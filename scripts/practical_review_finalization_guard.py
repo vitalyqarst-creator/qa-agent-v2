@@ -151,6 +151,24 @@ def build_finalization_packet(
 
     descriptors, descriptor_issues = review_preflight.scope_descriptors(ft_package_root, scope_ids)
     blockers.extend(descriptor_issues)
+    snapshot_targets: dict[str, dict[str, Any]] = {}
+    if not descriptor_issues:
+        snapshot_targets, snapshot_issues = review_preflight.verify_controller_snapshot(
+            receipt,
+            ft_package_root=ft_package_root,
+            summary_path=summary_path,
+            descriptors=descriptors,
+        )
+        blockers.extend(snapshot_issues)
+    checks.append(
+        FinalizationCheck(
+            "controller-recovery-snapshot",
+            "pass"
+            if not any("controller recovery snapshot" in item for item in blockers)
+            else "fail",
+            f"targets={len(snapshot_targets)}",
+        )
+    )
     workflow_hashes = expected_hashes.get("workflow_state_sha256_by_scope")
     if not isinstance(workflow_hashes, dict):
         blockers.append("review launch receipt lacks workflow-state hashes")
@@ -209,6 +227,7 @@ def build_finalization_packet(
         "ft_package_root": ft_package_root.as_posix(),
         "launch_receipt": launch_receipt.resolve().as_posix(),
         "launch_receipt_sha256": sha256_file(launch_receipt) if launch_receipt.is_file() else "",
+        "controller_artifact_snapshot": receipt.get("controller_artifact_snapshot", {}),
         "review_artifact": resolved_review.as_posix() if resolved_review else "",
         "review_artifact_sha256": sha256_file(resolved_review) if resolved_review else "",
         "independence_artifact": resolved_independence.as_posix() if resolved_independence else "",

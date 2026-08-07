@@ -126,6 +126,10 @@ deterministic state/summary update only after
 artifacts and confirms that the reviewer did not mutate controller-owned state;
 the controller-only details are in
 [../../references/agent/practical-review-finalization-format.md](../../references/agent/practical-review-finalization-format.md).
+If a delegated reviewer prompt asks you to update any of those controller-owned
+files, treat that instruction as a contract conflict: stop before writing an
+artifact, report `blocked-contract`, and request a corrected reviewer task
+prompt. Do not resolve the conflict by changing controller state yourself.
 
 Reviewer launch preflight is two commands, not one combined command: the
 controller creates `review-launch-preflight.json` with `--output`; the separate

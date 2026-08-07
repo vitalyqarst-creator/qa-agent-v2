@@ -12,6 +12,7 @@ import argparse
 import hashlib
 import json
 import re
+import shutil
 import subprocess
 import sys
 from dataclasses import asdict, dataclass
@@ -37,6 +38,7 @@ BLOCKED_TRANSITIONS = {
     "tc_review": "tc-review blocked",
 }
 SCOPE_ID_RE = re.compile(r"^\d{2}$")
+CONTROLLER_SNAPSHOT_SCHEMA_VERSION = 1
 
 
 @dataclass(frozen=True)
@@ -92,6 +94,184 @@ def is_within(path: Path, parent: Path) -> bool:
 
 def sha256_file(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def snapshot_directory_for_receipt(output_path: Path) -> Path:
+    """Return the immutable controller-state snapshot location for a receipt."""
+
+    return output_path.parent / f"{output_path.stem}.controller-state"
+
+
+def _snapshot_target(
+    *,
+    role: str,
+    source_path: Path,
+    snapshot_path: Path,
+) -> dict[str, str]:
+    return {
+        "role": role,
+        "source_path": source_path.resolve().as_posix(),
+        "snapshot_path": snapshot_path.resolve().as_posix(),
+        "sha256": sha256_file(source_path),
+    }
+
+
+def materialize_controller_snapshot(
+    receipt: dict[str, Any], output_path: Path) -> dict[str, Any]:
+    """Copy controller-owned state before a separate reviewer starts.
+
+    Hashes alone can detect an ownership violation but cannot recover from one.
+    The snapshot is a controller artifact created alongside the launch receipt;
+    reviewers must never edit it.  Reusing an existing matching snapshot keeps a
+    repeated preflight invocation idempotent, while a mismatched directory fails
+    closed instead of overwriting evidence from another review launch.
+    """
+
+    if receipt.get("allowed") is not True:
+        return receipt
+
+    ft_package_root = Path(str(receipt["ft_package_root"])).resolve()
+    summary_path = Path(str(receipt["summary_path"])).resolve()
+    hashes = receipt.get("controller_artifact_hashes")
+    if not isinstance(hashes, dict) or not summary_path.is_file():
+        raise ValueError("allowed receipt lacks controller artifact hashes or summary")
+
+    descriptors, issues = scope_descriptors(
+        ft_package_root,
+        [str(value) for value in receipt.get("scope_ids", [])],
+    )
+    if issues:
+        raise ValueError("cannot snapshot controller state: " + "; ".join(issues))
+
+    output_path = output_path.resolve()
+    snapshot_directory = snapshot_directory_for_receipt(output_path)
+    manifest_path = snapshot_directory / "manifest.json"
+    expected_workflow_hashes = hashes.get("workflow_state_sha256_by_scope")
+    if not isinstance(expected_workflow_hashes, dict):
+        raise ValueError("allowed receipt lacks workflow-state hashes")
+
+    targets: dict[str, dict[str, Any]] = {
+        "summary": _snapshot_target(
+            role="practical-stage-summary",
+            source_path=summary_path,
+            snapshot_path=snapshot_directory / "practical-stage-summary.md",
+        ),
+        "workflow_state_by_scope": {},
+    }
+    for descriptor in descriptors:
+        expected = str(expected_workflow_hashes.get(descriptor.scope_id) or "")
+        actual = sha256_file(descriptor.workflow_path)
+        if not expected or expected != actual:
+            raise ValueError(
+                f"controller workflow-state changed before snapshot for scope {descriptor.scope_id}"
+            )
+        targets["workflow_state_by_scope"][descriptor.scope_id] = _snapshot_target(
+            role="workflow-state",
+            source_path=descriptor.workflow_path,
+            snapshot_path=snapshot_directory / f"workflow-state-{descriptor.scope_id}.yaml",
+        )
+    if str(hashes.get("summary_sha256") or "") != targets["summary"]["sha256"]:
+        raise ValueError("controller practical-stage-summary changed before snapshot")
+
+    manifest = {
+        "schema_version": CONTROLLER_SNAPSHOT_SCHEMA_VERSION,
+        "launch_receipt_path": output_path.as_posix(),
+        "controller_artifacts": targets,
+    }
+    rendered = json.dumps(manifest, ensure_ascii=False, indent=2) + "\n"
+    if snapshot_directory.exists():
+        if not manifest_path.is_file() or manifest_path.read_text(encoding="utf-8") != rendered:
+            raise FileExistsError(
+                f"controller snapshot directory already exists with different contents: {snapshot_directory}"
+            )
+    else:
+        snapshot_directory.mkdir(parents=True)
+        try:
+            for item in [targets["summary"], *targets["workflow_state_by_scope"].values()]:
+                source = Path(item["source_path"])
+                destination = Path(item["snapshot_path"])
+                shutil.copyfile(source, destination)
+            manifest_path.write_text(rendered, encoding="utf-8")
+        except Exception:
+            shutil.rmtree(snapshot_directory, ignore_errors=True)
+            raise
+
+    receipt = dict(receipt)
+    receipt["controller_artifact_snapshot"] = {
+        "schema_version": CONTROLLER_SNAPSHOT_SCHEMA_VERSION,
+        "directory": snapshot_directory.as_posix(),
+        "manifest": manifest_path.as_posix(),
+    }
+    return receipt
+
+
+def verify_controller_snapshot(
+    receipt: dict[str, Any],
+    *,
+    ft_package_root: Path,
+    summary_path: Path,
+    descriptors: Iterable[ScopeDescriptor],
+) -> tuple[dict[str, dict[str, Any]], list[str]]:
+    """Verify snapshot bytes and return restore targets keyed by source path."""
+
+    snapshot_info = receipt.get("controller_artifact_snapshot")
+    if not isinstance(snapshot_info, dict):
+        return {}, ["review launch receipt lacks controller recovery snapshot"]
+    try:
+        snapshot_directory = Path(str(snapshot_info["directory"])).resolve()
+        manifest_path = Path(str(snapshot_info["manifest"])).resolve()
+    except (KeyError, TypeError, ValueError):
+        return {}, ["review launch receipt has invalid controller recovery snapshot paths"]
+    if not is_within(snapshot_directory, ft_package_root) or not is_within(manifest_path, snapshot_directory):
+        return {}, ["controller recovery snapshot is outside FT package root"]
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        return {}, [f"cannot read controller recovery snapshot: {exc}"]
+    if manifest.get("schema_version") != CONTROLLER_SNAPSHOT_SCHEMA_VERSION:
+        return {}, ["controller recovery snapshot schema is unsupported"]
+    artifacts = manifest.get("controller_artifacts")
+    if not isinstance(artifacts, dict):
+        return {}, ["controller recovery snapshot lacks artifact manifest"]
+    expected_hashes = receipt.get("controller_artifact_hashes")
+    if not isinstance(expected_hashes, dict):
+        return {}, ["review launch receipt lacks controller artifact hashes"]
+
+    expected_targets: dict[str, tuple[Path, str]] = {
+        "summary": (summary_path.resolve(), str(expected_hashes.get("summary_sha256") or "")),
+    }
+    workflow_hashes = expected_hashes.get("workflow_state_sha256_by_scope")
+    if not isinstance(workflow_hashes, dict):
+        return {}, ["review launch receipt lacks workflow-state hashes"]
+    for descriptor in descriptors:
+        expected_targets[f"workflow:{descriptor.scope_id}"] = (
+            descriptor.workflow_path.resolve(),
+            str(workflow_hashes.get(descriptor.scope_id) or ""),
+        )
+
+    manifest_items: dict[str, Any] = {"summary": artifacts.get("summary")}
+    workflows = artifacts.get("workflow_state_by_scope")
+    if isinstance(workflows, dict):
+        manifest_items.update({f"workflow:{key}": value for key, value in workflows.items()})
+
+    targets: dict[str, dict[str, Any]] = {}
+    issues: list[str] = []
+    for key, (expected_source, expected_hash) in expected_targets.items():
+        item = manifest_items.get(key)
+        if not isinstance(item, dict):
+            issues.append(f"controller recovery snapshot lacks {key}")
+            continue
+        source_path = Path(str(item.get("source_path") or "")).resolve()
+        snapshot_path = Path(str(item.get("snapshot_path") or "")).resolve()
+        snapshot_hash = str(item.get("sha256") or "")
+        if source_path != expected_source:
+            issues.append(f"controller recovery snapshot source path mismatch for {key}")
+        if not is_within(snapshot_path, snapshot_directory) or not snapshot_path.is_file():
+            issues.append(f"controller recovery snapshot file is missing for {key}")
+        elif not expected_hash or snapshot_hash != expected_hash or sha256_file(snapshot_path) != expected_hash:
+            issues.append(f"controller recovery snapshot hash mismatch for {key}")
+        targets[key] = {"source_path": source_path, "snapshot_path": snapshot_path, "sha256": expected_hash}
+    return targets, issues
 
 
 def code_version_gate_values(content: str) -> dict[str, str]:
@@ -481,6 +661,24 @@ def verify_receipt(receipt_path: Path, current: dict[str, Any]) -> list[str]:
         for field in expected_pairs
         if receipt.get(field) != current.get(field)
     ]
+    try:
+        ft_package_root = Path(str(current["ft_package_root"])).resolve()
+        summary_path = Path(str(current["summary_path"])).resolve()
+        descriptors, descriptor_issues = scope_descriptors(
+            ft_package_root,
+            [str(value) for value in current.get("scope_ids", [])],
+        )
+        issues.extend(descriptor_issues)
+        if not descriptor_issues:
+            _, snapshot_issues = verify_controller_snapshot(
+                receipt,
+                ft_package_root=ft_package_root,
+                summary_path=summary_path,
+                descriptors=descriptors,
+            )
+            issues.extend(snapshot_issues)
+    except (KeyError, TypeError, ValueError) as exc:
+        issues.append(f"cannot verify controller recovery snapshot: {exc}")
     if receipt.get("allowed") is not True:
         issues.append("launch preflight receipt is not allowed")
     return issues
@@ -519,10 +717,20 @@ def main() -> int:
             result["allowed"] = False
             result["status"] = "blocked"
             result["blocking_reasons"].extend(receipt_issues)
-    rendered = json.dumps(result, ensure_ascii=False, indent=2)
     if args.output:
         output_path = args.output if args.output.is_absolute() else Path.cwd() / args.output
         output_path.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            result = materialize_controller_snapshot(result, output_path)
+        except (OSError, ValueError) as exc:
+            result["allowed"] = False
+            result["status"] = "blocked"
+            result["blocking_reasons"].append(
+                f"cannot materialize controller recovery snapshot: {exc}"
+            )
+    rendered = json.dumps(result, ensure_ascii=False, indent=2)
+    if args.output:
+        output_path = args.output if args.output.is_absolute() else Path.cwd() / args.output
         output_path.write_text(rendered + "\n", encoding="utf-8")
     print(rendered)
     return 0 if result["allowed"] else 2

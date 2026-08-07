@@ -301,6 +301,30 @@ class PracticalReviewPreflightTests(unittest.TestCase):
         self.assertEqual(result["summary_sha256"], hashes["summary_sha256"])
         self.assertIn("01", hashes["workflow_state_sha256_by_scope"])
 
+    def test_materializes_hash_bound_controller_recovery_snapshot(self) -> None:
+        helper = self.load_helper()
+        _, root, ft_root, summary = self.make_repository()
+        original_validate = helper.artifact_validator.validate
+        helper.artifact_validator.validate = lambda _: {"findings": []}
+        try:
+            result = self.run_preflight(helper, root, ft_root, summary)
+            receipt_path = ft_root / "work" / "practical" / "sample-scope" / "review-launch-preflight.json"
+            materialized = helper.materialize_controller_snapshot(result, receipt_path)
+            descriptors, issues = helper.scope_descriptors(ft_root, ["01"])
+            targets, snapshot_issues = helper.verify_controller_snapshot(
+                materialized,
+                ft_package_root=ft_root,
+                summary_path=summary,
+                descriptors=descriptors,
+            )
+        finally:
+            helper.artifact_validator.validate = original_validate
+
+        self.assertFalse(issues)
+        self.assertFalse(snapshot_issues)
+        self.assertEqual({"summary", "workflow:01"}, set(targets))
+        self.assertTrue(Path(materialized["controller_artifact_snapshot"]["manifest"]).is_file())
+
     def test_ignores_practical_artifact_error_owned_by_another_scope(self) -> None:
         helper = self.load_helper()
         _, root, ft_root, summary = self.make_repository()
