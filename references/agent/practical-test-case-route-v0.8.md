@@ -348,6 +348,11 @@ current revision must be recorded in `workflow-state.yaml.current_round` and in
 the routing fields of a single-scope summary (`summary_stage` and
 `next_safe_step` when they name a round). Older round numbers belong only in
 `Prior state context`.
+For a scope-level reviewer launch, use `practical_review_preflight.py` as the
+decision gate. The package-wide validator remains mandatory audit evidence, but
+only its preflight partition for the declared scope (`scope_relevant` and
+`package_global`) can block that scope; errors owned by another scope must be
+recorded as external rather than retriggering the current route.
 If changed FT/package artifacts are ignored by git, set
 `git_persistence = ignored-by-git` or `mixed` and state that ordinary
 commit/push will not persist those files. The stage/final response must also

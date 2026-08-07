@@ -5247,6 +5247,35 @@ def practical_stage_summary_revision_alias_issues(
     return issues
 
 
+def practical_stage_summary_current_action_revision_issues(
+    content: str,
+    fields: Mapping[str, str],
+) -> list[str]:
+    """Reject an older explicit revision recorded as current-stage work.
+
+    A named summary stage is the controller's compact declaration of the
+    current revision.  Earlier revisions remain useful audit context, but they
+    must not appear in ``Current stage actions`` because a later controller can
+    otherwise repeat a superseded writer/reviewer transition.
+    """
+
+    current_rounds = practical_revision_numbers(fields.get("summary_stage", ""))
+    if len(current_rounds) != 1:
+        return []
+    current_round = next(iter(current_rounds))
+    current_actions = extract_markdown_section(content, "Current stage actions")
+    if not current_actions:
+        return []
+    action_rounds = practical_revision_numbers(current_actions)
+    unexpected_rounds = sorted(action_rounds - {current_round})
+    if not unexpected_rounds:
+        return []
+    return [
+        f"summary_stage=round:{current_round}; "
+        f"current_stage_actions=rounds:{','.join(map(str, unexpected_rounds))}"
+    ]
+
+
 def practical_stage_summary_has_specific_finding_evidence(value: str) -> bool:
     """Return whether a summary evidence field names both a finding and its path."""
 
@@ -5821,6 +5850,30 @@ def validate_practical_stage_summary(path: Path, root: Path) -> tuple[list[Findi
                 recommended_action=(
                     "Refresh workflow-state.yaml and the current summary routing fields from the active transition "
                     "prompt; retain older round numbers only in Prior state context."
+                ),
+            )
+        )
+
+    current_action_revision_issues = practical_stage_summary_current_action_revision_issues(
+        content,
+        fields,
+    )
+    if current_action_revision_issues:
+        findings.append(
+            Finding(
+                id="practical-stage-summary-current-action-stale-round",
+                severity="error",
+                category="practical-stage-summary",
+                title="Practical stage summary mixes an older revision into current actions",
+                details=(
+                    "Current stage actions must describe only the declared current revision. Older writer or reviewer "
+                    "rounds belong in Prior state context so a later controller cannot replay them."
+                ),
+                path=display_path,
+                evidence=current_action_revision_issues,
+                recommended_action=(
+                    "Move the older revision action to Prior state context and retain only actions performed in the "
+                    "current summary stage."
                 ),
             )
         )

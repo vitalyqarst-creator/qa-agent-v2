@@ -1026,6 +1026,42 @@ class PracticalStageSummaryValidatorTests(unittest.TestCase):
             {finding.id for finding in findings},
         )
 
+    def test_rejects_historical_revision_in_current_stage_actions(self) -> None:
+        root = self.make_package(summary_stage="scope01-writer-revision-r6-completed")
+        summary = root / "work" / "practical-stage-summary.md"
+        summary.write_text(
+            summary.read_text(encoding="utf-8").replace(
+                "- Подготовлен handoff текущего этапа.",
+                "- Ограниченная доработка writer r5 завершена.",
+            ),
+            encoding="utf-8",
+        )
+
+        findings, _ = self.validator.validate_practical_stage_summary(summary, root)
+
+        self.assertIn(
+            "practical-stage-summary-current-action-stale-round",
+            {finding.id for finding in findings},
+        )
+
+    def test_accepts_current_revision_in_current_stage_actions(self) -> None:
+        root = self.make_package(summary_stage="scope01-writer-revision-r6-completed")
+        summary = root / "work" / "practical-stage-summary.md"
+        summary.write_text(
+            summary.read_text(encoding="utf-8").replace(
+                "- Подготовлен handoff текущего этапа.",
+                "- Ограниченная доработка writer r6 завершена.",
+            ),
+            encoding="utf-8",
+        )
+
+        findings, _ = self.validator.validate_practical_stage_summary(summary, root)
+
+        self.assertNotIn(
+            "practical-stage-summary-current-action-stale-round",
+            {finding.id for finding in findings},
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -102,6 +102,11 @@ v0.8.3. The file is a user-facing handoff and a machine-checkable gate.
   `python scripts/validate_agent_artifacts.py --root <FT package root> --json`.
   Repo-root validation is supplementary. Keep primary package-root findings
   separate from repo-root-only findings.
+- A package-wide validator result is audit evidence, not by itself the decision
+  to launch a reviewer for one scope. The launch decision comes only from
+  `practical_review_preflight.py` for the declared `active_scope_ids`: its
+  `scope_relevant` and `package_global` errors block; `external` errors are
+  recorded but do not block that scope.
 - Classify validator warning/error findings in `validator_findings_breakdown` as:
   `tc_quality`, `process_artifact`, `validator_path_resolution` or
   `unrelated_repo`.
