@@ -12,7 +12,7 @@ active `workflow-state.yaml`. Before the controller changes aliases, summary or
 workflow state, it must verify the reviewer output:
 
 ```text
-python scripts/practical_review_finalization_guard.py --repo-root . --ft-package-root <FT package root> --summary <practical-stage-summary.md> --scope-id <two-digit scope id> --review-mode <matrix_review|tc_review> --launch-receipt <review-launch-preflight.json> --review-artifact <review artifact> --independence-artifact <review-independence.md> --output <review-finalization.json>
+python scripts/practical_review_finalization_guard.py --repo-root . --ft-package-root <FT package root> --summary <practical-stage-summary.md> --scope-id <two-digit scope id> --review-mode <matrix_review|tc_review> --launch-receipt <review-launch-preflight.json> --dispatch-receipt <review-dispatch.json> --review-artifact <review artifact> --independence-artifact <review-independence.md> --output <review-finalization.json>
 ```
 
 The guard requires all of the following:
@@ -21,8 +21,12 @@ The guard requires all of the following:
 - controller-owned summary and active workflow files have not changed during
   review;
 - review artifact has a canonical verdict for the selected mode;
-- independence artifact records a durable separate Codex task/thread ID and
-  `reviewer_execution_surface` equal to `codex-task` or `codex-thread`.
+- controller-owned dispatch receipt binds the allowed launch receipt to the
+  actual separate Codex task/thread ID and `reviewer_execution_surface` equal
+  to `codex-task` or `codex-thread`;
+- reviewer-owned evidence confirms only its read-only/separate-session facts
+  and references the dispatch receipt. It must not invent or manually copy a
+  task ID.
 
 Only a packet with `allowed: true` may be followed by the controller's one
 deterministic update of `workflow-state.yaml` and `practical-stage-summary.md`.
@@ -43,6 +47,22 @@ The reviewer prompt must explicitly say that `workflow-state.yaml`,
 `practical-stage-summary.md`, launch receipts and controller aliases are
 read-only. If a task instruction conflicts with this rule, the reviewer stops
 as `blocked-contract` and asks the controller for a corrected task prompt.
+
+## Controller-owned reviewer dispatch receipt
+
+`review-launch-preflight.json` is created before `create_thread` and cannot
+know the new task ID. Immediately after `create_thread` returns its ID, and
+before the reviewer begins assessment, the controller writes:
+
+```text
+python scripts/practical_review_dispatch_receipt.py --launch-receipt <review-launch-preflight.json> --reviewer-task-id <returned Codex task id> --reviewer-execution-surface codex-task --output <review-dispatch.json>
+```
+
+The reviewer receives the dispatch receipt path, verifies that it is bound to
+the same allowed launch receipt, and records only
+`reviewer_dispatch_receipt` in its independence artifact. This keeps task
+identity controller-owned and makes an accidental controller/reviewer ID swap
+a deterministic finalization failure.
 
 ## Portable accepted baseline
 

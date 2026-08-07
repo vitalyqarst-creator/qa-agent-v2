@@ -116,6 +116,7 @@ def build_finalization_packet(
     scope_ids: list[str],
     review_mode: str,
     launch_receipt: Path,
+    dispatch_receipt: Path,
     review_artifact: Path,
     independence_artifact: Path,
 ) -> dict[str, Any]:
@@ -145,6 +146,24 @@ def build_finalization_packet(
         blockers.append("review launch receipt mode differs from requested mode")
     if receipt.get("scope_ids") != scope_ids:
         blockers.append("review launch receipt scope ids differ from requested scope ids")
+
+    resolved_dispatch = resolve_inside_package(dispatch_receipt, ft_package_root)
+    dispatch: dict[str, Any] = {}
+    if resolved_dispatch is None:
+        blockers.append("review dispatch receipt is missing or outside FT package root")
+    else:
+        try:
+            dispatch = json.loads(resolved_dispatch.read_text(encoding="utf-8"))
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+            blockers.append(f"cannot read review dispatch receipt: {exc}")
+    if dispatch:
+        dispatch_launch = Path(str(dispatch.get("launch_receipt") or ""))
+        if not dispatch_launch or not review_preflight.paths_equal(dispatch_launch, launch_receipt):
+            blockers.append("review dispatch receipt does not bind the selected launch receipt")
+        if dispatch.get("launch_receipt_sha256") != sha256_file(launch_receipt):
+            blockers.append("review dispatch receipt launch hash differs from selected launch receipt")
+        if dispatch.get("allowed") is not True or dispatch.get("status") != "dispatched":
+            blockers.append("review dispatch receipt is not dispatched")
 
     expected_hashes = receipt.get("controller_artifact_hashes")
     if not isinstance(expected_hashes, dict):
@@ -206,15 +225,26 @@ def build_finalization_packet(
     if not verdict:
         blockers.append("review artifact lacks a canonical verdict for the selected review mode")
 
-    reviewer_surface = markdown_field(independence_content, "reviewer_execution_surface")
-    reviewer_task = markdown_field(independence_content, "reviewer_task_or_session")
-    reviewer_thread = markdown_field(independence_content, "reviewer_thread_url_or_id")
+    reviewer_surface = str(dispatch.get("reviewer_execution_surface") or "").strip()
+    reviewer_task = str(dispatch.get("reviewer_task_or_session") or "").strip()
+    reviewer_thread = str(dispatch.get("reviewer_thread_url_or_id") or "").strip()
     if reviewer_surface not in EXECUTION_SURFACES:
-        blockers.append("review independence artifact lacks a Codex task/thread execution surface")
+        blockers.append("review dispatch receipt lacks a Codex task/thread execution surface")
     if not TASK_ID_RE.fullmatch(reviewer_task):
-        blockers.append("review independence artifact lacks a durable reviewer task/session id")
+        blockers.append("review dispatch receipt lacks a durable reviewer task/session id")
     if reviewer_task and reviewer_task not in reviewer_thread:
-        blockers.append("reviewer thread id does not match reviewer task/session id")
+        blockers.append("review dispatch receipt thread id does not match reviewer task/session id")
+    for field, actual in (
+        ("reviewer_task_or_session", markdown_field(independence_content, "reviewer_task_or_session")),
+        ("reviewer_execution_surface", markdown_field(independence_content, "reviewer_execution_surface")),
+        ("reviewer_thread_url_or_id", markdown_field(independence_content, "reviewer_thread_url_or_id")),
+    ):
+        if actual and actual != {"reviewer_task_or_session": reviewer_task, "reviewer_execution_surface": reviewer_surface, "reviewer_thread_url_or_id": reviewer_thread}[field]:
+            blockers.append(f"review independence artifact {field} differs from controller dispatch receipt")
+    if markdown_field(independence_content, "reviewer_was_separate_session").casefold() != "yes":
+        blockers.append("review independence artifact does not confirm a separate reviewer session")
+    if markdown_field(independence_content, "reviewer_modified_test_cases").casefold() != "no":
+        blockers.append("review independence artifact does not confirm read-only test-case review")
     checks.append(
         FinalizationCheck(
             "reviewer-independence",
@@ -233,6 +263,8 @@ def build_finalization_packet(
         "ft_package_root": ft_package_root.as_posix(),
         "launch_receipt": launch_receipt.resolve().as_posix(),
         "launch_receipt_sha256": sha256_file(launch_receipt) if launch_receipt.is_file() else "",
+        "dispatch_receipt": resolved_dispatch.as_posix() if resolved_dispatch else "",
+        "dispatch_receipt_sha256": sha256_file(resolved_dispatch) if resolved_dispatch else "",
         "controller_artifact_snapshot": receipt.get("controller_artifact_snapshot", {}),
         "review_artifact": resolved_review.as_posix() if resolved_review else "",
         "review_artifact_sha256": sha256_file(resolved_review) if resolved_review else "",
@@ -257,6 +289,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--scope-id", action="append", required=True)
     parser.add_argument("--review-mode", choices=sorted(REVIEW_MODES), required=True)
     parser.add_argument("--launch-receipt", type=Path, required=True)
+    parser.add_argument("--dispatch-receipt", type=Path, required=True)
     parser.add_argument("--review-artifact", type=Path, required=True)
     parser.add_argument("--independence-artifact", type=Path, required=True)
     parser.add_argument("--output", type=Path)
@@ -273,6 +306,7 @@ def main() -> int:
         scope_ids=scope_ids,
         review_mode=args.review_mode,
         launch_receipt=args.launch_receipt.resolve(),
+        dispatch_receipt=args.dispatch_receipt,
         review_artifact=args.review_artifact,
         independence_artifact=args.independence_artifact,
     )

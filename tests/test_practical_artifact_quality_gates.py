@@ -89,6 +89,68 @@ class PracticalArtifactQualityGateTests(unittest.TestCase):
 
         self.assertNotIn("test-case-absence-oracle-find-step-mismatch", ids)
 
+    def test_rejects_two_execution_statuses_in_one_test_case(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            path = root / "fts" / "Sample" / "test-cases" / "scope.md"
+            path.parent.mkdir(parents=True)
+            path.write_text(
+                self.case().replace(
+                    "**Статус исполнения:** `needs-test-data`",
+                    "\n".join(
+                        [
+                            "**Статус исполнения:** `needs-test-data`",
+                            "**Статус тест-кейса:** `candidate-ui-calibration`",
+                        ]
+                    ),
+                ),
+                encoding="utf-8",
+            )
+
+            ids = self.finding_ids(root)
+
+        self.assertIn("test-case-multiple-execution-statuses", ids)
+
+    def test_file_count_case_cannot_hide_an_unrelated_save_step(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            path = root / "fts" / "Sample" / "test-cases" / "scope.md"
+            path.parent.mkdir(parents=True)
+            path.write_text(
+                self.case(
+                    title="Нельзя загрузить второй файл того же типа документа",
+                    test_type="Negative",
+                    test_data="- Первый файл: `a.pdf`.\n- Второй файл: `b.pdf`.",
+                    steps="1. Добавить второй файл `b.pdf`.\n2. Нажать `Сохранить`.",
+                    expected="Второй файл не добавлен; в поле остается только `a.pdf`.",
+                ),
+                encoding="utf-8",
+            )
+
+            ids = self.finding_ids(root)
+
+        self.assertIn("test-case-file-count-limit-save-crosscheck-smell", ids)
+
+    def test_persistence_case_requires_reopen_verification(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            path = root / "fts" / "Sample" / "test-cases" / "scope.md"
+            path.parent.mkdir(parents=True)
+            path.write_text(
+                self.case(
+                    title="Новая карточка сохраняется",
+                    test_type="Positive",
+                    test_data="- Уникальное значение: `Тест 001`.",
+                    steps="1. Ввести `Тест 001`.\n2. Нажать `Сохранить`.",
+                    expected="Карточка сохранена и форма закрыта.",
+                ),
+                encoding="utf-8",
+            )
+
+            ids = self.finding_ids(root)
+
+        self.assertIn("persistence-tc-without-reopen-verification", ids)
+
     def test_production_tc_runtime_fields_reject_agent_process_english(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

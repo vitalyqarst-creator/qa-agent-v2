@@ -4727,6 +4727,43 @@ def practical_review_preflight_issues(
     return issues
 
 
+def controller_review_dispatch_identity(
+    fields: Mapping[str, str],
+    practical_dir: Path,
+    root: Path,
+) -> tuple[dict[str, str], list[str]]:
+    """Load controller-owned reviewer identity for practical independent review."""
+
+    receipt_value = strip_markdown_code(fields.get("reviewer_dispatch_receipt", ""))
+    if not receipt_value:
+        return {}, ["reviewer_dispatch_receipt=<missing>"]
+    receipt_path = Path(receipt_value)
+    if not receipt_path.is_absolute():
+        local_candidate = practical_dir / receipt_path
+        root_candidate = root / receipt_path
+        receipt_path = local_candidate if local_candidate.is_file() else root_candidate
+    try:
+        payload = json.loads(receipt_path.read_text(encoding="utf-8"))
+    except (FileNotFoundError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        return {}, [f"reviewer_dispatch_receipt={receipt_value}; unreadable={exc}"]
+
+    identity = {
+        "reviewer_task_or_session": str(payload.get("reviewer_task_or_session", "")).strip(),
+        "reviewer_execution_surface": str(payload.get("reviewer_execution_surface", "")).strip().casefold(),
+        "reviewer_thread_url_or_id": str(payload.get("reviewer_thread_url_or_id", "")).strip(),
+    }
+    issues: list[str] = []
+    if payload.get("allowed") is not True or payload.get("status") != "dispatched":
+        issues.append("reviewer dispatch receipt is not dispatched")
+    if not CODEX_THREAD_ID_RE.match(identity["reviewer_task_or_session"]):
+        issues.append("reviewer dispatch receipt has no durable Codex task/thread id")
+    if identity["reviewer_execution_surface"] not in {"codex-task", "codex-thread"}:
+        issues.append("reviewer dispatch receipt has invalid execution surface")
+    if identity["reviewer_task_or_session"] and identity["reviewer_task_or_session"] not in identity["reviewer_thread_url_or_id"]:
+        issues.append("reviewer dispatch receipt thread id differs from task id")
+    return identity, issues
+
+
 PRACTICAL_STAGE_SUMMARY_NAME = "practical-stage-summary.md"
 PRACTICAL_STAGE_SUMMARY_REQUIRED_ROOT_FIELDS = {
     "code_root",
@@ -5178,11 +5215,31 @@ def current_tc_review_records(root: Path) -> dict[str, dict[str, str | int]]:
         round_match = re.search(r"\d+", metadata.get("review_round", ""))
         review_round = int(round_match.group(0)) if round_match else 0
         priority = (1 if review_path.name == "review-findings.md" else 0, review_round)
+        independence_fields: dict[str, str] = {}
+        try:
+            independence_path = review_path.parent / "review-independence.md"
+            if independence_path.is_file():
+                independence_fields = parse_review_independence_fields(
+                    independence_path.read_text(encoding="utf-8")
+                )
+        except UnicodeDecodeError:
+            independence_fields = {}
+        dispatch_identity, _ = controller_review_dispatch_identity(
+            independence_fields,
+            review_path.parent,
+            root,
+        ) if strip_markdown_code(independence_fields.get("reviewer_dispatch_receipt", "")) else ({}, [])
         record = {
             "verdict": verdict_match.group(1) if verdict_match else "",
             "blocking_finding_count": blocking_count,
-            "reviewer_task_or_session": strip_markdown_code(metadata.get("reviewer_task_or_session", "")).strip(),
-            "reviewer_execution_surface": strip_markdown_code(metadata.get("reviewer_execution_surface", "")).strip().lower(),
+            "reviewer_task_or_session": dispatch_identity.get(
+                "reviewer_task_or_session",
+                strip_markdown_code(metadata.get("reviewer_task_or_session", "")).strip(),
+            ),
+            "reviewer_execution_surface": dispatch_identity.get(
+                "reviewer_execution_surface",
+                strip_markdown_code(metadata.get("reviewer_execution_surface", "")).strip().lower(),
+            ),
             "path": rel(review_path, root),
         }
         previous = records.get(scope)
@@ -6265,18 +6322,37 @@ def validate_practical_review_independence_gate(
         for field, expected in required_values.items()
         if fields.get(field, "").strip().lower() != expected
     ]
-    reviewer_session_raw = fields.get("reviewer_task_or_session", "").strip()
+    has_dispatch_receipt = bool(strip_markdown_code(fields.get("reviewer_dispatch_receipt", "")))
+    dispatch_identity, dispatch_issues = (
+        controller_review_dispatch_identity(fields, practical_dir, root)
+        if has_dispatch_receipt
+        else ({}, [])
+    )
+    reviewer_session_raw = (
+        dispatch_identity.get("reviewer_task_or_session", "")
+        if has_dispatch_receipt
+        else fields.get("reviewer_task_or_session", "").strip()
+    )
     reviewer_session = reviewer_session_raw.lower()
-    execution_surface = fields.get("reviewer_execution_surface", "").strip().strip("`").strip().lower()
-    reviewer_thread_url_or_id = fields.get("reviewer_thread_url_or_id", "").strip().strip("`").strip()
+    execution_surface = (
+        dispatch_identity.get("reviewer_execution_surface", "")
+        if has_dispatch_receipt
+        else fields.get("reviewer_execution_surface", "").strip().strip("`").strip().lower()
+    )
+    reviewer_thread_url_or_id = (
+        dispatch_identity.get("reviewer_thread_url_or_id", "")
+        if has_dispatch_receipt
+        else fields.get("reviewer_thread_url_or_id", "").strip().strip("`").strip()
+    )
     review_findings_mode = review_findings_fields.get("review_mode", "").strip().strip("`").strip()
     review_findings_round = review_findings_fields.get("review_round", "").strip().strip("`").strip()
     review_findings_reviewer = review_findings_fields.get("reviewer_task_or_session", "").strip().strip("`").strip()
     independence_mode = fields.get("review_mode", "").strip().strip("`").strip()
     independence_round = fields.get("review_round", "").strip().strip("`").strip()
+    issues.extend(dispatch_issues)
     if reviewer_session in {"", "-", "not-available", "none", "n/a"}:
         issues.append(
-            f"reviewer_task_or_session={fields.get('reviewer_task_or_session', '<missing>')}; expected=<actual Codex thread/session id>"
+            "reviewer identity=<missing>; expected=<controller-owned dispatch receipt or actual Codex thread/session id>"
         )
     elif not CODEX_THREAD_ID_RE.match(reviewer_session_raw):
         issues.append(
@@ -6324,6 +6400,8 @@ def validate_practical_review_independence_gate(
             )
     if practical_review_preflight_required(practical_dir):
         issues.extend(practical_review_preflight_issues(fields, practical_dir, root))
+        if not has_dispatch_receipt:
+            issues.append("reviewer_dispatch_receipt=<missing> for practical launch protocol")
 
     if issues:
         review_surface = review_findings_fields.get("reviewer_execution_surface", "").strip().strip("`").lower()
@@ -8143,10 +8221,12 @@ WRITER_QUALITY_GATE_REQUIRED_ITEMS = {
     "step-executability",
     "test-data-specificity",
     "fixture-resolution",
+    "source-obligation-completeness",
     "closed-dictionary-completeness",
     "boundary-class-completeness",
     "internal-observability",
     "action-observability",
+    "expected-result-singularity",
     "semantic-req-id-parity",
     "scoped-validator-findings",
     "package-ready",
@@ -8367,6 +8447,12 @@ READY_FOR_REVIEW_BLOCKING_TEST_CASE_FINDING_IDS = {
     "test-case-missing-numbered-steps",
     "test-case-missing-traceability-token",
     "test-case-ready-status-with-unresolved-execution-input",
+    "test-case-multiple-execution-statuses",
+    "test-case-file-count-limit-save-crosscheck-smell",
+    "persistence-tc-without-save-action",
+    "persistence-tc-without-reopen-verification",
+    "persistence-tc-closes-without-saving",
+    "persistence-candidate-without-calibration-questions",
     "writer-quality-gate-scoped-validator-profile-invalid",
 }
 
@@ -13670,6 +13756,16 @@ PERSISTENCE_CLEANUP_STRATEGY_RE = re.compile(
     r"cleanup|isolation|restore|delete\s+test|reset|вернуть|восстанов|удалить\s+тест|очистить|изолирован",
     flags=re.IGNORECASE,
 )
+FILE_COUNT_LIMIT_RE = re.compile(
+    r"не\s+более\s+одн(?:ого|ин)\s+файл|втор(?:ой|ого)\s+файл|"
+    r"second\s+file|one\s+file\s+(?:per|in)",
+    flags=re.IGNORECASE,
+)
+FILE_COUNT_PERSISTENCE_ORACLE_RE = re.compile(
+    r"сохран\w*[^.\n]{0,100}(?:карточк|изменен|значен|данн)|"
+    r"(?:карточк|изменен|значен|данн)[^.\n]{0,100}сохран\w*",
+    flags=re.IGNORECASE,
+)
 PERSISTENCE_PASSIVE_PRECONDITION_RE = re.compile(
     r"(?m)^\s*(?:\d+\.\s*)?(?:"
     r"(?:application|card|form|block|field|record|entity|contact|phone|address)[^\n]{0,80}\b(?:is|are)\s+(?:open|opened|available|filled|created|present|displayed|selected|set|exists)\b|"
@@ -14147,6 +14243,68 @@ READY_STATUS_UNRESOLVED_DATA_RE = re.compile(
 
 def normalize_test_case_execution_status(value: str) -> str:
     return value.strip().strip("`*_ .").casefold()
+
+
+EXECUTION_STATUS_FIELD_RE = re.compile(
+    r"(?mi)^\s*\*\*(?:Статус\s+исполнения|Статус\s+тест-кейса|Status)\s*:\*\*\s*`?([^`\n]+)`?\s*$"
+)
+
+
+def validate_test_case_execution_status_singularity(
+    blocks: list[tuple[str, str]],
+    path: Path,
+    root: Path,
+) -> tuple[list[Finding], list[Check]]:
+    """Reject two lifecycle statuses in one runnable test case.
+
+    ``Статус oracle`` is deliberately not a lifecycle field.  It is a legacy
+    diagnostic alias and is handled by the runtime-format checks separately.
+    """
+
+    display_path = rel(path, root)
+    duplicates: list[str] = []
+    conflicts: list[str] = []
+    for test_case_id, block in blocks:
+        statuses = [normalize_test_case_execution_status(match.group(1)) for match in EXECUTION_STATUS_FIELD_RE.finditer(block)]
+        statuses = [status for status in statuses if status]
+        if len(statuses) <= 1:
+            continue
+        unique_statuses = list(dict.fromkeys(statuses))
+        evidence = f"{test_case_id}:statuses={', '.join(statuses)}"
+        if len(unique_statuses) == 1:
+            duplicates.append(evidence)
+        else:
+            conflicts.append(evidence)
+
+    findings: list[Finding] = []
+    if duplicates or conflicts:
+        findings.append(
+            Finding(
+                id="test-case-multiple-execution-statuses",
+                severity="warning",
+                category="test-case-status",
+                title="Test case has more than one execution lifecycle status",
+                details=(
+                    "A production test case has exactly one `Статус исполнения`. "
+                    "Calibration, fixture or observability detail belongs in `Требуется подтверждение`, "
+                    "not in a second lifecycle status field."
+                ),
+                path=display_path,
+                evidence=[*conflicts[:20], *duplicates[:20]],
+                recommended_action=(
+                    "Keep one `Статус исполнения` value and move the residual reason to "
+                    "`Требуется подтверждение`."
+                ),
+            )
+        )
+    return findings, [
+        Check(
+            "test-case-execution-status-singularity",
+            "warn" if findings else "pass",
+            "Test-case lifecycle status is ambiguous." if findings else "Every test case has one execution status.",
+            display_path,
+        )
+    ]
 
 
 def validate_ready_test_case_execution_inputs(
@@ -15130,6 +15288,7 @@ def validate_test_case_quality_smells(
     persistence_tc_without_save_action: list[str] = []
     persistence_tc_without_reopen_verification: list[str] = []
     persistence_tc_closes_without_saving: list[str] = []
+    file_count_limit_save_crosschecks: list[str] = []
     persistence_tc_unsourced_save_action: list[str] = []
     persistence_smoke_without_cleanup_strategy: list[str] = []
     persistence_trace_not_exercised: list[str] = []
@@ -15334,6 +15493,15 @@ def validate_test_case_quality_smells(
             candidate_negative_trigger_too_specific.append(f"{test_case_id}:steps={steps[:180]}")
         persistence_context = " ".join([title, scenario_rationale, expected_result])
         persistence_body = " ".join([steps, expected_result, postconditions])
+        file_count_context = " ".join([title, goal, test_data, steps, expected_result])
+        if (
+            FILE_COUNT_LIMIT_RE.search(file_count_context)
+            and PERSISTENCE_SAVE_ACTION_RE.search(steps)
+            and not FILE_COUNT_PERSISTENCE_ORACLE_RE.search(expected_result)
+        ):
+            file_count_limit_save_crosschecks.append(
+                f"{test_case_id}:steps={steps[:180]}; expected={expected_result[:160]}"
+            )
         if PERSISTENCE_TC_SIGNAL_RE.search(persistence_context):
             is_negative_no_save_tc = bool(
                 is_negative_test_case_type(test_case_type)
@@ -17572,6 +17740,28 @@ def validate_test_case_quality_smells(
             )
         )
 
+    if file_count_limit_save_crosschecks:
+        severity = atomicity_coverage_severity(atomicity_coverage_policy)
+        findings.append(
+            Finding(
+                id="test-case-file-count-limit-save-crosscheck-smell",
+                severity=severity,
+                category="atomarity",
+                title="File-count TC mixes the upload limit with an unrelated save check",
+                details=(
+                    "A test for a second file must observe the result of adding that file. "
+                    "A save step without a persistence oracle can fail for unrelated required fields and "
+                    "does not prove the file-count limit."
+                ),
+                path=display_path,
+                evidence=file_count_limit_save_crosschecks[:20],
+                recommended_action=(
+                    "Remove the save step and observe the second-file result, or make persistence a separate "
+                    "self-contained TC with all required fields valid."
+                ),
+            )
+        )
+
     if persistence_tc_unsourced_save_action:
         findings.append(
             Finding(
@@ -17919,6 +18109,7 @@ def validate_test_case_quality_smells(
         or persistence_tc_without_save_action
         or persistence_tc_without_reopen_verification
         or persistence_tc_closes_without_saving
+        or file_count_limit_save_crosschecks
         or persistence_tc_unsourced_save_action
         or persistence_smoke_without_cleanup_strategy
         or persistence_trace_not_exercised
@@ -18366,6 +18557,14 @@ def validate_test_case_file(
     )
     findings.extend(calibration_findings)
     checks.extend(calibration_checks)
+
+    status_singularity_findings, status_singularity_checks = validate_test_case_execution_status_singularity(
+        blocks,
+        path,
+        root,
+    )
+    findings.extend(status_singularity_findings)
+    checks.extend(status_singularity_checks)
 
     execution_input_findings, execution_input_checks = validate_ready_test_case_execution_inputs(
         blocks,

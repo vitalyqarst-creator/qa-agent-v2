@@ -326,6 +326,7 @@ class PracticalReviewIndependenceValidatorTests(unittest.TestCase):
                         "| review_round | `3` |",
                         "| review_launch_preflight | `review-launch-preflight.json` |",
                         "| review_launch_preflight_status | `allowed` |",
+                        "| reviewer_dispatch_receipt | `review-dispatch.json` |",
                     ]
                 ),
             )
@@ -353,6 +354,18 @@ class PracticalReviewIndependenceValidatorTests(unittest.TestCase):
                     "code_branch": "codex/test",
                     "code_commit": "a" * 40,
                     "summary_sha256": "b" * 64,
+                }
+            ),
+            encoding="utf-8",
+        )
+        (root / "work" / "practical" / "sample-scope" / "review-dispatch.json").write_text(
+            json.dumps(
+                {
+                    "status": "dispatched",
+                    "allowed": True,
+                    "reviewer_task_or_session": "019fc5cf-8bfe-7693-bf2f-c3c55cca4824",
+                    "reviewer_execution_surface": "codex-task",
+                    "reviewer_thread_url_or_id": "019fc5cf-8bfe-7693-bf2f-c3c55cca4824",
                 }
             ),
             encoding="utf-8",

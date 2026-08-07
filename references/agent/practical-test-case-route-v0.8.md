@@ -151,6 +151,13 @@ controller updates aliases, workflow or summary after review, run
 `practical_review_finalization_guard.py`; its full contract is in
 [practical-review-finalization-format.md](./practical-review-finalization-format.md).
 
+Immediately after `create_thread` returns the new reviewer task ID, the
+controller creates `review-dispatch.json` with
+`scripts/practical_review_dispatch_receipt.py`. Pass the dispatch receipt path
+to the reviewer. The reviewer records that path in `review-independence.md`; it
+does not manually provide a task ID. This controller-owned receipt is required
+by `practical_review_finalization_guard.py`.
+
 For the first matrix review, create/update the practical summary before launch
 and use `next_stage_transition = matrix-review allowed` or
 `matrix-review conditional`. This makes the preflight equally strict for the
@@ -816,6 +823,15 @@ Before handing off to reviewer, the writer checks every canonical file:
 - if DaData or another integration is in scope, test cases use a fixed verified
   fixture with exact query/input and exact expected suggestion/result; do not ask
   the tester to call a live service during test execution.
+- for each source obligation that names a closed set of fields, values or output
+  parts, the matrix and TC enumerate the same set. A `ready` TC may not silently
+  omit one member of the source list; its fixture must contain every value that
+  the TC asserts.
+- do not add an unrelated save action to a file-count, format or field-validation
+  TC. If persistence must also be checked, write a separate self-contained TC
+  with a single observable persistence result.
+- a TC has exactly one `Статус исполнения`; data, fixture or UI-oracle uncertainty
+  is explained in `Требуется подтверждение`, not in a second status.
 - final TC source navigation stays slim: `Трассировка` carries codes/atoms/section,
   while `Источник / цитата требования` carries only a short real quote. Do not
   duplicate the same `ATOM-*`/`SRC-*`/section list again in `Ссылка на ФТ` or
@@ -907,9 +923,7 @@ Minimum fields:
 
 | field | value |
 | --- | --- |
-| reviewer_task_or_session | `<actual Codex thread/session id>` |
-| reviewer_execution_surface | `codex-task/codex-thread` |
-| reviewer_thread_url_or_id | `<durable Codex task/thread id or URL>` |
+| reviewer_dispatch_receipt | `<controller-owned review-dispatch.json>` |
 | reviewer_was_separate_session | `yes/no` |
 | reviewer_input_excluded_writer_transcript | `yes/no` |
 | reviewer_input_excluded_writer_private_reasoning | `yes/no` |
@@ -925,19 +939,11 @@ Rules:
 - `independent_signoff_claim_allowed = yes` only when
   `reviewer_was_separate_session = yes` and the reviewer did not receive writer
   transcript/private reasoning.
-- `reviewer_task_or_session` must be the actual Codex thread/session id, for
-  example `019fc5cf-8bfe-7693-bf2f-c3c55cca4824`. Do not write role aliases
-  such as `matrix-review-round-2`, `<scope>-tc-review`, `not-available`, or
-  invented pseudo ids. If the reviewer cannot know its own id, the controller
-  that launches the separate session must pass that id into the reviewer prompt
-  and the reviewer must copy it verbatim.
-- `reviewer_execution_surface` must be `codex-task` or `codex-thread` for
-  independent sign-off. Values such as `sub-agent`, `same-session`,
-  `in-process`, `local-helper` or `not-available` are allowed only for
-  `reviewed-not-independent`.
-- `reviewer_thread_url_or_id` must contain the same durable Codex thread/task id
-  or a user-visible Codex task URL. It exists to make the evidence auditable from
-  the Codex sidebar/task list, not merely from an internal agent transcript.
+- `reviewer_dispatch_receipt` must point to the controller-owned receipt written
+  immediately after `create_thread`. It, rather than reviewer-authored prose,
+  holds the durable task ID and execution surface. Do not write
+  `reviewer_task_or_session`, `reviewer_execution_surface` or
+  `reviewer_thread_url_or_id` in reviewer-owned artifacts.
 - `review_mode` and `review_round` must match the current review artifact:
   `test-design-matrix-review.md` for matrix review or `review-findings.md` for
   TC review. A matrix-review independence receipt does not prove a later TC

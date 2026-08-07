@@ -35,7 +35,8 @@ description: Делает review существующих тест-кейсов 
   Each gate runs from a separate Codex task/session by default and produces
   review evidence. The controller/writer session must launch that task through
   Codex thread tools (`tool_search` discovery if needed, then `list_projects` /
-  `create_thread`) and pass the durable thread id into reviewer evidence. A
+  `create_thread`) and write the returned durable thread id into a
+  controller-owned `review-dispatch.json`. A
   sub-agent inside the writer/controller turn is not a separate Codex
   task/session and cannot produce independent sign-off. Before the controller
   creates that task, it must pass `scripts/practical_review_preflight.py`; the
@@ -192,15 +193,12 @@ Also verify `review-independence.md` for each gate. If the reviewer was not run
 in a separate Codex task/session or received writer transcript/private reasoning,
 review may continue but the matrix/suite must be labeled `reviewed-not-independent`,
 not independently signed off.
-For an independent verdict, `review-independence.md` must record the actual
-Codex thread/session id in `reviewer_task_or_session`. Role aliases such as
-`matrix-review-round-2`, `<scope>-tc-review`, `not-available`, or invented
-pseudo ids do not prove independence. If the reviewer cannot introspect its own
-id, use the id that the controller passed in the reviewer prompt.
-It must also record `reviewer_execution_surface = codex-task` or `codex-thread`
-and `reviewer_thread_url_or_id` with the durable task/thread id or URL. Values
-such as `sub-agent`, `same-session`, `in-process` or `local-helper` mean
-`reviewed-not-independent`. A sub-agent/local-helper/same-session pass can
+For an independent verdict, `review-independence.md` must record
+`reviewer_dispatch_receipt` created by the controller after `create_thread`.
+The controller-owned receipt, rather than reviewer-authored fields, proves the
+actual Codex task/thread id and execution surface. Role aliases, a sub-agent,
+same-session, `in-process` or `local-helper` mean `reviewed-not-independent`.
+A sub-agent/local-helper/same-session pass can
 support analysis, but it cannot be the final independent reviewer verdict for
 matrix acceptance, TC review acceptance, writer-revision routing or practical
 release.
