@@ -194,6 +194,29 @@ class WriterQualityGateSplitArtifactTests(unittest.TestCase):
             {finding.id for finding in findings},
         )
 
+    def test_recheck_history_cannot_repeat_a_gate_item(self) -> None:
+        root, _, design_dir = self.make_package()
+        self.write_valid_gate(design_dir)
+        gate_path = design_dir / "writer-quality-gate.md"
+        with gate_path.open("a", encoding="utf-8") as handle:
+            handle.write(
+                "\n## Повторная проверка\n\n"
+                "| gate_item | status | evidence | affected_package | required_action | blocks_ready_for_review |\n"
+                "| --- | --- | --- | --- | --- | --- |\n"
+                "| `expected-result-singularity` | `pass` | `test-cases/9.1-sample.md`: `TC-SAMPLE-001`. | `WP-01` | `none_required:pass` | `no` |\n"
+            )
+
+        findings, _ = self.validator.validate_writer_quality_gate(
+            gate_path.read_text(encoding="utf-8"),
+            gate_path,
+            root,
+        )
+
+        self.assertIn(
+            "writer-quality-gate-duplicate-item-rows",
+            {finding.id for finding in findings},
+        )
+
     def test_package_relative_scoped_profile_resolves_from_package_and_repo_root(self) -> None:
         root, _, design_dir = self.make_package()
         repo_root = root.parents[1]

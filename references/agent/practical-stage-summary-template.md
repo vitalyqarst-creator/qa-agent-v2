@@ -105,6 +105,7 @@ v0.8.3. The file is a user-facing handoff and a machine-checkable gate.
 - Classify validator warning/error findings in `validator_findings_breakdown` as:
   `tc_quality`, `process_artifact`, `validator_path_resolution` or
   `unrelated_repo`.
+- Если `validator_errors_classification = pre-existing-unrelated` или `mixed`, обязательно заполни `validator_scope_errors_*` и `validator_external_errors_*`: их количества должны в сумме давать `validator_errors_count`, а evidence для ненулевой части содержит каждый `finding id` и путь. Нельзя объявить ошибку «внешней» только текстом без проверяемого идентификатора и пути.
 - `validator_errors_count`, `validator_warnings_count` and
   `validator_info_count` are the canonical counts. Do not repeat them as
   unprefixed `errors_count`, `warnings_count` or `info_count`; if a secondary

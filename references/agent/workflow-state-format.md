@@ -70,6 +70,7 @@ fts/<ft-slug>/work/stage-handoffs/NN-<scope-slug>/workflow-state.yaml
 - `open_questions` — список еще не снятых неоднозначностей по scope или coverage.
 - `blocking_reasons` — список причин, почему этап нельзя продвигать дальше.
 - `accepted_risks` — необязательный список явно принятых blocking `GAP-*`, если владелец продукта/аналитик разрешил передать набор дальше без закрытия gap.
+- Каждый ключ YAML может встречаться только один раз в одном mapping. Не создавай второй `blocking_reasons`, `latest_artifacts` или иной верхнеуровневый ключ для новой записи: обнови единственное каноническое значение. Повтор ключа имеет last-key-wins семантику и делает routing неоднозначным.
 
 ## Blocking Gap Gate
 

@@ -831,6 +831,42 @@ def parse_scalar(value: str) -> Any:
     return value
 
 
+WORKFLOW_STATE_MAPPING_KEY_RE = re.compile(
+    r"^(?P<indent> *)(?P<key>[A-Za-z_][A-Za-z0-9_-]*):(?:\s|$)"
+)
+
+
+def workflow_state_duplicate_mapping_keys(content: str) -> list[str]:
+    """Return duplicate YAML mapping keys without accepting last-key-wins semantics.
+
+    Workflow-state files intentionally use a compact YAML subset.  A full YAML
+    loader would normally overwrite a duplicated key silently; this scanner
+    preserves the parent mapping path and source lines so the handoff can be
+    repaired before any route decision consumes an ambiguous state.
+    """
+
+    stack: list[tuple[int, str]] = []
+    locations: dict[tuple[str, ...], list[int]] = defaultdict(list)
+    for line_number, raw_line in enumerate(content.splitlines(), start=1):
+        line = raw_line.lstrip("\ufeff")
+        match = WORKFLOW_STATE_MAPPING_KEY_RE.match(line)
+        if match is None:
+            continue
+        indent = len(match.group("indent"))
+        key = match.group("key")
+        while stack and stack[-1][0] >= indent:
+            stack.pop()
+        mapping_path = tuple(name for _, name in stack) + (key,)
+        locations[mapping_path].append(line_number)
+        stack.append((indent, key))
+
+    return [
+        f"{'.'.join(mapping_path)}:lines={','.join(str(line) for line in lines)}"
+        for mapping_path, lines in sorted(locations.items())
+        if len(lines) > 1
+    ]
+
+
 def parse_workflow_state(path: Path) -> dict[str, Any]:
     state: dict[str, Any] = {}
     current_key: str | None = None
@@ -4901,6 +4937,10 @@ ROUND_CAP_TC_WITH_STATUS_RE = re.compile(
     flags=re.IGNORECASE,
 )
 PRACTICAL_STAGE_SUMMARY_FINDING_ID_RE = re.compile(r"\b[a-z][a-z0-9]+(?:-[a-z0-9]+){2,}\b")
+PRACTICAL_STAGE_SUMMARY_PATH_EVIDENCE_RE = re.compile(
+    r"(?:^|[\s`])(?:[A-Za-z]:)?[A-Za-z0-9_./\\-]+\.(?:md|yaml|yml|json|py)(?:\b|$)",
+    flags=re.IGNORECASE,
+)
 
 
 def strip_markdown_code(value: str) -> str:
@@ -5121,6 +5161,67 @@ def parse_nonnegative_int(value: str) -> int | None:
         return int(match.group(0))
     except ValueError:
         return None
+
+
+def practical_stage_summary_has_specific_finding_evidence(value: str) -> bool:
+    """Return whether a summary evidence field names both a finding and its path."""
+
+    if field_is_not_applicable(value):
+        return False
+    return bool(
+        PRACTICAL_STAGE_SUMMARY_FINDING_ID_RE.search(value)
+        and PRACTICAL_STAGE_SUMMARY_PATH_EVIDENCE_RE.search(value)
+    )
+
+
+def practical_stage_summary_error_partition_issues(
+    fields: Mapping[str, str],
+    total_errors: int,
+    classification: str,
+) -> list[str]:
+    """Validate the proof required when errors are claimed external to a scope."""
+
+    if classification not in {"pre-existing-unrelated", "mixed"}:
+        return []
+
+    required = (
+        "validator_scope_errors_count",
+        "validator_scope_errors_evidence",
+        "validator_external_errors_count",
+        "validator_external_errors_evidence",
+    )
+    missing = [field for field in required if field not in fields]
+    if missing:
+        return [f"missing={','.join(missing)}"]
+
+    scope_count = parse_nonnegative_int(fields["validator_scope_errors_count"])
+    external_count = parse_nonnegative_int(fields["validator_external_errors_count"])
+    if scope_count is None or external_count is None:
+        invalid = []
+        if scope_count is None:
+            invalid.append("validator_scope_errors_count")
+        if external_count is None:
+            invalid.append("validator_external_errors_count")
+        return [f"invalid-count={','.join(invalid)}"]
+
+    issues: list[str] = []
+    if scope_count + external_count != total_errors:
+        issues.append(
+            f"count-mismatch=scope:{scope_count}+external:{external_count}!={total_errors}"
+        )
+    if classification == "pre-existing-unrelated" and (scope_count != 0 or external_count == 0):
+        issues.append(
+            f"pre-existing-unrelated-requires=scope:0,external:positive;actual={scope_count},{external_count}"
+        )
+    if scope_count > 0 and not practical_stage_summary_has_specific_finding_evidence(
+        fields["validator_scope_errors_evidence"]
+    ):
+        issues.append("scope-evidence-must-contain-finding-id-and-path")
+    if external_count > 0 and not practical_stage_summary_has_specific_finding_evidence(
+        fields["validator_external_errors_evidence"]
+    ):
+        issues.append("external-evidence-must-contain-finding-id-and-path")
+    return issues
 
 
 def field_is_not_applicable(value: str) -> bool:
@@ -5747,6 +5848,30 @@ def validate_practical_stage_summary(path: Path, root: Path) -> tuple[list[Findi
                         f"next_stage_transition={fields.get('next_stage_transition', '<missing>')}",
                     ],
                     recommended_action="Use a conditional or blocked transition, with the exact error classification.",
+                )
+            )
+        partition_issues = practical_stage_summary_error_partition_issues(
+            fields,
+            validator_errors_count,
+            classification,
+        )
+        if partition_issues:
+            findings.append(
+                Finding(
+                    id="practical-stage-summary-validator-error-partition-unverified",
+                    severity="error",
+                    category="practical-stage-summary",
+                    title="Practical stage summary does not prove its validator-error partition",
+                    details=(
+                        "Errors classified as external or mixed must be partitioned between the active scope and "
+                        "other scopes, with a finding id and path for every nonzero part."
+                    ),
+                    path=display_path,
+                    evidence=partition_issues,
+                    recommended_action=(
+                        "Run refresh_practical_stage_summary.py with the active scope id, copy its scope/external "
+                        "error counts and evidence, and keep the counts equal to validator_errors_count."
+                    ),
                 )
             )
 
@@ -8250,6 +8375,9 @@ WRITER_QUALITY_GATE_GENERIC_EVIDENCE_RE = re.compile(
     r"^\s*(?:checked|check|проверено|проверка выполнена|выполнено)\s*\.?\s*$",
     flags=re.IGNORECASE,
 )
+WRITER_QUALITY_GATE_ITEM_ROW_RE = re.compile(
+    r"(?m)^\s*\|\s*`?([a-z][a-z0-9-]*)`?\s*\|"
+)
 SCOPED_VALIDATOR_PROFILE_REQUIRED_KEYS = {
     "command",
     "generated_by",
@@ -8728,6 +8856,27 @@ def parsed_writer_quality_gate_rows(content: str) -> tuple[list[str], list[dict[
     return header, parsed_rows
 
 
+def writer_quality_gate_duplicate_item_rows(content: str) -> list[str]:
+    """Return repeated gate items anywhere in the gate artifact.
+
+    The table is the current source of truth.  Revision history belongs to the
+    writer session/decision log; keeping a second recheck table with the same
+    item lets contradictory outcomes coexist in one gate artifact.
+    """
+
+    item_lines: dict[str, list[int]] = defaultdict(list)
+    for match in WRITER_QUALITY_GATE_ITEM_ROW_RE.finditer(content):
+        item = match.group(1)
+        if item == "gate-item":
+            continue
+        item_lines[item].append(content.count("\n", 0, match.start()) + 1)
+    return [
+        f"{item}:lines={','.join(str(line) for line in lines)}"
+        for item, lines in sorted(item_lines.items())
+        if len(lines) > 1
+    ]
+
+
 def writer_quality_gate_semantic_evidence_issues(rows: list[dict[str, str]]) -> list[str]:
     """Reject semantic gate passes that have no checkable artifact evidence."""
 
@@ -8841,6 +8990,7 @@ def writer_quality_gate_summary(content: str) -> dict[str, Any]:
         "missing_items": missing_items,
         "contract_version": contract_version,
         "contract_version_is_current": contract_version == WRITER_QUALITY_GATE_CONTRACT_VERSION,
+        "duplicate_item_rows": writer_quality_gate_duplicate_item_rows(content),
         "semantic_evidence_issues": writer_quality_gate_semantic_evidence_issues(rows),
         "invalid_status_rows": invalid_status_rows,
         "invalid_blocks_rows": invalid_blocks_rows,
@@ -10429,6 +10579,25 @@ def validate_writer_quality_gate(
                 recommended_action=(
                     "Replace the generic evidence with exact artifact paths and affected TC ids, or record "
                     "`not_applicable:` plus the source reason after a fresh writer self-check."
+                ),
+            )
+        )
+    if summary["duplicate_item_rows"]:
+        findings.append(
+            Finding(
+                id="writer-quality-gate-duplicate-item-rows",
+                severity="warning",
+                category="test-design",
+                title="Writer Quality Gate contains more than one current result for a gate item",
+                details=(
+                    "A gate artifact must have one authoritative result per gate item. A supplemental recheck "
+                    "table can leave contradictory pass/fail states in the same handoff."
+                ),
+                path=display_path,
+                evidence=summary["duplicate_item_rows"][:20],
+                recommended_action=(
+                    "Update the original gate row with fresh evidence and record the recheck history in the "
+                    "writer session or decision log; remove repeated gate-item rows."
                 ),
             )
         )
@@ -21393,6 +21562,46 @@ def validate_workflow_state(
         checks.append(Check("workflow-state-readable", "fail", "File is not UTF-8.", display_path))
         return findings, checks
 
+    duplicate_keys = workflow_state_duplicate_mapping_keys(
+        path.read_text(encoding="utf-8")
+    )
+    if duplicate_keys:
+        findings.append(
+            Finding(
+                id="workflow-state-duplicate-mapping-keys",
+                severity="error",
+                category="workflow-state",
+                title="workflow-state.yaml repeats a mapping key",
+                details=(
+                    "A duplicated YAML key has last-key-wins semantics and makes process status ambiguous. "
+                    "Each key may occur once within the same mapping."
+                ),
+                path=display_path,
+                evidence=duplicate_keys[:20],
+                recommended_action=(
+                    "Merge the values into the one canonical key and remove the repeated mapping entry before "
+                    "any downstream routing decision."
+                ),
+            )
+        )
+        checks.append(
+            Check(
+                "workflow-state-unique-mapping-keys",
+                "fail",
+                "Duplicate YAML mapping keys found.",
+                display_path,
+            )
+        )
+        return findings, checks
+    checks.append(
+        Check(
+            "workflow-state-unique-mapping-keys",
+            "pass",
+            "No duplicate YAML mapping keys.",
+            display_path,
+        )
+    )
+
     missing_fields = sorted(REQUIRED_WORKFLOW_FIELDS - set(state))
     if missing_fields:
         findings.append(
@@ -22707,6 +22916,10 @@ def validate_workflow_state(
                 if gate_summary["semantic_evidence_issues"]:
                     gate_errors.append(
                         f"{artifact_label}:semantic evidence {', '.join(gate_summary['semantic_evidence_issues'][:5])}"
+                    )
+                if gate_summary["duplicate_item_rows"]:
+                    gate_errors.append(
+                        f"{artifact_label}:duplicate gate items {', '.join(gate_summary['duplicate_item_rows'][:5])}"
                     )
                 if gate_summary["invalid_status_rows"]:
                     gate_errors.append(f"{artifact_label}:invalid status values")

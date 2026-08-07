@@ -152,7 +152,8 @@ the next safe step. It must also record `code_root`, `ft_package_root`,
 `artifact_write_root`, `root_split_allowed`, `next_stage_transition`,
 `per_scope_next_stage_transitions` for package-level `writer conditional` or
 `tc-review conditional`,
-`production_tc_clean`, `validator_errors_classification` and
+`production_tc_clean`, `validator_errors_classification` (with active/external
+finding ids and paths when it is `pre-existing-unrelated` or `mixed`) and
 `validator_warnings_classification` when validation was run, plus
 `source_restore_provenance`, `source_restore_sha256` and `git_persistence`.
 After repair/re-review, rerun validation and refresh the declared

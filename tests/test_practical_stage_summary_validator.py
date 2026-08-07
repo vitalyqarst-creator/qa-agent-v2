@@ -38,6 +38,11 @@ class PracticalStageSummaryValidatorTests(unittest.TestCase):
         root_split_authority: str = "not-applicable",
         validator_errors_count: int = 0,
         validator_errors_classification: str = "none",
+        validator_errors_evidence: str = "not-applicable",
+        validator_scope_errors_count: int | None = None,
+        validator_scope_errors_evidence: str = "not-applicable",
+        validator_external_errors_count: int | None = None,
+        validator_external_errors_evidence: str = "not-applicable",
         validator_warnings_count: int = 0,
         validator_warnings_classification: str = "none",
         validator_warnings_evidence: str = "not-applicable",
@@ -67,9 +72,7 @@ class PracticalStageSummaryValidatorTests(unittest.TestCase):
         (source_dir / "Sample.xhtml").write_text("<html></html>", encoding="utf-8")
         (source_dir / "Sample.pdf").write_text("fake-pdf", encoding="utf-8")
         summary = artifact_write_root / "practical-stage-summary.md"
-        summary.write_text(
-            "\n".join(
-                [
+        summary_rows = [
                     "# Practical Stage Summary",
                     "",
                     "| field | value |",
@@ -81,7 +84,7 @@ class PracticalStageSummaryValidatorTests(unittest.TestCase):
                     f"| root_split_authority | `{root_split_authority}` |",
                     f"| validator_errors_count | `{validator_errors_count}` |",
                     f"| validator_errors_classification | `{validator_errors_classification}` |",
-                    f"| validator_errors_evidence | `not-applicable` |",
+                    f"| validator_errors_evidence | `{validator_errors_evidence}` |",
                     f"| validator_warnings_count | `{validator_warnings_count}` |",
                     f"| validator_warnings_classification | `{validator_warnings_classification}` |",
                     f"| validator_warnings_evidence | `{validator_warnings_evidence}` |",
@@ -104,7 +107,15 @@ class PracticalStageSummaryValidatorTests(unittest.TestCase):
                     "- Результаты предыдущих этапов здесь не повторяются.",
                     "",
                 ]
-            ),
+        if validator_scope_errors_count is not None:
+            summary_rows[12:12] = [
+                f"| validator_scope_errors_count | `{validator_scope_errors_count}` |",
+                f"| validator_scope_errors_evidence | `{validator_scope_errors_evidence}` |",
+                f"| validator_external_errors_count | `{validator_external_errors_count}` |",
+                f"| validator_external_errors_evidence | `{validator_external_errors_evidence}` |",
+            ]
+        summary.write_text(
+            "\n".join(summary_rows),
             encoding="utf-8",
         )
         if tc_review_snapshot:
@@ -368,6 +379,50 @@ class PracticalStageSummaryValidatorTests(unittest.TestCase):
         )
 
         self.assertIn("practical-stage-summary-validator-errors-allow-writer-unconditionally", ids)
+
+    def test_rejects_unproven_preexisting_error_partition(self) -> None:
+        ids = self.finding_ids(
+            self.make_package(
+                validator_errors_count=2,
+                validator_errors_classification="pre-existing-unrelated",
+                validator_errors_evidence="`error-one`; `error-two`",
+                next_stage_transition="writer blocked",
+            )
+        )
+
+        self.assertIn(
+            "practical-stage-summary-validator-error-partition-unverified",
+            ids,
+        )
+
+    def test_accepts_proven_preexisting_error_partition(self) -> None:
+        ids = self.finding_ids(
+            self.make_package(
+                validator_errors_count=2,
+                validator_errors_classification="pre-existing-unrelated",
+                validator_errors_evidence=(
+                    "`workflow-state-invalid-status` @ "
+                    "`work/stage-handoffs/02-other/workflow-state.yaml`; "
+                    "`writer-quality-gate-failed` @ "
+                    "`work/test-design/02-other/writer-quality-gate.md`"
+                ),
+                validator_scope_errors_count=0,
+                validator_scope_errors_evidence="not-applicable",
+                validator_external_errors_count=2,
+                validator_external_errors_evidence=(
+                    "`workflow-state-invalid-status` @ "
+                    "`work/stage-handoffs/02-other/workflow-state.yaml`; "
+                    "`writer-quality-gate-failed` @ "
+                    "`work/test-design/02-other/writer-quality-gate.md`"
+                ),
+                next_stage_transition="writer blocked",
+            )
+        )
+
+        self.assertNotIn(
+            "practical-stage-summary-validator-error-partition-unverified",
+            ids,
+        )
 
     def test_rejects_unclassified_validator_warnings_before_writer(self) -> None:
         ids = self.finding_ids(

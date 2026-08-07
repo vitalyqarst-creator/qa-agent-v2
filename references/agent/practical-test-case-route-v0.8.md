@@ -253,6 +253,10 @@ not proof that the current scope test cases are bad.
 | validator_supplementary_command | `<repo-root validator command or not-run>` |
 | validator_findings_breakdown | `tc_quality=<n>; process_artifact=<n>; validator_path_resolution=<n>; unrelated_repo=<n>` |
 | validator_errors_count | `<integer>` |
+| validator_scope_errors_count | `<integer for active_scope_ids, or not-applicable>` |
+| validator_scope_errors_evidence | `<finding ids and paths, or not-applicable>` |
+| validator_external_errors_count | `<integer for other scopes, or not-applicable>` |
+| validator_external_errors_evidence | `<finding ids and paths, or not-applicable>` |
 | validator_errors_classification | `none / next-stage-blocker / pre-existing-unrelated / validator-false-positive / mixed` |
 | validator_errors_evidence | `<paths/finding ids or not-applicable>` |
 | validator_warnings_count | `<integer>` |
@@ -270,6 +274,11 @@ When `validator_errors_count > 0`, the summary must not say unconditional
 `writer allowed` or `tc-review allowed`. It must classify the errors and use a
 conditional/blocked transition unless every error is explicitly proven
 irrelevant or a validator false positive.
+
+For `pre-existing-unrelated` or `mixed`, the summary also records the exact
+partition: counts for active and external scopes, plus every finding id and its
+path. The two counts must add up to `validator_errors_count`; an unverified
+claim that errors belong to another scope does not authorize the next stage.
 
 When `validator_warnings_count > 0`, classify warnings separately from errors:
 

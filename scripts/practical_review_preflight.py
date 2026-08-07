@@ -413,18 +413,19 @@ def partition_validator_errors(
         finding_id = str(finding.get("id", "<missing-id>"))
         category = str(finding.get("category", ""))
         path_text = str(finding.get("path", ""))
+        evidence = f"{finding_id} @ {path_text or '<missing-path>'}"
         if category == "practical-stage-summary":
-            result["scope_relevant"].append(finding_id)
+            result["scope_relevant"].append(evidence)
             continue
         owner_scope_id = scope_id_for_finding_path(
             path_text, ownership_descriptors, ft_package_root
         )
         if owner_scope_id in requested_ids:
-            result["scope_relevant"].append(finding_id)
+            result["scope_relevant"].append(evidence)
         elif owner_scope_id is not None:
-            result["external"].append(finding_id)
+            result["external"].append(evidence)
         else:
-            result["package_global"].append(finding_id)
+            result["package_global"].append(evidence)
     return result
 
 

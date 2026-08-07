@@ -282,8 +282,20 @@ class PracticalReviewPreflightTests(unittest.TestCase):
             helper.artifact_validator.validate = original_validate
 
         self.assertFalse(result["allowed"])
-        self.assertEqual(["workflow-state-stale"], result["validator_error_partition"]["scope_relevant"])
-        self.assertEqual(["other-scope-stale"], result["validator_error_partition"]["external"])
+        self.assertEqual(
+            [
+                "workflow-state-stale @ "
+                "work/stage-handoffs/01-sample-scope/workflow-state.yaml"
+            ],
+            result["validator_error_partition"]["scope_relevant"],
+        )
+        self.assertEqual(
+            [
+                "other-scope-stale @ "
+                "work/stage-handoffs/02-other-scope/workflow-state.yaml"
+            ],
+            result["validator_error_partition"]["external"],
+        )
         details = {item["id"]: item["details"] for item in result["checks"]}
         self.assertIn("external_errors=1", details["package-validator"])
 
