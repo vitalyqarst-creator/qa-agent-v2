@@ -8584,6 +8584,9 @@ READY_FOR_REVIEW_BLOCKING_TEST_CASE_FINDING_IDS = {
     "test-case-duplicate-id",
     "test-case-mixed-schema-duplicate-fields",
     "test-case-runtime-field-duplicated",
+    "test-case-duplicate-canonical-field",
+    "test-case-form-isolation-missing-checked-fields",
+    "test-case-form-isolation-delayed-observation",
     "test-case-missing-required-template-sections",
     "test-case-missing-package-id",
     "test-case-sparse-required-fields",
@@ -18650,6 +18653,160 @@ def validate_test_case_mixed_schema_duplicates(
     return findings, checks
 
 
+CANONICAL_TEST_CASE_FIELD_ALIASES: dict[str, tuple[str, ...]] = {
+    "Название": ("Название", "Title"),
+    "Тип": ("Тип", "Type"),
+    "Приоритет": ("Приоритет", "Priority"),
+    "package_id": ("package_id",),
+    "Трассировка": ("Трассировка", "Traceability"),
+    "Статус исполнения": ("Статус исполнения", "Статус тест-кейса", "Status"),
+    "Цель": ("Цель", "Goal"),
+    "Предусловия": ("Предусловия", "Preconditions"),
+    "Тестовые данные": ("Тестовые данные", "Test Data", "test_data"),
+    "Проверяемые поля": ("Проверяемые поля", "Checked Fields"),
+    "Шаги": ("Шаги", "Steps"),
+    "Итоговый ожидаемый результат": ("Итоговый ожидаемый результат", "Expected Result"),
+    "Постусловия": ("Постусловия", "Postconditions"),
+    "Требуется подтверждение": ("Требуется подтверждение", "Confirmation Required"),
+    "Ссылка на ФТ": ("Ссылка на ФТ", "FT Reference"),
+    "Источник требования": ("Источник требования", "Requirement Source"),
+    "Источник / цитата требования": (
+        "Источник / цитата требования",
+        "Requirement Source / Quote",
+    ),
+}
+
+FORM_ISOLATION_TC_RE = re.compile(
+    r"(?is)(?=.*форм\w*)(?=.*(?:изоляц\w*|не\s+(?:наслед\w*|перенос\w*|предзаполн\w*)))"
+)
+FORM_ISOLATION_DELAYED_OBSERVATION_RE = re.compile(
+    r"(?im)^\s*\d+\.\s*(?:перевести|снять)\s+фокус\b"
+)
+FORM_ISOLATION_CHECKED_FIELD_LITERAL_RE = re.compile(r"`[^`\n]+`")
+
+
+def validate_test_case_canonical_field_integrity(
+    blocks: list[tuple[str, str]],
+    path: Path,
+    root: Path,
+) -> tuple[list[Finding], list[Check]]:
+    """Reject duplicated canonical fields and weak form-isolation cases.
+
+    The latter is intentionally narrow: it applies only to a case that already
+    claims to verify value leakage between two creation forms. It does not infer
+    that every creation action requires a second-object check; that obligation is
+    decided by the coverage matrix and Writer Quality Gate.
+    """
+
+    display_path = rel(path, root)
+    duplicate_fields: list[str] = []
+    missing_checked_fields: list[str] = []
+    delayed_observation: list[str] = []
+
+    for test_case_id, block in blocks:
+        for field_name, aliases in CANONICAL_TEST_CASE_FIELD_ALIASES.items():
+            alias_pattern = "|".join(re.escape(alias) for alias in aliases)
+            count = len(
+                re.findall(
+                    rf"(?im)^\s*\*\*(?:{alias_pattern})\s*:\*\*",
+                    block,
+                )
+            )
+            if count > 1:
+                duplicate_fields.append(f"{test_case_id}:{field_name}:count={count}")
+
+        title = extract_test_case_field_block(block, ["Название", "Title"])
+        goal = extract_test_case_field_block(block, ["Цель", "Goal"])
+        steps = extract_test_case_field_block(block, ["Шаги", "Steps"])
+        expected_result = extract_test_case_field_block(
+            block,
+            ["Итоговый ожидаемый результат", "Expected Result"],
+        )
+        isolation_text = "\n".join((title, goal, steps, expected_result))
+        if not FORM_ISOLATION_TC_RE.search(isolation_text):
+            continue
+
+        checked_fields = extract_test_case_field_block(
+            block,
+            ["Проверяемые поля", "Checked Fields"],
+        )
+        if not checked_fields or not FORM_ISOLATION_CHECKED_FIELD_LITERAL_RE.search(checked_fields):
+            missing_checked_fields.append(test_case_id)
+        if FORM_ISOLATION_DELAYED_OBSERVATION_RE.search(steps):
+            delayed_observation.append(test_case_id)
+
+    findings: list[Finding] = []
+    if duplicate_fields:
+        findings.append(
+            Finding(
+                id="test-case-duplicate-canonical-field",
+                severity="warning",
+                category="test-case-format",
+                title="Test case repeats a canonical field",
+                details=(
+                    "A canonical TC field must have one authoritative value. Repeated source, runtime or "
+                    "metadata fields make the manual case ambiguous and drift independently."
+                ),
+                path=display_path,
+                evidence=duplicate_fields[:20],
+                recommended_action=(
+                    "Keep one canonical field occurrence. Merge distinct FT locators into one `Ссылка на ФТ` "
+                    "value or move non-duplicating context to the appropriate source field."
+                ),
+            )
+        )
+    if missing_checked_fields:
+        findings.append(
+            Finding(
+                id="test-case-form-isolation-missing-checked-fields",
+                severity="warning",
+                category="test-design",
+                title="Form-isolation test case does not name the checked fields",
+                details=(
+                    "A creation-form isolation check must state which fields of the second form are checked "
+                    "for values leaked from the first object."
+                ),
+                path=display_path,
+                evidence=missing_checked_fields[:20],
+                recommended_action=(
+                    "Add `Проверяемые поля` with concrete backticked field labels and keep the first-object "
+                    "distinctive values in `Тестовые данные`."
+                ),
+            )
+        )
+    if delayed_observation:
+        findings.append(
+            Finding(
+                id="test-case-form-isolation-delayed-observation",
+                severity="warning",
+                category="test-design",
+                title="Form-isolation test case delays the initial-state observation",
+                details=(
+                    "The second form must be checked immediately after it opens. A focus-changing or editing "
+                    "step can alter the state that the test is meant to observe."
+                ),
+                path=display_path,
+                evidence=delayed_observation[:20],
+                recommended_action=(
+                    "Move the field-state check directly after opening the new form. Keep a focus step only "
+                    "when the source explicitly defines it as the required trigger."
+                ),
+            )
+        )
+
+    has_issues = bool(duplicate_fields or missing_checked_fields or delayed_observation)
+    return findings, [
+        Check(
+            "test-case-canonical-field-integrity",
+            "warn" if has_issues else "pass",
+            "Canonical TC fields or form-isolation checks have issues."
+            if has_issues
+            else "Canonical TC fields and form-isolation checks passed.",
+            display_path,
+        )
+    ]
+
+
 def validate_test_case_file(
     path: Path,
     root: Path,
@@ -18846,6 +19003,14 @@ def validate_test_case_file(
     )
     findings.extend(mixed_schema_findings)
     checks.extend(mixed_schema_checks)
+
+    canonical_field_findings, canonical_field_checks = validate_test_case_canonical_field_integrity(
+        blocks,
+        path,
+        root,
+    )
+    findings.extend(canonical_field_findings)
+    checks.extend(canonical_field_checks)
 
     calibration_findings, calibration_checks = validate_ui_calibration_candidate_test_cases(
         blocks,

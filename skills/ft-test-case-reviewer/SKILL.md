@@ -98,9 +98,9 @@ Review in two practical gates:
    availability/use TC that mix parent and child objects; the status row is
    supporting traceability when a later FT section owns the actual action.
    For `R-CREATE-FORM-ISOLATION`, when `Создать` / `Добавить` opens a form for a
-   new independent object, reject the matrix or TC if it omits the check that a
-   form for object B is not prefilled with distinctive values entered for object
-   A. Do not flag
+   new independent object, reject the matrix or TC if it omits a named list of
+   checked fields or an immediate check that a form for object B is not
+   prefilled with distinctive values entered for object A. Do not flag
    source-defined defaults, context/inherited values, clone/import behavior or
    documented draft restoration as leakage.
    Reject a duplicate-prevention TC that expects a positive save, a downstream

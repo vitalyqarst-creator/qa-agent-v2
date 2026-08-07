@@ -279,7 +279,10 @@ Minimum class:
 
 - create object A with distinctive values in one or more editable fields;
 - invoke the same creation action for object B;
-- verify that the new form for B does not contain the values entered for A.
+- immediately verify the new form for B before any edit, focus-changing or
+  save action;
+- list the fields checked for leakage and verify that none contains the
+  distinctive values entered for A.
 
 The creation of A is setup for this check; the single main expected result is
 the absence of leaked values in B. Do not require source-defined defaults,
@@ -392,7 +395,8 @@ Reviewer must block or return findings when:
 - boundary classes are missing for exact length, min/max range, date/current-date
   or file size limits;
 - a source-backed independent creation action has no form-isolation class, or
-  the planned check wrongly treats source-defined defaults, inheritance or
-  autofill as leaked values.
+  the planned check omits its checked field list, delays the observation with
+  an unrelated focus/edit action, or wrongly treats source-defined defaults,
+  inheritance or autofill as leaked values.
 - status/lifecycle coverage checks only an internal/business state label and
   does not name an observable UI/API/document artifact.

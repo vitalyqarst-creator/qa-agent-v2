@@ -111,6 +111,71 @@ class PracticalArtifactQualityGateTests(unittest.TestCase):
 
         self.assertIn("test-case-multiple-execution-statuses", ids)
 
+    def test_rejects_duplicate_canonical_source_field(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            path = root / "fts" / "Sample" / "test-cases" / "scope.md"
+            path.parent.mkdir(parents=True)
+            path.write_text(
+                self.case_with_steps("1. Попытаться найти скрытого партнера в реестре.")
+                + "\n**Ссылка на ФТ:** `AS.1`; PDF стр. 3.\n",
+                encoding="utf-8",
+            )
+
+            ids = self.finding_ids(root)
+
+        self.assertIn("test-case-duplicate-canonical-field", ids)
+
+    def test_form_isolation_requires_explicit_fields_and_immediate_check(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            path = root / "fts" / "Sample" / "test-cases" / "scope.md"
+            path.parent.mkdir(parents=True)
+            path.write_text(
+                self.case(
+                    title="Новая форма не наследует значения первого объекта",
+                    test_type="Positive",
+                    test_data="- Первый объект: `Первое значение`.",
+                    steps=(
+                        "1. Открыть новую форму второго объекта.\n"
+                        "2. Перевести фокус на поле `Наименование`.\n"
+                        "3. Проверить значения новой формы."
+                    ),
+                    expected="Новая форма не содержит значения первого объекта.",
+                ),
+                encoding="utf-8",
+            )
+
+            ids = self.finding_ids(root)
+
+        self.assertIn("test-case-form-isolation-missing-checked-fields", ids)
+        self.assertIn("test-case-form-isolation-delayed-observation", ids)
+
+    def test_form_isolation_accepts_named_fields_checked_immediately(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            path = root / "fts" / "Sample" / "test-cases" / "scope.md"
+            path.parent.mkdir(parents=True)
+            content = self.case(
+                title="Новая форма не наследует значения первого объекта",
+                test_type="Positive",
+                test_data="- Первый объект: `Первое значение`; `40702810900000000001`.",
+                steps=(
+                    "1. Открыть новую форму второго объекта.\n"
+                    "2. Проверить указанные поля новой формы."
+                ),
+                expected="Новая форма не содержит значений первого объекта в указанных полях.",
+            ).replace(
+                "**Шаги:**",
+                "**Проверяемые поля:** `Наименование`; `Расчетный счет`.\n\n**Шаги:**",
+            )
+            path.write_text(content, encoding="utf-8")
+
+            ids = self.finding_ids(root)
+
+        self.assertNotIn("test-case-form-isolation-missing-checked-fields", ids)
+        self.assertNotIn("test-case-form-isolation-delayed-observation", ids)
+
     def test_file_count_case_cannot_hide_an_unrelated_save_step(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

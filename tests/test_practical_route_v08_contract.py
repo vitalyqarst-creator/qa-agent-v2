@@ -119,9 +119,10 @@ class PracticalRouteV08ContractTests(unittest.TestCase):
 
         for content in (route, catalog, rule_cards, reviewer):
             self.assertIn("R-CREATE-FORM-ISOLATION", content)
-        self.assertIn("does not contain the values entered for A", catalog)
+        self.assertIn("immediately verify the new form for B", catalog)
+        self.assertIn("list the fields checked for leakage", catalog)
         self.assertIn("source-defined defaults", catalog)
-        self.assertIn("not prefilled with distinctive values", reviewer)
+        self.assertIn("immediate check that a form for object B", reviewer)
 
     def test_quality_gate_recovery_is_compact_and_preserves_one_canonical_candidate(self) -> None:
         route = self.read("references/agent/practical-test-case-route-v0.8.md")
