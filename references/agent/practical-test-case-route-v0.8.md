@@ -560,16 +560,23 @@ planned TC), use the fast path inside this same route:
 `blocked-quality-gate` is a draft-quality result, not an external-input state.
 It may be repaired only when the current macro-stage or controller explicitly
 authorizes one bounded writer revision. Before replacing an existing canonical
-test-case file, create a complete snapshot under
-`work/review-cycles/<scope-slug>/versions/<snapshot-id>/` according to
-`test-case-versioning-policy.md`. The snapshot manifest must identify the
-canonical source path, SHA-256 and the reason `pre_quality_gate_baseline`.
+test-case file, create and verify an immutable `pre_write_baseline` snapshot
+under `work/review-cycles/<scope-slug>/versions/<snapshot-id>/` with
+`scripts/practical_snapshot_preflight.py`, according to
+`test-case-versioning-policy.md`. The command must finish with `status: valid`
+before any canonical write. Snapshot only the canonical TC and the split
+artifacts that this revision will overwrite; never copy or alter
+workflow-state, prompts, session logs, findings or stage summary inside it.
+Use `snapshot_role: pre_write_baseline` and the audit reason
+`pre_quality_gate_baseline` in its manifest.
 
-After the snapshot, the writer updates the one canonical file in `test-cases/`.
+After the verified snapshot, the writer updates the one canonical file in `test-cases/`.
 That file is the current candidate for the next independent review; do not create
 parallel `*-candidate.md`, `*-round-N.md` or other competing files in
 `test-cases/`. The workflow must link the snapshot and state that the current
-file is a candidate revision. A failed Writer Quality Gate alone does not
+file is a candidate revision through
+`latest_artifacts.pre_write_baseline_snapshot`. TC-review preflight verifies
+that linked snapshot before a reviewer task may start. A failed Writer Quality Gate alone does not
 authorize overwriting an already accepted/released baseline.
 
 ## Release statuses

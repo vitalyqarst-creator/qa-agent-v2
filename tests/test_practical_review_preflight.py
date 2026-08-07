@@ -190,6 +190,45 @@ class PracticalReviewPreflightTests(unittest.TestCase):
             "\n".join(result["blocking_reasons"]),
         )
 
+    def test_blocks_tc_reviewer_when_linked_prewrite_snapshot_is_invalid(self) -> None:
+        helper = self.load_helper()
+        _, root, ft_root, summary = self.make_repository()
+        workflow = ft_root / "work" / "stage-handoffs" / "01-sample-scope" / "workflow-state.yaml"
+        workflow.write_text(
+            workflow.read_text(encoding="utf-8")
+            .replace("review_mode: matrix_review", "review_mode: tc_review")
+            .replace(
+                "latest_artifacts: {}",
+                "latest_artifacts:\n  pre_write_baseline_snapshot: work/review-cycles/sample-scope/versions/pre-write-r1",
+            ),
+            encoding="utf-8",
+        )
+        summary.write_text(
+            summary.read_text(encoding="utf-8").replace(
+                "matrix-review allowed", "tc-review allowed"
+            ),
+            encoding="utf-8",
+        )
+        snapshot = ft_root / "work" / "review-cycles" / "sample-scope" / "versions" / "pre-write-r1"
+        snapshot.mkdir(parents=True)
+        (snapshot / "snapshot-manifest.yaml").write_text("{}\n", encoding="utf-8")
+        original_validate = helper.artifact_validator.validate
+        helper.artifact_validator.validate = lambda _: {"findings": []}
+        try:
+            with working_directory(root):
+                result = helper.build_preflight(
+                    repo_root=root,
+                    ft_package_root=ft_root,
+                    summary_path=summary,
+                    scope_ids=["01"],
+                    review_mode="tc_review",
+                )
+        finally:
+            helper.artifact_validator.validate = original_validate
+
+        self.assertFalse(result["allowed"])
+        self.assertIn("pre-write baseline snapshot is invalid", "\n".join(result["blocking_reasons"]))
+
     def test_ignores_error_owned_by_another_scope_in_multi_scope_package(self) -> None:
         helper = self.load_helper()
         _, root, ft_root, summary = self.make_repository()

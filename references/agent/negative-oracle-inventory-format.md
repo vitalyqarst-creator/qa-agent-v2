@@ -75,6 +75,6 @@
 ## Writer Handoff Rules
 
 - Writer must carry every `scope_obligation_id` into Source Table Normalization / Coverage Obligation Table until mapped to `ATOM-*` or `GAP-*`.
-- Writer must create candidate TC for `candidate_tc_required` rows and mark `Статус oracle: ui-calibration-required`.
+- Writer must create candidate TC for `candidate_tc_required` rows with `Статус исполнения: candidate-ui-calibration` and a specific `Требуется подтверждение`.
 - Writer must not create executable negative TC for `gap_required` rows without new source evidence.
 ```

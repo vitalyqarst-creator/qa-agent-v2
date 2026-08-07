@@ -24,6 +24,7 @@ if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
 import validate_agent_artifacts as artifact_validator  # noqa: E402
+import practical_snapshot_preflight as snapshot_preflight  # noqa: E402
 
 
 REVIEW_MODES = {"matrix_review", "tc_review"}
@@ -339,6 +340,31 @@ def build_preflight(
             blockers.append(
                 f"scope {descriptor.scope_id}: review_mode={state.get('review_mode', '<missing>')}; expected={review_mode}"
             )
+        if review_mode == "tc_review":
+            latest = state.get("latest_artifacts")
+            snapshot_value = ""
+            if isinstance(latest, dict):
+                snapshot_value = str(
+                    latest.get("pre_write_baseline_snapshot")
+                    or latest.get("pre_quality_gate_baseline_snapshot")
+                    or ""
+                ).strip()
+            if snapshot_value:
+                snapshot_path = artifact_validator.resolve_artifact_path(
+                    snapshot_value,
+                    descriptor.workflow_path,
+                    repo_root,
+                    ft_package_root,
+                )
+                if snapshot_path is None or not snapshot_path.is_dir():
+                    blockers.append(f"scope {descriptor.scope_id}: pre-write baseline snapshot is missing")
+                else:
+                    snapshot_result = snapshot_preflight.verify_snapshot(snapshot_path, ft_package_root)
+                    if snapshot_result.get("status") != "valid":
+                        issues = "; ".join(str(item) for item in snapshot_result.get("issues", []))
+                        blockers.append(
+                            f"scope {descriptor.scope_id}: pre-write baseline snapshot is invalid: {issues or 'unknown issue'}"
+                        )
     checks.append(
         PreflightCheck(
             "scope-routing",

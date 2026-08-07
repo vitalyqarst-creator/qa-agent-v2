@@ -40,7 +40,23 @@ fts/<ft-slug>/test-cases/<section-id>-<scope-slug>.md
 fts/<ft-slug>/work/review-cycles/<scope-slug>/versions/<snapshot-id>/
 ```
 
-Snapshot - это полный слепок состояния на конкретной контрольной точке cycle. Он должен включать `snapshot-manifest.yaml` с путями, размерами и SHA-256 для скопированных файлов.
+Snapshot - это неизменяемый слепок артефактов, которые изменит конкретный
+writer-pass. Он не является копией всего `work/`: в него не входят
+`workflow-state.yaml`, session logs, prompts, findings и summary. Такие
+process-artifacts продолжают жить в активной ветке cycle и не нужны для
+rollback содержимого TC.
+
+Перед перезаписью существующего canonical TC создавай baseline snapshot
+инструментом `scripts/practical_snapshot_preflight.py`. Передай ему canonical TC
+и только те split-artifacts (например, test-design matrix), которые этот writer
+pass действительно перезапишет. Инструмент копирует bytes во временную папку,
+сверяет SHA-256 с исходником и только после этого атомарно публикует snapshot.
+После публикации snapshot не редактируется, не «чинится» и не переиспользуется.
+
+`snapshot-manifest.yaml` содержит package-relative source paths, пути копий,
+размеры, SHA-256 исходника до записи и SHA-256 копии. JSON-содержимое допустимо
+в файле с расширением `.yaml`, так как является валидным YAML и обеспечивает
+проверяемый dependency-free формат.
 
 Новые прогоны не должны писать snapshots в `work/review-loops/`.
 
@@ -130,7 +146,11 @@ fts/<ft-slug>/work/review-cycles/<scope-slug>/
 
 ## Обязательные Правила
 
-- Сначала обновляется канонический файл в `test-cases/`, затем runner сохраняет snapshot контрольной точки.
+- Перед изменением существующего canonical файла writer создаёт и проверяет
+  `pre_write_baseline` snapshot. Если создание или проверка не прошли, writer
+  не меняет canonical TC и останавливается на `blocked-quality-gate`.
+- После успешной writer-записи можно создать отдельный snapshot новой контрольной
+  точки, но baseline snapshot не заменяется и не изменяется.
 - `test-cases/` хранит только текущий baseline для scope, не историю.
 - `work/review-cycles/<scope>/versions/` хранит историю.
 - `cycle-state.yaml` является source of truth для session-based process status.

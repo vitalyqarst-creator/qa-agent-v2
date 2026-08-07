@@ -45,8 +45,14 @@ fts/<ft-slug>/work/stage-handoffs/NN-<scope-slug>/workflow-state.yaml
 
 ## Правила полей
 
-- `required_inputs` — список файлов, без которых следующий этап не должен стартовать.
-- `latest_artifacts` — map с относительными путями к последним актуальным артефактам handoff и session-based review-cycle.
+- `required_inputs` — минимальный список файлов, без которых **следующий** этап
+  не должен стартовать. Не добавляй туда старые prompts, session logs, decision
+  logs, прошлые review receipts или иные исторические артефакты только ради
+  аудита: они остаются в `work/`, но не входят в runtime context следующего
+  агента.
+- `latest_artifacts` — map с относительными путями к последним актуальным
+  артефактам handoff и session-based review-cycle. Для одного логического alias
+  указывай один текущий файл; историю не дублируй под разными aliases.
 - Для `ft-source-locator`, `ft-scope-analyzer`, `ft-test-case-writer`, `ft-test-case-reviewer` и `ft-test-case-iteration` `latest_artifacts` должен ссылаться на актуальный `*session-log*.md` по `references/agent/session-log-format.md`.
 - Для стадий, где агент принимает source/scope/writer/reviewer/routing решения, `latest_artifacts.decision_log` должен ссылаться на `agent-decision-log.md` по `references/agent/agent-decision-log-format.md`. Этот artifact фиксирует промежуточные решения и их rationale; `workflow-state.yaml` остается единственным источником process-status.
 - Session log должен соответствовать текущему stage. Ссылка на лог другого stage не считается корректным handoff даже если файл существует. Примеры: `ft-source-locator` должен ссылаться на `source-locator-session-log.md` или лог с `skill = ft-source-locator`; writer должен ссылаться на `writer-session-log.md` или лог с `skill = ft-test-case-writer`.

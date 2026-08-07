@@ -876,10 +876,13 @@ def parse_workflow_state(path: Path) -> dict[str, Any]:
 
 def iter_workflow_states(root: Path) -> list[Path]:
     if root.is_file() and root.name == "workflow-state.yaml":
-        return [root]
+        return [] if "versions" in root.parts else [root]
     if (root / "fts").is_dir():
-        return sorted((root / "fts").rglob("workflow-state.yaml"))
-    return sorted(root.rglob("workflow-state.yaml"))
+        candidates = (root / "fts").rglob("workflow-state.yaml")
+    else:
+        candidates = root.rglob("workflow-state.yaml")
+    # Version snapshots are immutable rollback evidence, never active workflow.
+    return sorted(path for path in candidates if "versions" not in path.parts)
 
 
 def iter_session_cycle_states(root: Path) -> list[Path]:
@@ -3808,8 +3811,8 @@ def validate_coverage_gap_inventory(
                 evidence=gap_only_input_restrictions[:20],
                 recommended_action=(
                     "Create candidate-negative TC coverage with a concrete representative invalid value, "
-                    "`Статус oracle: ui-calibration-required`, `Статус тест-кейса: candidate-ui-calibration`, "
-                    "`Требуется подтверждение`, and an optional linked GAP/BA question for the unknown UI mechanism."
+                    "`Статус исполнения: candidate-ui-calibration`, `Требуется подтверждение`, "
+                    "and an optional linked GAP/BA question for the unknown UI mechanism."
                 ),
             )
         )
@@ -13464,6 +13467,7 @@ PRODUCTION_TEST_CASE_METADATA_FIELDS = (
     "**Шаги:**",
     "**Ожидаемый результат:**",
     "**Постусловия:**",
+    # Legacy aliases remain parse boundaries only; new practical TC must not emit them.
     "**Статус oracle:**",
     "**Статус тест-кейса:**",
     "**Требуется подтверждение:**",
@@ -14004,14 +14008,11 @@ def validate_ui_calibration_candidate_test_cases(
     for test_case_id, block in blocks:
         if not is_ui_calibration_candidate_block(block):
             continue
-        has_oracle_status = bool(UI_CALIBRATION_REQUIRED_RE.search(block))
         has_candidate_status = bool(CANDIDATE_UI_CALIBRATION_RE.search(block))
         has_calibration_note = bool(UI_CALIBRATION_NOTE_RE.search(block))
         confirmation_match = CANDIDATE_CONFIRMATION_FIELD_RE.search(block)
-        if not (has_oracle_status and has_candidate_status and has_calibration_note):
+        if not (has_candidate_status and has_calibration_note):
             missing = []
-            if not has_oracle_status:
-                missing.append("oracle_status/ui-calibration-required")
             if not has_candidate_status:
                 missing.append("candidate-ui-calibration")
             if not has_calibration_note:
@@ -14022,7 +14023,8 @@ def validate_ui_calibration_candidate_test_cases(
 
         test_data = extract_test_case_field_block(block, ["Тестовые данные", "Test Data", "test_data", "test data"])
         steps = extract_test_case_field_block(block, ["Шаги", "Steps", "steps"])
-        if not candidate_has_concrete_invalid_value(test_data, steps):
+        test_type = extract_test_case_field_block(block, ["Тип", "Type"]).casefold()
+        if "negative" in test_type and not candidate_has_concrete_invalid_value(test_data, steps):
             missing_concrete_values.append(
                 f"{test_case_id}:test_data={test_data[:120] or '-'}; steps={steps[:120] or '-'}"
             )
@@ -14032,7 +14034,7 @@ def validate_ui_calibration_candidate_test_cases(
             ["Итоговый ожидаемый результат", "Ожидаемый результат", "Expected Result"],
         )
         if (
-            has_oracle_status
+            has_candidate_status
             and expected_result
             and CONCRETE_UI_REACTION_WITHOUT_EVIDENCE_RE.search(expected_result)
             and not UI_CALIBRATION_ALLOWED_EXPECTED_RE.search(expected_result)
@@ -14048,14 +14050,14 @@ def validate_ui_calibration_candidate_test_cases(
                 category="test-case-format",
                 title="UI calibration candidate test cases miss required markers",
                 details=(
-                    "A candidate TC must explicitly expose `ui-calibration-required`, "
-                    "`candidate-ui-calibration` and a specific confirmation question."
+                    "A candidate TC must expose `Статус исполнения: candidate-ui-calibration` "
+                    "and a specific confirmation question."
                 ),
                 path=display_path,
                 evidence=missing_markers[:20],
                 recommended_action=(
-                    "Add `Статус oracle: ui-calibration-required`, `Статус тест-кейса: "
-                    "candidate-ui-calibration`, and `Требуется подтверждение: <specific missing oracle question>`."
+                    "Add `Статус исполнения: candidate-ui-calibration` and "
+                    "`Требуется подтверждение: <specific missing oracle question>`."
                 ),
             )
         )
@@ -16443,8 +16445,8 @@ def validate_test_case_quality_smells(
                 path=display_path,
                 evidence=process_marker_titles[:20],
                 recommended_action=(
-                    "Remove process markers from `Название` and keep candidate status in `Статус oracle`, "
-                    "`Статус тест-кейса` and `Требуется подтверждение` fields."
+                    "Remove process markers from `Название` and keep candidate status in `Статус исполнения` "
+                    "with the concrete unresolved item in `Требуется подтверждение`."
                 ),
             )
         )

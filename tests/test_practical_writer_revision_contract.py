@@ -103,6 +103,22 @@ class PracticalWriterRevisionContractTests(unittest.TestCase):
                 {finding.id for finding in findings},
             )
 
+    def test_candidate_ui_calibration_uses_single_execution_status_field(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "fts" / "Sample"
+            tc_path = self.make_test_case(
+                root,
+                status="candidate-ui-calibration",
+                confirmation="Уточнить наблюдаемую реакцию UI после выбора подсказки.",
+            )
+
+            findings, _ = self.validator.validate_test_case_file(tc_path, root)
+
+            self.assertNotIn(
+                "test-case-ui-calibration-candidate-missing-marker",
+                {finding.id for finding in findings},
+            )
+
     def test_revision_status_assertion_must_match_canonical_case(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / "fts" / "Sample"

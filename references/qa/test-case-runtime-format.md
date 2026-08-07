@@ -37,6 +37,9 @@
   `needs-future-clarification`. Формулировка `Не требуется; ...` допустима,
   если продолжение только фиксирует уже доступное evidence и не объявляет новую
   неполученную зависимость.
+- Используй ровно одно поле статуса: `**Статус исполнения:**`. Не добавляй
+  синонимы `Статус oracle` или `Статус тест-кейса`: вид остаточной зависимости
+  раскрывается русским текстом в `Требуется подтверждение`.
 - `Название` описывает бизнес-проверку. Не пиши в названии process markers: `UI calibration`, `candidate`, `oracle`, `requires confirmation`, `требует подтверждения`, `требуется подтверждение`.
 - A runtime `TC-*` is materially useless and must be rewritten or downgraded to
   an explicit non-executable status when it has no concrete object under test,
@@ -106,7 +109,7 @@
 
 Для input restrictions не додумывай механизм enforcement. `Только цифры`, length или mask задают класс допустимых значений, но не доказывают, что UI фильтрует ввод, очищает поле, показывает marker или блокирует переход. Используй field-state только с evidence, transition-state только с полным valid fixture остальных обязательных полей, иначе `GAP-*` / `unclear`.
 
-Если такой restriction пришел из oracle inventory с `decision = candidate_tc_required`, сохраняй проверку как candidate TC по `negative-ui-calibration-policy.md`: `Статус oracle`, `Статус тест-кейса` и `Требуется подтверждение` указываются только в теле TC, а `Тестовые данные` или шаг содержит concrete representative invalid value.
+Если такой restriction пришел из oracle inventory с `decision = candidate_tc_required`, сохраняй проверку как candidate TC по `negative-ui-calibration-policy.md`: `Статус исполнения: candidate-ui-calibration` и конкретный русский вопрос в `Требуется подтверждение` указываются в теле TC, а `Тестовые данные` или шаг содержит concrete representative invalid value.
 
 - Rolling date boundaries: use `D` current app date; future-negative = `D+1 calendar day`; no fixed sole boundary dates; BAQ if unclear.
 

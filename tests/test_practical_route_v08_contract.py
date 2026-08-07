@@ -122,6 +122,8 @@ class PracticalRouteV08ContractTests(unittest.TestCase):
         self.assertIn("do not create reviewer task", route)
         self.assertIn("pre_quality_gate_baseline", route)
         self.assertIn("snapshot-manifest.yaml", policy)
+        self.assertIn("practical_snapshot_preflight.py", policy)
+        self.assertIn("pre_write_baseline", policy)
         self.assertIn("не плодить несколько конкурирующих", policy)
         self.assertIn("Writer Quality Gate blocks reviewer launch", preflight)
 

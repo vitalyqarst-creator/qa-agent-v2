@@ -25,8 +25,7 @@ Candidate UI calibration is an oracle-status marker, not a title taxonomy. `**Н
 
 Required fields:
 
-- `**Статус oracle:** ui-calibration-required`
-- `**Статус тест-кейса:** candidate-ui-calibration`
+- `**Статус исполнения:** candidate-ui-calibration`
 - `**Требуется подтверждение:** <specific missing oracle question>`
 
 Inventory row: `decision = candidate_tc_required`, `oracle_status = ui-calibration-required`, `planned_tc_or_gap`, `calibration_notes`.
@@ -58,9 +57,9 @@ Do not assert exact message, color, disabled state, filtering, clearing, blocked
 
 ## Calibration
 
-Record trigger, observed reaction, message if present, transition/save effect, evidence, and expected-result / `oracle_status` update.
+Record trigger, observed reaction, message if present, transition/save effect, evidence, and the update of `Статус исполнения`.
 
-After evidence: use one observed oracle, set `oracle_status = observed-ui-backed | analyst-confirmed`, remove candidate marker, do not rewrite FT-first baseline without evidence.
+After evidence: use one observed oracle, change `Статус исполнения` to the appropriate execution status, remove the unresolved confirmation, do not rewrite FT-first baseline without evidence.
 
 ## Canonical Suite Status
 

@@ -149,6 +149,9 @@ runtime inputs. `Статус исполнения: ready` is forbidden when `Т
 подтверждение` remains, or the case still needs an unverified fixture, concrete
 test data, access path or observable oracle. Record each affected `TC-*` and its
 exact final status under `## Status Assertions` in `tc-revision-summary.md`.
+Before overwriting an existing canonical file, create and verify its immutable
+`pre_write_baseline` with `scripts/practical_snapshot_preflight.py`; a failed
+snapshot blocks the write and must not be repaired in place.
 Route only to the final independent reviewer; writer cannot sign off, release or
 start UI preparation from a bounded revision.
 12c. If a validator detects only a status/confirmation/summary inconsistency
@@ -159,6 +162,12 @@ refresh `## Status Assertions` and refresh the practical stage summary with the
 current Code Version Gate commit. This repair is not permission for another
 writer/reviewer loop.
 13. If an applicable dimension requires mandatory coverage classes (`numeric-format`, `exact-length`, dependency transitions, repeatable blocks, checkbox-list, generated document mapping), decompose them in `Coverage Obligation Table`, `Package Test Design Plan`, and `coverage-metrics.md` before `TC-*`.
+13a. For a status/permission/visibility check, one executable TC has one object
+level, one actor capability and one observable outcome. Do not merge an
+administrator-positive and a restricted-user-negative assertion into one TC.
+Use exact visible labels from mockups or approved UI evidence in runtime steps;
+a section title from the FT is not a UI label. Use only `Статус исполнения` for
+the execution state; do not add `Статус oracle` or `Статус тест-кейса`.
 14. If writer cannot prepare a verifiable result without new scope/source decisions, use `blocked-input`.
 15. Before writer-ready handoff, run `artifact-shape-preflight` from `writer-output-format.md` and `writer-quality-gate-format.md`: split artifacts must use exact canonical headings/table columns without alias columns and without neighboring duplicates such as `# X` + `## X`; `writer-quality-gate.md` must have `gate_item | status | evidence | affected_package | required_action | blocks_ready_for_review`; canonical TC file must not duplicate split artifact tables or embed split-design sections. On any such defect, set `blocked-input` or fix artifacts before review handoff.
 16. Do not use non-canonical status aliases in writer-side artifacts: `Writer Quality Gate` and `Test Design Review` accept only `pass | fail | blocked | needs-rewrite`; `Coverage Obligation Table` accepts only `covered | gap | unclear | blocked | not-applicable | n/a`. `pass-with-gap`, `pass-with-gaps`, `planned`, `ok`, `yes`, `passed`, `failed`, and local variants are validator defects.
