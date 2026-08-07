@@ -1398,7 +1398,7 @@ def iter_test_case_files(root: Path) -> list[Path]:
             *(
                 path
                 for path in scope.rglob("test-cases/*.md")
-                if path.name != "README.md"
+                if path.name != "README.md" and not is_historical_or_scratch_artifact(path)
             ),
             *(
                 path
@@ -4819,6 +4819,9 @@ PRACTICAL_STAGE_SUMMARY_REQUIRED_OPERATIONAL_FIELDS = {
     "source_restore_sha256",
 }
 PRACTICAL_STAGE_SUMMARY_SCOPE_IDS_RE = re.compile(r"^\d{2}(?:\s*,\s*\d{2})*$")
+PRACTICAL_STAGE_SUMMARY_REVISION_RE = re.compile(
+    r"(?i)(?:^|[^a-z0-9])(?:round|r)[-_ ]?(\d+)(?=$|[^0-9])"
+)
 PRACTICAL_STAGE_SUMMARY_HUMAN_FIELDS = {
     "next_safe_step",
     "writer_stage_continuation",
@@ -5161,6 +5164,87 @@ def parse_nonnegative_int(value: str) -> int | None:
         return int(match.group(0))
     except ValueError:
         return None
+
+
+def practical_revision_numbers(value: str) -> set[int]:
+    """Extract explicit rN / round-N tokens from a controller artifact."""
+
+    return {int(match.group(1)) for match in PRACTICAL_STAGE_SUMMARY_REVISION_RE.finditer(value)}
+
+
+def practical_stage_summary_revision_alias_issues(
+    fields: Mapping[str, str],
+) -> list[str]:
+    """Detect stale controller round labels before a practical handoff.
+
+    The active transition prompt is the current routing source.  A summary can
+    contain historical rounds in narrative sections, so only its routing fields
+    and a single active scope are compared.
+    """
+
+    normalized_scope_ids = re.sub(r"\s+", "", fields.get("active_scope_ids", ""))
+    if not PRACTICAL_STAGE_SUMMARY_SCOPE_IDS_RE.fullmatch(normalized_scope_ids):
+        return []
+
+    ft_package_root = strip_markdown_code(fields.get("ft_package_root", "")).strip()
+    if not ft_package_root:
+        return []
+    handoff_root = Path(ft_package_root) / "work" / "stage-handoffs"
+    if not handoff_root.is_dir():
+        return []
+
+    scope_ids = normalized_scope_ids.split(",")
+    issues: list[str] = []
+    active_prompt_rounds: dict[str, int] = {}
+    for scope_id in scope_ids:
+        handoffs = sorted(path for path in handoff_root.glob(f"{scope_id}-*") if path.is_dir())
+        if len(handoffs) != 1:
+            continue
+        try:
+            state = parse_workflow_state(handoffs[0] / "workflow-state.yaml")
+        except (FileNotFoundError, UnicodeDecodeError):
+            continue
+        # The canonical handoff location is latest_artifacts.  Accept the
+        # legacy top-level location while old packages are still readable.
+        prompt_value = str(
+            explicit_active_transition_prompt_value(state)
+            or state.get("active_transition_prompt")
+            or ""
+        )
+        prompt_rounds = practical_revision_numbers(prompt_value)
+        if len(prompt_rounds) != 1:
+            continue
+        prompt_round = next(iter(prompt_rounds))
+        active_prompt_rounds[scope_id] = prompt_round
+        current_round = parse_nonnegative_int(str(state.get("current_round") or ""))
+        if current_round is None:
+            issues.append(
+                f"scope={scope_id}:workflow.current_round=missing-or-invalid; "
+                f"active_transition_prompt={prompt_value}:round={prompt_round}"
+            )
+        elif current_round != prompt_round:
+            issues.append(
+                f"scope={scope_id}:workflow.current_round={current_round}; "
+                f"active_transition_prompt={prompt_value}:round={prompt_round}"
+            )
+
+    # A package summary may cover several scopes at different rounds. In that
+    # situation summary_stage/next_safe_step must not be interpreted as a
+    # package-wide round alias.
+    if len(scope_ids) != 1:
+        return issues
+    scope_id = scope_ids[0]
+    prompt_round = active_prompt_rounds.get(scope_id)
+    if prompt_round is None:
+        return issues
+    for field_name in ("summary_stage", "next_safe_step"):
+        field_rounds = practical_revision_numbers(fields.get(field_name, ""))
+        if field_rounds and field_rounds != {prompt_round}:
+            issues.append(
+                f"scope={scope_id}:{field_name}=rounds:{','.join(map(str, sorted(field_rounds)))}; "
+                f"active_transition_prompt=round:{prompt_round}"
+            )
+    return issues
 
 
 def practical_stage_summary_has_specific_finding_evidence(value: str) -> bool:
@@ -5719,6 +5803,27 @@ def validate_practical_stage_summary(path: Path, root: Path) -> tuple[list[Findi
                         recommended_action="Correct the allowlist to the actual handoff ids for the scopes changed in this stage.",
                     )
                 )
+
+    revision_alias_issues = practical_stage_summary_revision_alias_issues(fields)
+    if revision_alias_issues:
+        findings.append(
+            Finding(
+                id="practical-stage-summary-revision-alias-stale",
+                severity="error",
+                category="practical-stage-summary",
+                title="Practical stage summary uses a stale revision alias",
+                details=(
+                    "The active transition prompt, workflow current_round and current summary routing fields must "
+                    "refer to the same practical revision. A stale round can dispatch the wrong reviewer input."
+                ),
+                path=display_path,
+                evidence=revision_alias_issues[:20],
+                recommended_action=(
+                    "Refresh workflow-state.yaml and the current summary routing fields from the active transition "
+                    "prompt; retain older round numbers only in Prior state context."
+                ),
+            )
+        )
 
     transition = fields.get("next_stage_transition", "").strip().lower()
     if transition not in PRACTICAL_STAGE_SUMMARY_ALLOWED_TRANSITIONS:

@@ -126,6 +126,36 @@ class PracticalArtifactQualityGateTests(unittest.TestCase):
 
         self.assertIn("test-case-duplicate-canonical-field", ids)
 
+    def test_ignores_historical_snapshot_test_cases_for_current_quality_findings(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            active = root / "fts" / "Sample" / "test-cases" / "scope.md"
+            historical = (
+                root
+                / "fts"
+                / "Sample"
+                / "work"
+                / "review-cycles"
+                / "scope"
+                / "versions"
+                / "r1"
+                / "files"
+                / "test-cases"
+                / "scope.md"
+            )
+            active.parent.mkdir(parents=True)
+            historical.parent.mkdir(parents=True)
+            active.write_text(self.case_with_steps("1. Попытаться найти скрытого партнера в реестре."), encoding="utf-8")
+            historical.write_text(
+                self.case_with_steps("1. Попытаться найти скрытого партнера в реестре.")
+                + "\n**Ссылка на ФТ:** `AS.1`; PDF стр. 3.\n",
+                encoding="utf-8",
+            )
+
+            ids = self.finding_ids(root)
+
+        self.assertNotIn("test-case-duplicate-canonical-field", ids)
+
     def test_form_isolation_requires_explicit_fields_and_immediate_check(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

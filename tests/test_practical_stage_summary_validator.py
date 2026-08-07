@@ -901,6 +901,131 @@ class PracticalStageSummaryValidatorTests(unittest.TestCase):
             {finding.id for finding in findings},
         )
 
+    def test_rejects_stale_revision_aliases_against_active_prompt(self) -> None:
+        root = self.make_package(
+            summary_stage="scope01-writer-revision-r6-completed",
+        )
+        summary = root / "work" / "practical-stage-summary.md"
+        summary.write_text(
+            summary.read_text(encoding="utf-8").replace(
+                "Продолжить работу на следующем разрешенном этапе.",
+                "Выполнить независимую проверку r5.",
+            ),
+            encoding="utf-8",
+        )
+        handoff = root / "work" / "stage-handoffs" / "01-sample"
+        prompt = handoff / "prompt.writer-to-reviewer.round-6.md"
+        prompt.write_text("# Reviewer prompt\n", encoding="utf-8")
+        (handoff / "workflow-state.yaml").write_text(
+            "\n".join(
+                [
+                    "scope_slug: sample",
+                    "current_round: 5",
+                    "active_transition_prompt: work/stage-handoffs/01-sample/prompt.writer-to-reviewer.round-6.md",
+                    "latest_artifacts:",
+                    "  practical_stage_summary: work/practical-stage-summary.md",
+                ]
+            ),
+            encoding="utf-8",
+        )
+
+        findings, _ = self.validator.validate_practical_stage_summary(summary, root)
+
+        self.assertIn(
+            "practical-stage-summary-revision-alias-stale",
+            {finding.id for finding in findings},
+        )
+
+    def test_accepts_current_revision_aliases_against_active_prompt(self) -> None:
+        root = self.make_package(
+            summary_stage="scope01-writer-revision-r6-completed",
+        )
+        summary = root / "work" / "practical-stage-summary.md"
+        summary.write_text(
+            summary.read_text(encoding="utf-8").replace(
+                "Продолжить работу на следующем разрешенном этапе.",
+                "Выполнить независимую проверку r6.",
+            ),
+            encoding="utf-8",
+        )
+        handoff = root / "work" / "stage-handoffs" / "01-sample"
+        prompt = handoff / "prompt.writer-to-reviewer.round-6.md"
+        prompt.write_text("# Reviewer prompt\n", encoding="utf-8")
+        (handoff / "workflow-state.yaml").write_text(
+            "\n".join(
+                [
+                    "scope_slug: sample",
+                    "current_round: 6",
+                    "active_transition_prompt: work/stage-handoffs/01-sample/prompt.writer-to-reviewer.round-6.md",
+                    "latest_artifacts:",
+                    "  practical_stage_summary: work/practical-stage-summary.md",
+                ]
+            ),
+            encoding="utf-8",
+        )
+
+        findings, _ = self.validator.validate_practical_stage_summary(summary, root)
+
+        self.assertNotIn(
+            "practical-stage-summary-revision-alias-stale",
+            {finding.id for finding in findings},
+        )
+
+    def test_rejects_missing_current_round_when_active_prompt_has_revision(self) -> None:
+        root = self.make_package(summary_stage="scope01-writer-revision-r6-completed")
+        handoff = root / "work" / "stage-handoffs" / "01-sample"
+        prompt = handoff / "prompt.writer-to-reviewer.round-6.md"
+        prompt.write_text("# Reviewer prompt\n", encoding="utf-8")
+        (handoff / "workflow-state.yaml").write_text(
+            "\n".join(
+                [
+                    "scope_slug: sample",
+                    "active_transition_prompt: work/stage-handoffs/01-sample/prompt.writer-to-reviewer.round-6.md",
+                    "latest_artifacts:",
+                    "  practical_stage_summary: work/practical-stage-summary.md",
+                ]
+            ),
+            encoding="utf-8",
+        )
+
+        findings, _ = self.validator.validate_practical_stage_summary(
+            root / "work" / "practical-stage-summary.md",
+            root,
+        )
+
+        self.assertIn(
+            "practical-stage-summary-revision-alias-stale",
+            {finding.id for finding in findings},
+        )
+
+    def test_reads_active_revision_prompt_from_latest_artifacts(self) -> None:
+        root = self.make_package(summary_stage="scope01-writer-revision-r6-completed")
+        handoff = root / "work" / "stage-handoffs" / "01-sample"
+        prompt = handoff / "prompt.writer-to-reviewer.round-6.md"
+        prompt.write_text("# Reviewer prompt\n", encoding="utf-8")
+        (handoff / "workflow-state.yaml").write_text(
+            "\n".join(
+                [
+                    "scope_slug: sample",
+                    "current_round: 5",
+                    "latest_artifacts:",
+                    "  active_transition_prompt: work/stage-handoffs/01-sample/prompt.writer-to-reviewer.round-6.md",
+                    "  practical_stage_summary: work/practical-stage-summary.md",
+                ]
+            ),
+            encoding="utf-8",
+        )
+
+        findings, _ = self.validator.validate_practical_stage_summary(
+            root / "work" / "practical-stage-summary.md",
+            root,
+        )
+
+        self.assertIn(
+            "practical-stage-summary-revision-alias-stale",
+            {finding.id for finding in findings},
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -69,7 +69,7 @@ matrix и canonical TC, собирает evidence и только после э�
 | `fixture-resolution` | `pass` | Каждый упомянутый fixture существует в каталоге либо полностью раскрыт в текущем TC. | `all` | none_required:pass | `no` |
 | `closed-dictionary-completeness` | `pass` | Для закрытого справочника проверено «все и только» значения из `dictionary-inventory.md`. | `WP-01` | none_required:pass | `no` |
 | `boundary-class-completeness` | `pass` | Для применимых ограничений описаны границы, допустимые и недопустимые эквивалентные значения. | `WP-01` | none_required:pass | `no` |
-| `creation-form-isolation-coverage` | `pass` | `test-design-matrix.md`: `TC-EXAMPLE-014`; после создания A новая форма B не содержит значения A. | `WP-01` | none_required:pass | `no` |
+| `creation-form-isolation-coverage` | `pass` | `test-design-matrix.md`: `TC-EXAMPLE-014`; проверяемые поля: `Наименование`, `Расчетный счет`; после создания A новая форма B не содержит значения A. | `WP-01` | none_required:pass | `no` |
 | `semantic-compression` | `fail` | `ATOM-017` закрывает `GSR 34`-`GSR 58` одним scenario TC. | `WP-02` | Переписать package от Source Table Normalization до TC. | `yes` |
 ```
 

@@ -343,6 +343,11 @@ Use
 `python scripts/refresh_practical_stage_summary.py --root . --summary <path> --scope-id <two-digit scope id> --print-fields`
 to compute the current validator counts/evidence, including info findings, and
 `git_persistence` before updating the summary.
+When the active transition prompt names a revision `rN` / `round-N`, the same
+current revision must be recorded in `workflow-state.yaml.current_round` and in
+the routing fields of a single-scope summary (`summary_stage` and
+`next_safe_step` when they name a round). Older round numbers belong only in
+`Prior state context`.
 If changed FT/package artifacts are ignored by git, set
 `git_persistence = ignored-by-git` or `mixed` and state that ordinary
 commit/push will not persist those files. The stage/final response must also
