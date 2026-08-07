@@ -655,6 +655,14 @@ Rules:
 - choose the exact class group from
   [../qa/coverage-class-catalog.md](../qa/coverage-class-catalog.md); activate a
   group only when the current source contains the matching rule;
+- when a source-backed `Создать` / `Добавить` action opens a form for a new
+  independent object, child record or row, add the derived
+  `R-CREATE-FORM-ISOLATION` row: create A with distinctive user-entered values,
+  open creation of B, and verify that B is not prefilled with A values. The
+  row may be `not-applicable` only with a reason: no independent creation,
+  source-defined copy/inheritance/persistent draft, or no editable value to
+  distinguish. Source-defined defaults, context values and autofill are not
+  treated as leaked values;
 - do not create test cases for glossary/status-table rows when later FT sections
   define the actual screen, action and expected result; assign the matrix row to
   that screen/action scope and use the status row only as supporting context in
@@ -690,7 +698,9 @@ Matrix review gate:
   from `coverage-class-catalog.md`, creates standalone tests from glossary/status
   rows when later FT sections define real actions, leaves `Объект и место
   выполнения` generic or mixes UI levels, or plans TC whose expected
-  result has no observable UI/API/document artifact.
+  result has no observable UI/API/document artifact. It must also block an
+  applicable independent-create flow without the `R-CREATE-FORM-ISOLATION`
+  row, or a row that demands blank source-defined defaults/autofill.
 
 ## Bounded TC Revision And Final Review Gate
 
@@ -747,6 +757,7 @@ The catalog covers the common source-backed rule groups:
 - status/lifecycle rules;
 - cross-field dependencies and combinations;
 - generated documents and mappings.
+- independent creation and form isolation.
 
 If the exact UI reaction is unknown, do not drop the class. Keep the class in the
 matrix and create a `candidate-ui-calibration` or `blocked-observability` case
@@ -823,6 +834,11 @@ Before handing off to reviewer, the writer checks every canonical file:
 - if DaData or another integration is in scope, test cases use a fixed verified
   fixture with exact query/input and exact expected suggestion/result; do not ask
   the tester to call a live service during test execution.
+- for an applicable independent creation flow, the plan contains a separate
+  form-isolation TC: after creating A with distinctive user-entered values,
+  opening creation of B does not prefill B with A values. Source-defined
+  defaults, context values, inheritance, clone/import behavior and documented
+  draft restoration are excluded or tested by their own source-backed case.
 - for each source obligation that names a closed set of fields, values or output
   parts, the matrix and TC enumerate the same set. A `ready` TC may not silently
   omit one member of the source list; its fixture must contain every value that

@@ -39,6 +39,7 @@ but exact UI reaction is unknown, keep the class and mark the planned TC as
 | dictionary / closed list / autocomplete / integration-backed selector | every source-listed value or a justified full relevant subset; empty value when required; exact-value search when applicable; partial search when applicable; invalid/free-text value when manual input is possible or closed-set behavior must be proven; no-result query only with verified fixture/evidence |
 | date / date-time / current-date-dependent rule | valid date in source format; current date `D`; `D-1`; `D+1`; minimum boundary when defined; maximum boundary when defined; invalid format; impossible calendar date; empty value when required |
 | required field | empty value with the source-backed trigger/commit action; filled valid value; split by input mechanism: typed field, dictionary/autocomplete selection, system-filled, dependent autofill, readonly, repeatable-row/action-created, conditional requiredness |
+| create/add a new independent object, child record or row | create object A with distinctive user-entered values; invoke the same create action for object B; verify that B does not contain values entered for A; retain only source-defined defaults, context values, inheritance or autofill |
 
 The quick matrix is intentionally not a Cartesian-product generator. Activate
 only the classes that follow from the current source rule.
@@ -268,6 +269,25 @@ Minimum classes:
 - delete last row or record a narrow gap if empty-state behavior is not defined;
 - boundary min/max count when the source defines count limits.
 
+## Independent creation and form isolation (`R-CREATE-FORM-ISOLATION`)
+
+Apply this class when a source-backed `Создать` / `Добавить` action opens a
+form for a new independent object, child record or row. It is not a clone,
+copy, import, inherited child or an explicitly persistent draft flow.
+
+Minimum class:
+
+- create object A with distinctive values in one or more editable fields;
+- invoke the same creation action for object B;
+- verify that the new form for B does not contain the values entered for A.
+
+The creation of A is setup for this check; the single main expected result is
+the absence of leaked values in B. Do not require source-defined defaults,
+context values, inherited values or documented autofill to be empty. If the
+source explicitly defines copying, inheritance or persistent draft values,
+cover that behavior instead and mark this class not applicable with the source
+reason.
+
 ## Uniqueness and duplicate checks
 
 Use when the source defines unique keys or duplicate prevention.
@@ -370,6 +390,9 @@ Reviewer must block or return findings when:
 - a dictionary/list/integration rule uses examples instead of the relevant list
   or a fixture need;
 - boundary classes are missing for exact length, min/max range, date/current-date
-  or file size limits.
+  or file size limits;
+- a source-backed independent creation action has no form-isolation class, or
+  the planned check wrongly treats source-defined defaults, inheritance or
+  autofill as leaked values.
 - status/lifecycle coverage checks only an internal/business state label and
   does not name an observable UI/API/document artifact.

@@ -47,6 +47,7 @@ writer запускает gate для новой revision и только тог
 | `fixture-resolution` | `pass` | Каждый упомянутый fixture существует в каталоге либо полностью раскрыт в текущем TC. | `all` | none_required:pass | `no` |
 | `closed-dictionary-completeness` | `pass` | Для закрытого справочника проверено «все и только» значения из `dictionary-inventory.md`. | `WP-01` | none_required:pass | `no` |
 | `boundary-class-completeness` | `pass` | Для применимых ограничений описаны границы, допустимые и недопустимые эквивалентные значения. | `WP-01` | none_required:pass | `no` |
+| `creation-form-isolation-coverage` | `pass` | Для применимого действия создания проверен переход от объекта A с отличительными значениями к новой форме B без переноса этих значений; либо указана source-backed причина неприменимости. | `WP-01` | none_required:pass | `no` |
 | `semantic-compression` | `fail` | `ATOM-017` закрывает `GSR 34`-`GSR 58` одним scenario TC. | `WP-02` | Переписать package от Source Table Normalization до TC. | `yes` |
 ```
 
@@ -82,6 +83,7 @@ writer запускает gate для новой revision и только тог
 - `fixture-resolution`: ссылка на `FX-*` допустима только на существующий fixture catalog или на полностью раскрытые данные в самом TC. Нельзя подменять реальную интеграционную/DaData запись выдуманным названием организации.
 - `closed-dictionary-completeness`: если source/support определяет закрытый перечень, план и TC проверяют присутствие всех разрешенных значений и отсутствие дополнительных; два случайных примера не являются покрытием перечня.
 - `boundary-class-completeness`: для digits-only отдельно представлены допустимые цифры и недопустимые классы (латиница, кириллица, пробел, знак/дефис, точка/десятичный разделитель, спецсимвол) в применимом объеме; для exact/min/max length есть границы и соседние значения.
+- `creation-form-isolation-coverage`: если действие `Создать` / `Добавить` открывает форму нового независимого объекта, дочерней записи или строки, matrix/TC проверяют: после создания A с отличительными пользовательскими значениями новая форма B не предзаполнена значениями A. Не требуй пустоты для source-defined default, context/inherited value, clone/import или документированного draft restoration; при неприменимости укажи конкретную source-backed причину.
 - `tc-regression-smells`: canonical TC file не содержит повторяющиеся canary-defects: placeholder `-` / `N/A`, source-rule oracle, duplicate modeled as positive save, downstream local rejection, injected requiredness, optional-as-required, field input after save, generic editability steps, dictionary TC без `все и только активные значения`, nondeterministic negative oracle через `или`, executable unresolved `GAP-*`, ambiguous UI alias/action, derived checks без source/rule derivation, шаблонное cleanup-постусловие в read-only TC.
 - `internal-observability`: internal/API/RabbitMQ/model/database behavior без observable artifact остается `GAP-*`/`unclear`.
 - `action-observability`: action/async TC со статусом `covered` называют конкретный observable result или artifact; `action initiated` без evidence остается `GAP-*`/`unclear`.

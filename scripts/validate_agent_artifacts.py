@@ -8224,6 +8224,7 @@ WRITER_QUALITY_GATE_REQUIRED_ITEMS = {
     "source-obligation-completeness",
     "closed-dictionary-completeness",
     "boundary-class-completeness",
+    "creation-form-isolation-coverage",
     "internal-observability",
     "action-observability",
     "expected-result-singularity",

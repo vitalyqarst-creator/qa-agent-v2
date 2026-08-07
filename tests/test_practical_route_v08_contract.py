@@ -105,10 +105,23 @@ class PracticalRouteV08ContractTests(unittest.TestCase):
             "fixture-resolution",
             "closed-dictionary-completeness",
             "boundary-class-completeness",
+            "creation-form-isolation-coverage",
         ):
             self.assertIn(item, writer)
             self.assertIn(item, gate)
             self.assertIn(item, validator)
+
+    def test_independent_creation_requires_form_isolation_coverage(self) -> None:
+        route = self.read("references/agent/practical-test-case-route-v0.8.md")
+        catalog = self.read("references/qa/coverage-class-catalog.md")
+        rule_cards = self.read("references/agent/runtime-quality-rule-cards.md")
+        reviewer = self.read("skills/ft-test-case-reviewer/SKILL.md")
+
+        for content in (route, catalog, rule_cards, reviewer):
+            self.assertIn("R-CREATE-FORM-ISOLATION", content)
+        self.assertIn("does not contain the values entered for A", catalog)
+        self.assertIn("source-defined defaults", catalog)
+        self.assertIn("not prefilled with distinctive values", reviewer)
 
     def test_quality_gate_recovery_is_compact_and_preserves_one_canonical_candidate(self) -> None:
         route = self.read("references/agent/practical-test-case-route-v0.8.md")

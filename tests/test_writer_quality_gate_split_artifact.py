@@ -115,6 +115,31 @@ class WriterQualityGateSplitArtifactTests(unittest.TestCase):
         self.assertNotIn("writer-quality-gate-missing", ids)
         self.assertNotIn("internal-diagnostic-section-in-production-testcases", ids)
 
+    def test_creation_form_isolation_row_is_required(self) -> None:
+        root, _, design_dir = self.make_package()
+        self.write_valid_gate(design_dir)
+        gate_path = design_dir / "writer-quality-gate.md"
+        gate_path.write_text(
+            "\n".join(
+                line
+                for line in gate_path.read_text(encoding="utf-8").splitlines()
+                if "creation-form-isolation-coverage" not in line
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
+        findings, _ = self.validator.validate_writer_quality_gate(
+            gate_path.read_text(encoding="utf-8"),
+            gate_path,
+            root,
+        )
+
+        self.assertIn(
+            "writer-quality-gate-missing-required-items",
+            {finding.id for finding in findings},
+        )
+
     def test_package_relative_scoped_profile_resolves_from_package_and_repo_root(self) -> None:
         root, _, design_dir = self.make_package()
         repo_root = root.parents[1]

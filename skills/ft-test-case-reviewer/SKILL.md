@@ -86,8 +86,8 @@ Review in two practical gates:
    current canonical suite, re-derive coverage from FT/PDF/XHTML/support and
    check that `ready` cases have no unresolved confirmation, fixture, data,
    access or observability dependency.
-2. Test design: positive, negative, boundary, dictionary, dependency and
-   repeatable-block classes from
+2. Test design: positive, negative, boundary, dictionary, dependency,
+   repeatable-block and independent-creation classes from
    [../../references/qa/coverage-class-catalog.md](../../references/qa/coverage-class-catalog.md)
    are present when the FT requires them; a single invalid representative does
    not cover multiple independently derivable classes; requiredness checks are
@@ -97,6 +97,12 @@ Review in two practical gates:
    screen/card/list/block and one observed user action. Reject generic
    availability/use TC that mix parent and child objects; the status row is
    supporting traceability when a later FT section owns the actual action.
+   For `R-CREATE-FORM-ISOLATION`, when `Создать` / `Добавить` opens a form for a
+   new independent object, reject the matrix or TC if it omits the check that a
+   form for object B is not prefilled with distinctive values entered for object
+   A. Do not flag
+   source-defined defaults, context/inherited values, clone/import behavior or
+   documented draft restoration as leakage.
    Reject a duplicate-prevention TC that expects a positive save, a downstream
    rule turned into a local save rejection, an optional field expected to have a
    required marker/save block, and `non-atomic-parameterization` across UI
