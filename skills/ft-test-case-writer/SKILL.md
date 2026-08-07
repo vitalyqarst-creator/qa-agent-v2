@@ -147,8 +147,8 @@ Minimum runtime rules:
 12. Writer-ready handoff (`ready-for-review`, `writer-draft-ready`, `semantic-review-ready`) is allowed only when current-scope validator warning/error from canonical TC, active test-design dir, and cycle outputs is either fixed, recorded as a valid `false-positive`/waiver with id/path/evidence/rationale, or unrelated to the current scope. Writer self-check and Writer Quality Gate must link to scoped validator evidence or runner validator gate evidence; do not expect reviewer to handle an obvious current-scope validator blocker after handoff.
 12a. For source-backed negative/requiredness restrictions with unknown UI reaction, remediation cannot simply replace one unsupported UI mechanism with another: preserve the obligation and create a candidate TC by `negative-ui-calibration-policy.md`, or a narrow `GAP-*` / `unclear` if a candidate is impossible.
 12b. After a bounded TC revision, compare every affected canonical case with its
-runtime inputs. `Статус исполнения: ready` is forbidden when `Требуется
-подтверждение` remains, or the case still needs an unverified fixture, concrete
+runtime inputs. `Статус исполнения: ready` is forbidden when `Требуется подтверждение`
+remains, or the case still needs an unverified fixture, concrete
 test data, access path or observable oracle. Record each affected `TC-*` and its
 exact final status under `## Status Assertions` in `tc-revision-summary.md`.
 Before overwriting an existing canonical file, create and verify its immutable

@@ -5276,6 +5276,124 @@ def practical_stage_summary_current_action_revision_issues(
     ]
 
 
+def practical_stage_summary_allowed_tc_preflight_record_issues(
+    fields: Mapping[str, str],
+    root: Path,
+) -> list[str]:
+    """Require an allowed active TC-review preflight to become controller state.
+
+    A receipt alone is deliberately immutable and does not advance a workflow.
+    Once the active round has an allowed receipt, the controller must link it
+    and expose the next reviewer-dispatch state. Otherwise another task can
+    repeat the preflight or launch a reviewer from an ambiguous handoff.
+    """
+
+    normalized_scope_ids = re.sub(r"\s+", "", fields.get("active_scope_ids", ""))
+    if not PRACTICAL_STAGE_SUMMARY_SCOPE_IDS_RE.fullmatch(normalized_scope_ids):
+        return []
+    ft_package_root_text = strip_markdown_code(fields.get("ft_package_root", "")).strip()
+    if not ft_package_root_text:
+        return []
+    ft_package_root = Path(ft_package_root_text)
+    handoff_root = ft_package_root / "work" / "stage-handoffs"
+    if not handoff_root.is_dir():
+        return []
+
+    issues: list[str] = []
+    for scope_id in normalized_scope_ids.split(","):
+        handoffs = sorted(
+            path for path in handoff_root.glob(f"{scope_id}-*") if path.is_dir()
+        )
+        if len(handoffs) != 1:
+            continue
+        workflow_path = handoffs[0] / "workflow-state.yaml"
+        try:
+            state = parse_workflow_state(workflow_path)
+        except (FileNotFoundError, UnicodeDecodeError):
+            continue
+        scope_slug = str(state.get("scope_slug") or "").strip()
+        prompt_value = str(
+            explicit_active_transition_prompt_value(state)
+            or state.get("active_transition_prompt")
+            or ""
+        )
+        prompt_rounds = practical_revision_numbers(prompt_value)
+        if not scope_slug or len(prompt_rounds) != 1:
+            continue
+        review_round = next(iter(prompt_rounds))
+        receipt_path = (
+            ft_package_root
+            / "work"
+            / "practical"
+            / scope_slug
+            / f"review-launch-preflight-r{review_round}.json"
+        )
+        if not receipt_path.is_file():
+            continue
+        try:
+            receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            issues.append(
+                f"scope={scope_id}:active-preflight-receipt=unreadable:{receipt_path.as_posix()}"
+            )
+            continue
+        if receipt.get("allowed") is not True or receipt.get("review_mode") != "tc_review":
+            continue
+
+        latest = state.get("latest_artifacts")
+        workflow_receipt_ref = (
+            latest.get("review_launch_preflight") if isinstance(latest, dict) else None
+        )
+        workflow_receipt_matches = isinstance(workflow_receipt_ref, str) and any(
+            candidate.resolve() == receipt_path.resolve()
+            for candidate in candidate_artifact_paths(
+                workflow_receipt_ref,
+                workflow_path,
+                root,
+                ft_package_root,
+            )
+        )
+        expected_gate_status = f"preflight-allowed-round-{review_round}"
+        expected_final_status = f"ready-to-launch-round-{review_round}"
+        expected_round_status_key = f"review_launch_preflight_round_{review_round}"
+        if not workflow_receipt_matches:
+            issues.append(
+                f"scope={scope_id}:latest_artifacts.review_launch_preflight must resolve to "
+                f"{receipt_path.relative_to(ft_package_root).as_posix()}"
+            )
+        if (
+            normalize_markdown_field_name(str(state.get(expected_round_status_key) or ""))
+            != "allowed"
+        ):
+            issues.append(f"scope={scope_id}:{expected_round_status_key}=allowed required")
+        if normalize_markdown_field_name(
+            str(state.get("tc_review_gate_status") or "")
+        ) != normalize_markdown_field_name(expected_gate_status):
+            issues.append(f"scope={scope_id}:tc_review_gate_status={expected_gate_status} required")
+        if normalize_markdown_field_name(
+            str(state.get("final_independent_tc_review_status") or "")
+        ) != normalize_markdown_field_name(expected_final_status):
+            issues.append(f"scope={scope_id}:final_independent_tc_review_status={expected_final_status} required")
+
+        expected_receipt = receipt_path.relative_to(ft_package_root).as_posix()
+        summary_receipt = strip_markdown_code(fields.get("review_launch_preflight_receipt", "")).strip()
+        summary_receipt_matches = False
+        if summary_receipt:
+            receipt_candidates = [Path(summary_receipt)]
+            if not Path(summary_receipt).is_absolute():
+                receipt_candidates.extend([ft_package_root / summary_receipt, root / summary_receipt])
+            summary_receipt_matches = any(
+                candidate.resolve() == receipt_path.resolve() for candidate in receipt_candidates
+            )
+        if normalize_markdown_field_name(fields.get("review_launch_preflight_status", "")) != "allowed":
+            issues.append(f"scope={scope_id}:summary.review_launch_preflight_status=allowed required")
+        if not summary_receipt_matches:
+            issues.append(
+                f"scope={scope_id}:summary.review_launch_preflight_receipt must resolve to {expected_receipt}"
+            )
+    return issues
+
+
 def practical_stage_summary_has_specific_finding_evidence(value: str) -> bool:
     """Return whether a summary evidence field names both a finding and its path."""
 
@@ -5874,6 +5992,30 @@ def validate_practical_stage_summary(path: Path, root: Path) -> tuple[list[Findi
                 recommended_action=(
                     "Move the older revision action to Prior state context and retain only actions performed in the "
                     "current summary stage."
+                ),
+            )
+        )
+
+    preflight_record_issues = practical_stage_summary_allowed_tc_preflight_record_issues(
+        fields,
+        root,
+    )
+    if preflight_record_issues:
+        findings.append(
+            Finding(
+                id="practical-stage-summary-allowed-preflight-unrecorded",
+                severity="error",
+                category="practical-stage-summary",
+                title="Allowed TC-review preflight is not recorded in controller state",
+                details=(
+                    "The active round has an allowed review-launch-preflight receipt, but workflow-state or the "
+                    "stage summary still describes it as pending. The next handoff would be ambiguous."
+                ),
+                path=display_path,
+                evidence=preflight_record_issues[:20],
+                recommended_action=(
+                    "Link the allowed receipt from workflow-state.latest_artifacts and the summary; set the round "
+                    "preflight status to allowed and route the scope to reviewer dispatch."
                 ),
             )
         )

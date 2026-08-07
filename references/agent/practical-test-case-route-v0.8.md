@@ -269,6 +269,8 @@ not proof that the current scope test cases are bad.
 | git_persistence | `tracked / ignored-by-git / mixed / not-applicable` |
 | source_restore_provenance | `<source path/checkpoint used to restore package files, or not-applicable>` |
 | source_restore_sha256 | `<SHA-256 bindings for restored files, or not-applicable>` |
+| review_launch_preflight_status | `not-run / allowed / blocked / not-applicable` |
+| review_launch_preflight_receipt | `<FT-relative review-launch-preflight-rN.json or not-applicable>` |
 
 When `validator_errors_count > 0`, the summary must not say unconditional
 `writer allowed` or `tc-review allowed`. It must classify the errors and use a
@@ -353,6 +355,12 @@ decision gate. The package-wide validator remains mandatory audit evidence, but
 only its preflight partition for the declared scope (`scope_relevant` and
 `package_global`) can block that scope; errors owned by another scope must be
 recorded as external rather than retriggering the current route.
+After a preflight is written, record its status and receipt before reporting a
+verdict. For an allowed TC review, `workflow-state.yaml` must link the receipt
+from `latest_artifacts.review_launch_preflight`, mark the active round as
+`allowed`, and route to reviewer dispatch; the package summary must expose the
+same `review_launch_preflight_status` and receipt. A receipt file alone does
+not advance the workflow.
 If changed FT/package artifacts are ignored by git, set
 `git_persistence = ignored-by-git` or `mixed` and state that ordinary
 commit/push will not persist those files. The stage/final response must also

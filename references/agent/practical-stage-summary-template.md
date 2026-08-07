@@ -17,6 +17,8 @@ v0.8.3. The file is a user-facing handoff and a machine-checkable gate.
 | root_split_authority | `<user/controller approval or not-applicable>` |
 | next_stage_transition | `matrix-review allowed / matrix-review conditional / matrix-review blocked / writer allowed / writer conditional / writer blocked / tc-review allowed / tc-review conditional / tc-review blocked / not-applicable` |
 | next_safe_step | `<one Russian sentence>` |
+| review_launch_preflight_status | `not-run / allowed / blocked / not-applicable` |
+| review_launch_preflight_receipt | `<FT-relative review-launch-preflight-rN.json or not-applicable>` |
 | per_scope_next_stage_transitions | `yes / not-applicable` |
 | production_tc_clean | `yes / no / mixed / not-applicable` |
 | git_persistence | `tracked / ignored-by-git / mixed / not-applicable` |
@@ -72,6 +74,15 @@ v0.8.3. The file is a user-facing handoff and a machine-checkable gate.
   `allowed: true`; store that result as `review-launch-preflight.json` next to
   the practical scope artifacts. The reviewer repeats the same command with
   `--verify-receipt <review-launch-preflight.json>` before reviewing.
+- Immediately record a preflight result in controller state. For an allowed TC
+  review, link its receipt as `latest_artifacts.review_launch_preflight`, set
+  `review_launch_preflight_round_<N>: allowed`,
+  `tc_review_gate_status: preflight-allowed-round-<N>` and
+  `final_independent_tc_review_status: ready-to-launch-round-<N>`. Set the
+  summary fields `review_launch_preflight_status` and
+  `review_launch_preflight_receipt` to the same receipt, and change
+  `next_safe_step` to reviewer dispatch. Do this before reporting the preflight
+  result or creating the separate reviewer task.
 - If the preflight result is `allowed: false` with `status: blocked`, it is a
   controller gate result. Keep only the preflight receipt, this summary and the
   workflow-state update; do not create reviewer findings, reviewer logs or a

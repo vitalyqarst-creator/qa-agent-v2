@@ -69,6 +69,11 @@ Record it in the same revision summary:
 
 Refresh `## Status Assertions` and `practical-stage-summary.md`, including its
 exact Code Version Gate commit, before the final review handoff.
+When a writer revision creates or updates a pre-write baseline snapshot,
+`latest_artifacts.pre_write_baseline_snapshot` must reference the immutable
+snapshot **directory**. `snapshot-manifest.yaml` remains inside that directory
+as evidence and must not be used as the workflow link consumed by review
+preflight.
 For this repair, the package summary's `Current stage actions` must describe
 only the contract repair; describe the earlier bounded writer revision under
 `Prior state context`. Its canonical `validator_*_count` values must come from
