@@ -250,6 +250,57 @@ class PracticalReviewPreflightTests(unittest.TestCase):
 
         self.assertTrue(result["allowed"])
 
+    def test_receipt_reports_external_errors_separately_from_scope_blockers(self) -> None:
+        helper = self.load_helper()
+        _, root, ft_root, summary = self.make_repository()
+        other_handoff = ft_root / "work" / "stage-handoffs" / "02-other-scope"
+        other_handoff.mkdir()
+        (other_handoff / "workflow-state.yaml").write_text(
+            "scope_slug: other-scope\n",
+            encoding="utf-8",
+        )
+        original_validate = helper.artifact_validator.validate
+        helper.artifact_validator.validate = lambda _: {
+            "findings": [
+                {
+                    "id": "workflow-state-stale",
+                    "severity": "error",
+                    "category": "workflow-state",
+                    "path": "work/stage-handoffs/01-sample-scope/workflow-state.yaml",
+                },
+                {
+                    "id": "other-scope-stale",
+                    "severity": "error",
+                    "category": "workflow-state",
+                    "path": "work/stage-handoffs/02-other-scope/workflow-state.yaml",
+                },
+            ]
+        }
+        try:
+            result = self.run_preflight(helper, root, ft_root, summary)
+        finally:
+            helper.artifact_validator.validate = original_validate
+
+        self.assertFalse(result["allowed"])
+        self.assertEqual(["workflow-state-stale"], result["validator_error_partition"]["scope_relevant"])
+        self.assertEqual(["other-scope-stale"], result["validator_error_partition"]["external"])
+        details = {item["id"]: item["details"] for item in result["checks"]}
+        self.assertIn("external_errors=1", details["package-validator"])
+
+    def test_receipt_hash_binds_controller_owned_workflow(self) -> None:
+        helper = self.load_helper()
+        _, root, ft_root, summary = self.make_repository()
+        original_validate = helper.artifact_validator.validate
+        helper.artifact_validator.validate = lambda _: {"findings": []}
+        try:
+            result = self.run_preflight(helper, root, ft_root, summary)
+        finally:
+            helper.artifact_validator.validate = original_validate
+
+        hashes = result["controller_artifact_hashes"]
+        self.assertEqual(result["summary_sha256"], hashes["summary_sha256"])
+        self.assertIn("01", hashes["workflow_state_sha256_by_scope"])
+
     def test_ignores_practical_artifact_error_owned_by_another_scope(self) -> None:
         helper = self.load_helper()
         _, root, ft_root, summary = self.make_repository()

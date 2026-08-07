@@ -97,6 +97,40 @@ class PracticalSnapshotPreflightTests(unittest.TestCase):
 
             self.assertEqual([active], states)
 
+    def test_recovers_external_source_with_hash_bound_package_provenance(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            ft_root = root / "fts" / "Sample" / "Sample-v1"
+            recovery_source = root / "controller-backup" / "9.2-status.md"
+            recovery_source.parent.mkdir(parents=True)
+            recovery_source.write_text("original baseline\n", encoding="utf-8")
+            expected_sha256 = self.helper.sha256_file(recovery_source)
+
+            result = self.helper.recover_snapshot(
+                ft_package_root=ft_root,
+                scope_slug="status",
+                snapshot_id="pre-write-r2-recovered",
+                recovery_source=recovery_source,
+                expected_sha256=expected_sha256,
+                reason="controller-approved recovery",
+            )
+
+            self.assertEqual("valid", result["status"])
+            snapshot_dir = Path(str(result["snapshot_dir"]))
+            manifest = json.loads((snapshot_dir / "snapshot-manifest.yaml").read_text(encoding="utf-8"))
+            self.assertEqual(expected_sha256, manifest["recovery"]["expected_sha256"])
+            self.assertIn("recovery-sources/pre-write-r2-recovered", manifest["recovery"]["materialized_path"])
+            self.assertEqual("valid", self.helper.verify_snapshot(snapshot_dir, ft_root)["status"])
+            with self.assertRaises(FileExistsError):
+                self.helper.recover_snapshot(
+                    ft_package_root=ft_root,
+                    scope_slug="status",
+                    snapshot_id="pre-write-r2-recovered",
+                    recovery_source=recovery_source,
+                    expected_sha256=expected_sha256,
+                    reason="retry",
+                )
+
 
 if __name__ == "__main__":
     unittest.main()

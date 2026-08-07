@@ -211,6 +211,43 @@ def relevant_validator_errors(
     return issues
 
 
+def partition_validator_errors(
+    findings: Iterable[dict[str, Any]],
+    descriptors: list[ScopeDescriptor],
+    ft_package_root: Path,
+) -> dict[str, list[str]]:
+    """Separate current-scope errors from external package debt.
+
+    A reviewer launch must fail closed on errors owned by the selected scope or
+    by the package-level summary.  Errors owned by another numbered handoff are
+    useful diagnostic context, but must not force a content repair in the
+    selected scope.
+    """
+
+    requested_ids = {item.scope_id for item in descriptors}
+    ownership_descriptors = all_scope_descriptors(ft_package_root)
+    result = {"scope_relevant": [], "external": [], "package_global": []}
+    for finding in findings:
+        if str(finding.get("severity", "")).casefold() != "error":
+            continue
+        finding_id = str(finding.get("id", "<missing-id>"))
+        category = str(finding.get("category", ""))
+        path_text = str(finding.get("path", ""))
+        if category == "practical-stage-summary":
+            result["scope_relevant"].append(finding_id)
+            continue
+        owner_scope_id = scope_id_for_finding_path(
+            path_text, ownership_descriptors, ft_package_root
+        )
+        if owner_scope_id in requested_ids:
+            result["scope_relevant"].append(finding_id)
+        elif owner_scope_id is not None:
+            result["external"].append(finding_id)
+        else:
+            result["package_global"].append(finding_id)
+    return result
+
+
 def build_preflight(
     *,
     repo_root: Path,
@@ -378,13 +415,22 @@ def build_preflight(
     )
 
     report = artifact_validator.validate(ft_package_root)
-    validator_issues = relevant_validator_errors(report.get("findings", []), descriptors, ft_package_root)
+    validator_partition = partition_validator_errors(
+        report.get("findings", []), descriptors, ft_package_root
+    )
+    validator_issues = relevant_validator_errors(
+        report.get("findings", []), descriptors, ft_package_root
+    )
     blockers.extend(validator_issues)
     checks.append(
         PreflightCheck(
             "package-validator",
             "pass" if not validator_issues else "fail",
-            f"errors={sum(1 for item in report.get('findings', []) if item.get('severity') == 'error')}; scope_relevant_errors={len(validator_issues)}",
+            "errors="
+            f"{sum(1 for item in report.get('findings', []) if item.get('severity') == 'error')}; "
+            f"scope_relevant_errors={len(validator_partition['scope_relevant'])}; "
+            f"external_errors={len(validator_partition['external'])}; "
+            f"package_global_errors={len(validator_partition['package_global'])}",
         )
     )
 
@@ -398,9 +444,17 @@ def build_preflight(
         "ft_package_root": ft_package_root.as_posix(),
         "summary_path": summary_path.as_posix(),
         "summary_sha256": sha256_file(summary_path) if summary_path.is_file() else "",
+        "controller_artifact_hashes": {
+            "summary_sha256": sha256_file(summary_path) if summary_path.is_file() else "",
+            "workflow_state_sha256_by_scope": {
+                descriptor.scope_id: sha256_file(descriptor.workflow_path)
+                for descriptor in descriptors
+            },
+        },
         "code_branch": current_branch,
         "code_commit": current_commit,
         "checks": [asdict(check) for check in checks],
+        "validator_error_partition": validator_partition,
         "blocking_reasons": blockers,
     }
 
@@ -418,6 +472,7 @@ def verify_receipt(receipt_path: Path, current: dict[str, Any]) -> list[str]:
         "ft_package_root",
         "summary_path",
         "summary_sha256",
+        "controller_artifact_hashes",
         "code_branch",
         "code_commit",
     )

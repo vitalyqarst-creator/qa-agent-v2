@@ -66,6 +66,9 @@ Use
 [../../references/agent/practical-test-case-route-v0.8.md](../../references/agent/practical-test-case-route-v0.8.md)
 as the controlling route.
 
+Для `practical_v0_8` не создавай `.xlsx`-дубль по умолчанию: XLSX companion
+нужен только если пользователь явно запросил XLSX export.
+
 Review in two practical gates:
 
 0. Matrix review gate: treat `test-design-matrix.md` as writer output, not source
@@ -118,7 +121,11 @@ independent reviewer writes only its review artifacts
 `review-independence.md`, and reviewer audit log/decision log). Do not update
 controller aliases or the stage summary from the reviewer task: that creates
 stale-alias repair loops. After reviewer return, the controller performs one
-deterministic state/summary update.
+deterministic state/summary update only after
+`scripts/practical_review_finalization_guard.py` accepts the separate review
+artifacts and confirms that the reviewer did not mutate controller-owned state;
+the controller-only details are in
+[../../references/agent/practical-review-finalization-format.md](../../references/agent/practical-review-finalization-format.md).
 
 Reviewer launch preflight is two commands, not one combined command: the
 controller creates `review-launch-preflight.json` with `--output`; the separate
@@ -139,7 +146,7 @@ the next safe step. It must also record `code_root`, `ft_package_root`,
 `source_restore_provenance`, `source_restore_sha256` and `git_persistence`.
 After repair/re-review, rerun validation and refresh the declared
 validator counts/evidence from the latest report before handing off. Use
-`python scripts/refresh_practical_stage_summary.py --root . --summary <path> --print-fields`
+`python scripts/refresh_practical_stage_summary.py --root . --summary <path> --scope-id <two-digit scope id> --print-fields`
 to compute those fields and keep summary enum fields enum-only.
 When changed FT/package artifacts are git-ignored, record that explicitly in
 `git_persistence` because ordinary commit/push will not persist them; the

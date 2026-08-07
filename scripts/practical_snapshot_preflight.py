@@ -19,6 +19,7 @@ from pathlib import Path
 
 
 SNAPSHOT_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
+SHA256_RE = re.compile(r"^[0-9a-f]{64}$", re.IGNORECASE)
 
 
 def sha256_file(path: Path) -> str:
@@ -63,6 +64,7 @@ def create_snapshot(
     snapshot_id: str,
     sources: list[Path],
     reason: str,
+    recovery: dict[str, str] | None = None,
 ) -> dict[str, object]:
     destination = snapshot_directory(ft_package_root, scope_slug, snapshot_id)
     if destination.exists():
@@ -101,6 +103,8 @@ def create_snapshot(
             "reason": reason,
             "source_files": records,
         }
+        if recovery is not None:
+            manifest["recovery"] = recovery
         # JSON is valid YAML and gives the verifier a dependency-free, exact format.
         (temporary / "snapshot-manifest.yaml").write_text(
             json.dumps(manifest, ensure_ascii=False, indent=2) + "\n",
@@ -117,6 +121,80 @@ def create_snapshot(
         "manifest": (destination / "snapshot-manifest.yaml").as_posix(),
         "files": records,
     }
+
+
+def recover_snapshot(
+    *,
+    ft_package_root: Path,
+    scope_slug: str,
+    snapshot_id: str,
+    recovery_source: Path,
+    expected_sha256: str,
+    reason: str,
+) -> dict[str, object]:
+    """Materialize a hash-bound external recovery source and snapshot it once.
+
+    Recovery is intentionally explicit: the external source bytes must match the
+    supplied SHA-256, the package-local copy is immutable, and the resulting
+    snapshot records both the original source and the materialized provenance.
+    """
+
+    if not recovery_source.is_file():
+        raise ValueError(f"recovery source does not exist: {recovery_source}")
+    if not SHA256_RE.fullmatch(expected_sha256):
+        raise ValueError("--expected-sha256 must contain exactly 64 hexadecimal characters")
+    source_hash = sha256_file(recovery_source)
+    if source_hash.casefold() != expected_sha256.casefold():
+        raise ValueError("recovery source SHA-256 differs from --expected-sha256")
+
+    recovery_dir = (
+        ft_package_root
+        / "work"
+        / "review-cycles"
+        / scope_slug
+        / "recovery-sources"
+        / snapshot_id
+    )
+    destination = snapshot_directory(ft_package_root, scope_slug, snapshot_id)
+    if destination.exists():
+        raise FileExistsError(f"snapshot already exists and is immutable: {destination}")
+    if recovery_dir.exists():
+        raise FileExistsError(f"recovery source directory already exists and is immutable: {recovery_dir}")
+    recovery_dir.parent.mkdir(parents=True, exist_ok=True)
+    temporary = Path(tempfile.mkdtemp(prefix=f".{snapshot_id}.recovery-", dir=recovery_dir.parent))
+    try:
+        materialized = temporary / recovery_source.name
+        shutil.copy2(recovery_source, materialized)
+        materialized_hash = sha256_file(materialized)
+        if materialized_hash.casefold() != expected_sha256.casefold():
+            raise RuntimeError("materialized recovery source SHA-256 mismatch")
+        os.replace(temporary, recovery_dir)
+    except Exception:
+        shutil.rmtree(temporary, ignore_errors=True)
+        raise
+
+    package_source = recovery_dir / recovery_source.name
+    recovery_record = {
+        "original_source_path": recovery_source.resolve().as_posix(),
+        "materialized_path": package_source.relative_to(ft_package_root).as_posix(),
+        "expected_sha256": expected_sha256.casefold(),
+        "materialized_sha256": sha256_file(package_source),
+    }
+    try:
+        result = create_snapshot(
+            ft_package_root=ft_package_root,
+            scope_slug=scope_slug,
+            snapshot_id=snapshot_id,
+            sources=[package_source],
+            reason=reason,
+            recovery=recovery_record,
+        )
+    except Exception:
+        # The recovery source remains as an immutable audit record even if a
+        # differently named snapshot collision requires controller action.
+        raise
+    result["recovery"] = recovery_record
+    return result
 
 
 def verify_snapshot(snapshot_dir: Path, ft_package_root: Path) -> dict[str, object]:
@@ -156,6 +234,33 @@ def verify_snapshot(snapshot_dir: Path, ft_package_root: Path) -> dict[str, obje
         if not is_within((ft_package_root / source_path).resolve(), ft_package_root):
             issues.append(f"source_files[{index}] source_path escapes FT package")
 
+    recovery = manifest.get("recovery")
+    if recovery is not None:
+        if not isinstance(recovery, dict):
+            issues.append("recovery must be an object when present")
+        else:
+            materialized_path = recovery.get("materialized_path")
+            expected_hash = recovery.get("expected_sha256")
+            materialized_hash = recovery.get("materialized_sha256")
+            if not all(
+                isinstance(value, str) and value
+                for value in (materialized_path, expected_hash, materialized_hash)
+            ):
+                issues.append("recovery misses materialized path or SHA-256 fields")
+            elif not SHA256_RE.fullmatch(expected_hash) or not SHA256_RE.fullmatch(materialized_hash):
+                issues.append("recovery SHA-256 fields are invalid")
+            else:
+                materialized = (ft_package_root / materialized_path).resolve()
+                if not is_within(materialized, ft_package_root) or not materialized.is_file():
+                    issues.append("recovery materialized source is missing or escapes FT package")
+                else:
+                    actual_hash = sha256_file(materialized)
+                    if (
+                        actual_hash.casefold() != expected_hash.casefold()
+                        or actual_hash.casefold() != materialized_hash.casefold()
+                    ):
+                        issues.append("recovery materialized source SHA-256 mismatch")
+
     return {
         "status": "valid" if not issues else "invalid",
         "snapshot_dir": snapshot_dir.as_posix(),
@@ -171,6 +276,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--source", action="append", default=[])
     parser.add_argument("--reason", default="pre_quality_gate_baseline")
     parser.add_argument("--verify", type=Path)
+    parser.add_argument("--recover-source", type=Path)
+    parser.add_argument("--expected-sha256")
     return parser.parse_args()
 
 
@@ -181,8 +288,27 @@ def main() -> int:
         raise SystemExit(f"error: FT package root does not exist: {ft_package_root}")
     try:
         if args.verify:
+            if args.recover_source or args.expected_sha256:
+                raise ValueError("--verify cannot be combined with recovery arguments")
             result = verify_snapshot(args.verify.resolve(), ft_package_root)
+        elif args.recover_source:
+            if args.source:
+                raise ValueError("--recover-source cannot be combined with --source")
+            if not args.scope_slug or not args.snapshot_id or not args.expected_sha256:
+                raise ValueError(
+                    "--scope-slug, --snapshot-id and --expected-sha256 are required for recovery"
+                )
+            result = recover_snapshot(
+                ft_package_root=ft_package_root,
+                scope_slug=args.scope_slug,
+                snapshot_id=args.snapshot_id,
+                recovery_source=args.recover_source.resolve(),
+                expected_sha256=args.expected_sha256,
+                reason=args.reason,
+            )
         else:
+            if args.expected_sha256:
+                raise ValueError("--expected-sha256 requires --recover-source")
             if not args.scope_slug or not args.snapshot_id:
                 raise ValueError("--scope-slug and --snapshot-id are required when creating a snapshot")
             result = create_snapshot(

@@ -25,6 +25,10 @@ v0.8.3. The file is a user-facing handoff and a machine-checkable gate.
 | validator_supplementary_command | `<repo-root validator command or not-run>` |
 | validator_findings_breakdown | `tc_quality=<n>; process_artifact=<n>; validator_path_resolution=<n>; unrelated_repo=<n>` |
 | validator_errors_count | `<integer>` |
+| validator_scope_errors_count | `<integer for active_scope_ids, or not-applicable>` |
+| validator_scope_errors_evidence | `<finding ids or not-applicable>` |
+| validator_external_errors_count | `<integer for other scopes, or not-applicable>` |
+| validator_external_errors_evidence | `<finding ids or not-applicable>` |
 | validator_errors_classification | `none / next-stage-blocker / pre-existing-unrelated / validator-false-positive / mixed / not-applicable` |
 | validator_errors_evidence | `<finding ids or not-applicable>` |
 | validator_warnings_count | `<integer>` |
@@ -81,9 +85,14 @@ v0.8.3. The file is a user-facing handoff and a machine-checkable gate.
   `contract-only-status-repair`, `Current stage actions` may describe only the
   repair; the preceding writer revision belongs in `Prior state context`.
 - After every repair, run:
-  `python scripts/refresh_practical_stage_summary.py --root . --summary <path> --print-fields`
+  `python scripts/refresh_practical_stage_summary.py --root . --summary <path> --scope-id <two-digit scope id> --print-fields`
   and update validator counts/evidence, including info fields, plus `git_persistence`
   from the output.
+- Before controller aliases, `workflow-state.yaml` or this summary are updated
+  after an independent review, run
+  `python scripts/practical_review_finalization_guard.py` with the original
+  launch receipt, review artifact and independence artifact. A blocked guard is
+  a controller-state integrity failure, not a reason to revise test cases.
 - `execution_working_directory` must equal `code_root`. If the current Codex task
   is attached to another worktree, hand it off or recreate it in `code_root`
   before the stage; changing into an external repository mid-stage is invalid.

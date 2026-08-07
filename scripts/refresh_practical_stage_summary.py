@@ -14,6 +14,7 @@ if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
 import validate_agent_artifacts as artifact_validator  # noqa: E402
+import practical_review_preflight as review_preflight  # noqa: E402
 
 
 SUMMARY_CATEGORY = "practical-stage-summary"
@@ -39,6 +40,10 @@ class SummaryRefresh:
     validator_info_evidence: str
     git_persistence: str
     git_persistence_evidence: str
+    validator_scope_errors_count: int | None = None
+    validator_scope_errors_evidence: str = "not-applicable"
+    validator_external_errors_count: int | None = None
+    validator_external_errors_evidence: str = "not-applicable"
 
 
 def _relative_to_root(root: Path, path: Path) -> str:
@@ -177,7 +182,11 @@ def format_validator_findings_breakdown(findings: list[dict[str, Any]]) -> str:
     return "; ".join(f"{name}={counts[name]}" for name in counts)
 
 
-def build_refresh(root: Path, summary_path: Path) -> SummaryRefresh:
+def build_refresh(
+    root: Path,
+    summary_path: Path,
+    scope_ids: list[str] | None = None,
+) -> SummaryRefresh:
     root = root.resolve()
     summary_abs = summary_path if summary_path.is_absolute() else root / summary_path
     primary_root = artifact_validator.ft_package_root_for_path(summary_abs) or root
@@ -189,6 +198,30 @@ def build_refresh(root: Path, summary_path: Path) -> SummaryRefresh:
         report.get("findings", [])
     )
     git_persistence = detect_git_persistence(root, summary_path)
+    scope_error_count: int | None = None
+    scope_error_evidence = "not-applicable"
+    external_error_count: int | None = None
+    external_error_evidence = "not-applicable"
+    if scope_ids:
+        descriptors, descriptor_issues = review_preflight.scope_descriptors(
+            primary_root, scope_ids
+        )
+        if descriptor_issues:
+            scope_error_count = len(descriptor_issues)
+            scope_error_evidence = "; ".join(descriptor_issues)
+            external_error_count = 0
+        else:
+            partition = review_preflight.partition_validator_errors(
+                report.get("findings", []), descriptors, primary_root
+            )
+            scope_error_count = len(partition["scope_relevant"]) + len(
+                partition["package_global"]
+            )
+            scope_error_evidence = "; ".join(
+                partition["scope_relevant"] + partition["package_global"]
+            ) or "not-applicable"
+            external_error_count = len(partition["external"])
+            external_error_evidence = "; ".join(partition["external"]) or "not-applicable"
     supplementary_command = (
         f"python scripts/validate_agent_artifacts.py --root {_relative_to_root(root, root)} --json"
         if root != primary_root
@@ -209,6 +242,10 @@ def build_refresh(root: Path, summary_path: Path) -> SummaryRefresh:
         validator_info_evidence=str(validator_summary["validator_info_evidence"]),
         git_persistence=git_persistence.value,
         git_persistence_evidence=git_persistence.evidence,
+        validator_scope_errors_count=scope_error_count,
+        validator_scope_errors_evidence=scope_error_evidence,
+        validator_external_errors_count=external_error_count,
+        validator_external_errors_evidence=external_error_evidence,
     )
 
 
@@ -231,6 +268,15 @@ def format_field_rows(refresh: SummaryRefresh) -> str:
         ("git_persistence", refresh.git_persistence),
         ("git_persistence_evidence", refresh.git_persistence_evidence),
     ]
+    if refresh.validator_scope_errors_count is not None:
+        rows.extend(
+            [
+                ("validator_scope_errors_count", refresh.validator_scope_errors_count),
+                ("validator_scope_errors_evidence", refresh.validator_scope_errors_evidence),
+                ("validator_external_errors_count", refresh.validator_external_errors_count),
+                ("validator_external_errors_evidence", refresh.validator_external_errors_evidence),
+            ]
+        )
     return "\n".join(f"| {name} | `{_cell(value)}` |" for name, value in rows)
 
 
@@ -240,6 +286,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--root", type=Path, default=Path("."))
     parser.add_argument("--summary", type=Path, required=True)
+    parser.add_argument("--scope-id", action="append")
     parser.add_argument("--json", action="store_true", dest="as_json")
     parser.add_argument("--print-fields", action="store_true")
     return parser.parse_args()
@@ -247,7 +294,7 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> int:
     args = parse_args()
-    refresh = build_refresh(args.root, args.summary)
+    refresh = build_refresh(args.root, args.summary, args.scope_id)
 
     if args.as_json:
         print(json.dumps(asdict(refresh), ensure_ascii=False, indent=2))

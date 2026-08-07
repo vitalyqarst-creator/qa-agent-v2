@@ -185,6 +185,32 @@ class RefreshPracticalStageSummaryTests(unittest.TestCase):
         self.assertIn("warning-a; warning-b", output)
         self.assertIn("info-a; info-b", output)
 
+    def test_scope_fields_are_printed_only_when_scope_ids_are_supplied(self) -> None:
+        helper = self.load_helper()
+        refresh = helper.SummaryRefresh(
+            validator_primary_command="command",
+            validator_primary_root="C:/repo/fts/Sample",
+            validator_supplementary_command="not-run",
+            validator_findings_breakdown="tc_quality=0; process_artifact=0; validator_path_resolution=0; unrelated_repo=0",
+            validator_errors_count=3,
+            validator_errors_evidence="scope-a; other-b",
+            validator_warnings_count=0,
+            validator_warnings_evidence="not-applicable",
+            validator_info_count=0,
+            validator_info_evidence="not-applicable",
+            git_persistence="tracked",
+            git_persistence_evidence="git ls-files",
+            validator_scope_errors_count=1,
+            validator_scope_errors_evidence="scope-a",
+            validator_external_errors_count=2,
+            validator_external_errors_evidence="other-b; other-c",
+        )
+
+        output = helper.format_field_rows(refresh)
+
+        self.assertIn("| validator_scope_errors_count | `1` |", output)
+        self.assertIn("| validator_external_errors_count | `2` |", output)
+
 
 if __name__ == "__main__":
     unittest.main()

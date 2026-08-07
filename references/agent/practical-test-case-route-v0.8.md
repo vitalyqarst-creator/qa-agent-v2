@@ -146,6 +146,11 @@ branch, commit, roots, summary digest or scope/mode, it must stop without
 creating review artifacts. This is required because another active Codex task
 can otherwise switch a shared checkout between controller and reviewer turns.
 
+The launch receipt hash-binds controller-owned workflow state. Before a
+controller updates aliases, workflow or summary after review, run
+`practical_review_finalization_guard.py`; its full contract is in
+[practical-review-finalization-format.md](./practical-review-finalization-format.md).
+
 For the first matrix review, create/update the practical summary before launch
 and use `next_stage_transition = matrix-review allowed` or
 `matrix-review conditional`. This makes the preflight equally strict for the
@@ -319,7 +324,7 @@ After every repair, rerun the validator and refresh
 evidence ids from the latest report. Stale counts or stale finding ids block the
 next practical stage.
 Use
-`python scripts/refresh_practical_stage_summary.py --root . --summary <path> --print-fields`
+`python scripts/refresh_practical_stage_summary.py --root . --summary <path> --scope-id <two-digit scope id> --print-fields`
 to compute the current validator counts/evidence, including info findings, and
 `git_persistence` before updating the summary.
 If changed FT/package artifacts are ignored by git, set
@@ -334,6 +339,10 @@ step limited to explicit persistence (`git add -f` or an export/bundle), and do
 not claim `released-*` until the declared artifacts are tracked. A later
 publication step must not rewrite the accepted TC content merely to make git
 accept it.
+
+For ignored accepted artifacts, export with `export_practical_baseline.py`; the
+exact contract is in
+[practical-review-finalization-format.md](./practical-review-finalization-format.md).
 
 `practical-stage-summary.md` must be linked from workflow-state files inside the
 actual FT package root. An "equivalent package-level state/index pointer" is
