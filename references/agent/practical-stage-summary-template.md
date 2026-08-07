@@ -70,10 +70,13 @@ v0.8.3. The file is a user-facing handoff and a machine-checkable gate.
 - Enum fields must contain only the enum value, not explanatory prose.
 - Before creating any separate reviewer task, run
   `python scripts/practical_review_preflight.py` with this summary, the selected
-  scope id and the review mode. Create the task only when its JSON result has
-  `allowed: true`; store that result as `review-launch-preflight.json` next to
-  the practical scope artifacts. The reviewer repeats the same command with
-  `--verify-receipt <review-launch-preflight.json>` before reviewing.
+  scope id, the review mode and `--check-only`. Use it to validate the final
+  controller state before materializing evidence. Only when this check returns
+  `allowed: true`, run the same command once with `--output` to store
+  `review-launch-preflight.json` next to the practical scope artifacts. Do not
+  edit controller-owned artifacts after that output is written. The reviewer
+  repeats the same command with `--verify-receipt <review-launch-preflight.json>`
+  before reviewing.
 - Immediately record a preflight result in controller state. For an allowed TC
   review, link its receipt as `latest_artifacts.review_launch_preflight`, set
   `review_launch_preflight_round_<N>: allowed`,
@@ -92,6 +95,10 @@ v0.8.3. The file is a user-facing handoff and a machine-checkable gate.
 - Explanations belong in `next_safe_step`, scope `reason` or a short notes section.
 - Keep `Current stage actions` and `Prior state context` separate. A summary that
   mixes old route history into current-stage actions is not a clear handoff.
+- In the current validator evidence and current-stage actions, refer only to the
+  active review-launch round. Put references to superseded rounds in `Prior state
+  context`; do not correct this wording after a receipt is materialized because
+  the receipt hash-binds the summary.
 - For every named `summary_stage`, both sections are mandatory. In a
   `contract-only-status-repair`, `Current stage actions` may describe only the
   repair; the preceding writer revision belongs in `Prior state context`.

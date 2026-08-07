@@ -8,6 +8,7 @@ import tempfile
 import unittest
 from contextlib import contextmanager
 from pathlib import Path
+from unittest.mock import patch
 
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
@@ -336,6 +337,59 @@ class PracticalReviewPreflightTests(unittest.TestCase):
         self.assertFalse(snapshot_issues)
         self.assertEqual({"summary", "workflow:01"}, set(targets))
         self.assertTrue(Path(materialized["controller_artifact_snapshot"]["manifest"]).is_file())
+
+    def test_check_only_runs_the_gate_without_creating_receipt_or_snapshot(self) -> None:
+        helper = self.load_helper()
+        _, root, ft_root, summary = self.make_repository()
+        original_validate = helper.artifact_validator.validate
+        helper.artifact_validator.validate = lambda _: {"findings": []}
+        try:
+            with patch.object(
+                sys,
+                "argv",
+                [
+                    "practical_review_preflight.py",
+                    "--repo-root",
+                    str(root),
+                    "--ft-package-root",
+                    str(ft_root),
+                    "--summary",
+                    str(summary),
+                    "--scope-id",
+                    "01",
+                    "--review-mode",
+                    "matrix_review",
+                    "--check-only",
+                ],
+            ), working_directory(root):
+                self.assertEqual(0, helper.main())
+        finally:
+            helper.artifact_validator.validate = original_validate
+
+        self.assertFalse(list(ft_root.rglob("review-launch-preflight*.json")))
+        self.assertFalse(list(ft_root.rglob("*.controller-state")))
+
+    def test_check_only_cannot_be_combined_with_receipt_modes(self) -> None:
+        helper = self.load_helper()
+        with patch.object(
+            sys,
+            "argv",
+            [
+                "practical_review_preflight.py",
+                "--ft-package-root",
+                "fixture",
+                "--summary",
+                "summary.md",
+                "--scope-id",
+                "01",
+                "--review-mode",
+                "matrix_review",
+                "--check-only",
+                "--output",
+                "receipt.json",
+            ],
+        ), self.assertRaisesRegex(SystemExit, "mutually exclusive"):
+            helper.main()
 
     def test_ignores_practical_artifact_error_owned_by_another_scope(self) -> None:
         helper = self.load_helper()

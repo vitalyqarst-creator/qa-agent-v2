@@ -239,6 +239,7 @@ class PracticalRouteV08ContractTests(unittest.TestCase):
         self.assertIn("Current stage actions", template)
         self.assertIn("Prior state context", template)
         self.assertIn("practical_review_preflight.py", template)
+        self.assertIn("--check-only", template)
         self.assertIn("matrix-review allowed", template)
 
     def test_ui_prep_requires_access_preflight_before_outputs(self) -> None:

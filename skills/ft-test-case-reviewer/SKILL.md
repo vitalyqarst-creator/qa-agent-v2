@@ -138,11 +138,13 @@ files, treat that instruction as a contract conflict: stop before writing an
 artifact, report `blocked-contract`, and request a corrected reviewer task
 prompt. Do not resolve the conflict by changing controller state yourself.
 
-Reviewer launch preflight is two commands, not one combined command: the
-controller creates `review-launch-preflight.json` with `--output`; the separate
-reviewer task verifies that unchanged receipt with `--verify-receipt`. Do not
-rerun entry preflight after final sign-off, because terminal state naturally has
-no next reviewer route.
+Reviewer launch preflight has three distinct operations: the controller first
+runs `--check-only` against the final controller state, then creates
+`review-launch-preflight.json` once with `--output`; the separate reviewer task
+verifies that unchanged receipt with `--verify-receipt`. Do not edit
+controller-owned state after the receipt is materialized or rerun entry
+preflight after final sign-off, because terminal state naturally has no next
+reviewer route.
 
 After every matrix review or matrix re-review, produce/update
 `practical-stage-summary.md` before the controller/user gets the next-stage

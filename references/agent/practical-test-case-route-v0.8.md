@@ -488,7 +488,8 @@ planned TC), use the fast path inside this same route:
    - Do not review canonical test cases in this pass. The expected current TC file
      state is "not created yet" or "old draft ignored".
   - Default behavior: run reviewer in a separate Codex task/session. The
-    controller/writer session must run the Reviewer launch preflight, then
+    controller/writer session must first run the Reviewer launch preflight with
+    `--check-only`, then materialize one allowed receipt with `--output`, then
     discover Codex thread tools with
     `tool_search` when they are not already loaded, use `list_projects` and
     `create_thread` to launch the reviewer prompt in a separate Codex task,

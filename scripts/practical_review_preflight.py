@@ -694,13 +694,23 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--review-mode", choices=sorted(REVIEW_MODES), required=True)
     parser.add_argument("--output", type=Path)
     parser.add_argument("--verify-receipt", type=Path)
+    parser.add_argument(
+        "--check-only",
+        action="store_true",
+        help="Run the launch gate without writing a receipt or controller snapshot.",
+    )
     return parser.parse_args()
 
 
 def main() -> int:
     args = parse_args()
-    if args.output and args.verify_receipt:
-        raise SystemExit("error: --output and --verify-receipt are mutually exclusive")
+    selected_modes = sum(
+        bool(value) for value in (args.output, args.verify_receipt, args.check_only)
+    )
+    if selected_modes > 1:
+        raise SystemExit(
+            "error: --output, --verify-receipt and --check-only are mutually exclusive"
+        )
     scope_ids = list(dict.fromkeys(args.scope_id))
     invalid_scope_ids = [scope_id for scope_id in scope_ids if not SCOPE_ID_RE.fullmatch(scope_id)]
     if invalid_scope_ids:
