@@ -77,6 +77,12 @@ def normalized_verdict(content: str, review_mode: str) -> str:
     if not value:
         match = re.search(r"(?mi)^\s*(?:\*\*)?(?:verdict|вердикт)(?:\*\*)?\s*[:—-]\s*`?([^`\n]+)`?", content)
         value = match.group(1).strip() if match else ""
+    if not value:
+        heading_match = re.search(
+            r"(?mi)^#{1,6}\s*(?:verdict|вердикт)\s*$\s*^\s*`?([^`\n]+)`?\s*$",
+            content,
+        )
+        value = heading_match.group(1).strip() if heading_match else ""
     normalized = value.casefold().strip().strip("`")
     if review_mode == "matrix_review":
         return normalized if normalized in {

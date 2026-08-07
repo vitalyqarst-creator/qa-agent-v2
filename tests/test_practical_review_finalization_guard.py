@@ -184,6 +184,25 @@ class PracticalReviewFinalizationGuardTests(unittest.TestCase):
         self.assertFalse(result["allowed"])
         self.assertIn("controller workflow-state changed", "\n".join(result["blocking_reasons"]))
 
+    def test_accepts_heading_style_verdict(self) -> None:
+        helper = self.load_helper()
+        repo_root, ft_root, summary, receipt, review, independence = self.make_fixture()
+        review.write_text("## Verdict\n\n`tc-accepted`\n", encoding="utf-8")
+
+        result = helper.build_finalization_packet(
+            repo_root=repo_root,
+            ft_package_root=ft_root,
+            summary_path=summary,
+            scope_ids=["01"],
+            review_mode="tc_review",
+            launch_receipt=receipt,
+            review_artifact=review,
+            independence_artifact=independence,
+        )
+
+        self.assertTrue(result["allowed"], result["blocking_reasons"])
+        self.assertEqual("tc-accepted", result["verdict"])
+
     def test_explicit_recovery_restores_controller_snapshot(self) -> None:
         helper = self.load_helper()
         recovery = self.load_recovery_helper()
