@@ -173,6 +173,23 @@ class PracticalStageSummaryValidatorTests(unittest.TestCase):
         self.assertNotIn("practical-stage-summary-validator-warning-count-stale", ids)
         self.assertNotIn("practical-stage-summary-current-prior-sections-missing", ids)
 
+    def test_ignores_immutable_controller_snapshot_summary(self) -> None:
+        root = self.make_package()
+        snapshot = (
+            root
+            / "work"
+            / "practical"
+            / "sample"
+            / "review-launch-preflight-r1.controller-state"
+            / "practical-stage-summary.md"
+        )
+        snapshot.parent.mkdir(parents=True)
+        snapshot.write_text("# Historical snapshot\n", encoding="utf-8")
+
+        ids = self.finding_ids(root)
+
+        self.assertNotIn("practical-stage-summary-missing-root-consistency-fields", ids)
+
     def test_warns_when_summary_uses_legacy_completed_stage_section(self) -> None:
         root = self.make_package()
         summary = root / "work" / "practical-stage-summary.md"

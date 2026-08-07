@@ -1398,7 +1398,11 @@ def iter_session_logs(root: Path) -> list[Path]:
 
 
 def is_historical_or_scratch_artifact(path: Path) -> bool:
-    return "versions" in path.parts or "_artifact_write" in path.parts
+    return (
+        "versions" in path.parts
+        or "_artifact_write" in path.parts
+        or any(part.endswith(".controller-state") for part in path.parts)
+    )
 
 
 def is_active_text_artifact(path: Path, root: Path) -> bool:
@@ -5044,7 +5048,11 @@ def practical_contract_only_repair_issues(fields: Mapping[str, str]) -> list[str
 def iter_practical_stage_summaries(root: Path) -> list[Path]:
     if root.is_file() and root.name == PRACTICAL_STAGE_SUMMARY_NAME:
         return [root]
-    return sorted(validation_scope(root).rglob(PRACTICAL_STAGE_SUMMARY_NAME))
+    return sorted(
+        path
+        for path in validation_scope(root).rglob(PRACTICAL_STAGE_SUMMARY_NAME)
+        if not is_historical_or_scratch_artifact(path)
+    )
 
 
 def practical_stage_summary_is_linked(path: Path, root: Path) -> bool:
