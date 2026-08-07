@@ -244,6 +244,50 @@ class PracticalArtifactQualityGateTests(unittest.TestCase):
 
         self.assertNotIn("test-case-field-input-after-save-step", ids)
 
+    def test_status_lifecycle_tc_cannot_merge_partner_and_requisite(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            path = root / "fts" / "Sample" / "test-cases" / "scope.md"
+            path.parent.mkdir(parents=True)
+            path.write_text(
+                self.case(
+                    title="Сущность или реквизит в статусе `Подтвержден` доступна для использования",
+                    test_type="Positive",
+                    steps=(
+                        "1. Найти подготовленную сущность или реквизит.\n"
+                        "2. Проверить возможность использовать объект в обычном сценарии."
+                    ),
+                    expected="Сущность или реквизит в статусе `Подтвержден` доступна для использования.",
+                ),
+                encoding="utf-8",
+            )
+
+            ids = self.finding_ids(root)
+
+        self.assertIn("status-lifecycle-execution-owner-missing", ids)
+
+    def test_status_lifecycle_tc_for_one_card_does_not_trigger_mixed_owner_gate(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            path = root / "fts" / "Sample" / "test-cases" / "scope.md"
+            path.parent.mkdir(parents=True)
+            path.write_text(
+                self.case(
+                    title="На карточке партнера отображается индикатор статуса `Подтвержден`",
+                    test_type="Positive",
+                    steps=(
+                        "1. Открыть карточку подготовленного партнера.\n"
+                        "2. Проверить зеленый индикатор статуса в карточке партнера."
+                    ),
+                    expected="В карточке партнера отображается зеленый индикатор статуса `Подтвержден`.",
+                ),
+                encoding="utf-8",
+            )
+
+            ids = self.finding_ids(root)
+
+        self.assertNotIn("status-lifecycle-execution-owner-missing", ids)
+
     def test_negative_no_save_tc_does_not_require_reopen_verification(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

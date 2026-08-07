@@ -297,6 +297,26 @@ class PracticalReviewIndependenceValidatorTests(unittest.TestCase):
 
         self.assertIn("practical-release-invalid-review-independence", ids)
 
+    def test_v083_release_still_requires_a_valid_reviewer_launch_preflight_receipt(self) -> None:
+        root = self.make_package(review_independence=VALID_REVIEW_INDEPENDENCE)
+        (root / "work" / "practical-stage-summary.md").write_text(
+            "\n".join(
+                [
+                    "# Practical Stage Summary",
+                    "",
+                    "| field | value |",
+                    "| --- | --- |",
+                    "| route_profile | `practical route v0.8.3` |",
+                    "",
+                ]
+            ),
+            encoding="utf-8",
+        )
+
+        ids = self.finding_ids(root)
+
+        self.assertIn("practical-release-invalid-review-independence", ids)
+
     def test_v082_release_accepts_matching_reviewer_launch_preflight_receipt(self) -> None:
         root = self.make_package(
             review_independence=VALID_REVIEW_INDEPENDENCE.replace(

@@ -100,6 +100,7 @@ class PracticalRouteV08ContractTests(unittest.TestCase):
 
         for item in (
             "tc-metadata-integrity",
+            "lifecycle-execution-ownership",
             "step-executability",
             "fixture-resolution",
             "closed-dictionary-completeness",
@@ -190,7 +191,7 @@ class PracticalRouteV08ContractTests(unittest.TestCase):
     def test_practical_stage_summary_template_pins_enum_fields(self) -> None:
         template = self.read("references/agent/practical-stage-summary-template.md")
 
-        self.assertIn("practical route v0.8.2", template)
+        self.assertIn("practical route v0.8.3", template)
         self.assertIn("Enum fields must contain only the enum value", template)
         self.assertIn("writer allowed / writer conditional / writer blocked", template)
         self.assertIn("tc-review allowed / tc-review conditional / tc-review blocked", template)
@@ -245,12 +246,25 @@ class PracticalRouteV08ContractTests(unittest.TestCase):
     def test_practical_matrix_uses_russian_user_facing_columns(self) -> None:
         content = self.read("references/agent/practical-test-case-route-v0.8.md")
         for expected in (
-            "| Источник | Проверяемое утверждение | Измерение тест-дизайна | Классы покрытия | TC-ID | Статус | Примечания |",
+            "| Источник | Проверяемое утверждение | Объект и место выполнения | Измерение тест-дизайна | Классы покрытия | TC-ID | Статус | Примечания |",
             "user-facing artifact",
             "do not use English technical aliases",
             "tools may normalize the Russian columns",
         ):
             self.assertIn(expected, content)
+
+    def test_practical_route_requires_lifecycle_execution_owner_and_local_publication_state(self) -> None:
+        route = self.read("references/agent/practical-test-case-route-v0.8.md")
+        rule_cards = self.read("references/agent/runtime-quality-rule-cards.md")
+        reviewer = self.read("skills/ft-test-case-reviewer/SKILL.md")
+        validator = self.read("scripts/validate_agent_artifacts.py")
+
+        self.assertIn("Объект и место выполнения", route)
+        self.assertIn("generic availability", route)
+        self.assertIn("status/lifecycle", reviewer)
+        self.assertIn("R-LIFECYCLE-EXECUTION-OWNERSHIP", rule_cards)
+        self.assertIn("status-lifecycle-execution-owner-missing", validator)
+        self.assertIn("accepted-local-publication-pending", route)
 
     def test_coverage_class_catalog_pins_common_triggered_groups(self) -> None:
         content = self.read("references/qa/coverage-class-catalog.md")
@@ -289,6 +303,7 @@ class PracticalRouteV08ContractTests(unittest.TestCase):
         runtime = self.read("references/qa/test-case-runtime-format.md")
         writer = self.read("skills/ft-test-case-writer/SKILL.md")
         reviewer = self.read("skills/ft-test-case-reviewer/SKILL.md")
+        normalized_reviewer = " ".join(reviewer.split())
         gate = self.read("references/agent/writer-quality-gate-format.md")
         for expected in (
             "The duplicate class is negative by default",
@@ -315,11 +330,11 @@ class PracticalRouteV08ContractTests(unittest.TestCase):
         ):
             self.assertIn(expected, writer)
         for expected in (
-            "duplicate prevention не должен быть positive save TC",
-            "downstream/future-stage rule не должен превращаться в local save rejection",
-            "optional field не должен ожидать required marker/save block",
+            "Reject a duplicate-prevention TC",
+            "downstream rule turned into a local save rejection",
+            "optional field expected to have a required marker/save block",
         ):
-            self.assertIn(expected, reviewer)
+            self.assertIn(expected, normalized_reviewer)
         for expected in (
             "duplicate-positive",
             "downstream-local rejection",

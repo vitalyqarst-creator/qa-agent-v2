@@ -307,6 +307,7 @@ Resolver должен читать JSON-блок ниже как канонич�
       "rationale": "Reviewer context needed by iteration to understand review modes and findings contracts.",
       "paths": [
         "skills/ft-test-case-reviewer/SKILL.md",
+        "references/agent/reviewer-general-workflow.md",
         "references/agent/runtime-quality-rule-cards.md",
         "references/agent/reviewer-output-format.md",
         "references/qa/review-findings-format.md",
@@ -385,6 +386,7 @@ Resolver должен читать JSON-блок ниже как канонич�
         "references/agent/source-parity-check-format.md",
         "references/agent/source-row-inventory-format.md",
         "references/agent/mockup-visual-inventory-format.md",
+        "references/agent/reviewer-specialized-review-contracts.md",
         "references/qa/review-findings-format.md",
         "references/qa/traceability-rules.md"
       ]
@@ -402,6 +404,7 @@ Resolver должен читать JSON-блок ниже как канонич�
       "rationale": "Semantic reviewer pass for traceability, coverage, test-design and expected-result observability.",
       "paths": [
         "skills/ft-test-case-reviewer/SKILL.md",
+        "references/agent/reviewer-general-workflow.md",
         "references/agent/runtime-quality-rule-cards.md",
         "references/agent/reviewer-output-format.md",
         "references/agent/package-test-design-plan-format.md",
@@ -418,6 +421,7 @@ Resolver должен читать JSON-блок ниже как канонич�
       "rationale": "Final reviewer pass for template, numbering, grouping, wording and format-only findings after semantic closure.",
       "paths": [
         "skills/ft-test-case-reviewer/SKILL.md",
+        "references/agent/reviewer-general-workflow.md",
         "references/agent/runtime-quality-rule-cards.md",
         "references/agent/reviewer-output-format.md",
         "references/qa/review-findings-format.md",

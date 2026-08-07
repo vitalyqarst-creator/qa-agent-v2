@@ -4658,7 +4658,7 @@ def parse_review_independence_fields(content: str) -> dict[str, str]:
 
 
 def practical_review_preflight_required(practical_dir: Path) -> bool:
-    """Return whether the scope was produced by the v0.8.2 launch protocol."""
+    """Return whether the scope was produced by the v0.8 launch protocol."""
 
     candidates = [practical_dir / "practical-stage-summary.md"]
     for parent in practical_dir.parents:
@@ -4670,7 +4670,10 @@ def practical_review_preflight_required(practical_dir: Path) -> bool:
             fields = parse_markdown_key_value_fields(candidate.read_text(encoding="utf-8"))
         except (FileNotFoundError, UnicodeDecodeError):
             continue
-        if normalize_markdown_field_name(fields.get("route_profile", "")) == "practical_route_v0_8_2":
+        if normalize_markdown_field_name(fields.get("route_profile", "")) in {
+            "practical_route_v0_8_2",
+            "practical_route_v0_8_3",
+        }:
             return True
     return False
 
@@ -8124,6 +8127,7 @@ WRITER_QUALITY_GATE_REQUIRED_ITEMS = {
     "scenario-does-not-replace-atomic",
     "tc-atomicity",
     "tc-metadata-integrity",
+    "lifecycle-execution-ownership",
     "step-executability",
     "test-data-specificity",
     "fixture-resolution",
@@ -12986,6 +12990,27 @@ GENERIC_TC_SMELL_PATTERNS = [
     re.compile(r"при\s+необходимости", flags=re.IGNORECASE),
 ]
 
+# This is intentionally a compound heuristic, not a ban on particular words.
+# Status/lifecycle checks may legitimately mention a partner or a requisite.
+# The smell is a generic lifecycle claim that merges different UI objects with
+# an alternative such as "partner or requisite". Such a TC cannot be made
+# executable merely by replacing the wording: it needs an execution owner.
+STATUS_LIFECYCLE_INTENT_RE = re.compile(
+    r"(?:статус\w*|подтвержд\w*|скрыт\w*|архивир\w*|разархивир\w*|"
+    r"вывод\w*\s+из\s+использован|возврат\w*\s+в\s+использован|"
+    r"доступн\w*\s+для\s+использован)",
+    flags=re.IGNORECASE,
+)
+STATUS_LIFECYCLE_MIXED_OBJECT_RE = re.compile(
+    r"(?:партнер\w*\s*(?:или|/)\s*реквизит\w*|"
+    r"реквизит\w*\s*(?:или|/)\s*партнер\w*|"
+    r"сущност\w*\s*(?:или|/)\s*реквизит\w*|"
+    r"(?:групп\w*\s*(?:или|/)\s*партнер\w*)|"
+    r"(?:родительск\w*\s*(?:или|/)\s*дочерн\w*))",
+    flags=re.IGNORECASE,
+)
+
+
 GENERIC_VALID_FIXTURE_PLACEHOLDER_RE = re.compile(
     r"минимальн\w+\s+валидн\w+\s+набор|"
     r"валидн\w+\s+(?:заявк|анкет|карточк|данн\w+)|"
@@ -14235,6 +14260,32 @@ def generic_test_case_smell_matches(test_case_id: str, field_values: list[tuple[
     return matches
 
 
+def status_lifecycle_execution_owner_smell(
+    test_case_id: str,
+    *,
+    title: str,
+    goal: str,
+    preconditions: str,
+    steps: str,
+    expected_result: str,
+) -> str | None:
+    """Return evidence for an obvious non-atomic lifecycle scenario.
+
+    This check deliberately catches only a case that combines lifecycle intent
+    and alternative UI-object ownership. Broader completeness remains a matrix
+    reviewer responsibility because the source may legitimately define one
+    shared control for multiple object types.
+    """
+
+    context = " ".join([title, goal, preconditions, steps, expected_result])
+    if not STATUS_LIFECYCLE_INTENT_RE.search(context):
+        return None
+    match = STATUS_LIFECYCLE_MIXED_OBJECT_RE.search(context)
+    if not match:
+        return None
+    return f"{test_case_id}:mixed_ui_objects={match.group(0)!r}; title={title[:140]}"
+
+
 TEST_CASE_PLAIN_FIELD_BOUNDARY_RE = re.compile(
     (
         r"(?im)^\s*(?:"
@@ -14999,6 +15050,7 @@ def validate_test_case_quality_smells(
             table_residue_atoms.append(f"{atom_id}:{inspected_text[:180]}")
 
     generic_test_cases: list[str] = []
+    status_lifecycle_execution_owner_smells: list[str] = []
     value_type_list_selection_smells: list[str] = []
     dependency_placeholder_setup_smells: list[str] = []
     merged_valid_invalid_test_cases: list[str] = []
@@ -15205,6 +15257,15 @@ def validate_test_case_quality_smells(
             )
         exercised_context = " ".join([title, test_data, steps, expected_result, scenario_rationale])
         executable_context = " ".join([title, test_data, steps, expected_result])
+        if lifecycle_owner_smell := status_lifecycle_execution_owner_smell(
+            test_case_id,
+            title=title,
+            goal=goal,
+            preconditions=preconditions,
+            steps=steps,
+            expected_result=expected_result,
+        ):
+            status_lifecycle_execution_owner_smells.append(lifecycle_owner_smell)
         if (
             re.search(r"\bBSR\s+167\b", traceability)
             and re.search(r"\bBSR\s+17[12]\b", traceability)
@@ -16422,6 +16483,28 @@ def validate_test_case_quality_smells(
                 path=display_path,
                 evidence=generic_test_cases[:20],
                 recommended_action="Replace generic placeholders with concrete preconditions, data, steps, and observable expected results.",
+            )
+        )
+
+    if status_lifecycle_execution_owner_smells:
+        severity = atomicity_coverage_severity(atomicity_coverage_policy)
+        findings.append(
+            Finding(
+                id="status-lifecycle-execution-owner-missing",
+                severity=severity,
+                category="atomarity",
+                title="Status/lifecycle TC merges different execution objects",
+                details=(
+                    "A lifecycle check that says `partner or requisite` (or another alternative object pair) "
+                    "does not name one executable UI owner. Status definitions must be allocated to the "
+                    "concrete card/list/action that displays or changes the state, or kept as a narrow GAP."
+                ),
+                path=display_path,
+                evidence=status_lifecycle_execution_owner_smells[:20],
+                recommended_action=(
+                    "Split the cases by object/UI level, or document one exact shared screen, action and "
+                    "observable result in the matrix and scenario rationale. Do not use a generic availability scenario."
+                ),
             )
         )
 
@@ -17761,6 +17844,7 @@ def validate_test_case_quality_smells(
         or internal_runtime_id_leaks
         or process_marker_titles
         or generic_test_cases
+        or status_lifecycle_execution_owner_smells
         or value_type_list_selection_smells
         or dependency_placeholder_setup_smells
         or mockup_generic_ui_steps

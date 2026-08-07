@@ -1,13 +1,13 @@
 # Practical Stage Summary Template
 
 Use this template verbatim for `practical-stage-summary.md` in practical route
-v0.8.2. The file is a user-facing handoff and a machine-checkable gate.
+v0.8.3. The file is a user-facing handoff and a machine-checkable gate.
 
 ## Summary
 
 | field | value |
 | --- | --- |
-| route_profile | `practical route v0.8.2` |
+| route_profile | `practical route v0.8.3` |
 | summary_stage | `<short-stage-id>` |
 | code_root | `<absolute path>` |
 | execution_working_directory | `<absolute path; must equal code_root>` |
@@ -98,6 +98,10 @@ v0.8.2. The file is a user-facing handoff and a machine-checkable gate.
 - If `git_persistence = ignored-by-git`, the stage/final response must explicitly
   say that changed FT/package artifacts are local, ordinary commit/push will not
   include them, and persistence requires `git add -f <paths>` or an export/bundle.
+- An accepted review with `git_persistence = ignored-by-git` or `mixed` is
+  `accepted-local-publication-pending`, not `released-*`. The only next action
+  is explicit persistence of the accepted artifacts; do not reopen writer/reviewer
+  work merely because the package is ignored.
 - Link this file from affected `workflow-state.yaml` files or from a
   package-level state/index inside the actual `ft_package_root`.
 - После `tc_review` generic aliases `review_independence`, `session_log`,

@@ -85,6 +85,7 @@ source/TC-backed design defect, доказанный самими артефак
 - Проверяемое действие спрятано в предусловиях или тестовых данных вместо шагов.
 - Magic/vague/passive `Предусловия` без action setup path, fixture/API/profile.
 - Один тест-кейс объединяет независимые бизнес-проверки, которые могут pass/fail отдельно.
+- Статусная или lifecycle-строка превращена в общий тест вида `партнер или реквизит доступен для использования` без одного конкретного объекта, места выполнения и наблюдаемого действия. Если последующий раздел ФТ определяет экран/действие, status-row может быть только supporting traceability этого сценария; если такой точки применения нет, нужен узкий `GAP-*`, а не фиктивный runtime TC.
 - One TC references more than two independent source-backed obligations (`ATOM`/`BSR`/`GSR`/`REQ`) without explicit source-backed `Сценарное обоснование` and traceable atomic coverage elsewhere.
 - `Сценарное обоснование` uses a legacy/non-canonical field label, is generic without naming the tested target/source rows, or describes another field family/domain than the TC actually checks.
 - Positive и negative сценарии смешаны в одном тест-кейсе.

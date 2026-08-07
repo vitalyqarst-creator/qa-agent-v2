@@ -327,6 +327,14 @@ If changed FT/package artifacts are ignored by git, set
 commit/push will not persist those files. The stage/final response must also
 say that persistence requires `git add -f <paths>` or an export/bundle.
 
+An accepted local review is not a published baseline when the reviewed canonical
+TC files or the current review receipt are ignored by git. In that situation use
+the human-facing state `accepted-local-publication-pending`, keep the next safe
+step limited to explicit persistence (`git add -f` or an export/bundle), and do
+not claim `released-*` until the declared artifacts are tracked. A later
+publication step must not rewrite the accepted TC content merely to make git
+accept it.
+
 `practical-stage-summary.md` must be linked from workflow-state files inside the
 actual FT package root. An "equivalent package-level state/index pointer" is
 allowed only inside that same `ft_package_root`; a parent folder such as
@@ -577,8 +585,8 @@ until the matrix is accepted.
 
 Minimum columns:
 
-| Источник | Проверяемое утверждение | Измерение тест-дизайна | Классы покрытия | TC-ID | Статус | Примечания |
-| --- | --- | --- | --- | --- | --- | --- |
+| Источник | Проверяемое утверждение | Объект и место выполнения | Измерение тест-дизайна | Классы покрытия | TC-ID | Статус | Примечания |
+| --- | --- | --- | --- | --- | --- | --- | --- |
 
 Rules:
 
@@ -587,6 +595,10 @@ Rules:
 - every executable FT obligation must map to a `TC-*`;
 - every unexecutable obligation must map to a `candidate-ui-calibration`,
   `blocked-observability` or `needs-test-data` `TC-*`;
+- `Объект и место выполнения` is mandatory: name one concrete tested object and
+  the exact screen/card/list/block plus user action where its result is observed;
+  if either is absent from the sources, write `не определено: GAP-*` instead of
+  inventing a generic usage scenario;
 - `Классы покрытия` is mandatory for validation, format, length, mask,
   allowed-symbol, dictionary, requiredness, visibility-condition, dependency,
   file-upload, integration, status/lifecycle and repeatable-block rules;
@@ -594,8 +606,14 @@ Rules:
   [../qa/coverage-class-catalog.md](../qa/coverage-class-catalog.md); activate a
   group only when the current source contains the matching rule;
 - do not create test cases for glossary/status-table rows when later FT sections
-  define the actual screen, action and expected result; use those rows as
-  supporting context in `Источник`;
+  define the actual screen, action and expected result; assign the matrix row to
+  that screen/action scope and use the status row only as supporting context in
+  `Источник`;
+- a status/lifecycle row may not become a generic TC about an `entity or child
+  entity`, `ordinary use`, `removal from use` or `return to use`. Split parent
+  and child objects unless the same source-backed screen, action and observable
+  result genuinely apply to both; record that narrow common owner in
+  `Объект и место выполнения` and `Сценарное обоснование`;
 - do not use English technical aliases such as `source_ref`, `atomic_check`,
   `coverage_classes` as the visible headers in this Markdown file. Internal
   tools may normalize the Russian columns to stable keys, but the checked-in
@@ -620,7 +638,8 @@ Matrix review gate:
 - Matrix review must block a plan that uses one representative invalid value as
   complete coverage for a source-backed restriction, omits applicable classes
   from `coverage-class-catalog.md`, creates standalone tests from glossary/status
-  rows when later FT sections define real actions, or plans TC whose expected
+  rows when later FT sections define real actions, leaves `Объект и место
+  выполнения` generic or mixes UI levels, or plans TC whose expected
   result has no observable UI/API/document artifact.
 
 ## Bounded TC Revision And Final Review Gate
@@ -696,6 +715,14 @@ expected result. If rows cross parent/child entities, different cards, nested
 blocks, tables, lists or screens, split them into separate `TC-*`; do not
 optimize the case count at the cost of automation-readiness.
 
+Status and lifecycle checks follow the same ownership rule even without a
+parameter table: a partner, its requisites, and a parent group are different
+objects unless the FT names one common UI surface and one action that applies to
+each. Do not hide the difference behind wording such as `партнер или реквизит`.
+When the source defines only a status meaning but no observable application
+point, preserve the source row as context and create a narrow `GAP-*`; do not
+write a fictional availability test.
+
 ## Canonical test-case quality gates
 
 Before handing off to reviewer, the writer checks every canonical file:
@@ -717,6 +744,9 @@ Before handing off to reviewer, the writer checks every canonical file:
   `Требуется подтверждение`, the draft is blocked at writer gate;
 - title describes user-visible behavior, not traceability IDs or internal
   obligations;
+- every status/lifecycle TC has one concrete object, one execution location and
+  one observable action/result; generic availability/use wording is a writer
+  gate failure, not an acceptable placeholder;
 - `Предусловия` first open the relevant form/card/screen/section before entering
   a block;
 - `Тестовые данные` contain concrete values or a clear `needs-test-data` reason;

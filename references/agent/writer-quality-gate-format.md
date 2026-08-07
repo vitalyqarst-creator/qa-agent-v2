@@ -42,6 +42,7 @@ writer запускает gate для новой revision и только тог
 | `runtime-language-style` | `pass` | Runtime-поля TC написаны по-русски и не содержат agent-process фраз вроде `source-backed`, `runtime-prose`, `semantic projection`. | `all` | none_required:pass | `no` |
 | `tc-regression-smells` | `pass` | В canonical TC отсутствуют placeholder traceability, source-rule oracle, duplicate-positive, downstream-local rejection, injected requiredness, optional-as-required, post-save input, generic editability, nondeterministic negative oracle, executable unresolved GAP, ambiguous UI alias и read-only cleanup smells. | `all` | none_required:pass | `no` |
 | `tc-metadata-integrity` | `pass` | У каждого `TC-*` заполнены канонические metadata-поля; тип соответствует полярности проверки. | `all` | none_required:pass | `no` |
+| `lifecycle-execution-ownership` | `pass` | Каждый TC по статусу/жизненному циклу привязан к одному конкретному объекту, месту выполнения (экрану, карточке, списку или блоку), действию пользователя и наблюдаемому результату; определение статуса без такого сценария остается трассировкой или `GAP-*`. | `all` | none_required:pass | `no` |
 | `step-executability` | `pass` | Шаги пронумерованы, не ссылаются на шаги другого TC и не содержат условных альтернатив выполнения. | `all` | none_required:pass | `no` |
 | `fixture-resolution` | `pass` | Каждый упомянутый fixture существует в каталоге либо полностью раскрыт в текущем TC. | `all` | none_required:pass | `no` |
 | `closed-dictionary-completeness` | `pass` | Для закрытого справочника проверено «все и только» значения из `dictionary-inventory.md`. | `WP-01` | none_required:pass | `no` |
@@ -75,6 +76,7 @@ writer запускает gate для новой revision и только тог
 - `scenario-does-not-replace-atomic`: scenario/use-case TC являются дополнительными и не заменяют atomic positive, negative, boundary, dependency или action TC.
 - `tc-atomicity`: `TC-*` не объединяют независимые pass/fail decisions.
 - `tc-metadata-integrity`: у каждого `TC-*` есть канонические поля `Название`, `Тип`, `Приоритет`, `package_id`, `Трассировка`; `Positive` не используется для проверки отказа, а `Negative` не скрывает позитивную приемку.
+- `lifecycle-execution-ownership`: TC по статусу, архивированию, разархивированию или доступности объекта не смешивает разные уровни UI (например, партнера и реквизит); у него есть один объект, точка исполнения, действие и наблюдаемый результат. Если ФТ задает только словарное определение статуса, это не самостоятельный executable TC.
 - `step-executability`: шаги имеют непрерывную нумерацию внутри TC, содержат конкретное действие или проверку, не ссылаются на другой TC и не предлагают альтернативы вида «если действие доступно».
 - `test-data-specificity`: validation/boundary/equivalence TC используют конкретные значения или именованные классы, а не placeholders вроде `значение, нарушающее правило`.
 - `fixture-resolution`: ссылка на `FX-*` допустима только на существующий fixture catalog или на полностью раскрытые данные в самом TC. Нельзя подменять реальную интеграционную/DaData запись выдуманным названием организации.
