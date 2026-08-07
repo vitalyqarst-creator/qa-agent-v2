@@ -255,6 +255,11 @@ Minimum classes:
 - delete/replace file only when the source describes or the UI calibration needs
   the behavior.
 
+Проверка лимита «один файл» относится к полю или типу документа, указанному в
+источнике, а не к расширению второго файла. Для неё добавь второй валидный файл
+в то же поле и наблюдай результат добавления; не подменяй это проверкой «второй
+файл того же расширения», если такое ограничение не задано источником.
+
 ## Repeatable blocks and child rows
 
 Use when the source allows adding/removing repeated rows, blocks, documents,
@@ -400,3 +405,14 @@ Reviewer must block or return findings when:
   inheritance or autofill as leaked values.
 - status/lifecycle coverage checks only an internal/business state label and
   does not name an observable UI/API/document artifact.
+- TC объединяет создание и редактирование, либо другой набор вариантов с
+  разными объектами, UI-уровнями или входными действиями.
+- TC заявляет очистку/изменение системно заполненного или автозаполненного
+  поля, но источник или UI evidence не задаёт способ достигнуть этого
+  состояния.
+- TC, который создаёт, изменяет, архивирует, привязывает или сохраняет объект,
+  заканчивается нажатием команды без последующей проверки наблюдаемого
+  результата в корректном месте (после повторного открытия, возврата в список,
+  перехода или иного source-backed наблюдения).
+- file-count TC проверяет только одинаковое расширение второго файла вместо
+  ограничения количества файлов в source-defined поле/типе документа.

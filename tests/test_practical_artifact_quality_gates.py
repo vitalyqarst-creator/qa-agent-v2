@@ -226,6 +226,54 @@ class PracticalArtifactQualityGateTests(unittest.TestCase):
 
         self.assertIn("test-case-file-count-limit-save-crosscheck-smell", ids)
 
+    def test_declared_test_case_count_must_match_canonical_headings(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            path = root / "fts" / "Sample" / "test-cases" / "scope.md"
+            path.parent.mkdir(parents=True)
+            path.write_text(
+                "\n".join(
+                    [
+                        "# Sample scope",
+                        "",
+                        "| Поле | Значение |",
+                        "| --- | --- |",
+                        "| Количество тест-кейсов | `2` |",
+                        "",
+                        self.case_with_steps("1. Попытаться найти скрытого партнера в реестре."),
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            ids = self.finding_ids(root)
+
+        self.assertIn("test-case-declared-count-mismatch", ids)
+
+    def test_matching_declared_test_case_count_is_accepted(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            path = root / "fts" / "Sample" / "test-cases" / "scope.md"
+            path.parent.mkdir(parents=True)
+            path.write_text(
+                "\n".join(
+                    [
+                        "# Sample scope",
+                        "",
+                        "| Метрика | Значение |",
+                        "| --- | --- |",
+                        "| Тест-кейсов | `1` |",
+                        "",
+                        self.case_with_steps("1. Попытаться найти скрытого партнера в реестре."),
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            ids = self.finding_ids(root)
+
+        self.assertNotIn("test-case-declared-count-mismatch", ids)
+
     def test_persistence_case_requires_reopen_verification(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

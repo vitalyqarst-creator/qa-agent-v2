@@ -546,8 +546,8 @@ Resolver должен читать JSON-блок ниже как канонич�
       "required_groups": ["global_core", "practical_route_core", "writer_core", "quality_rule_cards"],
       "conditional_groups": ["scope_practical_core", "writer_ui_artifacts", "writer_numeric_coverage", "writer_integration_coverage", "style_remediation_compact"],
       "audit_only_groups": ["audit_only_history", "governance_audit_only"],
-      "budget_limit_kib": 190,
-      "rationale": "Default practical writer context: first matrix-only from scope brief, then canonical test cases only after accepted separate-session matrix review."
+      "budget_limit_kib": 200,
+      "rationale": "Default practical writer context: first matrix-only from scope brief, then canonical test cases only after accepted separate-session matrix review. The 200 KiB limit preserves the 15 KiB safety headroom for the compact execution-quality rules; it does not authorize loading additional deep references by default."
     },
     {
       "id": "reviewer.practical_v0_8",

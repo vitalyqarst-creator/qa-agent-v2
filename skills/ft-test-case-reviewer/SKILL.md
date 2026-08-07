@@ -107,6 +107,14 @@ Review in two practical gates:
    rule turned into a local save rejection, an optional field expected to have a
    required marker/save block, and `non-atomic-parameterization` across UI
    levels.
+   Выполни отдельный adversarial pass по исполнимости каждого TC: не допускай
+   объединения создания и редактирования через «или»; не считай автозаполнение
+   доказательством возможности вручную очистить поле; для create/edit/archive/
+   bind/save проверяй наблюдаемый результат после команды, а не только её
+   нажатие; для лимита файлов проверяй число файлов в source-defined поле, а не
+   совпадение расширений. Если source не задаёт нужный UI-механизм, верни
+   точный finding и соответствующий deferred status, а не предполагаемое
+   поведение.
 3. Runtime executability: steps are user actions/checks; expected results are
    observable or marked `blocked-observability`.
 4. Language and wording: runtime fields are Russian; English is allowed only for

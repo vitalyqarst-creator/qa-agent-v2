@@ -27,6 +27,11 @@
 - Canonical writer output must use parser-supported bold metadata fields from `test-case-format.md`: `**Название:**`, `**Тип:**`, `**Приоритет:**`, `**package_id:**`, `**Трассировка:**`. A table-only metadata block such as `| Поле | Значение |` / `| package_id | WP-01 |` is not acceptable for canonical `TC-*`, because validator parsing of required fields and `package_id` relies on the bold-field/runtime-field contract. Do not mix table metadata with the same bold fields either; use bold fields only.
 
 - Один `TC-*` проверяет одну обязанность системы и один основной pass/fail результат.
+- Не объединяй в одном `TC-*` разные режимы работы с объектом через формулировки
+  `создание или редактирование`, `добавление или изменение`, `новый или
+  существующий`. У них разные предусловия, действия и риски; разделяй их на
+  отдельные кейсы или на явно параметризованные варианты с одинаковым UI-путем
+  и одним ожидаемым результатом.
 - If one `TC-*` references more than two independent source-backed obligations (`ATOM`/`BSR`/`GSR`/`REQ`), split it unless a single visible source-backed workflow has explicit `**Сценарное обоснование:**` and separate atomic coverage remains traceable.
 - Не смешивай acceptance valid value и rejection invalid value в одном `TC-*`.
 - `Статус исполнения: ready` допустим только для кейса без незакрытого
@@ -66,6 +71,11 @@
 - Не используй source-rule oracle: `по правилу из источника`, `по правилу видимости из источника`, `согласно источнику`, `согласно ФТ` вместо конкретного наблюдаемого результата.
 - В search-based проверке необязательности фильтра одного отсутствия ошибки обязательности недостаточно. В `Тестовых данных` укажи строки `Номер целевой заявки` и `Номер контрольной заявки`, каждая с конкретным code literal номера. В expected result повтори ровно эти номера с теми же role labels и явными состояниями: номер целевой заявки `отображается в таблице результатов`, номер контрольной заявки `не отображается в таблице результатов`. Generic labels без номеров, несовпадающие или одинаковые номера, инвертированная polarity и двойное отрицание не доказывают фильтрацию и блокируют production promotion.
 - Не добавляй exact text, colors, sorting, normalization, status codes or backend effects unless they are source-backed.
+- Сам факт автозаполнения не доказывает возможность вручную очистить или
+  изменить поле. Negative TC для пустого/измененного автозаполняемого поля
+  допустим только при source-backed или подтвержденном UI-пути к этому
+  состоянию; иначе оставь точный `GAP-*` или статус
+  `candidate-ui-calibration`.
 - Если behavior unclear, создай `GAP-*` / `unclear`, а не executable TC. Для source-backed restriction с unknown UI reaction используй candidate markers from `negative-ui-calibration-policy.md`.
 - Каждый `TC-*` должен иметь traceability to source statement; gap-only notes не оформляются как `TC-*`.
 - `Трассировка` является обязательным source-link полем. `Ссылка на ФТ`, `Источник требования` и `Источник / цитата требования` допустимы только если добавляют недублирующую навигацию, иерархию источника или короткую реальную цитату. Не заполняй эти поля тем же набором `ATOM-*`/`SRC-*`, который уже указан в `Трассировка`.

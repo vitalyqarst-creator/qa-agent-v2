@@ -142,6 +142,23 @@ TC_REVIEW_FINDING_WITH_MIXED_PROSE = TC_REVIEW_FINDING_WITH_ENGLISH_PROSE.replac
 )
 
 
+TC_REVIEW_FINDING_WITH_RUSSIAN_VISIBLE_LABELS = """# Результаты ревью тест-кейсов
+
+### FINDING-001
+**Режим ревью:** test-design
+**Критичность:** error
+**Категория:** test-design
+**Измерение покрытия:** boundary
+**Идентификатор тест-кейса:** TC-SAMPLE-001
+**Заголовок:** Не хватает проверки нижней границы числового поля
+**Проблема:** В тест-кейсе проверено только максимальное значение, а минимальное допустимое значение не проверяется.
+**Доказательства:** `TC-SAMPLE-001`
+**Требуемое изменение:** Добавить отдельный атомарный тест-кейс для допустимого значения на нижней границе.
+**Ссылка на источник:** `Таблица 1`
+**Статус:** open
+"""
+
+
 INVALID_REVIEW_INDEPENDENCE = """# Review Independence
 
 | field | value |
@@ -472,6 +489,18 @@ class PracticalReviewIndependenceValidatorTests(unittest.TestCase):
         )
 
         self.assertIn("review-findings-nonrussian-human-field", ids)
+
+    def test_review_findings_accept_russian_visible_field_labels(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            path = root / "review-findings.md"
+            path.write_text(TC_REVIEW_FINDING_WITH_RUSSIAN_VISIBLE_LABELS, encoding="utf-8")
+
+            findings, _ = self.validator.validate_review_findings(path, root)
+
+        ids = {finding.id for finding in findings}
+        self.assertNotIn("review-findings-missing-required-fields", ids)
+        self.assertNotIn("review-findings-nonrussian-human-field", ids)
 
     def test_workflow_rejects_stale_generic_aliases_after_tc_review(self) -> None:
         root = self.make_package(

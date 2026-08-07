@@ -7919,6 +7919,26 @@ def normalize_markdown_field_value(value: str) -> str:
     return strip_quotes(value.strip().strip("`").strip())
 
 
+STRUCTURED_REVIEW_FIELD_LABEL_ALIASES = {
+    "Режим ревью": "review_mode",
+    "Критичность": "severity",
+    "Категория": "category",
+    "Измерение покрытия": "coverage_dimension",
+    "Идентификатор тест-кейса": "test_case_id",
+    "Ссылка трассировки": "traceability_ref",
+    "Заголовок": "title",
+    "Проблема": "problem",
+    "Доказательства": "evidence",
+    "Требуемое изменение": "required_change",
+    "Ссылка на источник": "source_reference",
+    "Статус": "status",
+    "Статус исправления": "resolution_status",
+    "Сводка изменений": "change_summary",
+    "Затронутые ID тест-кейсов": "affected_test_case_ids",
+    "Затронутые ссылки трассировки": "affected_traceability_refs",
+}
+
+
 def extract_finding_blocks(content: str) -> list[tuple[str, str]]:
     matches = list(
         re.finditer(
@@ -7957,7 +7977,11 @@ def parse_markdown_fields(block: str) -> dict[str, str]:
         match = re.match(r"^\*\*([^*:\n]+):\*\*\s*(.*)$", line.strip())
         if not match:
             continue
-        key = normalize_markdown_field_name(match.group(1))
+        visible_label = match.group(1).strip()
+        key = STRUCTURED_REVIEW_FIELD_LABEL_ALIASES.get(
+            visible_label,
+            normalize_markdown_field_name(visible_label),
+        )
         fields[key] = normalize_markdown_field_value(match.group(2))
     return fields
 
@@ -19107,6 +19131,76 @@ def validate_test_case_canonical_field_integrity(
     ]
 
 
+DECLARED_TEST_CASE_COUNT_RE = re.compile(
+    r"(?im)^\s*(?:\|\s*)?(?:Количество\s+тест-кейсов|Тест-кейсов)\s*(?:\|\s*)?`?(\d+)`?\s*\|?\s*$"
+)
+
+
+def validate_declared_test_case_counts(
+    content: str,
+    path: Path,
+    root: Path,
+    *,
+    blocks: list[tuple[str, str]],
+) -> tuple[list[Finding], list[Check]]:
+    """Cross-check human-readable suite totals against canonical TC headings.
+
+    A stale total does not change test behavior, so it remains a warning; it
+    does, however, make review scope attestations and release summaries
+    unreliable.
+    """
+
+    display_path = rel(path, root)
+    declared_counts = [int(match.group(1)) for match in DECLARED_TEST_CASE_COUNT_RE.finditer(content)]
+    actual_count = len(blocks)
+    mismatches = [count for count in declared_counts if count != actual_count]
+    if mismatches:
+        evidence = [
+            f"declared={count}; actual_tc_headings={actual_count}"
+            for count in mismatches[:10]
+        ]
+        return (
+            [
+                Finding(
+                    id="test-case-declared-count-mismatch",
+                    severity="warning",
+                    category="test-case-format",
+                    title="Declared test-case count differs from canonical headings",
+                    details=(
+                        "Human-readable suite totals must match the number of canonical `## TC-*` headings. "
+                        "A stale total makes review scope and release summaries unreliable."
+                    ),
+                    path=display_path,
+                    evidence=evidence,
+                    recommended_action=(
+                        "Refresh `Количество тест-кейсов` and `Тест-кейсов` from the current canonical "
+                        "`## TC-*` heading count."
+                    ),
+                )
+            ],
+            [
+                Check(
+                    "test-case-declared-count",
+                    "warn",
+                    "Declared test-case count does not match canonical headings.",
+                    display_path,
+                )
+            ],
+        )
+
+    return (
+        [],
+        [
+            Check(
+                "test-case-declared-count",
+                "pass",
+                "Declared test-case count matches canonical headings or is not declared.",
+                display_path,
+            )
+        ],
+    )
+
+
 def validate_test_case_file(
     path: Path,
     root: Path,
@@ -19270,6 +19364,15 @@ def validate_test_case_file(
             )
         )
         return findings, checks
+
+    declared_count_findings, declared_count_checks = validate_declared_test_case_counts(
+        content,
+        path,
+        root,
+        blocks=blocks,
+    )
+    findings.extend(declared_count_findings)
+    checks.extend(declared_count_checks)
 
     noncanonical_heading_evidence = noncanonical_test_case_heading_evidence(content)
     if noncanonical_heading_evidence:
