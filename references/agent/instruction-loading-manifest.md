@@ -535,8 +535,8 @@ Resolver должен читать JSON-блок ниже как канонич�
       "required_groups": ["policy_core", "scope_practical_core"],
       "conditional_groups": ["scope_table_artifacts", "scope_ui_artifacts", "scope_practical_source_details", "scope_practical_design_details"],
       "audit_only_groups": ["audit_only_history", "governance_audit_only"],
-      "budget_limit_kib": 160,
-      "rationale": "Compact practical scope brief for ordinary test-case writing without source assertions, bridge or immutable runner routing."
+      "budget_limit_kib": 163,
+      "rationale": "Compact practical scope brief for ordinary test-case writing without source assertions, bridge or immutable runner routing. The 163 KiB limit retains the mandatory 15 KiB safety headroom after the explicit round-cap handoff contract; it does not load additional references."
     },
     {
       "id": "writer.practical_v0_8",

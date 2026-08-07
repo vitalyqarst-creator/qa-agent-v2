@@ -188,7 +188,7 @@ class PracticalRouteV08DefaultsTests(unittest.TestCase):
         self.assertIn("do not create or modify", writer)
         self.assertIn("fail closed unless", writer)
         self.assertIn("This pass must run before canonical test-case writing", reviewer)
-        self.assertIn("If an accepted matrix review is absent", reviewer)
+        self.assertIn("The only practical exception is a matching per-scope round-cap record", reviewer)
 
     def test_practical_route_caps_default_review_rounds(self) -> None:
         route = (ROOT_DIR / "references" / "agent" / "practical-test-case-route-v0.8.md").read_text(

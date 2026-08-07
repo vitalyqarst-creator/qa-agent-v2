@@ -54,8 +54,10 @@ continue automatically across:
 
 - matrix-only writer handoff -> independent matrix review;
 - `matrix-changes-required` -> one bounded matrix repair -> one independent
-  matrix re-review; if the matrix is still not `matrix-accepted`, stop before TC
-  writing;
+  matrix re-review; if the matrix is still not `matrix-accepted`, apply the
+  documented round-cap decision per scope: write status-marked TC only when
+  `source_contradiction: no` and `tc_with_status_decision: write-with-statuses`;
+  otherwise stop before TC writing for that scope;
 - `matrix-accepted` -> canonical TC writing;
 - TC writer handoff -> independent TC review;
 - `tc-changes-required` -> one bounded TC revision -> one final independent TC
@@ -542,10 +544,12 @@ planned TC), use the fast path inside this same route:
      artifacts. This summary is required before the controller/user receives the
      next-stage prompt.
 
-5. `ft-test-case-writer` — TC draft after accepted matrix
-   - Start only when `test-design-matrix-review.md` has verdict
-     `matrix-accepted` and `review-independence.md` shows the matrix reviewer ran
-     in a separate session for independent sign-off.
+5. `ft-test-case-writer` — TC draft after matrix gate
+   - Start only when `review-independence.md` shows that the matrix reviewer ran
+     in a separate session and either `test-design-matrix-review.md` has verdict
+     `matrix-accepted`, or the current practical-stage summary records the
+     bounded matrix round-cap decision `source_contradiction: no` and
+     `tc_with_status_decision: write-with-statuses` for this exact scope.
    - Create or update canonical test cases in
      `fts/<ft-slug>/test-cases/<section-id>-<scope-slug>.md`.
    - Keep the canonical file in `draft-ready-for-review` or `review-ready`;
@@ -707,18 +711,21 @@ Rules:
 
 Matrix review gate:
 
-- Canonical TC writing is unlocked only by verdict `matrix-accepted` from
+- Canonical TC writing is unlocked by verdict `matrix-accepted` from
   `test-design-matrix-review.md`. If the first matrix review returns
   `matrix-changes-required`, the writer may perform exactly one bounded matrix
-  repair, record it in `matrix-repair-summary.md`, but the repaired matrix must
-  pass one matrix re-review before any canonical `TC-*` writing starts.
+  repair, record it in `matrix-repair-summary.md`, and perform one independent
+  matrix re-review. If that re-review is still not accepted, TC writing is
+  allowed only through the explicit practical round-cap decision described above;
+  it is never an implicit controller exception.
 - `matrix-accepted` means every current-scope source obligation is represented
   as a planned TC, a class-specific deferred TC, or a narrow documented gap, and
   the reviewer has independently checked the plan against FT/PDF/XHTML/support
   rather than relying on writer's matrix alone;
 - `matrix-changes-required` means writer can repair the matrix in one bounded
   revision and route the repaired matrix to one independent matrix re-review;
-  canonical TC writing remains blocked until the verdict is `matrix-accepted`;
+  after that re-review, the per-scope round-cap policy decides between
+  `write-with-statuses` and `block-source-contradiction`;
 - `matrix-rejected` means the coverage plan is materially unreliable and TC
   review must stop until the matrix is rebuilt.
 - Matrix review must block a plan that uses one representative invalid value as

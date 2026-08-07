@@ -8651,7 +8651,7 @@ WRITER_QUALITY_GATE_REQUIRED_COLUMNS = {
     "blocks_ready_for_review",
 }
 
-WRITER_QUALITY_GATE_CONTRACT_VERSION = "writer-quality-gate-v2"
+WRITER_QUALITY_GATE_CONTRACT_VERSION = "writer-quality-gate-v3"
 WRITER_QUALITY_GATE_CONTRACT_VERSION_RE = re.compile(
     r"(?mi)^\s*\*\*Версия контракта:\*\*\s*`?([^`\r\n]+)"
 )
@@ -8679,6 +8679,7 @@ WRITER_QUALITY_GATE_REQUIRED_ITEMS = {
     "closed-dictionary-completeness",
     "boundary-class-completeness",
     "creation-form-isolation-coverage",
+    "runtime-execution-semantics",
     "internal-observability",
     "action-observability",
     "expected-result-singularity",
@@ -8694,6 +8695,7 @@ WRITER_QUALITY_GATE_SEMANTIC_ITEMS = {
     "source-obligation-completeness",
     "expected-result-singularity",
     "creation-form-isolation-coverage",
+    "runtime-execution-semantics",
 }
 WRITER_QUALITY_GATE_GENERIC_EVIDENCE_RE = re.compile(
     r"^\s*(?:checked|check|проверено|проверка выполнена|выполнено)\s*\.?\s*$",
@@ -15348,6 +15350,43 @@ AMBIGUOUS_CREATE_OR_TAKE_SETUP_RE = re.compile(
     r"создать\s+или\s+взять|создать\s*/\s*взять|взять\s+существующ",
     flags=re.IGNORECASE,
 )
+MIXED_CREATE_EDIT_PATH_RE = re.compile(
+    r"(?:форм[аы]\s+)?(?:добавлен\w*|создан\w*)\s+или\s+редактирован\w*|"
+    r"(?:add(?:ing)?|create(?:ing)?)\s+or\s+edit(?:ing)?",
+    flags=re.IGNORECASE,
+)
+AUTOFILL_MANUAL_MUTATION_RE = re.compile(
+    r"(?:попытаться\s+)?вручную\s+(?:изменить|очистить)|"
+    r"manually\s+(?:change|edit|clear)",
+    flags=re.IGNORECASE,
+)
+FILE_COUNT_DOCUMENT_TYPE_SUBSTITUTION_RE = re.compile(
+    r"втор(?:ой|ого)\s+файл(?:а)?\s+того\s+же\s+тип[а-я]*\s+документ|"
+    r"second\s+file\s+of\s+the\s+same\s+document\s+type",
+    flags=re.IGNORECASE,
+)
+AMBIGUOUS_CANCEL_MUTATION_RE = re.compile(
+    r"(?:расч[её]тн\w*\s+сч[её]т|account)[^.\n]{0,100}\s+или\s+(?:город|city)|"
+    r"(?:город|city)[^.\n]{0,100}\s+или\s+(?:расч[её]тн\w*\s+сч[её]т|account)",
+    flags=re.IGNORECASE,
+)
+FIRST_CHILD_TITLE_RE = re.compile(
+    r"\bперв\w*\s+(?:реквизит|дочерн\w*\s+(?:запис|объект)|child\s+record)\b|"
+    r"\bfirst\s+(?:requisite|child\s+record)\b",
+    flags=re.IGNORECASE,
+)
+NO_EXISTING_CHILD_PRECONDITION_RE = re.compile(
+    r"(?:нет\s+(?:ни\s+одного\s+реквизита|реквизитов|ни\s+одной\s+дочерн\w*\s+записи|дочерних\s+записей)|"
+    r"не\s+имеет\s+(?:ни\s+одного\s+реквизита|реквизитов|ни\s+одной\s+дочерн\w*\s+записи|дочерних\s+записей)|"
+    r"без\s+(?:реквизитов|дочерних\s+записей))|"
+    r"no\s+(?:existing\s+)?(?:requisite|child\s+record)",
+    flags=re.IGNORECASE,
+)
+SECOND_CHILD_TITLE_RE = re.compile(
+    r"\bвтор\w*\s+(?:независим\w*\s+)?(?:реквизит|дочерн\w*\s+(?:запис|объект))\b|"
+    r"\bsecond\s+(?:independent\s+)?(?:requisite|child\s+record)\b",
+    flags=re.IGNORECASE,
+)
 CONTACT_PERSON_FIELD_RE = re.compile(
     r"(?<![А-Яа-яЁё])(?:Фамилия|Имя|Отчество)(?![А-Яа-яЁё])",
     flags=re.IGNORECASE,
@@ -15790,6 +15829,12 @@ def validate_test_case_quality_smells(
     project_name_precondition_leaks: list[str] = []
     ambiguous_create_or_take_preconditions: list[str] = []
     missing_target_revealing_actions: list[str] = []
+    mixed_create_edit_paths: list[str] = []
+    unsupported_manual_autofill_mutations: list[str] = []
+    file_count_document_type_substitutions: list[str] = []
+    ambiguous_cancel_mutations: list[str] = []
+    first_child_without_empty_parent_setup: list[str] = []
+    second_child_without_persistence_proof: list[str] = []
     if production_test_case_file:
         production_content = physical_content if physical_content is not None else content
         production_diagnostic_sections = [
@@ -16234,6 +16279,43 @@ def validate_test_case_quality_smells(
                 ambiguous_create_or_take_preconditions.append(f"{test_case_id}:preconditions={preconditions[:180]}")
             if CONTACT_PERSON_FIELD_RE.search(block) and not CONTACT_PERSON_REVEAL_ACTION_RE.search(preconditions):
                 missing_target_revealing_actions.append(f"{test_case_id}:preconditions={preconditions[:180] or '<missing>'}")
+            runtime_context = " ".join([title, goal, preconditions, test_data, steps, expected_result])
+            if MIXED_CREATE_EDIT_PATH_RE.search(runtime_context):
+                mixed_create_edit_paths.append(
+                    f"{test_case_id}:title={title[:100]}; preconditions={preconditions[:140]}; steps={steps[:140]}"
+                )
+            if (
+                re.search(r"автозаполн|auto[- ]?fill|предзаполн|системн\w*\s+заполн", block, flags=re.IGNORECASE)
+                and AUTOFILL_MANUAL_MUTATION_RE.search(steps)
+                and not is_calibration_candidate
+                and "blocked-observability" not in status
+            ):
+                unsupported_manual_autofill_mutations.append(
+                    f"{test_case_id}:steps={steps[:180]}; source_only_signals=autofill"
+                )
+            if FILE_COUNT_DOCUMENT_TYPE_SUBSTITUTION_RE.search(" ".join([title, goal, test_data, steps, expected_result])):
+                file_count_document_type_substitutions.append(
+                    f"{test_case_id}:title={title[:140]}; steps={steps[:160]}"
+                )
+            if AMBIGUOUS_CANCEL_MUTATION_RE.search(" ".join([test_data, steps])):
+                ambiguous_cancel_mutations.append(
+                    f"{test_case_id}:test_data={test_data[:160]}; steps={steps[:140]}"
+                )
+            if FIRST_CHILD_TITLE_RE.search(title) and not NO_EXISTING_CHILD_PRECONDITION_RE.search(preconditions):
+                first_child_without_empty_parent_setup.append(
+                    f"{test_case_id}:preconditions={preconditions[:180] or '<missing>'}"
+                )
+            if (
+                SECOND_CHILD_TITLE_RE.search(title)
+                and SAVE_ACTION_RE.search(steps)
+                and not (
+                    PERSISTENCE_REOPEN_ACTION_RE.search(steps)
+                    and PERSISTENCE_REOPEN_VERIFICATION_RE.search(" ".join([steps, expected_result]))
+                )
+            ):
+                second_child_without_persistence_proof.append(
+                    f"{test_case_id}:steps={steps[:180]}; expected={expected_result[:160]}"
+                )
         traceability_tokens = normalize_test_case_ref_tokens(traceability)
         ft_reference_tokens = normalize_test_case_ref_tokens(ft_reference)
         requirement_source_tokens = normalize_test_case_ref_tokens(requirement_source)
@@ -18265,6 +18347,118 @@ def validate_test_case_quality_smells(
             )
         )
 
+    # These are narrow execution contradictions, not stylistic preferences.  A
+    # writer-ready practical draft must fail before reviewer dispatch when it
+    # contains one of them; otherwise an expensive independent review merely
+    # rediscovers a deterministic defect.
+    if mixed_create_edit_paths:
+        findings.append(
+            Finding(
+                id="test-case-mixed-create-edit-path",
+                severity="error",
+                category="atomarity",
+                title="TC mixes creation and editing entry paths",
+                details=(
+                    "Creation and editing have different initial state and UI entry points. "
+                    "One executable TC must select one path, or use a tightly bounded parameter table "
+                    "when the source proves that both paths are identical."
+                ),
+                path=display_path,
+                evidence=mixed_create_edit_paths[:20],
+                recommended_action="Split the case into create/edit TC or name one source-backed entry path.",
+            )
+        )
+
+    if unsupported_manual_autofill_mutations:
+        findings.append(
+            Finding(
+                id="test-case-autofill-manual-mutation-unsupported",
+                severity="error",
+                category="test-design",
+                title="TC infers manual mutation from autofill",
+                details=(
+                    "Autofill proves only that the system supplies a value. It does not prove that a user can "
+                    "clear or edit the field. A manual-mutation check needs source/UI evidence or a calibration status."
+                ),
+                path=display_path,
+                evidence=unsupported_manual_autofill_mutations[:20],
+                recommended_action=(
+                    "Keep the source-backed autofill assertion only, or make the manual-mutation check an explicit "
+                    "UI-calibration candidate with a concrete confirmation question."
+                ),
+            )
+        )
+
+    if file_count_document_type_substitutions:
+        findings.append(
+            Finding(
+                id="test-case-file-count-substituted-by-document-type",
+                severity="error",
+                category="test-design",
+                title="File-count TC substitutes document type for field cardinality",
+                details=(
+                    "A one-file limit applies to a named upload field. A second valid file in that same field must "
+                    "be attempted; wording about a second file of the same document type can silently test a different rule."
+                ),
+                path=display_path,
+                evidence=file_count_document_type_substitutions[:20],
+                recommended_action=(
+                    "Name the upload field and attempt to add a second otherwise valid file to that same field."
+                ),
+            )
+        )
+
+    if ambiguous_cancel_mutations:
+        findings.append(
+            Finding(
+                id="test-case-cancel-mutation-ambiguous",
+                severity="error",
+                category="atomarity",
+                title="Cancel TC uses alternative changed fields",
+                details=(
+                    "A cancellation scenario must change one concrete field to one concrete value so that absence of "
+                    "persistence is observable. Alternatives such as account-or-city make the test non-deterministic."
+                ),
+                path=display_path,
+                evidence=ambiguous_cancel_mutations[:20],
+                recommended_action="Choose one source-backed field, its original value and one changed literal.",
+            )
+        )
+
+    if first_child_without_empty_parent_setup:
+        findings.append(
+            Finding(
+                id="test-case-first-child-without-empty-parent-setup",
+                severity="error",
+                category="test-data",
+                title="First-child TC does not establish an empty parent",
+                details=(
+                    "A case titled as creation of the first child record must explicitly establish that the selected "
+                    "parent has no existing child records; uniqueness of one value is not equivalent to an empty parent."
+                ),
+                path=display_path,
+                evidence=first_child_without_empty_parent_setup[:20],
+                recommended_action="Use a parent with no child records or rename the TC to generic child creation.",
+            )
+        )
+
+    if second_child_without_persistence_proof:
+        findings.append(
+            Finding(
+                id="test-case-second-child-without-persistence-proof",
+                severity="error",
+                category="test-design",
+                title="Second-child TC does not prove persistence",
+                details=(
+                    "Saving a second child record is not enough to prove that it remains attached to the same parent. "
+                    "The test must reopen or reload the parent and verify both independently identifiable records."
+                ),
+                path=display_path,
+                evidence=second_child_without_persistence_proof[:20],
+                recommended_action="Reopen the parent after save and verify the first and second child records.",
+            )
+        )
+
     if candidate_negative_trigger_missing:
         severity = atomicity_coverage_severity(atomicity_coverage_policy)
         findings.append(
@@ -18725,6 +18919,12 @@ def validate_test_case_quality_smells(
         or representative_strategy_data_mismatches
         or production_internal_language_leaks
         or production_runtime_agent_process_language_leaks
+        or mixed_create_edit_paths
+        or unsupported_manual_autofill_mutations
+        or file_count_document_type_substitutions
+        or ambiguous_cancel_mutations
+        or first_child_without_empty_parent_setup
+        or second_child_without_persistence_proof
         or candidate_negative_trigger_missing
         or candidate_negative_trigger_too_specific
         or scenario_rationale_stimulus_mismatches

@@ -31,8 +31,8 @@ class PracticalRouteV08ContractTests(unittest.TestCase):
         self.assertIn("Do not stop for user confirmation", content)
         self.assertIn("one bounded TC revision", content)
         self.assertIn("fast path", content)
-        self.assertIn("TC draft after accepted matrix", content)
-        self.assertIn("Start only when `test-design-matrix-review.md` has verdict", content)
+        self.assertIn("TC draft after matrix gate", content)
+        self.assertIn("tc_with_status_decision: write-with-statuses", content)
         for forbidden_default in (
             "benchmark",
             "sharding",
@@ -106,6 +106,7 @@ class PracticalRouteV08ContractTests(unittest.TestCase):
             "closed-dictionary-completeness",
             "boundary-class-completeness",
             "creation-form-isolation-coverage",
+            "runtime-execution-semantics",
         ):
             self.assertIn(item, writer)
             self.assertIn(item, gate)

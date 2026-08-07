@@ -24,7 +24,9 @@ For ordinary user work “write test cases for this FT/scope”, use
 The practical route is fixed: matrix only → separate-session matrix review →
 canonical TC → separate-session TC review → at most one bounded revision →
 final separate-session TC review. Do not create canonical TC until `test-design-matrix-review.md` is
-`matrix-accepted`. Record matrix and TC-review routing in the linked
+`matrix-accepted`, except for a documented `round-cap-reached` decision with
+`source_contradiction: no` and `tc_with_status_decision: write-with-statuses`.
+Record matrix and TC-review routing in the linked
 `practical-stage-summary.md` with `next_stage_transition`; write status-marked TC when the obligation is
 clear but UI/data evidence is missing, and block only a source contradiction.
 In the matrix pass, do not create or modify canonical test cases.
@@ -35,7 +37,7 @@ the user explicitly selects such a route. The detailed transition, validation,
 root-consistency and round-cap policy is canonical in
 `practical-test-case-route-v0.8.md`.
 
-The first writer invocation is always `practical_v0_8_matrix`; fail closed unless a separate-session matrix review has verdict `matrix-accepted` before canonical TC writing. For `matrix-changes-required`, at most one bounded matrix repair; for `tc-changes-required`, at most one bounded TC revision followed by a final separate-session TC review.
+The first writer invocation is always `practical_v0_8_matrix`; fail closed unless a separate-session matrix review has verdict `matrix-accepted`, or the documented round-cap exception above applies, before canonical TC writing. For `matrix-changes-required`, at most one bounded matrix repair; for `tc-changes-required`, at most one bounded TC revision followed by a final separate-session TC review.
 Default: do not create XLSX duplicates.
 
 The practical-stage summary records `code_root`, `ft_package_root`,
@@ -139,7 +141,7 @@ Minimum runtime rules:
 8b. Parameter tables are allowed only when every row has the same start screen, UI level, navigation path, user action, trigger and observable expected result. Split parent/child entities, nested blocks or different screens into separate `TC-*`; do not optimize TC count over automation-readiness.
 8c. Before `ready-for-review` and after any writer repair, check that production TC runtime fields are Russian user-facing prose; use the agent-process vocabulary blacklist in `test-case-runtime-format.md`. This is a writer gate blocker, not reviewer cleanup.
 8d. Before `ready-for-review`, apply runtime rule cards from `test-case-runtime-format.md` and `coverage-class-catalog.md`: duplicate input = negative by default; no downstream-as-local-rejection; no injected requiredness; no optional-as-required; no field input after save. Treat violations as `tc-regression-smells`.
-8e. Before `ready-for-review`, fill the recurrent-defect rows in `Writer Quality Gate`: `tc-metadata-integrity`, `lifecycle-execution-ownership`, `step-executability`, `fixture-resolution`, `source-obligation-completeness`, `closed-dictionary-completeness`, `boundary-class-completeness`, `creation-form-isolation-coverage` and `expected-result-singularity`. These are writer gates, not optional reviewer cleanup. A reference to another TC step, a generic status TC that mixes object/UI levels, a made-up fixture/entity, a silently omitted member of a source list, an alternative pass oracle, only one arbitrary invalid sample, or an applicable new-object form without an immediate, explicit field-level check against value leakage from the prior object fails this gate.
+8e. Before `ready-for-review`, fill the recurrent-defect rows in `Writer Quality Gate`: `tc-metadata-integrity`, `lifecycle-execution-ownership`, `step-executability`, `fixture-resolution`, `source-obligation-completeness`, `closed-dictionary-completeness`, `boundary-class-completeness`, `creation-form-isolation-coverage`, `runtime-execution-semantics` and `expected-result-singularity`. These are writer gates, not optional reviewer cleanup. A reference to another TC step, a generic status TC that mixes object/UI levels, a made-up fixture/entity, a silently omitted member of a source list, an alternative pass oracle, only one arbitrary invalid sample, an applicable new-object form without an immediate, explicit field-level check against value leakage from the prior object, a create/edit alternative, an inferred manual change of an autofilled value, or an upload cardinality check phrased as document type fails this gate.
 8f. A Writer Quality Gate is valid only with the current `**Версия контракта:**` from `writer-quality-gate-format.md`. When a new required gate item appears, do not append a `pass` row to migrate an old draft. Set `blocked-quality-gate`, rerun the current matrix/TC self-check and cite the checked artifacts/TC ids (or `not_applicable:` with source reason) before reviewer launch. One row per item; log history separately.
 9. Before `ready-for-review`, `semantic-review-ready`, and final handoff, check each `TC-*` by [../../references/qa/test-case-runtime-format.md](../../references/qa/test-case-runtime-format.md): `Трассировка` is mandatory, optional source fields are allowed only when they add non-duplicating navigation or real source evidence. If `TC-*` uses `DICT-*`, the same id must appear in `Трассировка`; a synthetic quote cannot be presented as an FT quote.
 10. Do not mix TC schemas: a metadata table does not replace parser-supported bold metadata fields from `test-case-format.md` (`**Название:**`, `**Тип:**`, `**Приоритет:**`, `**package_id:**`, `**Трассировка:**`); table-only metadata such as `| Поле | Значение |` / `| package_id | WP-01 |` is invalid. Do not duplicate runtime headings with inline/bold fields.

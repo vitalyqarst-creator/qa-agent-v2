@@ -226,6 +226,122 @@ class PracticalArtifactQualityGateTests(unittest.TestCase):
 
         self.assertIn("test-case-file-count-limit-save-crosscheck-smell", ids)
 
+    def test_rejects_mixed_create_and_edit_entry_paths(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            path = root / "fts" / "Sample" / "test-cases" / "scope.md"
+            path.parent.mkdir(parents=True)
+            path.write_text(
+                self.case(
+                    title="Форма добавления или редактирования реквизита содержит обязательные поля",
+                    test_type="Positive",
+                    steps="1. Открыть форму добавления или редактирования реквизита.\n2. Проверить поля формы.",
+                    expected="В форме отображаются обязательные поля.",
+                ),
+                encoding="utf-8",
+            )
+
+            ids = self.finding_ids(root)
+
+        self.assertIn("test-case-mixed-create-edit-path", ids)
+
+    def test_rejects_manual_mutation_inferred_from_autofill(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            path = root / "fts" / "Sample" / "test-cases" / "scope.md"
+            path.parent.mkdir(parents=True)
+            path.write_text(
+                self.case(
+                    title="Поле партнера автозаполняется при создании реквизита",
+                    test_type="Negative",
+                    steps="1. Открыть добавление реквизита.\n2. Попытаться вручную очистить поле `Наименование партнера`.",
+                    expected="Поле нельзя оставить пустым.",
+                ),
+                encoding="utf-8",
+            )
+
+            ids = self.finding_ids(root)
+
+        self.assertIn("test-case-autofill-manual-mutation-unsupported", ids)
+
+    def test_rejects_document_type_as_file_cardinality_substitute(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            path = root / "fts" / "Sample" / "test-cases" / "scope.md"
+            path.parent.mkdir(parents=True)
+            path.write_text(
+                self.case(
+                    title="Нельзя загрузить второй файл того же типа документа",
+                    test_type="Negative",
+                    test_data="- Первый файл: `a.pdf`.\n- Второй файл: `b.pdf`.",
+                    steps="1. Добавить второй файл того же типа документа.\n2. Проверить состав файлов.",
+                    expected="В поле остается только первый файл.",
+                ),
+                encoding="utf-8",
+            )
+
+            ids = self.finding_ids(root)
+
+        self.assertIn("test-case-file-count-substituted-by-document-type", ids)
+
+    def test_rejects_cancel_case_with_alternative_changed_fields(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            path = root / "fts" / "Sample" / "test-cases" / "scope.md"
+            path.parent.mkdir(parents=True)
+            path.write_text(
+                self.case(
+                    title="Отмена закрывает форму без сохранения изменений",
+                    test_type="Positive",
+                    test_data="- Изменение: расчетный счет `40702810900000000032` или город `Москва`.",
+                    steps="1. Изменить данные.\n2. Нажать `Отменить`.",
+                    expected="Изменения не сохранены.",
+                ),
+                encoding="utf-8",
+            )
+
+            ids = self.finding_ids(root)
+
+        self.assertIn("test-case-cancel-mutation-ambiguous", ids)
+
+    def test_first_child_case_requires_an_empty_parent(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            path = root / "fts" / "Sample" / "test-cases" / "scope.md"
+            path.parent.mkdir(parents=True)
+            path.write_text(
+                self.case(
+                    title="Пользователь может добавить первый реквизит к партнеру",
+                    test_type="Positive",
+                    steps="1. Открыть добавление реквизита.\n2. Нажать `Сохранить`.",
+                    expected="Реквизит сохранен.",
+                ),
+                encoding="utf-8",
+            )
+
+            ids = self.finding_ids(root)
+
+        self.assertIn("test-case-first-child-without-empty-parent-setup", ids)
+
+    def test_second_child_case_requires_persistence_proof(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            path = root / "fts" / "Sample" / "test-cases" / "scope.md"
+            path.parent.mkdir(parents=True)
+            path.write_text(
+                self.case(
+                    title="Пользователь может добавить второй независимый реквизит к партнеру",
+                    test_type="Positive",
+                    steps="1. Открыть добавление реквизита.\n2. Нажать `Сохранить`.",
+                    expected="Второй реквизит успешно привязан к партнеру.",
+                ),
+                encoding="utf-8",
+            )
+
+            ids = self.finding_ids(root)
+
+        self.assertIn("test-case-second-child-without-persistence-proof", ids)
+
     def test_declared_test_case_count_must_match_canonical_headings(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

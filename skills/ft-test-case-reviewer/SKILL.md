@@ -188,8 +188,11 @@ inventing behavior.
 
 For independent `tc_review`, return `review-findings.md` and verify that
 `test-design-matrix-review.md` has verdict `matrix-accepted` before judging TC
-coverage. If an accepted matrix review is absent, block TC review and route back
-to matrix review.
+coverage. The only practical exception is a matching per-scope round-cap record
+in `practical-stage-summary.md` with `source_contradiction: no` and
+`tc_with_status_decision: write-with-statuses`; then reviewer must validate that
+all uncertainty is represented by explicit execution statuses. If neither
+evidence path exists, block TC review and route back to matrix review.
 
 `review-findings.md` is release-grade review evidence and is allowed only when
 the reviewer ran in a separate Codex task/thread. If review is performed as a
