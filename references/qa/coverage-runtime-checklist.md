@@ -22,6 +22,8 @@ Before writing `TC-*`, check whether the scope contains:
 - integration/API/async/internal effects;
 - repeated blocks, tables, files or documents;
 - generated document content mapping;
+- cross-view projection after mutation;
+- visible history or audit;
 - role/status/security/NFR dimensions.
 
 ## Runtime Rules
@@ -37,6 +39,7 @@ Before writing `TC-*`, check whether the scope contains:
 - For 3+ independent factors with multiple values, pairwise/combinatorial coverage is mandatory; choose `2-way | 3-way | t-way`, prove coverage strength, or record a gap.
 - For reusable baseline and negative transition, use a concrete fixture or `fixture-catalog.md`.
 - Record coverage metrics for applicable dimensions; missing metrics mean unfinished design work.
+- For source-defined multiple views after a mutation or a visible history/audit, mark `cross-view-projection` / `audit-history`; load the full checklist. Do not infer behavior absent from the source.
 
 ## Deep Coverage Triggers
 
@@ -50,6 +53,7 @@ Load the full `coverage-checklist.md` or a specialized deep reference when the s
 - complex decision table;
 - pairwise/combinatorial factors;
 - file upload/download or generated documents;
+- cross-view projection after mutation or visible history/audit;
 - repeatable blocks or action-created optional blocks;
 - checkbox-list / multi-select behavior;
 - performance/reliability/compatibility/usability/accessibility expectations;

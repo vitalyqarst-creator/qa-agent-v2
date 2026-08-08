@@ -763,7 +763,7 @@ Resolver должен читать JSON-блок ниже как канонич�
       "required_groups": ["global_core", "review_cycle_core", "reviewer_semantic_core", "reviewer_process_artifacts"],
       "conditional_groups": ["source_locator_core", "scope_manual_core", "scope_table_artifacts", "scope_ui_artifacts", "writer_table_artifacts", "writer_ui_artifacts", "style_remediation", "reviewer_handoff_artifacts"],
       "audit_only_groups": ["audit_only_history", "governance_audit_only"],
-      "budget_limit_kib": 290,
+      "budget_limit_kib": 292,
       "rationale": "Session-based semantic review for traceability and test-design, before format polishing."
     },
     {

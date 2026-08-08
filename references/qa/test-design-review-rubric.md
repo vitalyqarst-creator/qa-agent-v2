@@ -200,6 +200,8 @@ Reviewer обязан явно попытаться найти следующи�
 7ag. `implementation-observation-as-baseline`: exploratory implementation behavior is promoted to FT-first baseline without approved evidence.
 7ah. `scope-entrypoint-precondition-incomplete`: TC omits or reorders a source-backed parent card/form opening action before block navigation.
 7ai. `negated-rejection-positive-oracle`: positive TC proves acceptance only by saying that rejection/blocking does not happen, without a concrete observable positive artifact.
+7aj. `cross-view-projection-gap`: source-defined target view after mutation is absent or replaced with generic reopen/list behavior.
+7ak. `audit-history-coverage-gap`: source-defined history/audit is considered covered by the mutation itself.
 8. `covered without TC`: atom/requirement имеет `coverage_status = covered`, но не связан ни с одним исполнимым `TC-*`.
 9. `package leakage`: `TC-*` смешивает независимые проверки из разных internal work packages.
 10. `set organization drift`: набор не сгруппирован по функциональности/блоку/элементу/операции или `TC-*` нумерация перезапускается внутри групп, содержит пропуски либо дубли.
