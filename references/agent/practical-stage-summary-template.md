@@ -49,7 +49,7 @@ v0.8.3. The file is a user-facing handoff and a machine-checkable gate.
 
 | scope | verdict | blocking_finding_count | reviewer_task_or_session | reviewer_execution_surface |
 | --- | --- | --- | --- | --- |
-| `<scope-slug>` | `tc-accepted / tc-changes-required` | `<integer>` | `<Codex task/thread id>` | `codex-task / codex-thread` |
+| `<scope-slug>` | `tc-accepted / tc-changes-required` | `<integer>` | `<separate Codex session id>` | `codex-thread` |
 
 ## Scope transitions
 

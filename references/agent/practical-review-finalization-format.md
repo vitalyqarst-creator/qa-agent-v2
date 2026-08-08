@@ -22,8 +22,8 @@ The guard requires all of the following:
   review;
 - review artifact has a canonical verdict for the selected mode;
 - controller-owned dispatch receipt binds the allowed launch receipt to the
-  actual separate Codex task/thread ID and `reviewer_execution_surface` equal
-  to `codex-task` or `codex-thread`;
+  actual separate Codex session/thread ID and `reviewer_execution_surface`
+  equal to `codex-thread`;
 - reviewer-owned evidence confirms only its read-only/separate-session facts
   and references the dispatch receipt. It must not invent or manually copy a
   task ID.
@@ -55,7 +55,7 @@ know the new task ID. Immediately after `create_thread` returns its ID, and
 before the reviewer begins assessment, the controller writes:
 
 ```text
-python scripts/practical_review_dispatch_receipt.py --launch-receipt <review-launch-preflight.json> --reviewer-task-id <returned Codex task id> --reviewer-execution-surface codex-task --output <review-dispatch.json>
+python scripts/practical_review_dispatch_receipt.py --launch-receipt <review-launch-preflight.json> --reviewer-session-id <returned separate Codex session id> --reviewer-execution-surface codex-thread --output <review-dispatch.json>
 ```
 
 The reviewer receives the dispatch receipt path, verifies that it is bound to

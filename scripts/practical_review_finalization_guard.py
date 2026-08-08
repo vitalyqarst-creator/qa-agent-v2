@@ -27,7 +27,7 @@ import practical_review_preflight as review_preflight  # noqa: E402
 
 
 REVIEW_MODES = {"matrix_review", "tc_review"}
-EXECUTION_SURFACES = {"codex-task", "codex-thread"}
+EXECUTION_SURFACES = {"codex-thread"}
 TASK_ID_RE = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", re.IGNORECASE)
 
 
@@ -95,6 +95,74 @@ def normalized_verdict(content: str, review_mode: str) -> str:
     if normalized in {"tc-changes-required", "changes-required"}:
         return "tc-changes-required"
     return ""
+
+
+def review_submission_issues(
+    *,
+    review_content: str,
+    independence_content: str,
+    descriptors: list[review_preflight.ScopeDescriptor],
+    review_mode: str,
+) -> list[str]:
+    """Validate reviewer-owned metadata before controller finalization.
+
+    The separate reviewer runs this guard without ``--output`` as a read-only
+    self-check.  That makes malformed reviewer metadata fail in the reviewer
+    session instead of forcing controller-side repair after a verdict.
+    """
+
+    issues: list[str] = []
+    if not re.search(r"(?mi)^##\s*(?:verdict|вердикт)\s*$", review_content):
+        issues.append("review artifact lacks canonical ## Verdict heading")
+
+    expected_scope_slugs = {descriptor.scope_slug for descriptor in descriptors}
+    scope_slug = markdown_field(review_content, "scope_slug")
+    if not scope_slug:
+        issues.append("review artifact lacks scope_slug")
+    elif len(expected_scope_slugs) == 1 and scope_slug != next(iter(expected_scope_slugs)):
+        issues.append("review artifact scope_slug differs from selected scope")
+    elif len(expected_scope_slugs) > 1 and not expected_scope_slugs.issubset(
+        {item.strip() for item in re.split(r"[,;]", scope_slug) if item.strip()}
+    ):
+        issues.append("review artifact scope_slug does not cover every selected scope")
+
+    if markdown_field(review_content, "review_mode") != review_mode:
+        issues.append("review artifact review_mode differs from selected mode")
+
+    expected_rounds: set[str] = set()
+    for descriptor in descriptors:
+        try:
+            state = review_preflight.artifact_validator.parse_workflow_state(descriptor.workflow_path)
+        except (OSError, UnicodeDecodeError, ValueError):
+            issues.append(f"scope {descriptor.scope_id}: cannot read workflow round for review contract")
+            continue
+        current_round = str(state.get("current_round") or "").strip()
+        if current_round:
+            expected_rounds.add(current_round)
+    review_round = markdown_field(review_content, "review_round")
+    if not review_round:
+        issues.append("review artifact lacks review_round")
+    elif expected_rounds and review_round not in expected_rounds:
+        issues.append("review artifact review_round differs from current workflow round")
+
+    required_independence = {
+        "reviewer_dispatch_receipt": None,
+        "reviewer_was_separate_session": "yes",
+        "reviewer_input_excluded_writer_transcript": "yes",
+        "reviewer_input_excluded_writer_private_reasoning": "yes",
+        "reviewer_modified_test_cases": "no",
+        "independent_signoff_claim_allowed": "yes",
+        "review_mode": review_mode,
+        "review_round": review_round,
+    }
+    for field, expected in required_independence.items():
+        actual = markdown_field(independence_content, field)
+        if expected is None:
+            if not actual:
+                issues.append(f"review independence artifact lacks {field}")
+        elif actual.casefold() != expected.casefold():
+            issues.append(f"review independence artifact {field} differs from review contract")
+    return issues
 
 
 def next_controller_transition(review_mode: str, verdict: str) -> str:
@@ -224,12 +292,26 @@ def build_finalization_packet(
     verdict = normalized_verdict(review_content, review_mode)
     if not verdict:
         blockers.append("review artifact lacks a canonical verdict for the selected review mode")
+    submission_issues = review_submission_issues(
+        review_content=review_content,
+        independence_content=independence_content,
+        descriptors=descriptors,
+        review_mode=review_mode,
+    )
+    blockers.extend(submission_issues)
+    checks.append(
+        FinalizationCheck(
+            "review-submission-contract",
+            "pass" if not submission_issues else "fail",
+            f"issues={len(submission_issues)}",
+        )
+    )
 
     reviewer_surface = str(dispatch.get("reviewer_execution_surface") or "").strip()
     reviewer_task = str(dispatch.get("reviewer_task_or_session") or "").strip()
     reviewer_thread = str(dispatch.get("reviewer_thread_url_or_id") or "").strip()
     if reviewer_surface not in EXECUTION_SURFACES:
-        blockers.append("review dispatch receipt lacks a Codex task/thread execution surface")
+        blockers.append("review dispatch receipt lacks a separate Codex session execution surface")
     if not TASK_ID_RE.fullmatch(reviewer_task):
         blockers.append("review dispatch receipt lacks a durable reviewer task/session id")
     if reviewer_task and reviewer_task not in reviewer_thread:

@@ -30,14 +30,14 @@ class PracticalReviewDispatchReceiptTests(unittest.TestCase):
         path.write_text(json.dumps({"allowed": allowed}), encoding="utf-8")
         return path
 
-    def test_binds_allowed_launch_to_controller_task_id(self) -> None:
+    def test_binds_allowed_launch_to_separate_session_id(self) -> None:
         helper = self.load_helper()
         with tempfile.TemporaryDirectory() as tmp:
             launch = self.launch_receipt(Path(tmp))
             result = helper.build_dispatch_receipt(
                 launch_receipt=launch,
                 reviewer_task_id=TASK_ID,
-                reviewer_execution_surface="codex-task",
+                reviewer_execution_surface="codex-thread",
             )
 
         self.assertTrue(result["allowed"], result["blocking_reasons"])
@@ -51,12 +51,25 @@ class PracticalReviewDispatchReceiptTests(unittest.TestCase):
             result = helper.build_dispatch_receipt(
                 launch_receipt=launch,
                 reviewer_task_id="reviewer-round-1",
-                reviewer_execution_surface="codex-task",
+                reviewer_execution_surface="codex-thread",
             )
 
         self.assertFalse(result["allowed"])
         self.assertIn("launch receipt is not allowed", result["blocking_reasons"])
-        self.assertIn("reviewer task id", "\n".join(result["blocking_reasons"]))
+        self.assertIn("reviewer session id", "\n".join(result["blocking_reasons"]))
+
+    def test_rejects_subagent_execution_surface(self) -> None:
+        helper = self.load_helper()
+        with tempfile.TemporaryDirectory() as tmp:
+            launch = self.launch_receipt(Path(tmp))
+            result = helper.build_dispatch_receipt(
+                launch_receipt=launch,
+                reviewer_task_id=TASK_ID,
+                reviewer_execution_surface="codex-task",
+            )
+
+        self.assertFalse(result["allowed"])
+        self.assertIn("codex-thread", "\n".join(result["blocking_reasons"]))
 
 
 if __name__ == "__main__":

@@ -20,7 +20,7 @@ workflow. In the default route:
   are both available;
 - `test-design-matrix.md` is Markdown only by default;
 - XLSX export is created only by explicit user request;
-- reviewer runs in a separate Codex task/session for independent sign-off;
+- reviewer runs in a separate top-level Codex session for independent sign-off;
 - benchmark, sharding, semantic bridge, `source_assertion_review`,
   source-qualified immutable `ft-agent run`, `work/iterations/` and
   session-based review-cycle are not default routes.

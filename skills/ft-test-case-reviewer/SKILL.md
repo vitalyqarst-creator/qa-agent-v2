@@ -32,7 +32,7 @@ description: Делает review существующих тест-кейсов 
   1) `matrix_review` checks `test-design-matrix.md` before any canonical TC is
      written;
   2) `tc_review` checks canonical test cases only after the matrix was accepted.
-  Each gate runs from a separate Codex task/session by default and produces
+  Each gate runs from a separate top-level Codex session by default and produces
   review evidence. The controller/writer session must launch that task through
   Codex thread tools (`tool_search` discovery if needed, then `list_projects` /
   `create_thread`) and write the returned durable thread id into a
@@ -195,7 +195,7 @@ all uncertainty is represented by explicit execution statuses. If neither
 evidence path exists, block TC review and route back to matrix review.
 
 `review-findings.md` is release-grade review evidence and is allowed only when
-the reviewer ran in a separate Codex task/thread. If review is performed as a
+the reviewer ran in a separate top-level Codex session/thread. If review is performed as a
 sub-agent, same-session pass, local helper or any other non-independent advisory
 analysis, write `advisory-review-findings.md` instead. Advisory findings cannot
 authorize `ready-for-writer-revision`, matrix/TC acceptance, sign-off or release
@@ -210,13 +210,13 @@ Inventory`, `Package Test Design Plan`, `Writer Self-Check`, `Writer Quality
 Gate` or other split-design sections.
 
 Also verify `review-independence.md` for each gate. If the reviewer was not run
-in a separate Codex task/session or received writer transcript/private reasoning,
+in a separate top-level Codex session or received writer transcript/private reasoning,
 review may continue but the matrix/suite must be labeled `reviewed-not-independent`,
 not independently signed off.
 For an independent verdict, `review-independence.md` must record
 `reviewer_dispatch_receipt` created by the controller after `create_thread`.
 The controller-owned receipt, rather than reviewer-authored fields, proves the
-actual Codex task/thread id and execution surface. Role aliases, a sub-agent,
+actual separate Codex session id and execution surface. Role aliases, a sub-agent,
 same-session, `in-process` or `local-helper` mean `reviewed-not-independent`.
 A sub-agent/local-helper/same-session pass can
 support analysis, but it cannot be the final independent reviewer verdict for
@@ -225,6 +225,13 @@ release.
 For `practical_v0_8`, `review-independence.md` must also include `review_mode`
 and `review_round` matching the current review artifact. Matrix-review
 independence does not prove TC-review independence.
+
+Before returning an independent verdict, run the practical review finalization
+guard without `--output`. It is a read-only submission check for reviewer-owned
+output: the review artifact must have `## Verdict`, `scope_slug`, `review_mode`,
+`review_round` and a complete independence receipt. Correct only reviewer-owned
+artifacts before returning the verdict; never ask the controller to repair
+reviewer metadata after completion.
 
 Return independent `review-findings.md` with `blocking`, `nonblocking`,
 `needs-ui-calibration` and `needs-test-data` findings. Do not block release only

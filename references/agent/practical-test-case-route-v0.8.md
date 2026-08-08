@@ -14,7 +14,7 @@ quality controls non-optional:
 - `test-design-matrix.md` is reviewed as writer output, not trusted as source;
 - canonical `TC-*` writing is gated by accepted matrix review, so coverage defects
   are caught before the expensive prose-writing step;
-- independent sign-off requires a separate reviewer Codex task/session by
+- independent sign-off requires a separate reviewer top-level Codex session by
   default;
 - practical-route outputs must fail closed when heavy-route artifacts appear
   without an explicit user-selected route.
@@ -153,7 +153,7 @@ controller updates aliases, workflow or summary after review, run
 `practical_review_finalization_guard.py`; its full contract is in
 [practical-review-finalization-format.md](./practical-review-finalization-format.md).
 
-Immediately after `create_thread` returns the new reviewer task ID, the
+Immediately after `create_thread` returns the new separate reviewer session ID, the
 controller creates `review-dispatch.json` with
 `scripts/practical_review_dispatch_receipt.py`. Pass the dispatch receipt path
 to the reviewer. The reviewer records that path in `review-independence.md`; it
@@ -456,7 +456,7 @@ planned TC), use the fast path inside this same route:
      - `test-design-matrix.md` in the practical scope folder;
      - `writer-self-check.md` or an equivalent compact writer check for the
        matrix;
-     - `prompt.matrix-to-reviewer.md` for a separate reviewer Codex task/session,
+     - `prompt.matrix-to-reviewer.md` for a separate reviewer top-level Codex session,
        and an updated `practical-stage-summary.md` with
        `next_stage_transition = matrix-review allowed` or
        `matrix-review conditional` before launch.
@@ -489,15 +489,15 @@ planned TC), use the fast path inside this same route:
      matrix formatting or traceability tokens.
    - Do not review canonical test cases in this pass. The expected current TC file
      state is "not created yet" or "old draft ignored".
-  - Default behavior: run reviewer in a separate Codex task/session. The
+  - Default behavior: run reviewer in a separate top-level Codex session. The
     controller/writer session must first run the Reviewer launch preflight with
     `--check-only`, then materialize one allowed receipt with `--output`, then
     discover Codex thread tools with
     `tool_search` when they are not already loaded, use `list_projects` and
-    `create_thread` to launch the reviewer prompt in a separate Codex task,
+    `create_thread` to launch the reviewer prompt in a separate top-level Codex session,
     then use `wait_threads`/`read_thread` or the returned thread id to collect
     the reviewer result. A sub-agent spawned inside the writer/controller turn
-    does not count as a separate Codex task/session for independent sign-off. If
+    does not count as a separate top-level Codex session for independent sign-off. If
     Codex thread tools are genuinely unavailable in the runtime, stop with
     `blocked-reviewer-session-tool-unavailable`; do not perform same-session
     review as the route verdict.
@@ -511,7 +511,7 @@ planned TC), use the fast path inside this same route:
     `stage_status: blocked-quality-gate` and
     `next_skill: ft-test-case-writer`. Use `blocked-input` only for missing or
     contradictory external inputs.
-  - When the controller creates a separate reviewer Codex task/thread, set a
+  - When the controller creates a separate reviewer top-level Codex session, set a
     short human-readable title such as `Partners-v1 TC review 9.1+9.3.1`;
     never leave the full reviewer prompt as the task title.
    - The reviewer input must exclude writer transcript, writer private
@@ -560,16 +560,16 @@ planned TC), use the fast path inside this same route:
      reviewer pass accepts it.
    - Exact release invariant: no `released-*`, `signed-off` or equivalent status
      before an independent reviewer pass accepts the canonical cases.
-   - Create `prompt.tc-to-reviewer.md` for a separate TC reviewer Codex
-     task/session.
+   - Create `prompt.tc-to-reviewer.md` for a separate top-level TC reviewer
+     Codex session.
 
 6. `ft-test-case-reviewer` — TC review gate
    - Run practical TC review over FT/PDF context, `scope-brief.md`, accepted
      `test-design-matrix.md`, `test-design-matrix-review.md`, and canonical test
      cases.
-   - Default behavior: run reviewer in a separate Codex task/session. The
+   - Default behavior: run reviewer in a separate top-level Codex session. The
      controller/writer session must pass the Reviewer launch preflight before it
-     creates the reviewer task with Codex thread
+     creates the reviewer session with Codex thread
      tools (`tool_search` discovery if needed, then `list_projects` /
      `create_thread`). The reviewer input must exclude writer transcript and
      private reasoning. The controller must give the separate reviewer
@@ -577,7 +577,7 @@ planned TC), use the fast path inside this same route:
      unavailable, stop as `blocked-reviewer-session-tool-unavailable` and do not
      issue a same-session route verdict.
    - Produce `review-findings.md` only for validator-accepted separate
-     Codex-task/thread TC review and update `review-independence.md` with
+     Codex-thread TC review and update `review-independence.md` with
      TC-review evidence.
    - If the user explicitly requests advisory non-independent review, or if a
      controller performs auxiliary sub-agent/same-session analysis, store its
@@ -597,7 +597,7 @@ planned TC), use the fast path inside this same route:
 7. Revision
    - The writer performs one revision pass for blocking findings.
    - Route the revised canonical suite to one final independent full-scope TC
-     review in a separate Codex task/session. The reviewer must validate the
+     review in a separate top-level Codex session. The reviewer must validate the
      writer's status assertions against canonical metadata before acceptance.
    - Do not enter an unbounded repair loop. If the final review still returns
      `tc-changes-required`, report its findings and stop; do not apply another
@@ -761,7 +761,7 @@ steps, expected results, traceability, source interpretation or the number of
 writer/reviewer rounds.
 
 The next stage is always a final independent full-scope TC review in a separate
-Codex task/session. Its `Review Focus` is a priority list, not a boundary: the
+top-level Codex session. Its `Review Focus` is a priority list, not a boundary: the
 reviewer must inspect the entire current canonical suite against the FT, PDF,
 XHTML, support and current statuses. Only that final review can accept the
 revised baseline.
@@ -998,7 +998,7 @@ Rules:
   transcript/private reasoning.
 - `reviewer_dispatch_receipt` must point to the controller-owned receipt written
   immediately after `create_thread`. It, rather than reviewer-authored prose,
-  holds the durable task ID and execution surface. Do not write
+  holds the durable separate-session ID and execution surface. Do not write
   `reviewer_task_or_session`, `reviewer_execution_surface` or
   `reviewer_thread_url_or_id` in reviewer-owned artifacts.
 - `review_mode` and `review_round` must match the current review artifact:

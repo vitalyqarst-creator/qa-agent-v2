@@ -21,7 +21,10 @@ TASK_ID_RE = re.compile(
     r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
     re.IGNORECASE,
 )
-EXECUTION_SURFACES = {"codex-task", "codex-thread"}
+# A controller subagent is not an independent review session.  Older v1
+# receipts remain readable as historical evidence, but this dispatcher creates
+# only the current separate-session protocol.
+EXECUTION_SURFACES = {"codex-thread"}
 
 
 def sha256_file(path: Path) -> str:
@@ -47,12 +50,12 @@ def build_dispatch_receipt(
     if launch.get("allowed") is not True:
         errors.append("launch receipt is not allowed")
     if not TASK_ID_RE.fullmatch(task_id):
-        errors.append("reviewer task id is not a durable Codex task/thread id")
+        errors.append("reviewer session id is not a durable Codex thread id")
     if surface not in EXECUTION_SURFACES:
-        errors.append("reviewer execution surface must be codex-task or codex-thread")
+        errors.append("reviewer execution surface must be codex-thread (a separate Codex session)")
 
     return {
-        "schema_version": 1,
+        "schema_version": 2,
         "status": "dispatched" if not errors else "blocked",
         "allowed": not errors,
         "launch_receipt": launch_receipt.as_posix(),
@@ -69,7 +72,12 @@ def parse_args() -> argparse.Namespace:
         description="Create controller-owned reviewer dispatch receipt for practical route."
     )
     parser.add_argument("--launch-receipt", type=Path, required=True)
-    parser.add_argument("--reviewer-task-id", required=True)
+    parser.add_argument(
+        "--reviewer-session-id",
+        "--reviewer-task-id",
+        dest="reviewer_session_id",
+        required=True,
+    )
     parser.add_argument(
         "--reviewer-execution-surface",
         choices=sorted(EXECUTION_SURFACES),
@@ -83,7 +91,7 @@ def main() -> int:
     args = parse_args()
     result = build_dispatch_receipt(
         launch_receipt=args.launch_receipt,
-        reviewer_task_id=args.reviewer_task_id,
+        reviewer_task_id=args.reviewer_session_id,
         reviewer_execution_surface=args.reviewer_execution_surface,
     )
     output = args.output.resolve()

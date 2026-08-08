@@ -130,13 +130,13 @@ class PracticalReviewFinalizationGuardTests(unittest.TestCase):
         dispatch.write_text(
             json.dumps(
                 {
-                    "schema_version": 1,
+                    "schema_version": 2,
                     "status": "dispatched",
                     "allowed": True,
                     "launch_receipt": receipt.resolve().as_posix(),
                     "launch_receipt_sha256": sha256(receipt),
                     "reviewer_task_or_session": TASK_ID,
-                    "reviewer_execution_surface": "codex-task",
+                    "reviewer_execution_surface": "codex-thread",
                     "reviewer_thread_url_or_id": TASK_ID,
                 },
                 ensure_ascii=False,
@@ -144,18 +144,37 @@ class PracticalReviewFinalizationGuardTests(unittest.TestCase):
             encoding="utf-8",
         )
         review = receipt.parent / "review-findings.final.md"
-        review.write_text("**Вердикт:** `accepted`\n", encoding="utf-8")
+        review.write_text(
+            "\n".join(
+                [
+                    "## Verdict",
+                    "",
+                    "`tc-accepted`",
+                    "",
+                    "| Field | Value |",
+                    "| --- | --- |",
+                    "| scope_slug | `sample` |",
+                    "| review_mode | `tc_review` |",
+                    "| review_round | `1` |",
+                    "",
+                ]
+            ),
+            encoding="utf-8",
+        )
         independence = receipt.parent / "review-independence.final.md"
         independence.write_text(
             "\n".join(
                 [
                     "| field | value |",
                     "| --- | --- |",
-                    f"| reviewer_task_or_session | `{TASK_ID}` |",
-                    "| reviewer_execution_surface | `codex-task` |",
-                    f"| reviewer_thread_url_or_id | `{TASK_ID}` |",
+                    f"| reviewer_dispatch_receipt | `{dispatch.name}` |",
                     "| reviewer_was_separate_session | `yes` |",
+                    "| reviewer_input_excluded_writer_transcript | `yes` |",
+                    "| reviewer_input_excluded_writer_private_reasoning | `yes` |",
                     "| reviewer_modified_test_cases | `no` |",
+                    "| independent_signoff_claim_allowed | `yes` |",
+                    "| review_mode | `tc_review` |",
+                    "| review_round | `1` |",
                     "",
                 ]
             ),
@@ -208,7 +227,6 @@ class PracticalReviewFinalizationGuardTests(unittest.TestCase):
     def test_accepts_heading_style_verdict(self) -> None:
         helper = self.load_helper()
         repo_root, ft_root, summary, receipt, dispatch, review, independence = self.make_fixture()
-        review.write_text("## Verdict\n\n`tc-accepted`\n", encoding="utf-8")
 
         result = helper.build_finalization_packet(
             repo_root=repo_root,
@@ -224,6 +242,26 @@ class PracticalReviewFinalizationGuardTests(unittest.TestCase):
 
         self.assertTrue(result["allowed"], result["blocking_reasons"])
         self.assertEqual("tc-accepted", result["verdict"])
+
+    def test_blocks_review_submission_without_scope_metadata(self) -> None:
+        helper = self.load_helper()
+        repo_root, ft_root, summary, receipt, dispatch, review, independence = self.make_fixture()
+        review.write_text("## Verdict\n\n`tc-accepted`\n", encoding="utf-8")
+
+        result = helper.build_finalization_packet(
+            repo_root=repo_root,
+            ft_package_root=ft_root,
+            summary_path=summary,
+            scope_ids=["01"],
+            review_mode="tc_review",
+            launch_receipt=receipt,
+            dispatch_receipt=dispatch,
+            review_artifact=review,
+            independence_artifact=independence,
+        )
+
+        self.assertFalse(result["allowed"])
+        self.assertIn("review artifact lacks scope_slug", "\n".join(result["blocking_reasons"]))
 
     def test_explicit_recovery_restores_controller_snapshot(self) -> None:
         helper = self.load_helper()
@@ -257,11 +295,33 @@ class PracticalReviewFinalizationGuardTests(unittest.TestCase):
         self.assertEqual(["summary", "workflow:01"], recovery_result["changed_controller_targets_before_restore"])
         self.assertTrue(finalization["allowed"], finalization["blocking_reasons"])
 
-    def test_blocks_same_session_review_receipt(self) -> None:
+    def test_blocks_non_session_review_dispatch(self) -> None:
         helper = self.load_helper()
         repo_root, ft_root, summary, receipt, dispatch, review, independence = self.make_fixture()
-        independence.write_text(
-            independence.read_text(encoding="utf-8").replace("codex-task", "same-session"),
+        payload = json.loads(dispatch.read_text(encoding="utf-8"))
+        payload["reviewer_execution_surface"] = "codex-task"
+        dispatch.write_text(json.dumps(payload), encoding="utf-8")
+
+        result = helper.build_finalization_packet(
+            repo_root=repo_root,
+            ft_package_root=ft_root,
+            summary_path=summary,
+            scope_ids=["01"],
+            review_mode="tc_review",
+            launch_receipt=receipt,
+            dispatch_receipt=dispatch,
+            review_artifact=review,
+            independence_artifact=independence,
+        )
+
+        self.assertFalse(result["allowed"])
+        self.assertIn("separate Codex session", "\n".join(result["blocking_reasons"]))
+
+    def test_blocks_review_round_that_differs_from_workflow(self) -> None:
+        helper = self.load_helper()
+        repo_root, ft_root, summary, receipt, dispatch, review, independence = self.make_fixture()
+        review.write_text(
+            review.read_text(encoding="utf-8").replace("| review_round | `1` |", "| review_round | `2` |"),
             encoding="utf-8",
         )
 
@@ -278,31 +338,7 @@ class PracticalReviewFinalizationGuardTests(unittest.TestCase):
         )
 
         self.assertFalse(result["allowed"])
-        self.assertIn("differs from controller dispatch receipt", "\n".join(result["blocking_reasons"]))
-
-    def test_blocks_reviewer_identity_that_differs_from_controller_dispatch(self) -> None:
-        helper = self.load_helper()
-        repo_root, ft_root, summary, receipt, dispatch, review, independence = self.make_fixture()
-        wrong_task = "019fdaaa-1111-7222-8333-444455556666"
-        independence.write_text(
-            independence.read_text(encoding="utf-8").replace(TASK_ID, wrong_task),
-            encoding="utf-8",
-        )
-
-        result = helper.build_finalization_packet(
-            repo_root=repo_root,
-            ft_package_root=ft_root,
-            summary_path=summary,
-            scope_ids=["01"],
-            review_mode="tc_review",
-            launch_receipt=receipt,
-            dispatch_receipt=dispatch,
-            review_artifact=review,
-            independence_artifact=independence,
-        )
-
-        self.assertFalse(result["allowed"])
-        self.assertIn("differs from controller dispatch receipt", "\n".join(result["blocking_reasons"]))
+        self.assertIn("review_round differs", "\n".join(result["blocking_reasons"]))
 
 
 if __name__ == "__main__":

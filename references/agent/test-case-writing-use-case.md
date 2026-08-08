@@ -33,7 +33,7 @@ ft-source-locator
    - Keep the suite review-ready, not released/signed-off.
 
 4. `ft-test-case-reviewer`
-   - Run in a separate Codex task/session by default.
+   - Run in a separate top-level Codex session by default.
    - Re-derive coverage from FT/PDF/XHTML/support/mockups instead of trusting
      the writer matrix.
    - Produce `review-findings.md` and `review-independence.md` only for
