@@ -322,6 +322,62 @@ class PracticalReviewPreflightTests(unittest.TestCase):
 
         self.assertTrue(result["allowed"])
 
+    def test_ignores_canonical_test_case_error_owned_by_another_scope(self) -> None:
+        helper = self.load_helper()
+        _, root, ft_root, summary = self.make_repository()
+        other_workflow = ft_root / "work" / "stage-handoffs" / "02-other-scope" / "workflow-state.yaml"
+        other_workflow.parent.mkdir(parents=True)
+        other_workflow.write_text(
+            "\n".join(
+                [
+                    "scope_slug: other-scope",
+                    "latest_artifacts:",
+                    "  canonical_test_cases: test-cases/other-scope.md",
+                    "",
+                ]
+            ),
+            encoding="utf-8",
+        )
+        original_validate = helper.artifact_validator.validate
+        helper.artifact_validator.validate = lambda _: {
+            "findings": [
+                {
+                    "id": "test-case-mixed-create-edit-path",
+                    "severity": "error",
+                    "category": "atomarity",
+                    "path": "test-cases/other-scope.md",
+                }
+            ]
+        }
+        try:
+            result = self.run_preflight(helper, root, ft_root, summary)
+        finally:
+            helper.artifact_validator.validate = original_validate
+
+        self.assertTrue(result["allowed"])
+
+    def test_blocks_canonical_test_case_error_owned_by_current_scope(self) -> None:
+        helper = self.load_helper()
+        _, root, ft_root, summary = self.make_repository()
+        original_validate = helper.artifact_validator.validate
+        helper.artifact_validator.validate = lambda _: {
+            "findings": [
+                {
+                    "id": "test-case-mixed-create-edit-path",
+                    "severity": "error",
+                    "category": "atomarity",
+                    "path": "test-cases/sample-scope.md",
+                }
+            ]
+        }
+        try:
+            result = self.run_preflight(helper, root, ft_root, summary)
+        finally:
+            helper.artifact_validator.validate = original_validate
+
+        self.assertFalse(result["allowed"])
+        self.assertIn("current scope 01", "\n".join(result["blocking_reasons"]))
+
     def test_receipt_reports_external_errors_separately_from_scope_blockers(self) -> None:
         helper = self.load_helper()
         _, root, ft_root, summary = self.make_repository()

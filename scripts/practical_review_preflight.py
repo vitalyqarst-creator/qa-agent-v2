@@ -47,6 +47,7 @@ class ScopeDescriptor:
     handoff_dir: Path
     scope_slug: str
     workflow_path: Path
+    canonical_test_case_paths: tuple[str, ...]
 
 
 @dataclass(frozen=True)
@@ -323,12 +324,31 @@ def scope_descriptors(ft_package_root: Path, scope_ids: Iterable[str]) -> tuple[
         if not scope_slug:
             issues.append(f"scope {scope_id}: scope_slug is missing")
             continue
+        latest_artifacts = state.get("latest_artifacts")
+        configured_canonical_paths: list[str] = []
+        if isinstance(latest_artifacts, dict):
+            configured_value = latest_artifacts.get("canonical_test_cases")
+            if isinstance(configured_value, str):
+                configured_canonical_paths.append(configured_value)
+            elif isinstance(configured_value, list):
+                configured_canonical_paths.extend(
+                    item for item in configured_value if isinstance(item, str)
+                )
+        canonical_test_case_paths = {
+            normalized_path(value).lstrip("./")
+            for value in configured_canonical_paths
+            if normalized_path(value)
+        }
+        canonical_test_case_paths.add(
+            normalized_path(f"test-cases/{scope_slug}.md")
+        )
         descriptors.append(
             ScopeDescriptor(
                 scope_id=scope_id,
                 handoff_dir=handoff_dir,
                 scope_slug=scope_slug,
                 workflow_path=workflow_path,
+                canonical_test_case_paths=tuple(sorted(canonical_test_case_paths)),
             )
         )
     return descriptors, issues
@@ -354,13 +374,15 @@ def all_scope_descriptors(ft_package_root: Path) -> list[ScopeDescriptor]:
 
 
 def scope_id_for_finding_path(path_text: str, descriptors: Iterable[ScopeDescriptor], ft_package_root: Path) -> str | None:
-    normalized = path_text.replace("\\", "/").lstrip("./")
+    normalized = normalized_path(path_text).lstrip("./")
     for descriptor in descriptors:
         handoff_relative = descriptor.handoff_dir.relative_to(ft_package_root).as_posix()
         practical_relative = (ft_package_root / "work" / "practical" / descriptor.scope_slug).relative_to(ft_package_root).as_posix()
-        if normalized == handoff_relative or normalized.startswith(f"{handoff_relative}/"):
+        if normalized == normalized_path(handoff_relative) or normalized.startswith(f"{normalized_path(handoff_relative)}/"):
             return descriptor.scope_id
-        if normalized == practical_relative or normalized.startswith(f"{practical_relative}/"):
+        if normalized == normalized_path(practical_relative) or normalized.startswith(f"{normalized_path(practical_relative)}/"):
+            return descriptor.scope_id
+        if normalized in descriptor.canonical_test_case_paths:
             return descriptor.scope_id
     handoff_match = re.search(r"(?:^|/)work/stage-handoffs/(\d{2})-", normalized)
     return handoff_match.group(1) if handoff_match else None

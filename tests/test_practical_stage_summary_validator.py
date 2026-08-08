@@ -636,6 +636,21 @@ class PracticalStageSummaryValidatorTests(unittest.TestCase):
 
         self.assertIn("practical-stage-summary-nonrussian-human-prose", ids)
 
+    def test_allows_unquoted_technical_identifiers_in_russian_summary_reason(self) -> None:
+        root = self.make_package()
+        summary = root / "work" / "practical-stage-summary.md"
+        summary.write_text(
+            summary.read_text(encoding="utf-8").replace(
+                "Матрица принята.",
+                "Ограничения зафиксированы в GAP-002, AS.37 и TC026.",
+            ),
+            encoding="utf-8",
+        )
+
+        ids = self.finding_ids(root)
+
+        self.assertNotIn("practical-stage-summary-nonrussian-human-prose", ids)
+
     def test_rejects_invalid_git_persistence_field(self) -> None:
         ids = self.finding_ids(self.make_package(git_persistence="ordinary git maybe"))
 

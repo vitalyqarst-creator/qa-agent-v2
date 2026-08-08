@@ -4843,6 +4843,10 @@ PRACTICAL_STAGE_SUMMARY_ALLOWED_ENGLISH_TOKENS = {
     "xhtml",
     "yaml",
 }
+PRACTICAL_STAGE_SUMMARY_TECHNICAL_IDENTIFIER_RE = re.compile(
+    r"\b[A-Z]{2,12}(?=[A-Z0-9._/-]*\d)(?:[-._/][A-Z0-9]+)+\b|\b[A-Z]{2,12}\d+\b",
+    flags=re.IGNORECASE,
+)
 PRACTICAL_TC_REVIEW_CURRENT_ARTIFACT_ALIASES = {
     "review_independence": ("tc_review_independence", "reviewer_tc_independence"),
     "session_log": ("tc_review_session_log", "reviewer_tc_session_log"),
@@ -5563,6 +5567,9 @@ def field_is_not_applicable(value: str) -> bool:
 
 def english_prose_words(value: str) -> list[str]:
     prose = re.sub(r"`[^`]*`", "", value)
+    # Work summaries must remain traceable.  Typed IDs such as GAP-002 and
+    # AS.37 are not English prose even when they are not wrapped in backticks.
+    prose = PRACTICAL_STAGE_SUMMARY_TECHNICAL_IDENTIFIER_RE.sub("", prose)
     return [
         word
         for word in re.findall(r"[A-Za-z]{3,}", prose)
