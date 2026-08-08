@@ -203,7 +203,9 @@ Reviewer обязан явно попытаться найти следующи�
 7ag. `implementation-observation-as-baseline`: exploratory implementation behavior is promoted to FT-first baseline without approved evidence.
 7ah. `scope-entrypoint-precondition-incomplete`: TC omits or reorders a source-backed parent card/form opening action before block navigation.
 7ai. `negated-rejection-positive-oracle`: positive TC proves acceptance only by saying that rejection/blocking does not happen, without a concrete observable positive artifact.
-7aj. `unbounded-quantity-without-gap`: source states an unlimited, complete or other quantitative behavior, but matrix/TC treats one or two examples as proof while source gives no measurable capacity or stopping rule and no narrow `GAP-*`.
+7aj. `cross-view-projection-gap`: source-defined target view after mutation is absent or replaced with generic reopen/list behavior.
+7ak. `audit-history-coverage-gap`: source-defined history/audit is considered covered by the mutation itself.
+7al. `unbounded-quantity-without-gap`: source states an unlimited, complete or other quantitative behavior, but matrix/TC treats one or two examples as proof while source gives no measurable capacity or stopping rule and no narrow `GAP-*`.
 8. `covered without TC`: atom/requirement имеет `coverage_status = covered`, но не связан ни с одним исполнимым `TC-*`.
 9. `package leakage`: `TC-*` смешивает независимые проверки из разных internal work packages.
 10. `set organization drift`: набор не сгруппирован по функциональности/блоку/элементу/операции или `TC-*` нумерация перезапускается внутри групп, содержит пропуски либо дубли.
@@ -279,7 +281,7 @@ Reviewer проверяет:
 8. Если связанный `TC-*` не доказывает dimension или linked atoms загрязняют строку другой semantic class, reviewer должен требовать либо доработать/добавить `TC-*`, либо оформить `GAP-*`/исправить matrix; до этого строка matrix считается непокрытой.
 9. Reviewer не может подписать набор, пока каждая применимая строка matrix не имеет одного из двух состояний: `covered-by-TC` с проверяемым TC или `covered-by-gap` с явным `GAP-*`, а linked atoms не содержат metadata contamination.
 
-Используй словарь `coverage_dimension` из `review-findings-format.md`. Типовые dimensions включают `role-permission`, `status-lifecycle`, `decision-table`, `pairwise`, `boundary`, `equivalence`, `dependency`, `numeric`, `date-time`, `length`, `persistence`, `scenario-use-case`, `api-server-validation`, `integration`, `security`, `async`, `table-list`, `file-upload`, `calculation`, `performance`, `reliability`, `compatibility`, `usability` и `accessibility-ui`.
+Используй словарь `coverage_dimension` из `review-findings-format.md`. Типовые dimensions включают `role-permission`, `status-lifecycle`, `decision-table`, `pairwise`, `boundary`, `equivalence`, `dependency`, `numeric`, `date-time`, `length`, `persistence`, `cross-view-projection`, `audit-history`, `scenario-use-case`, `api-server-validation`, `integration`, `security`, `async`, `table-list`, `file-upload`, `calculation`, `performance`, `reliability`, `compatibility`, `usability` и `accessibility-ui`.
 
 ## Ревью Risk / Priority Map
 

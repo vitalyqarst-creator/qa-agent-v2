@@ -43,6 +43,8 @@ APPLICABILITY_DIMENSIONS = (
     "integration",
     "async",
     "persistence",
+    "cross-view-projection",
+    "audit-history",
     "security",
 )
 APPROVED_AUTHORITY_TYPES = {
