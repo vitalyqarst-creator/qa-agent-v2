@@ -5406,6 +5406,11 @@ def practical_stage_summary_allowed_tc_preflight_record_issues(
             state = parse_workflow_state(workflow_path)
         except (FileNotFoundError, UnicodeDecodeError):
             continue
+        # A completed TC review routes to a writer revision. Its launch
+        # receipt remains audit evidence, but it must not force the workflow
+        # back into reviewer-dispatch fields.
+        if state.get("stage_status") == "ready-for-writer-revision":
+            continue
         scope_slug = str(state.get("scope_slug") or "").strip()
         prompt_value = str(
             explicit_active_transition_prompt_value(state)

@@ -1182,6 +1182,40 @@ class PracticalStageSummaryValidatorTests(unittest.TestCase):
             {finding.id for finding in findings},
         )
 
+    def test_completed_review_does_not_require_reviewer_dispatch_state(self) -> None:
+        root = self.make_package(summary_stage="scope01-writer-revision-r6-pending")
+        summary = root / "work" / "practical-stage-summary.md"
+        handoff = root / "work" / "stage-handoffs" / "01-sample"
+        prompt = handoff / "prompt.reviewer-to-writer.round-6.md"
+        prompt.write_text("# Writer prompt\n", encoding="utf-8")
+        (handoff / "workflow-state.yaml").write_text(
+            "\n".join(
+                [
+                    "scope_slug: sample",
+                    "current_round: 6",
+                    "stage_status: ready-for-writer-revision",
+                    "tc_review_gate_status: final-review-changes-required",
+                    "final_independent_tc_review_status: changes-required-round-6",
+                    "latest_artifacts:",
+                    "  active_transition_prompt: work/stage-handoffs/01-sample/prompt.reviewer-to-writer.round-6.md",
+                ]
+            ),
+            encoding="utf-8",
+        )
+        receipt = root / "work" / "practical" / "sample" / "review-launch-preflight-r6.json"
+        receipt.parent.mkdir(parents=True, exist_ok=True)
+        receipt.write_text(
+            '{"status":"allowed","allowed":true,"review_mode":"tc_review"}\n',
+            encoding="utf-8",
+        )
+
+        findings, _ = self.validator.validate_practical_stage_summary(summary, root)
+
+        self.assertNotIn(
+            "practical-stage-summary-allowed-preflight-unrecorded",
+            {finding.id for finding in findings},
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
