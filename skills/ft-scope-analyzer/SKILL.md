@@ -10,8 +10,7 @@ description: Выделяет релевантные разделы ФТ, суж
 For ordinary work where the user wants test cases, use practical route v0.8 from
 [../../references/agent/practical-test-case-route-v0.8.md](../../references/agent/practical-test-case-route-v0.8.md).
 
-In this route, scope analysis prepares enough context for writing without
-starting a heavy source contract:
+In this route, scope analysis prepares only the next writer input:
 
 - confirm external scope boundaries by FT section/subsection;
 - create one compact `scope-brief.md` under
@@ -21,17 +20,14 @@ starting a heavy source contract:
 - create a compact `source-row-inventory.md` before writer handoff when the
   selected scope is driven by FT table rows, action rows, field rows, status
   rows, document mappings or fixed value lists;
-- include relevant FT text/table rows/PDF pages, support files, mockups,
-  dictionaries, source parity conclusions, open questions and candidate
-  UI-calibration points;
-- route next to `ft-test-case-writer` in `practical_v0_8_matrix` mode, not to
-  `source_assertion_review` or `ft-test-case-iteration`.
+- keep FT context, gaps, dictionary values and candidate UI calibration concise
+  in `scope-brief.md`; create `scope-clarification-requests.md` only for a
+  concrete BA question;
+- route next to `ft-test-case-writer` in `practical_v0_8_matrix` mode, not to `source_assertion_review` or `ft-test-case-iteration`.
 
-Exact routing invariant: route next to `ft-test-case-writer`, not to `source_assertion_review`.
-
-Do not materialize `source-assertions.json`, semantic bridge artifacts,
-immutable run configs, sharding artifacts or benchmark artifacts in
-`practical_v0_8`.
+Do not create `scope-contract.md`, a separate `scope-coverage-gaps.md`, oracle
+inventories, session/decision logs or heavy/source-first artifacts in
+`practical_v0_8`; those belong to legacy, diagnostic or explicitly selected routes.
 
 ## Bounded lean-production path
 
@@ -123,6 +119,11 @@ Minimum for `prompt.scope-gaps-to-reviewer.md`:
 
 ## Правила Формирования `prompt.scope-to-writer.md`
 
+Для `practical_v0_8` prompt содержит только путь к `scope-brief.md` и к
+присутствующим parity/row/mockup/BA artifacts; не дублирует правила и не
+ссылается на `scope-contract.md`, full gaps или oracle inventories.
+Нижеследующий полный контракт относится только к legacy/session route.
+
 При создании `prompt.scope-to-writer.md` применяй специальный контракт из `next-step-prompt-format.md`. Prompt обязан быть самодостаточным для writer-сессии и явно переносить критичные правила из `scope-contract.md`, `scope-coverage-gaps.md`, `source-parity-check.md` и regression artifacts.
 
 Минимум для каждого `prompt.scope-to-writer.md`:
@@ -167,12 +168,12 @@ Minimum for `prompt.scope-gaps-to-reviewer.md`:
 - список `coverage gaps` и открытых вопросов;
 - выбранный режим scope: `manual-scope` или `agent-proposed-scope`;
 - при `agent-proposed-scope`: только options/prompts и `awaiting-user-scope-selection`;
-- `scope-contract.md` с подтвержденными границами анализа;
+- `scope-contract.md` с подтвержденными границами анализа — только legacy/session route;
 - `source-parity-check.md`, если для основного ФТ доступны DOCX и PDF;
 - `source-row-inventory.md`, если `source-parity-check.md` содержит row-level/table parity или scope основан на таблице полей/действий;
 - `mockup-visual-inventory.md`, если подтвержденный UI scope включает mockup / screen image / `mockups/`;
-- `scope-coverage-gaps.md` с неоднозначностями и отсутствующими данными;
-- для подтвержденного practical scope: `scope-brief.md`, обязательные source-parity/row/mockup artifacts, `scope-coverage-gaps.md` и `scope-clarification-requests.md` только при конкретных scope-local gaps;
+- `scope-coverage-gaps.md` с неоднозначностями и отсутствующими данными — только legacy/session route;
+- для practical scope: `scope-brief.md`, обязательные source-parity/row/mockup artifacts и `scope-clarification-requests.md` только при вопросе к БА;
 - один активный handoff к matrix-only writer, если scope готов к следующей стадии;
 - при необходимости результаты `resolve_sections()` или `preview_chunks()`.
 
@@ -199,7 +200,7 @@ Minimum for `prompt.scope-gaps-to-reviewer.md`:
 9a. Если `source-parity-check.md` содержит секцию `Table / Row Parity` или подтвержденный scope основан на таблице полей/действий, создай отдельный `source-row-inventory.md` по `source-row-inventory-format.md` до handoff к writer. В inventory должны попасть все source rows выбранного scope, включая `in_scope = no`, применимые document-global/ancestor/cross-referenced constraints, rows/list values из XHTML, строки с PDF-only requirement codes и строки, которые могут стать `GAP-*`. Для compiler v3 заполни exact `source_path`, `source_locator`, `bounded_source_text`, `source_context_class` и `requirement_codes`; downstream manifest обязан совпасть с этим registry полностью. Не передавай writer-у табличный scope только с `source-parity-check.md`: writer должен получить независимый row inventory.
 9b. Для табличного scope проверь расшифровку колонок, сокращений и локальных кодов; неподтвержденное значение, влияющее на test design, фиксируй как `GAP-*` типа `missing-source-definition`, а не как догадку.
 10. Перед handoff к writer выполни `Scope Complexity Assessment`: оцени количество полей/блоков, условных зависимостей, validation domains, action flows, integrations/API/async, lifecycle/status rules и ожидаемых gaps.
-10a. Если complexity/source rows выявляют validation/format/date/email/length/numeric/allowed-values ограничения или обязательность, создай `negative-oracle-inventory.md` / `requiredness-oracle-inventory.md` до handoff. Для каждого invalid/requiredness item проверь observable oracle: сообщение, подсветка, blocked transition, input filtering, save rejection, API response, visible marker или другой source-backed pass/fail artifact.
+10a. Для legacy/session route при validation/format/date/email/length/numeric/allowed-values ограничениях или обязательности создай `negative-oracle-inventory.md` / `requiredness-oracle-inventory.md`. В `practical_v0_8` перечисли отдельные `SO-NEG-*` / `SO-REQ-*` прямо в `scope-brief.md` и не объединяй их в один ATOM.
 10b. Если source задает restriction/requiredness, но exact UI oracle отсутствует, не теряй obligation: укажи `decision = candidate_tc_required`, `oracle_status = ui-calibration-required`, stable `scope_obligation_id` (`SO-NEG-*` / `SO-REQ-*`) и передай writer-у как candidate TC по `negative-ui-calibration-policy.md`. Parent `GAP-*` используй только для общего неизвестного oracle, но child obligations перечисляй отдельно. `gap_required` оставляй для случаев, когда нельзя сформировать даже candidate TC.
 10c. Если scope содержит буквальный UI-текст/сообщение или неоднозначное преобразование единиц, создай `source-to-package-fidelity.json` по canonical format и зарегистрируй его в `latest_artifacts`. Не преобразуй `МБ` в точные байты без source-backed policy; неизвестную точную boundary fixture сохрани как отдельный `GAP-*` obligation.
 10d. `source-assertions.json` допустим только для явно выбранного production/promotion route по его canonical format; никогда не создавай его в `practical_v0_8`.
@@ -218,7 +219,7 @@ obligations/полям/validation classes разложи на отдельные
 нумерованный checklist. Не задавай БА umbrella-вопрос; при intake закрывай
 только подтверждённые подпункты, остаток оставляй residual gap.
 15. Для новых handoff-папок используй numbered naming из `references/agent/stage-handoff-model.md`: `00-<container-slug>/` для контейнера выбора и `NN-<scope-slug>/` для подтвержденного scope-level handoff. Логический `scope_slug` оставляй без числового префикса.
-16. После подтверждения scope сохрани один активный downstream prompt. Для `practical_v0_8` создай/обнови `scope-brief.md` и route к `ft-test-case-writer`; `scope-contract.md`, `workflow-state.yaml`, `source-assertions.json`, `prompt.scope-assertions-to-reviewer.md` и `prompt.scope-gaps-to-reviewer.md` не обязательны. Для legacy/session/production route сохрани `scope-contract.md`, `scope-coverage-gaps.md` и условно добавь `source-parity-check.md`, `source-row-inventory.md`, oracle inventories, `scope-clarification-requests.md` и `prompt.scope-gaps-to-reviewer.md`, когда их требуют правила выше. `scope-execution-options.md` создавай только для неоднозначного выбора следующего действия; в однозначном lean-run он запрещён как дубликат active route.
+16. После подтверждения scope сохрани `workflow-state.yaml` и один active downstream prompt. Для `practical_v0_8` создай `scope-brief.md`, обязательные parity/row/mockup artifacts и route к writer; `scope-contract.md`, logs, full gaps/oracle artifacts и reviewer prompts не создавай. Для legacy/session/production route сохрани `scope-contract.md`, `scope-coverage-gaps.md` и условно добавь остальные artifacts. `scope-execution-options.md` создавай только для неоднозначного выбора.
 16a. Для `practical_v0_8` отсутствие `scope-contract.md` не отменяет обязательные source checks: если DOCX+PDF доступны, `scope-brief.md` обязан ссылаться на актуальный `source-parity-check.md`; если scope табличный/строковый, `scope-brief.md` обязан ссылаться на актуальный `source-row-inventory.md`. Если любой обязательный artifact отсутствует или не открывается, остановись с `blocked-input` и не создавай writer prompt.
 17. В legacy/session route `workflow-state.yaml` задает один active downstream по его canonical contract. `practical_v0_8` всегда идет к writer, не в `source_assertion_review`.
 18. Передай выбранный scope дальше в `ft-test-case-writer`, `ft-test-case-reviewer` или `ft-test-case-iteration` вместе с информацией о XHTML extraction notes, source parity, PDF cross-check, package-specific notes, scope complexity assessment и обязательными внутренними рабочими пакетами.

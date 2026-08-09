@@ -459,12 +459,11 @@ planned TC), use the fast path inside this same route:
      - dictionary values required by the scope;
      - open questions and assumptions;
      - candidate UI-calibration points.
-   - `scope-brief.md` uses Russian visible prose and tables `Планируемые проверки`,
-     `Предпосылки исполнения` and `Зависимости от тестовых данных`. Map each
-     `ATOM-*` to actor, state, `SETUP-*`, evidence and status. ATOMs of one action
-     repeat the same setup; every independent `AS.*` maps to `ATOM-*` or `GAP-*`.
-     `ready` needs `FX-*` or source-backed `поле=значение` preparation, not merely
-     a display/action table; otherwise use `needs-test-data`.
+   - `scope-brief.md` uses Russian visible prose and three execution tables; its
+     linked source-row inventory path must resolve. Map one `AS.*` / `SO-NEG-*` / `SO-REQ-*`
+     to one `ATOM-*` or `GAP-*`, with actor, state, `SETUP-*`, evidence and status;
+     sibling atoms repeat setup. `ready` needs `FX-*` or source-backed
+     `поле=значение` preparation, otherwise use `needs-test-data`.
 
 3. `ft-test-case-writer` — design-matrix-only pass
    - Create or update exactly these required artifacts:

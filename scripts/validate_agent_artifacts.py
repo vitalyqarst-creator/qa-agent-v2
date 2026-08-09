@@ -3507,8 +3507,8 @@ def _practical_table_column_indexes(rows: list[list[str]], required: dict[str, s
     return indexes
 
 
-def practical_scope_brief_source_inventory_paths(content: str, path: Path, root: Path) -> list[Path]:
-    """Return source-row inventories explicitly named by a practical scope brief.
+def practical_scope_brief_source_inventory_refs(content: str, path: Path, root: Path) -> tuple[list[Path], list[str]]:
+    """Return resolving and broken explicit source-row inventory references.
 
     A brief is intentionally compact, so it does not duplicate the inventory. The
     validator follows only explicit references from its ``Источники`` section and
@@ -3518,11 +3518,89 @@ def practical_scope_brief_source_inventory_paths(content: str, path: Path, root:
     source_section = extract_markdown_section(content, "Источники") or ""
     ft_root = nearest_ft_package_root(path) or path.parent
     paths: list[Path] = []
+    unresolved: list[str] = []
     for raw_path in extract_prompt_refs(source_section):
         if Path(strip_quotes(raw_path)).name != "source-row-inventory.md":
             continue
-        paths.extend(prompt_ref_candidates(raw_path, path, root, ft_root))
-    return [candidate for candidate in dedupe_paths(paths) if candidate.is_file()]
+        resolved = [
+            candidate
+            for candidate in prompt_ref_candidates(raw_path, path, root, ft_root)
+            if candidate.is_file()
+        ]
+        if resolved:
+            paths.extend(resolved)
+        else:
+            unresolved.append(raw_path)
+    if "source-row-inventory.md" in source_section.casefold() and not paths and not unresolved:
+        unresolved.append("source-row-inventory.md (must be an explicit path in backticks)")
+    return [candidate for candidate in dedupe_paths(paths) if candidate.is_file()], unresolved
+
+
+def practical_scope_brief_source_inventory_paths(content: str, path: Path, root: Path) -> list[Path]:
+    return practical_scope_brief_source_inventory_refs(content, path, root)[0]
+
+
+PRACTICAL_GAP_AGENT_PROSE_LABELS = {
+    "description",
+    "missing behavior",
+    "why expected result not derivable",
+    "missing observable oracle",
+    "why not executable",
+    "downstream do not test",
+    "question to analyst",
+    "temporary handling",
+    "writer rule",
+    "reviewer rule",
+}
+
+
+def practical_scope_gap_language_evidence(content: str) -> list[str]:
+    """Return English in explanatory gap values, not schema labels or quotes."""
+
+    evidence: list[str] = []
+    for line_number, raw_line in enumerate(content.splitlines(), start=1):
+        match = re.match(r"^\*\*(.+?):\*\*\s*(.*)$", raw_line.strip())
+        if match is None or match.group(1).casefold() not in PRACTICAL_GAP_AGENT_PROSE_LABELS:
+            continue
+        visible = re.sub(r"`[^`]*`", "", match.group(2))
+        words = [
+            word.casefold()
+            for word in re.findall(r"[A-Za-z][A-Za-z-]{2,}", visible)
+            if word.casefold() not in PRACTICAL_HANDOFF_ALLOWED_ASCII_WORDS
+        ]
+        if words:
+            evidence.append(f"line={line_number}:field={match.group(1)}:words={','.join(words[:6])}")
+    return evidence
+
+
+def validate_practical_scope_gap_language(path: Path, root: Path) -> tuple[list[Finding], list[Check]]:
+    evidence = practical_scope_gap_language_evidence(path.read_text(encoding="utf-8"))
+    display_path = rel(path, root)
+    findings: list[Finding] = []
+    if evidence:
+        findings.append(
+            Finding(
+                id="practical-scope-gaps-non-russian-agent-prose",
+                severity="error",
+                category="practical-handoff",
+                title="Practical coverage gaps contain English explanatory prose",
+                details=(
+                    "Schema labels and source quotations may stay canonical, but the agent-authored explanation, "
+                    "handling and downstream rules in user-facing coverage gaps must be Russian."
+                ),
+                path=display_path,
+                evidence=evidence[:20],
+                recommended_action="Rewrite the explanatory gap values in Russian without changing source quotations or IDs.",
+            )
+        )
+    return findings, [
+        Check(
+            "practical-scope-gaps-russian-agent-prose",
+            "fail" if evidence else "pass",
+            "English explanatory prose found." if evidence else "Gap explanatory prose is Russian.",
+            display_path,
+        )
+    ]
 
 
 def validate_practical_scope_brief(path: Path, root: Path) -> tuple[list[Finding], list[Check]]:
@@ -3562,12 +3640,46 @@ def validate_practical_scope_brief(path: Path, root: Path) -> tuple[list[Finding
         return findings, checks
 
     planned_statuses: dict[str, str] = {}
+    aggregated_oracle_obligations: list[str] = []
     for row in planned_rows[1:]:
         if max(planned_columns.values()) >= len(row):
             continue
         status = normalize_markdown_field_value(row[planned_columns["status"]]).casefold()
-        for atom_id in re.findall(r"\bATOM-[A-Z0-9-]+\b", row[planned_columns["id"]], flags=re.IGNORECASE):
+        atom_ids = {
+            atom_id.upper()
+            for atom_id in re.findall(r"\bATOM-[A-Z0-9-]+\b", row[planned_columns["id"]], flags=re.IGNORECASE)
+        }
+        for atom_id in atom_ids:
             planned_statuses[atom_id.upper()] = status
+        oracle_obligations = {
+            obligation.upper()
+            for obligation in re.findall(
+                r"\bSO-(?:NEG|REQ)-[A-Z0-9-]+\b",
+                " ".join(row),
+                flags=re.IGNORECASE,
+            )
+        }
+        if len(atom_ids) == 1 and len(oracle_obligations) > 1:
+            aggregated_oracle_obligations.append(
+                f"{next(iter(atom_ids))}:obligations={','.join(sorted(oracle_obligations))}"
+            )
+
+    if aggregated_oracle_obligations:
+        findings.append(
+            Finding(
+                id="practical-scope-brief-aggregated-oracle-obligations",
+                severity="error",
+                category="practical-handoff",
+                title="Practical scope brief groups independent negative or requiredness obligations",
+                details=(
+                    "Each SO-NEG-* or SO-REQ-* obligation must have a separate planned ATOM-* before matrix "
+                    "writing. Grouping distinct invalid conditions hides test-design coverage gaps."
+                ),
+                path=display_path,
+                evidence=aggregated_oracle_obligations[:20],
+                recommended_action="Split the planned row so each oracle obligation maps to one ATOM-*.",
+            )
+        )
 
     execution_statuses: dict[str, str] = {}
     execution_actors: dict[str, str] = {}
@@ -3758,11 +3870,29 @@ def validate_practical_scope_brief(path: Path, root: Path) -> tuple[list[Finding
             )
         )
 
+    source_inventory_paths, unresolved_source_inventory_refs = practical_scope_brief_source_inventory_refs(content, path, root)
+    if unresolved_source_inventory_refs:
+        findings.append(
+            Finding(
+                id="practical-scope-brief-source-row-inventory-link-unresolved",
+                severity="error",
+                category="artifact-links",
+                title="Practical scope brief has no resolving source-row inventory link",
+                details=(
+                    "A table-driven practical scope must name the exact readable source-row inventory path in its "
+                    "`Источники` section so row-to-ATOM coverage can be checked before matrix writing."
+                ),
+                path=display_path,
+                evidence=unresolved_source_inventory_refs[:10],
+                recommended_action="Replace the bare or broken reference with the exact relative path to source-row-inventory.md.",
+            )
+        )
+
     source_row_mapping_mismatches: list[str] = []
     operation_setup_inheritance_mismatches: list[str] = []
     operation_actor_inheritance_mismatches: list[str] = []
     source_row_inventory_language_mismatches: list[str] = []
-    for inventory_path in practical_scope_brief_source_inventory_paths(content, path, root):
+    for inventory_path in source_inventory_paths:
         try:
             inventory_content = inventory_path.read_text(encoding="utf-8")
         except UnicodeDecodeError:
@@ -3912,9 +4042,9 @@ def validate_practical_scope_brief(path: Path, root: Path) -> tuple[list[Finding
     checks.append(
         Check(
             "practical-scope-brief-source-row-action-coverage",
-            "fail" if source_row_mapping_mismatches or operation_setup_inheritance_mismatches or operation_actor_inheritance_mismatches else "pass",
+            "fail" if source_row_mapping_mismatches or operation_setup_inheritance_mismatches or operation_actor_inheritance_mismatches or unresolved_source_inventory_refs else "pass",
             "Source-row action coverage is incomplete."
-            if source_row_mapping_mismatches or operation_setup_inheritance_mismatches or operation_actor_inheritance_mismatches
+            if source_row_mapping_mismatches or operation_setup_inheritance_mismatches or operation_actor_inheritance_mismatches or unresolved_source_inventory_refs
             else "Source-row action coverage and setup inheritance are consistent.",
             display_path,
         )
@@ -24294,11 +24424,11 @@ def validate_workflow_state(
     ):
         scope_handoff_values = [*required_input_values, *latest_artifact_values]
         is_practical_scope_to_writer = next_skill == "ft-test-case-writer" and is_practical_v08_route(state)
-        required_scope_handoff_names = {
-            "source-selection.md",
-            "scope-coverage-gaps.md",
-            "scope-brief.md" if is_practical_scope_to_writer else "scope-contract.md",
-        }
+        required_scope_handoff_names = (
+            {"source-selection.md", "scope-brief.md"}
+            if is_practical_scope_to_writer
+            else {"source-selection.md", "scope-coverage-gaps.md", "scope-contract.md"}
+        )
         required_scope_handoff_names.add(
             "prompt.scope-to-writer.md"
             if next_skill == "ft-test-case-writer"
@@ -24367,6 +24497,10 @@ def validate_workflow_state(
             ft_root,
         )
         if scope_gaps_path is not None:
+            if is_practical_scope_to_writer:
+                language_findings, language_checks = validate_practical_scope_gap_language(scope_gaps_path, root)
+                findings.extend(language_findings)
+                checks.extend(language_checks)
             try:
                 scope_gap_total = get_int(extract_scope_coverage_metrics(scope_gaps_path).get("total")) or 0
             except UnicodeDecodeError:

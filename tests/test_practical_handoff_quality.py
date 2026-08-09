@@ -297,6 +297,64 @@ class PracticalHandoffQualityTests(unittest.TestCase):
         finding_ids = {finding.id for finding in findings}
         self.assertIn("practical-scope-brief-source-row-atom-coverage-incomplete", finding_ids)
 
+    def test_scope_brief_rejects_unresolved_source_inventory_reference(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            brief = self.write_multi_action_brief(root, mapped_atoms="`ATOM-001`; `ATOM-002`")
+            brief.write_text(
+                brief.read_text(encoding="utf-8").replace(
+                    "`work/stage-handoffs/scope/source-row-inventory.md`",
+                    "`source-row-inventory.md`",
+                ),
+                encoding="utf-8",
+            )
+
+            findings, _ = self.validator.validate_practical_scope_brief(brief, root)
+
+        finding_ids = {finding.id for finding in findings}
+        self.assertIn("practical-scope-brief-source-row-inventory-link-unresolved", finding_ids)
+
+    def test_scope_brief_rejects_aggregated_oracle_obligations(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            brief = root / "scope-brief.md"
+            self.write_scope_brief(brief)
+            brief.write_text(
+                brief.read_text(encoding="utf-8").replace(
+                    "| `ATOM-002` | Действие доступно пользователю с заданными правами. | `needs-test-data` |",
+                    "| `ATOM-002` | `SO-NEG-001`; `SO-NEG-002` требуют разной проверки. | `needs-test-data` |",
+                ),
+                encoding="utf-8",
+            )
+
+            findings, _ = self.validator.validate_practical_scope_brief(brief, root)
+
+        finding_ids = {finding.id for finding in findings}
+        self.assertIn("practical-scope-brief-aggregated-oracle-obligations", finding_ids)
+
+    def test_scope_gap_language_rejects_english_explanatory_prose(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            gaps = root / "scope-coverage-gaps.md"
+            gaps.write_text(
+                "\n".join(
+                    [
+                        "# Scope Coverage Gaps",
+                        "",
+                        "### GAP-001",
+                        "**Description:** Неизвестное правило.",
+                        "**Missing Behavior:** Exact UI response is not specified.",
+                        "**Source Statement:** `Исходная цитата ФТ`",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            findings, _ = self.validator.validate_practical_scope_gap_language(gaps, root)
+
+        finding_ids = {finding.id for finding in findings}
+        self.assertIn("practical-scope-gaps-non-russian-agent-prose", finding_ids)
+
     def test_scope_brief_requires_shared_setup_for_atomic_checks_of_one_action(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
