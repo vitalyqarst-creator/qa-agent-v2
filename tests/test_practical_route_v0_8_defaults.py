@@ -2,6 +2,7 @@
 
 import importlib.util
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -317,6 +318,63 @@ class PracticalRouteV08DefaultsTests(unittest.TestCase):
             "prompt.writer-to-reviewer.round-1.md",
         )
         self.assertTrue(validator.is_ready_for_review_state(tc_state))
+
+    def test_practical_scope_writer_handoff_accepts_scope_brief_without_legacy_contract(self) -> None:
+        validator = self.load_validator()
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            handoff = root / "fts" / "Sample" / "work" / "stage-handoffs" / "01-sample"
+            handoff.mkdir(parents=True)
+            for name in ("source-selection.md", "scope-coverage-gaps.md", "scope-brief.md"):
+                (handoff / name).write_text(f"# {name}\n", encoding="utf-8")
+            (handoff / "prompt.scope-to-writer.md").write_text(
+                "\n".join(
+                    [
+                        "## Цель этапа",
+                        "Подготовить матрицу тест-дизайна.",
+                        "## Входные артефакты",
+                        "- `source-selection.md`",
+                        "- `scope-coverage-gaps.md`",
+                        "- `scope-brief.md`",
+                        "## Обязательные действия",
+                        "- Изучить входные артефакты.",
+                        "## Не делать",
+                        "- Не расширять границы scope.",
+                        "## Ожидаемые выходы",
+                        "- `test-design-matrix.md`.",
+                        "## Gate завершения",
+                        "Матрица создана.",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            workflow = handoff / "workflow-state.yaml"
+            workflow.write_text(
+                "\n".join(
+                    [
+                        "ft_slug: Sample",
+                        "scope_slug: sample",
+                        "route_profile: practical_v0_8",
+                        "current_stage: ft-scope-analyzer",
+                        "stage_status: ready-for-next-stage",
+                        "next_skill: ft-test-case-writer",
+                        "required_inputs:",
+                        "  - source-selection.md",
+                        "  - scope-coverage-gaps.md",
+                        "  - scope-brief.md",
+                        "latest_artifacts:",
+                        "  active_transition_prompt: prompt.scope-to-writer.md",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            report = validator.validate(root)
+
+        finding_ids = {finding["id"] for finding in report["findings"]}
+        self.assertNotIn("workflow-state-scope-analyzer-missing-handoff-artifacts", finding_ids)
+        self.assertNotIn("prompt-format-missing-required-scope-inputs", finding_ids)
 
 
 if __name__ == "__main__":

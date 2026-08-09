@@ -896,8 +896,9 @@ Before handing off to reviewer, the writer checks every canonical file:
 - do not add an unrelated save action to a file-count, format or field-validation
   TC. If persistence must also be checked, write a separate self-contained TC
   with a single observable persistence result.
-- a TC has exactly one `Статус исполнения`; data, fixture or UI-oracle uncertainty
-  is explained in `Требуется подтверждение`, not in a second status.
+- a TC has exactly one `Статус исполнения`; when an unavailable account, role,
+  object or data fixture is shared by several checks, every dependent matrix/TC
+  line is `needs-test-data`. A BA question is not a substitute for test setup.
 - final TC source navigation stays slim: `Трассировка` carries codes/atoms/section,
   while `Источник / цитата требования` carries only a short real quote. Do not
   duplicate the same `ATOM-*`/`SRC-*`/section list again in `Ссылка на ФТ` or
@@ -905,44 +906,22 @@ Before handing off to reviewer, the writer checks every canonical file:
 
 ## Practical-route heavy-artifact guard
 
-In `practical_v0_8`, these artifacts are forbidden unless the user explicitly
-selected a heavy/development route by name:
-
-- `source-assertions.json`;
-- `source-assertion-review.json`;
-- `source-evidence.md`;
-- `semantic-design*` / `semantic_design*`;
-- `*shard*` artifacts;
-- `run-config*.json` for `ft-agent run`;
-- `work/iterations/`;
-- benchmark/eval configs inside the active FT package.
-
-XLSX traceability duplicates are also not practical-route defaults. They are
-allowed only by explicit user request or explicit session-based/promotion route.
-
-If any of these appear during ordinary practical work, stop the route and repair
-the handoff. Do not silently continue through a mixed practical/source-qualified
-process.
+In `practical_v0_8`, do not create or route through `source-assertions*`,
+`semantic-design*`, `*shard*`, `ft-agent run` configs, `work/iterations/`,
+benchmarks/evals or XLSX traceability duplicates unless the user explicitly
+selects a named heavy/development route. Stop and repair a mixed handoff.
 
 ## Business-analyst questions
 
-Questions to BA must be useful without the analyst opening agent internals.
-
-Each question must include:
-
-- source section/table/row/code;
-- affected field/action/status;
-- current ambiguity;
-- why it blocks or changes test-case execution;
-- concrete answer format expected from BA;
-- candidate TC/status affected.
-
-If prior BA-answer files exist in `support/` or the package work folder, read and
-reuse them before asking again.
-
-If BA information is missing but the obligation can still be represented, release
-the test case with `candidate-ui-calibration`, `blocked-observability` or
-`needs-test-data` instead of stopping the whole scope.
+Ask BA only about an unresolved product rule, meaning, conflict, trigger or
+observable result after checking the package DOCX/XHTML/PDF/support. Do not ask
+for a test account, role, object, record or fixture that a tester/automation
+engineer can prepare: name the required properties and use `needs-test-data`.
+Each question is Russian, self-contained, anchored to source and field/action,
+states the exact unknown and expected answer, and names affected TC/statuses.
+Reuse prior approved answers. If the source obligation remains representable,
+release it with `candidate-ui-calibration`, `blocked-observability` or
+`needs-test-data` instead of stopping the scope.
 
 ## Reviewer focus
 
@@ -958,6 +937,8 @@ The practical reviewer must block:
 - pseudo-test cases that cannot be executed;
 - generic fixtures such as “valid entity” without concrete data or a
   `needs-test-data` status;
+- a `ready` matrix/TC line that depends on an unavailable account, role, object
+  or fixture; every check sharing that prerequisite must be `needs-test-data`;
 - merged checks that hide independent positive/negative/boundary behavior;
 - one invalid representative that claims to cover several independently
   derivable classes;

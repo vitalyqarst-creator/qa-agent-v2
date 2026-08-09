@@ -34,6 +34,10 @@ Required guardrails:
 
 `prompt.scope-to-writer.md` не должен быть только краткой ссылкой на `scope-contract.md`. Он обязан переносить в handoff критичные правила, без которых writer может воспроизвести старые дефекты даже при наличии правильных downstream-инструкций.
 
+Для `practical_v0_8` это компактный scope-specific delta: фактические пути
+входов, границы, статусы/неизвестности, результат и gate. Постоянные правила
+skill-а, общий маршрут, технические детали и generic запреты не копируй.
+
 Обязательные входы для `prompt.scope-to-writer.md`:
 
 - `source-selection.md`;
@@ -136,6 +140,8 @@ Prompt-файлы хранятся в:
 - Prompt должен ссылаться только на актуальные артефакты текущего `scope-slug`.
 - Prompt не заменяет `workflow-state.yaml`: process-status остается в state-файле.
 - Prompt не должен дублировать полный workflow skill-а; он фиксирует только handoff для конкретного этапа и конкретного scope.
+- В `practical_v0_8` секция `Не делать` содержит только scope-specific границы;
+  не повторяй generic route restrictions, reviewer dispatch или encoding policy.
 - В compiler contract v3 после scope analysis активный prompt до writer всегда `prompt.scope-assertions-to-reviewer.md`.
 - `prompt.scope-to-writer.md` используется для единичного writer-pass, а `prompt.scope-to-iteration.md` — для полного writer-reviewer loop через `ft-test-case-iteration` только после accepted source assertion review либо для явно legacy/non-promotion route.
 
