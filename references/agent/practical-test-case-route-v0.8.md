@@ -460,9 +460,11 @@ planned TC), use the fast path inside this same route:
      - open questions and assumptions;
      - candidate UI-calibration points.
    - `scope-brief.md` uses Russian visible prose and tables `Планируемые проверки`,
-     `Предпосылки исполнения` and `Зависимости от тестовых данных`. The second maps
-     every `ATOM-*` to actor, state, `Подтверждение подготовки` and status.
-     `ready` needs a fixture or reproducible setup; otherwise `needs-test-data`.
+     `Предпосылки исполнения` and `Зависимости от тестовых данных`. Map each
+     `ATOM-*` to actor, state, `SETUP-*`, evidence and status. ATOMs of one action
+     repeat the same setup; every independent `AS.*` maps to `ATOM-*` or `GAP-*`.
+     `ready` needs `FX-*` or source-backed `поле=значение` preparation, not merely
+     a display/action table; otherwise use `needs-test-data`.
 
 3. `ft-test-case-writer` — design-matrix-only pass
    - Create or update exactly these required artifacts:

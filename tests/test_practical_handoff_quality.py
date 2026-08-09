@@ -59,7 +59,7 @@ class PracticalHandoffQualityTests(unittest.TestCase):
                     "",
                     "| Затронутые проверки | Исполнитель | Объект и исходное состояние | Ключ подготовки | Подтверждение подготовки | Статус исполнения |",
                     "| --- | --- | --- | --- | --- | --- |",
-                    "| `ATOM-001` | Пользователь с доступом. | Подготовленный объект. | `SETUP-OBJECT-001` | Шаги подготовки: создать объект по AS.10; данные: проверенные значения. | `ready` |",
+                    "| `ATOM-001` | Пользователь с доступом. | Подготовленный объект. | `SETUP-OBJECT-001` | Шаги подготовки: создать объект по AS.10; данные: наименование=`Тестовый объект`. | `ready` |",
                     "| `ATOM-002` | Пользователь с заданными правами. | Подготовленный объект. | `SETUP-ACCESS-001` | Отсутствует: учетная запись с заданными правами. | `needs-test-data` |",
                     "",
                     "## Зависимости от тестовых данных",
@@ -86,6 +86,24 @@ class PracticalHandoffQualityTests(unittest.TestCase):
             root = Path(tmp)
             brief = root / "scope-brief.md"
             self.write_scope_brief(brief)
+
+            findings, checks = self.validator.validate_practical_scope_brief(brief, root)
+
+        self.assertEqual([], findings)
+        self.assertTrue(all(check.status == "pass" for check in checks))
+
+    def test_scope_brief_does_not_require_fixture_data_for_a_simple_screen_entry(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            brief = root / "scope-brief.md"
+            self.write_scope_brief(brief)
+            brief.write_text(
+                brief.read_text(encoding="utf-8").replace(
+                    "| `ATOM-001` | Пользователь с доступом. | Подготовленный объект. | `SETUP-OBJECT-001` | Шаги подготовки: создать объект по AS.10; данные: наименование=`Тестовый объект`. | `ready` |",
+                    "| `ATOM-001` | Пользователь с доступом. | Экран с доступной кнопкой добавления. | `SETUP-OBJECT-001` | Шаги подготовки: открыть экран по AS.10; данные: путь к экрану. | `ready` |",
+                ),
+                encoding="utf-8",
+            )
 
             findings, checks = self.validator.validate_practical_scope_brief(brief, root)
 
@@ -135,7 +153,7 @@ class PracticalHandoffQualityTests(unittest.TestCase):
             self.write_scope_brief(brief)
             brief.write_text(
                 brief.read_text(encoding="utf-8").replace(
-                    "Шаги подготовки: создать объект по AS.10; данные: проверенные значения.",
+                    "Шаги подготовки: создать объект по AS.10; данные: наименование=`Тестовый объект`.",
                     "Подготовленный объект уже существует.",
                 ),
                 encoding="utf-8",
@@ -153,8 +171,8 @@ class PracticalHandoffQualityTests(unittest.TestCase):
             self.write_scope_brief(brief)
             brief.write_text(
                 brief.read_text(encoding="utf-8").replace(
-                    "| `ATOM-001` | Пользователь с доступом. | Подготовленный объект. | `SETUP-OBJECT-001` | Шаги подготовки: создать объект по AS.10; данные: проверенные значения. | `ready` |",
-                    "| `ATOM-001` | Тестировщик | Объект доступен только администратору. | `SETUP-OBJECT-001` | Шаги подготовки: создать объект по AS.10; данные: проверенные значения. | `ready` |",
+                    "| `ATOM-001` | Пользователь с доступом. | Подготовленный объект. | `SETUP-OBJECT-001` | Шаги подготовки: создать объект по AS.10; данные: наименование=`Тестовый объект`. | `ready` |",
+                    "| `ATOM-001` | Тестировщик | Объект доступен только администратору. | `SETUP-OBJECT-001` | Шаги подготовки: создать объект по AS.10; данные: наименование=`Тестовый объект`. | `ready` |",
                 ),
                 encoding="utf-8",
             )
@@ -171,8 +189,8 @@ class PracticalHandoffQualityTests(unittest.TestCase):
             self.write_scope_brief(brief)
             brief.write_text(
                 brief.read_text(encoding="utf-8").replace(
-                    "| `ATOM-001` | Пользователь с доступом. | Подготовленный объект. | `SETUP-OBJECT-001` | Шаги подготовки: создать объект по AS.10; данные: проверенные значения. | `ready` |",
-                    "| `ATOM-001` | Администратор | Объект в статусе «Подтвержден». | `SETUP-ADMIN-001` | Шаги подготовки: создать объект по AS.10; данные: проверенные значения. | `ready` |",
+                    "| `ATOM-001` | Пользователь с доступом. | Подготовленный объект. | `SETUP-OBJECT-001` | Шаги подготовки: создать объект по AS.10; данные: наименование=`Тестовый объект`. | `ready` |",
+                    "| `ATOM-001` | Администратор | Объект в статусе «Подтвержден». | `SETUP-ADMIN-001` | Шаги подготовки: создать объект по AS.10; данные: наименование=`Тестовый объект`. | `ready` |",
                 ),
                 encoding="utf-8",
             )
@@ -189,7 +207,7 @@ class PracticalHandoffQualityTests(unittest.TestCase):
             self.write_scope_brief(brief)
             brief.write_text(
                 brief.read_text(encoding="utf-8").replace(
-                    "Шаги подготовки: создать объект по AS.10; данные: проверенные значения.",
+                    "Шаги подготовки: создать объект по AS.10; данные: наименование=`Тестовый объект`.",
                     "Исходные данные: создать или выбрать объект.",
                 ),
                 encoding="utf-8",
@@ -200,6 +218,95 @@ class PracticalHandoffQualityTests(unittest.TestCase):
         finding_ids = {finding.id for finding in findings}
         self.assertIn("practical-scope-brief-execution-prerequisites-incomplete", finding_ids)
 
+    def test_scope_brief_rejects_ready_preparation_without_concrete_data(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            brief = root / "scope-brief.md"
+            self.write_scope_brief(brief)
+            brief.write_text(
+                brief.read_text(encoding="utf-8").replace(
+                    "Шаги подготовки: создать объект по AS.10; данные: наименование=`Тестовый объект`.",
+                    "Шаги подготовки: создать объект по AS.10; данные: наименование объекта.",
+                ),
+                encoding="utf-8",
+            )
+
+            findings, _ = self.validator.validate_practical_scope_brief(brief, root)
+
+        finding_ids = {finding.id for finding in findings}
+        self.assertIn("practical-scope-brief-execution-prerequisites-incomplete", finding_ids)
+
+    def write_multi_action_brief(self, root: Path, *, mapped_atoms: str) -> Path:
+        inventory = root / "work" / "stage-handoffs" / "scope" / "source-row-inventory.md"
+        inventory.parent.mkdir(parents=True)
+        inventory.write_text(
+            "\n".join(
+                [
+                    "## Source Row Inventory",
+                    "",
+                    "| source_row_id | package_id | field_or_action | source_ref | requirement_codes | in_scope | mapped_atom_or_gap |",
+                    "| --- | --- | --- | --- | --- | --- | --- |",
+                    f"| `SRC-001` | `PKG-01` | Архивирование партнера | Таблица действий | `AS.12; AS.13` | `yes` | {mapped_atoms} |",
+                ]
+            ),
+            encoding="utf-8",
+        )
+        brief = root / "scope-brief.md"
+        brief.write_text(
+            "\n".join(
+                [
+                    "# Краткое описание области",
+                    "",
+                    "## Источники",
+                    "",
+                    "- `work/stage-handoffs/scope/source-row-inventory.md`",
+                    "",
+                    "## Планируемые проверки",
+                    "",
+                    "| Идентификатор | Проверяемое утверждение | Статус исполнения |",
+                    "| --- | --- | --- |",
+                    "| `ATOM-001` | Архивирование доступно. | `needs-test-data` |",
+                    "| `ATOM-002` | Архивирование разрешено администратору. | `needs-test-data` |",
+                    "",
+                    "## Предпосылки исполнения",
+                    "",
+                    "| Затронутые проверки | Исполнитель | Объект и исходное состояние | Ключ подготовки | Подтверждение подготовки | Статус исполнения |",
+                    "| --- | --- | --- | --- | --- | --- |",
+                    "| `ATOM-001` | Администратор | Партнер в статусе «Подтвержден». | `SETUP-PARTNER-STATE` | Отсутствует: партнер в статусе «Подтвержден». | `needs-test-data` |",
+                    "| `ATOM-002` | Администратор | Партнер в статусе «Подтвержден». | `SETUP-ROLE-ACCOUNT` | Отсутствует: учетная запись администратора. | `needs-test-data` |",
+                    "",
+                    "## Зависимости от тестовых данных",
+                    "",
+                    "| Ключ подготовки | Подготовка | Затронутые проверки | Статус исполнения |",
+                    "| --- | --- | --- | --- |",
+                    "| `SETUP-PARTNER-STATE` | Подготовить партнера в заданном статусе. | `ATOM-001` | `needs-test-data` |",
+                    "| `SETUP-ROLE-ACCOUNT` | Подготовить учетную запись администратора. | `ATOM-002` | `needs-test-data` |",
+                ]
+            ),
+            encoding="utf-8",
+        )
+        return brief
+
+    def test_scope_brief_requires_each_action_code_to_map_to_atom_or_gap(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            brief = self.write_multi_action_brief(root, mapped_atoms="`ATOM-001`")
+
+            findings, _ = self.validator.validate_practical_scope_brief(brief, root)
+
+        finding_ids = {finding.id for finding in findings}
+        self.assertIn("practical-scope-brief-source-row-atom-coverage-incomplete", finding_ids)
+
+    def test_scope_brief_requires_shared_setup_for_atomic_checks_of_one_action(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            brief = self.write_multi_action_brief(root, mapped_atoms="`ATOM-001`; `ATOM-002`")
+
+            findings, _ = self.validator.validate_practical_scope_brief(brief, root)
+
+        finding_ids = {finding.id for finding in findings}
+        self.assertIn("practical-scope-brief-operation-setup-inheritance-incomplete", finding_ids)
+
     def test_scope_brief_propagates_missing_setup_to_every_dependent_atom(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -207,8 +314,8 @@ class PracticalHandoffQualityTests(unittest.TestCase):
             self.write_scope_brief(brief)
             brief.write_text(
                 brief.read_text(encoding="utf-8").replace(
-                    "| `ATOM-001` | Пользователь с доступом. | Подготовленный объект. | `SETUP-OBJECT-001` | Шаги подготовки: создать объект по AS.10; данные: проверенные значения. | `ready` |",
-                    "| `ATOM-001` | Пользователь с доступом. | Подготовленный объект. | `SETUP-ACCESS-001` | Шаги подготовки: создать объект по AS.10; данные: проверенные значения. | `ready` |",
+                    "| `ATOM-001` | Пользователь с доступом. | Подготовленный объект. | `SETUP-OBJECT-001` | Шаги подготовки: создать объект по AS.10; данные: наименование=`Тестовый объект`. | `ready` |",
+                    "| `ATOM-001` | Пользователь с доступом. | Подготовленный объект. | `SETUP-ACCESS-001` | Шаги подготовки: создать объект по AS.10; данные: наименование=`Тестовый объект`. | `ready` |",
                 ).replace(
                     "| `SETUP-ACCESS-001` | Подготовить учетную запись с заданными правами. | `ATOM-002` | `needs-test-data` |",
                     "| `SETUP-ACCESS-001` | Подготовить учетную запись с заданными правами. | `ATOM-001`; `ATOM-002` | `needs-test-data` |",

@@ -3476,6 +3476,24 @@ def _practical_table_column_indexes(rows: list[list[str]], required: dict[str, s
     return indexes
 
 
+def practical_scope_brief_source_inventory_paths(content: str, path: Path, root: Path) -> list[Path]:
+    """Return source-row inventories explicitly named by a practical scope brief.
+
+    A brief is intentionally compact, so it does not duplicate the inventory. The
+    validator follows only explicit references from its ``Источники`` section and
+    cannot accidentally combine source rows from a neighbouring scope.
+    """
+
+    source_section = extract_markdown_section(content, "Источники") or ""
+    ft_root = nearest_ft_package_root(path) or path.parent
+    paths: list[Path] = []
+    for raw_path in extract_prompt_refs(source_section):
+        if Path(strip_quotes(raw_path)).name != "source-row-inventory.md":
+            continue
+        paths.extend(prompt_ref_candidates(raw_path, path, root, ft_root))
+    return [candidate for candidate in dedupe_paths(paths) if candidate.is_file()]
+
+
 def validate_practical_scope_brief(path: Path, root: Path) -> tuple[list[Finding], list[Check]]:
     """Validate status inheritance for a practical scope brief before writer launch."""
 
@@ -3520,6 +3538,9 @@ def validate_practical_scope_brief(path: Path, root: Path) -> tuple[list[Finding
         for atom_id in re.findall(r"\bATOM-[A-Z0-9-]+\b", row[planned_columns["id"]], flags=re.IGNORECASE):
             planned_statuses[atom_id.upper()] = status
 
+    execution_statuses: dict[str, str] = {}
+    execution_setup_keys: dict[str, set[str]] = {}
+
     execution_section = extract_markdown_section(content, "Предпосылки исполнения")
     execution_rows = markdown_table_rows_from_text(execution_section or "")
     execution_columns = _practical_table_column_indexes(
@@ -3561,8 +3582,6 @@ def validate_practical_scope_brief(path: Path, root: Path) -> tuple[list[Finding
             )
         )
     else:
-        execution_statuses: dict[str, str] = {}
-        execution_setup_keys: dict[str, set[str]] = {}
         duplicated_ids: set[str] = set()
         incomplete_needs_data_ids: set[str] = set()
         incomplete_preparation_evidence_ids: set[str] = set()
@@ -3598,6 +3617,18 @@ def validate_practical_scope_brief(path: Path, root: Path) -> tuple[list[Finding
                 and re.search(r"(?:\b(?:as|bsr|gsr)\.?\s*\d+\b|таблиц\w*\s*\d+|раздел\w*\s*\d+)", preparation_evidence, flags=re.IGNORECASE)
                 and re.search(r"(?:данн\w*\s*[:—-]|значен\w*\s*[:—-]|\bfx-[a-z0-9-]+\b)", preparation_evidence, flags=re.IGNORECASE)
             )
+            setup_steps_with_concrete_data = bool(
+                setup_steps_evidence
+                and (
+                    re.search(r"\bfx-[a-z0-9-]+\b", preparation_evidence, flags=re.IGNORECASE)
+                    or re.search(
+                        r"(?:данн\w*|значен\w*)\s*[:—-][^|\n]*?"
+                        r"(?:[а-яёa-z][а-яёa-z0-9 _-]{1,48}\s*=\s*(?:`[^`]+`|«[^»]+»|[^;,.|]{2,}))",
+                        preparation_evidence,
+                        flags=re.IGNORECASE,
+                    )
+                )
+            )
             no_setup_evidence = bool(
                 re.match(r"^подготовк\w*\s+не требуется\s*:\s*.+", preparation_evidence, flags=re.IGNORECASE)
             )
@@ -3619,15 +3650,16 @@ def validate_practical_scope_brief(path: Path, root: Path) -> tuple[list[Finding
                 if status == "ready":
                     requires_preparation = bool(
                         re.search(
-                            r"(?:подготовлен|существующ|завед[её]н|выбран|заполненн|"
-                            r"статус|индикатор|уч[её]тн|партн[её]р|реквизит|объект)",
+                            r"(?:подготовлен|существующ|завед[её]н|выбран|заполненн|сохраненн|"
+                            r"статус|индикатор|уч[её]тн\w*\s+запис|"
+                            r"(?:виджет|карточк\w*|строк\w*)\s+(?:партн[её]р|реквизит|объект))",
                             object_state,
                             flags=re.IGNORECASE,
                         )
                     )
                     if not (fixture_evidence or setup_steps_evidence or no_setup_evidence):
                         unsupported_preparation_evidence_ids.add(atom_id)
-                    if requires_preparation and not (fixture_evidence or setup_steps_evidence):
+                    if requires_preparation and not (fixture_evidence or setup_steps_with_concrete_data):
                         unverified_ready_preparation_ids.add(atom_id)
                     if (
                         (re.search(r"(?:администратор|роль|прав)", actor, flags=re.IGNORECASE)
@@ -3692,6 +3724,105 @@ def validate_practical_scope_brief(path: Path, root: Path) -> tuple[list[Finding
                 display_path,
             )
         )
+
+    source_row_mapping_mismatches: list[str] = []
+    operation_setup_inheritance_mismatches: list[str] = []
+    for inventory_path in practical_scope_brief_source_inventory_paths(content, path, root):
+        try:
+            inventory_content = inventory_path.read_text(encoding="utf-8")
+        except UnicodeDecodeError:
+            continue
+        for index, inventory_row in enumerate(parsed_source_row_inventory_rows(inventory_content), start=2):
+            source_row_id = inventory_row.get("source_row_id", "").strip() or f"row {index}"
+            if inventory_row.get("in_scope", "").strip().strip("`").casefold() != "yes":
+                continue
+            action_codes = sorted(
+                {
+                    f"AS.{match.group(1)}"
+                    for match in re.finditer(
+                        r"\bAS\.?\s*(\d+)\b",
+                        inventory_row.get("requirement_codes", ""),
+                        flags=re.IGNORECASE,
+                    )
+                }
+            )
+            if len(action_codes) < 2:
+                continue
+            mapped_text = inventory_row.get("mapped_atom_or_gap", "")
+            mapped_atoms = set(extract_any_atom_ids_from_text(mapped_text))
+            mapped_gaps = set(extract_gap_ids_from_text(mapped_text))
+            if len(mapped_atoms) + len(mapped_gaps) < len(action_codes):
+                source_row_mapping_mismatches.append(
+                    f"{rel(inventory_path, root)}:{source_row_id}:codes={','.join(action_codes)};"
+                    f"mapped={','.join(sorted(mapped_atoms | mapped_gaps)) or '-'}"
+                )
+                continue
+
+            relevant_atoms = sorted(atom_id for atom_id in mapped_atoms if atom_id in planned_statuses)
+            if (
+                len(relevant_atoms) < 2
+                or any(planned_statuses[atom_id] != "needs-test-data" for atom_id in relevant_atoms)
+            ):
+                continue
+            setup_sets = [execution_setup_keys.get(atom_id, set()) for atom_id in relevant_atoms]
+            union_setup_keys = set().union(*setup_sets)
+            if not union_setup_keys or any(setup_keys != union_setup_keys for setup_keys in setup_sets):
+                setup_details = []
+                for atom_id in relevant_atoms:
+                    setup_keys = ",".join(sorted(execution_setup_keys.get(atom_id, set()))) or "-"
+                    setup_details.append(f"{atom_id}={setup_keys}")
+                operation_setup_inheritance_mismatches.append(
+                    f"{rel(inventory_path, root)}:{source_row_id}:atoms={','.join(relevant_atoms)};"
+                    f"setup={'; '.join(setup_details)}"
+                )
+
+    if source_row_mapping_mismatches:
+        findings.append(
+            Finding(
+                id="practical-scope-brief-source-row-atom-coverage-incomplete",
+                severity="error",
+                category="practical-handoff",
+                title="Practical scope brief loses an action assertion from source-row coverage",
+                details=(
+                    "Each independent AS.* assertion from one in-scope source row must map to a distinct ATOM-* "
+                    "or GAP-* before writer launch."
+                ),
+                path=display_path,
+                evidence=source_row_mapping_mismatches[:20],
+                recommended_action=(
+                    "Complete mapped_atom_or_gap for the affected source row and synchronize the planned-checks table."
+                ),
+            )
+        )
+    if operation_setup_inheritance_mismatches:
+        findings.append(
+            Finding(
+                id="practical-scope-brief-operation-setup-inheritance-incomplete",
+                severity="error",
+                category="practical-handoff",
+                title="Atomic checks of one action do not inherit the same setup prerequisites",
+                details=(
+                    "When one action is split into needs-test-data ATOM-* checks, every resulting check must carry "
+                    "the complete shared SETUP-* set. Splitting role, state or fixture preparation between atoms "
+                    "makes the future tests non-reproducible."
+                ),
+                path=display_path,
+                evidence=operation_setup_inheritance_mismatches[:20],
+                recommended_action=(
+                    "Repeat the same role, object-state and fixture/setup keys for every ATOM of the source action."
+                ),
+            )
+        )
+    checks.append(
+        Check(
+            "practical-scope-brief-source-row-action-coverage",
+            "fail" if source_row_mapping_mismatches or operation_setup_inheritance_mismatches else "pass",
+            "Source-row action coverage is incomplete."
+            if source_row_mapping_mismatches or operation_setup_inheritance_mismatches
+            else "Source-row action coverage and setup inheritance are consistent.",
+            display_path,
+        )
+    )
 
     needs_test_data_ids = {
         atom_id for atom_id, status in planned_statuses.items() if status == "needs-test-data"
