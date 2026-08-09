@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 import warnings
+import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import Iterator
 
@@ -16,6 +17,31 @@ from test_case_agent.models import Section
 
 HEADING_RE = re.compile(r"^\d+(?:\.\d+)*")
 WHITESPACE_RE = re.compile(r"\s+")
+XHTML_HEADING_RE = re.compile(r"^h([1-6])$")
+XHTML_TABLE_CELL_TAGS = {"td", "th"}
+
+
+def _xhtml_local_name(tag: object) -> str:
+    """Return a lowercase local name while keeping non-element nodes harmless."""
+
+    if not isinstance(tag, str):
+        return ""
+    return tag.rsplit("}", 1)[-1].casefold()
+
+
+def _xhtml_is_decorative(element: ET.Element) -> bool:
+    """Identify converter-only list markers that are not requirement text."""
+
+    classes = set(element.attrib.get("class", "").split())
+    return any(item.startswith("ListLabel_") for item in classes) or "odfLiEnd" in classes
+
+
+def _xhtml_contains_heading(element: ET.Element) -> bool:
+    return any(
+        descendant is not element
+        and XHTML_HEADING_RE.fullmatch(_xhtml_local_name(descendant.tag))
+        for descendant in element.iter()
+    )
 
 
 def normalize_text(value: str) -> str:
@@ -63,6 +89,57 @@ def table_to_text(table: Table) -> str:
         if any(cell != "-" for cell in cells):
             lines.append("| " + " | ".join(cells) + " |")
     return "\n".join(lines).strip()
+
+
+def _xhtml_text(
+    element: ET.Element,
+    *,
+    exclude_descendants: set[str] | None = None,
+    include_decorative: bool = False,
+) -> str:
+    """Extract visible XHTML text, excluding nested structural blocks when needed."""
+
+    excluded = exclude_descendants or set()
+    parts: list[str] = []
+
+    def visit(node: ET.Element) -> None:
+        if node.text:
+            parts.append(node.text)
+        for child in node:
+            if (
+                _xhtml_local_name(child.tag) not in excluded
+                and (include_decorative or not _xhtml_is_decorative(child))
+            ):
+                visit(child)
+            if child.tail:
+                parts.append(child.tail)
+
+    visit(element)
+    return normalize_text(" ".join(parts))
+
+
+def _xhtml_table_row_to_text(row: ET.Element) -> str:
+    cells = [
+        _xhtml_text(cell)
+        for cell in row
+        if _xhtml_local_name(cell.tag) in XHTML_TABLE_CELL_TAGS
+    ]
+    if cells:
+        return "| " + " | ".join(cell or "-" for cell in cells) + " |"
+    return _xhtml_text(row)
+
+
+def _xhtml_has_ancestor(
+    element: ET.Element,
+    parents: dict[ET.Element, ET.Element],
+    tag_names: set[str],
+) -> bool:
+    current = parents.get(element)
+    while current is not None:
+        if _xhtml_local_name(current.tag) in tag_names:
+            return True
+        current = parents.get(current)
+    return False
 
 
 def finalize_sections(sections: list[Section]) -> list[Section]:
@@ -144,10 +221,86 @@ def load_pdf_sections(path: Path) -> list[Section]:
     return finalize_sections([section])
 
 
+def load_xhtml_sections(path: Path) -> list[Section]:
+    """Load XHTML into sections without treating comments as source text or nodes.
+
+    Main FT XHTML is a mandatory machine-readable source.  The XML parser is
+    configured to discard comments explicitly, so converter comments cannot
+    alter section detection or leak into a requirement inventory.
+    """
+
+    try:
+        parser = ET.XMLParser(target=ET.TreeBuilder(insert_comments=False))
+        root = ET.fromstring(path.read_bytes(), parser=parser)
+    except (OSError, ET.ParseError) as exc:
+        raise ValueError(f"Cannot parse XHTML source {path}: {exc}") from exc
+
+    parents = {child: parent for parent in root.iter() for child in parent}
+    sections: list[Section] = []
+    heading_stack: list[tuple[int, str]] = []
+    untitled_counter = 1
+    current = Section(
+        section_id="preface",
+        title="Preface",
+        level=0,
+        path=["Preface"],
+        source_path=path,
+    )
+    sections.append(current)
+
+    for element in root.iter():
+        tag = _xhtml_local_name(element.tag)
+        heading_match = XHTML_HEADING_RE.fullmatch(tag)
+        if heading_match:
+            # LibreOffice exports the visible section number in a ListLabel
+            # span.  It is decorative for list text but structural for a
+            # heading, so retain it here for stable section IDs.
+            text = _xhtml_text(element, include_decorative=True)
+            if not text:
+                continue
+            level = int(heading_match.group(1))
+            while heading_stack and heading_stack[-1][0] >= level:
+                heading_stack.pop()
+            heading_stack.append((level, text))
+            section_id = detect_section_id(text) or f"section-{untitled_counter}"
+            untitled_counter += 1
+            current = Section(
+                section_id=section_id,
+                title=text,
+                level=level,
+                path=[title for _, title in heading_stack],
+                source_path=path,
+            )
+            sections.append(current)
+            continue
+
+        if tag == "tr":
+            text = _xhtml_table_row_to_text(element)
+        elif tag == "li":
+            if _xhtml_contains_heading(element):
+                continue
+            text = _xhtml_text(element, exclude_descendants={"ol", "ul"})
+            if text:
+                text = f"- {text}"
+        elif tag == "p":
+            if _xhtml_has_ancestor(element, parents, {"li", "td", "th"}):
+                continue
+            text = _xhtml_text(element)
+        else:
+            continue
+
+        if text:
+            current.content_blocks.append(text)
+
+    return finalize_sections(sections)
+
+
 def load_sections(path: Path) -> list[Section]:
     suffix = path.suffix.lower()
     if suffix == ".docx":
         return load_docx_sections(path)
     if suffix == ".pdf":
         return load_pdf_sections(path)
+    if suffix in {".xhtml", ".html"}:
+        return load_xhtml_sections(path)
     raise ValueError(f"Unsupported document type: {path.suffix}")
