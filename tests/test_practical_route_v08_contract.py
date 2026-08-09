@@ -75,6 +75,8 @@ class PracticalRouteV08ContractTests(unittest.TestCase):
         self.assertIn("review-independence.md", reviewer)
         self.assertIn("Mandatory route gate", scope)
         self.assertIn("does **not** authorize a pre-writer `scope_gap_review`", scope)
+        self.assertIn("synthetic-fixture-generation-policy.md", writer)
+        self.assertIn("synthetic-fixture-generation-policy.md", reviewer)
         self.assertIn("Re-derive coverage from FT DOCX/PDF/XHTML", reviewer)
         self.assertIn("advisory-review-findings.md", reviewer)
         self.assertIn("controller_authorized_advisory_revision", reviewer)

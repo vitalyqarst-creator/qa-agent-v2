@@ -67,3 +67,12 @@ lifecycle:
   продукта создаётся только после подтверждения расхождения с ФТ на новом
   валидном fixture.
 
+## Optional Synthetic Fixture
+
+`FX-SYNTH-*` — отдельный тип fixture для конкретных нейтральных значений
+свободного ввода и формата. Он не является `external-dynamic` dictionary и не
+заменяет `FX-DADATA-*`. Создавай его только через
+[`synthetic-fixture-generation-policy.md`](synthetic-fixture-generation-policy.md):
+в catalog укажи literals, receipt/snapshot path и SHA-256; в runtime TC используй
+только сохранённые literals. Не используй synthetic fixture для существования
+организации/адреса, бизнес-валидности реквизитов или стендовых ролей/статусов.

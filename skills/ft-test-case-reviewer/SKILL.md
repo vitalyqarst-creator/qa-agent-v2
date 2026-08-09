@@ -128,7 +128,12 @@ Review in two practical gates:
 5. Source precedence: FT text wins over mockups for business rules; mockups may
    refine visible labels and navigation.
 6. Data readiness: concrete values are used where available; otherwise the case
-   has `needs-test-data` with a clear fixture need.
+    has `needs-test-data` with a clear fixture need.
+   `FX-SYNTH-*` допустим только по
+   [`synthetic-fixture-generation-policy.md`](../../references/agent/synthetic-fixture-generation-policy.md):
+   reviewer проверяет snapshot, SHA-256, `request_count: 1`, конкретные literals
+   и отсутствие live API в runtime TC. Такой fixture не подтверждает
+   интеграционную или бизнес-валидность.
 
 For `matrix_review`, return `test-design-matrix-review.md` with exactly one
 verdict: `matrix-accepted`, `matrix-changes-required`, or `matrix-rejected`. Do
