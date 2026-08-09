@@ -91,6 +91,7 @@ class PracticalStageSummaryValidatorTests(unittest.TestCase):
                     f"| per_scope_next_stage_transitions | `{per_scope_next_stage_transitions}` |",
                     f"| production_tc_clean | `{production_tc_clean}` |",
                     f"| git_persistence | `{git_persistence}` |",
+                    "| source_row_counts | `not-applicable` |",
                     f"| source_restore_provenance | `{source_restore_provenance}` |",
                     f"| source_restore_sha256 | `{source_restore_sha256}` |",
                     f"| active_scope_ids | `{active_scope_ids}` |",

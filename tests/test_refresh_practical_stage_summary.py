@@ -182,6 +182,7 @@ class RefreshPracticalStageSummaryTests(unittest.TestCase):
         self.assertIn("| validator_warnings_count | `3` |", output)
         self.assertIn("| validator_info_count | `4` |", output)
         self.assertIn("| git_persistence | `ignored-by-git` |", output)
+        self.assertIn("| source_row_counts | `not-applicable` |", output)
         self.assertIn("warning-a; warning-b", output)
         self.assertIn("info-a; info-b", output)
 

@@ -3642,6 +3642,9 @@ def validate_practical_scope_brief(path: Path, root: Path) -> tuple[list[Finding
     planned_statuses: dict[str, str] = {}
     aggregated_oracle_obligations: list[str] = []
     unspecified_autofill_targets: list[str] = []
+    aggregated_autofill_targets: list[str] = []
+    mixed_input_mechanisms: list[str] = []
+    aggregated_ui_controls: list[str] = []
     aggregated_field_obligations: list[str] = []
     unspecified_date_constraints: list[str] = []
     for row in planned_rows[1:]:
@@ -3669,16 +3672,28 @@ def validate_practical_scope_brief(path: Path, root: Path) -> tuple[list[Finding
 
         planned_check_text = " ".join(row)
         atom_label = ",".join(sorted(atom_ids)) or "<missing-atom>"
-        if re.search(
+        has_autofill = bool(re.search(
             r"автозаполн|автоматическ\w*\s+заполн|заполня\w*.*атрибут",
             planned_check_text,
             flags=re.IGNORECASE,
-        ) and re.search(
+        ))
+        if has_autofill and re.search(
             r"\b(?:перечисленн\w*\s+)?(?:базов\w*\s+)?атрибут\w*\b|\bвсе\s+атрибут\w*\b",
             planned_check_text,
             flags=re.IGNORECASE,
         ):
             unspecified_autofill_targets.append(atom_label)
+        autofill_targets = re.search(
+            r"\b(?:автозаполн\w*|автоматическ\w*\s+заполн\w*|заполня\w*)\s+(?P<targets>[^.;]+)",
+            planned_check_text,
+            flags=re.IGNORECASE,
+        )
+        if autofill_targets and re.search(r",|\s+и\s+", autofill_targets.group("targets"), flags=re.IGNORECASE):
+            aggregated_autofill_targets.append(atom_label)
+        if has_autofill and re.search(r"\b(?:ручн\w*\s+ввод|вручную)\b", planned_check_text, flags=re.IGNORECASE):
+            mixed_input_mechanisms.append(atom_label)
+        if re.search(r"\bотмен\w*\s+и\s+(?:закрыти\w*|закры\w*|крестик)\b", planned_check_text, flags=re.IGNORECASE):
+            aggregated_ui_controls.append(atom_label)
         if re.search(
             r"\b(?:поле|поля)\s+.+?,\s*.+?\s+и\s+.+?\s+(?:имеют|должны|принимают|сохраняются|проверяются)\b",
             planned_check_text,
@@ -3726,6 +3741,58 @@ def validate_practical_scope_brief(path: Path, root: Path) -> tuple[list[Finding
                     "Replace generic auto-fill wording with the exact field names and split distinct field behavior "
                     "into separate ATOM rows where it has a different source, trigger or expected result."
                 ),
+            )
+        )
+
+    if aggregated_autofill_targets:
+        findings.append(
+            Finding(
+                id="practical-scope-brief-aggregated-autofill-targets",
+                severity="error",
+                category="practical-handoff",
+                title="Practical scope brief groups several auto-fill targets in one check",
+                details=(
+                    "A common auto-fill trigger does not make several target fields one observable obligation. "
+                    "Each target must be independently traceable and diagnosable in the later matrix and test case."
+                ),
+                path=display_path,
+                evidence=aggregated_autofill_targets[:20],
+                recommended_action=(
+                    "Create one ATOM-* for each named target field, retaining the common source trigger in each row."
+                ),
+            )
+        )
+
+    if mixed_input_mechanisms:
+        findings.append(
+            Finding(
+                id="practical-scope-brief-mixed-input-mechanisms",
+                severity="error",
+                category="practical-handoff",
+                title="Practical scope brief groups auto-fill and manual input in one check",
+                details=(
+                    "Auto-fill and manual entry are different user actions with different preparation and observation. "
+                    "Keeping them in one planned check makes future tests non-atomic."
+                ),
+                path=display_path,
+                evidence=mixed_input_mechanisms[:20],
+                recommended_action="Split auto-fill and manual-entry behavior into separate ATOM-* rows for the field.",
+            )
+        )
+
+    if aggregated_ui_controls:
+        findings.append(
+            Finding(
+                id="practical-scope-brief-aggregated-ui-controls",
+                severity="error",
+                category="practical-handoff",
+                title="Practical scope brief groups independent UI controls in one check",
+                details=(
+                    "Different controls remain separate checks even when they are expected to produce the same result."
+                ),
+                path=display_path,
+                evidence=aggregated_ui_controls[:20],
+                recommended_action="Create one ATOM-* per UI control and preserve the shared expected result in each row.",
             )
         )
 
@@ -5792,6 +5859,7 @@ PRACTICAL_STAGE_SUMMARY_REQUIRED_OPERATIONAL_FIELDS = {
     "validator_warnings_count",
     "validator_warnings_classification",
     "validator_warnings_evidence",
+    "source_row_counts",
     "source_restore_provenance",
     "source_restore_sha256",
 }
@@ -5934,6 +6002,21 @@ PRACTICAL_SCOPE_TRANSITION_TC_DECISIONS = {
     "block-source-contradiction",
     "not-applicable",
 }
+PRACTICAL_STAGE_SUMMARY_SOURCE_ROW_COUNTS_RE = re.compile(
+    r"^\s*(\d{2})\s*=\s*(\d+)(?:\s*;\s*(\d{2})\s*=\s*(\d+))*\s*$"
+)
+PRACTICAL_SCOPE_TRANSITION_VERDICTS = {
+    "matrix-not-created",
+    "matrix-accepted",
+    "matrix-changes-required",
+    "round-cap-reached",
+    "blocked",
+}
+PRACTICAL_SCOPE_TRANSITION_MATRIX_WRITER_TRANSITIONS = {
+    "writer allowed",
+    "writer conditional",
+    "writer blocked",
+}
 PRACTICAL_STAGE_SUMMARY_FINDING_ID_RE = re.compile(r"\b[a-z][a-z0-9]+(?:-[a-z0-9]+){2,}\b")
 PRACTICAL_STAGE_SUMMARY_PATH_EVIDENCE_RE = re.compile(
     r"(?:^|[\s`])(?:[A-Za-z]:)?[A-Za-z0-9_./\\-]+\.(?:md|yaml|yml|json|py)(?:\b|$)",
@@ -6049,22 +6132,114 @@ def practical_scope_transition_decision_issues(record: Mapping[str, str]) -> lis
     source_contradiction = record.get("source_contradiction", "").casefold()
     decision = record.get("tc_with_status_decision", "").casefold()
     issues: list[str] = []
+    if verdict not in PRACTICAL_SCOPE_TRANSITION_VERDICTS:
+        return [f"scope={scope}:verdict={verdict or '<missing>'}"]
     if source_contradiction not in PRACTICAL_SCOPE_TRANSITION_SOURCE_CONTRADICTIONS:
         issues.append(f"scope={scope}:source_contradiction={source_contradiction or '<missing>'}")
         return issues
     if decision not in PRACTICAL_SCOPE_TRANSITION_TC_DECISIONS:
         issues.append(f"scope={scope}:tc_with_status_decision={decision or '<missing>'}")
         return issues
-    if source_contradiction == "no" and decision != "write-with-statuses":
-        issues.append(f"scope={scope}:source_contradiction=no requires tc_with_status_decision=write-with-statuses")
-    elif source_contradiction == "yes" and decision != "block-source-contradiction":
-        issues.append(f"scope={scope}:source_contradiction=yes requires tc_with_status_decision=block-source-contradiction")
-    elif source_contradiction == "not-applicable" and decision != "not-applicable":
-        issues.append(f"scope={scope}:source_contradiction=not-applicable requires tc_with_status_decision=not-applicable")
+
+    if verdict == "matrix-not-created":
+        if next_stage_transition not in PRACTICAL_SCOPE_TRANSITION_MATRIX_WRITER_TRANSITIONS:
+            issues.append(
+                f"scope={scope}:verdict=matrix-not-created requires a writer transition for matrix creation"
+            )
+        if source_contradiction == "yes" and next_stage_transition != "writer blocked":
+            issues.append(
+                f"scope={scope}:matrix-not-created with source_contradiction=yes requires next_stage_transition=writer blocked"
+            )
+        if decision != "not-applicable":
+            issues.append(
+                f"scope={scope}:verdict=matrix-not-created requires tc_with_status_decision=not-applicable"
+            )
+        return issues
+
+    if verdict in {"matrix-accepted", "matrix-changes-required"}:
+        if next_stage_transition not in PRACTICAL_SCOPE_TRANSITION_MATRIX_WRITER_TRANSITIONS:
+            issues.append(
+                f"scope={scope}:verdict={verdict} requires a writer transition"
+            )
+        if decision != "not-applicable":
+            issues.append(
+                f"scope={scope}:verdict={verdict} requires tc_with_status_decision=not-applicable"
+            )
+        return issues
+
+    if verdict == "round-cap-reached":
+        if source_contradiction == "no" and decision != "write-with-statuses":
+            issues.append(f"scope={scope}:source_contradiction=no requires tc_with_status_decision=write-with-statuses")
+        elif source_contradiction == "yes" and decision != "block-source-contradiction":
+            issues.append(f"scope={scope}:source_contradiction=yes requires tc_with_status_decision=block-source-contradiction")
+        elif source_contradiction == "not-applicable" and decision != "not-applicable":
+            issues.append(f"scope={scope}:source_contradiction=not-applicable requires tc_with_status_decision=not-applicable")
     if verdict == "blocked" and next_stage_transition != "writer blocked":
         issues.append(
             f"scope={scope}:verdict=blocked requires next_stage_transition=writer blocked"
         )
+    return issues
+
+
+def practical_stage_summary_source_row_count_issues(
+    fields: Mapping[str, str],
+    root: Path,
+) -> list[str]:
+    """Prove scope-analysis counts from the current linked inventory, not prose."""
+
+    if normalize_markdown_field_name(fields.get("summary_stage", "")) != "scope_analysis":
+        return []
+    scope_ids_text = re.sub(r"\s+", "", fields.get("active_scope_ids", ""))
+    ft_package_root_text = strip_markdown_code(fields.get("ft_package_root", "")).strip()
+    if not PRACTICAL_STAGE_SUMMARY_SCOPE_IDS_RE.fullmatch(scope_ids_text) or not ft_package_root_text:
+        return []
+    declared = strip_markdown_code(fields.get("source_row_counts", ""))
+    pairs = re.findall(r"(\d{2})\s*=\s*(\d+)", declared)
+    if not pairs or not PRACTICAL_STAGE_SUMMARY_SOURCE_ROW_COUNTS_RE.fullmatch(declared):
+        return [f"source_row_counts={declared or '<missing>'}; expected=<scope-id>=<count>"]
+    declared_counts = {scope_id: int(count) for scope_id, count in pairs}
+    if len(declared_counts) != len(pairs):
+        return [f"source_row_counts has duplicate scope ids: {declared}"]
+    scope_ids = scope_ids_text.split(",")
+    if set(declared_counts) != set(scope_ids):
+        return [
+            "source_row_counts scopes="
+            f"{','.join(sorted(declared_counts)) or '<none>'}; active_scope_ids={scope_ids_text}"
+        ]
+    ft_package_root = Path(ft_package_root_text)
+    handoff_root = ft_package_root / "work" / "stage-handoffs"
+    issues: list[str] = []
+    for scope_id in scope_ids:
+        handoffs = sorted(path for path in handoff_root.glob(f"{scope_id}-*") if path.is_dir())
+        if len(handoffs) != 1:
+            issues.append(f"scope={scope_id}:handoff-count={len(handoffs)}")
+            continue
+        workflow_path = handoffs[0] / "workflow-state.yaml"
+        try:
+            state = parse_workflow_state(workflow_path)
+        except (FileNotFoundError, UnicodeDecodeError):
+            issues.append(f"scope={scope_id}:workflow-state=unreadable")
+            continue
+        inventory_paths = workflow_artifact_paths_by_name(
+            state,
+            workflow_path,
+            root,
+            ft_package_root,
+            "source-row-inventory.md",
+        )
+        if len(inventory_paths) != 1:
+            issues.append(f"scope={scope_id}:source-row-inventory-count={len(inventory_paths)}")
+            continue
+        try:
+            actual_count = len(parsed_source_row_inventory_rows(inventory_paths[0].read_text(encoding="utf-8")))
+        except UnicodeDecodeError:
+            issues.append(f"scope={scope_id}:source-row-inventory=not-utf8")
+            continue
+        if declared_counts[scope_id] != actual_count:
+            issues.append(
+                f"scope={scope_id}:declared={declared_counts[scope_id]}; actual={actual_count}; "
+                f"inventory={rel(inventory_paths[0], root)}"
+            )
     return issues
 
 
@@ -6195,6 +6370,72 @@ def validate_practical_workflow_version_gate(
         ], [Check("workflow-state-practical-code-version-gate", "fail", "Recorded commit is stale.", display_path)]
 
     return [], [Check("workflow-state-practical-code-version-gate", "pass", "Recorded commit matches code root HEAD.", display_path)]
+
+
+PRACTICAL_HANDOFF_INTERMEDIATE_ENTRY_NAMES = {"chunks", "tmp", "temp", ".tmp", "_artifact-write"}
+PRACTICAL_HANDOFF_INTERMEDIATE_FILE_RE = re.compile(
+    r"^(?:tmp|temp|_artifact-write).+|.+\.(?:partial|tmp)$",
+    flags=re.IGNORECASE,
+)
+
+
+def validate_practical_handoff_intermediate_artifacts(
+    state: dict[str, Any],
+    workflow_path: Path,
+    root: Path,
+) -> tuple[list[Finding], list[Check]]:
+    """Reject transient files left inside an otherwise final practical handoff."""
+
+    if not is_practical_v08_route(state):
+        return [], []
+    try:
+        entries = list(workflow_path.parent.iterdir())
+    except OSError:
+        return [], []
+    leftovers = sorted(
+        entry.name
+        for entry in entries
+        if (
+            entry.is_dir() and entry.name.casefold() in PRACTICAL_HANDOFF_INTERMEDIATE_ENTRY_NAMES
+        )
+        or (
+            entry.is_file() and PRACTICAL_HANDOFF_INTERMEDIATE_FILE_RE.fullmatch(entry.name) is not None
+        )
+    )
+    display_path = rel(workflow_path, root)
+    if leftovers:
+        return [
+            Finding(
+                id="practical-handoff-intermediate-artifacts-present",
+                severity="error",
+                category="practical-handoff",
+                title="Practical handoff retains intermediate generation artifacts",
+                details=(
+                    "The final handoff must contain only declared downstream inputs and artifacts. Intermediate chunks "
+                    "or temporary write files can be mistaken for current source evidence by a later task."
+                ),
+                path=display_path,
+                evidence=leftovers[:20],
+                recommended_action=(
+                    "Move diagnostic fragments to work/debug or remove them before the final handoff validation."
+                ),
+            )
+        ], [
+            Check(
+                "practical-handoff-intermediate-artifacts",
+                "fail",
+                "Intermediate artifacts remain in the practical handoff directory.",
+                display_path,
+            )
+        ]
+    return [], [
+        Check(
+            "practical-handoff-intermediate-artifacts",
+            "pass",
+            "No intermediate artifacts remain in the practical handoff directory.",
+            display_path,
+        )
+    ]
 
 
 def normalized_path_text(value: str) -> str:
@@ -6908,6 +7149,26 @@ def validate_practical_stage_summary(path: Path, root: Path) -> tuple[list[Findi
                     "Add per_scope_next_stage_transitions, validator_warnings_count, "
                     "validator_warnings_classification, validator_warnings_evidence, "
                     "production_tc_clean, git_persistence, source_restore_provenance and source_restore_sha256."
+                ),
+            )
+        )
+
+    source_row_count_issues = practical_stage_summary_source_row_count_issues(fields, root)
+    if source_row_count_issues:
+        findings.append(
+            Finding(
+                id="practical-stage-summary-source-row-count-mismatch",
+                severity="error",
+                category="practical-stage-summary",
+                title="Practical scope-analysis summary does not prove its source-row count",
+                details=(
+                    "The source-row count in a scope-analysis summary must be derived from the linked current inventory. "
+                    "A manually reported count can otherwise conceal lost or stale source rows."
+                ),
+                path=display_path,
+                evidence=source_row_count_issues[:20],
+                recommended_action=(
+                    "Refresh source_row_counts from the linked source-row-inventory.md before handing off to matrix writing."
                 ),
             )
         )
@@ -23652,6 +23913,9 @@ def validate_workflow_state(
     version_findings, version_checks = validate_practical_workflow_version_gate(state, path, root)
     findings.extend(version_findings)
     checks.extend(version_checks)
+    intermediate_findings, intermediate_checks = validate_practical_handoff_intermediate_artifacts(state, path, root)
+    findings.extend(intermediate_findings)
+    checks.extend(intermediate_checks)
 
     missing_fields = sorted(REQUIRED_WORKFLOW_FIELDS - set(state))
     if missing_fields:

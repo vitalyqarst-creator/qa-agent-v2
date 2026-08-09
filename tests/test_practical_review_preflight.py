@@ -237,7 +237,7 @@ class PracticalReviewPreflightTests(unittest.TestCase):
         workflow.write_text(
             workflow.read_text(encoding="utf-8")
             .replace("review_mode: matrix_review", "review_mode: tc_review")
-            + "matrix_review_status: matrix-changes-required\n",
+            + "matrix_review_status: round-cap-reached\n",
             encoding="utf-8",
         )
         summary.write_text(
@@ -282,7 +282,7 @@ class PracticalReviewPreflightTests(unittest.TestCase):
             + "\n## Scope transitions\n\n"
             + "| scope | verdict | next_stage_transition | source_contradiction | tc_with_status_decision | reason |\n"
             + "| --- | --- | --- | --- | --- |\n"
-            + "| sample-scope | matrix-changes-required | tc-review conditional | no | write-with-statuses | Матрица выпущена с пометками. |\n",
+            + "| sample-scope | round-cap-reached | tc-review conditional | no | write-with-statuses | Матрица выпущена с пометками. |\n",
             encoding="utf-8",
         )
         original_validate = helper.artifact_validator.validate

@@ -38,6 +38,7 @@ v0.8.3. The file is a user-facing handoff and a machine-checkable gate.
 | validator_warnings_evidence | `<finding ids or not-applicable>` |
 | validator_info_count | `<integer>` |
 | validator_info_evidence | `<finding ids or not-applicable>` |
+| source_row_counts | `<scope-id>=<count> через `;`, например `05=27`; для scope-analysis обязателен exact count из source-row-inventory.md>` |
 | source_restore_provenance | `<source path/checkpoint or not-applicable>` |
 | source_restore_sha256 | `<SHA-256 or not-applicable>` |
 | active_scope_ids | `<обязательный allowlist: один id или список через запятую, например 02, 05>` |
@@ -55,7 +56,7 @@ v0.8.3. The file is a user-facing handoff and a machine-checkable gate.
 
 | scope | verdict | next_stage_transition | source_contradiction | tc_with_status_decision | reason |
 | --- | --- | --- | --- | --- | --- |
-| `<scope-slug>` | `matrix-accepted / matrix-changes-required / round-cap-reached / blocked` | `<enum from Summary>` | `yes / no / not-applicable` | `write-with-statuses / block-source-contradiction / not-applicable` | `<Russian reason>` |
+| `<scope-slug>` | `matrix-not-created / matrix-accepted / matrix-changes-required / round-cap-reached / blocked` | `<enum from Summary>` | `yes / no / not-applicable` | `write-with-statuses / block-source-contradiction / not-applicable` | `<Russian reason>` |
 
 ## Current stage actions
 
@@ -68,9 +69,13 @@ v0.8.3. The file is a user-facing handoff and a machine-checkable gate.
 ## Rules
 
 - Enum fields must contain only the enum value, not explanatory prose.
-- For each active scope with `matrix-changes-required` or `round-cap-reached`,
-  the `Scope transitions` row is authoritative: `source_contradiction = no`
-  requires `tc_with_status_decision = write-with-statuses`; `yes` requires
+- Before a matrix exists, use `matrix-not-created`; it is not a reviewer verdict.
+  It routes only to matrix writing through `writer allowed`, `writer conditional`
+  or `writer blocked`, and `tc_with_status_decision = not-applicable`.
+- For `matrix-changes-required`, `matrix-accepted` and `matrix-not-created`,
+  `tc_with_status_decision = not-applicable`: the status-based decision is made
+  only after the review cap. For `round-cap-reached`,
+  `source_contradiction = no` requires `write-with-statuses`; `yes` requires
   `block-source-contradiction`. Put case statuses and explanation only in
   `reason`, never in the enum cell.
 - Before creating any separate reviewer task, run

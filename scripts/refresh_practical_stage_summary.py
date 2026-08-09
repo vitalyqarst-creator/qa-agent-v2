@@ -40,6 +40,7 @@ class SummaryRefresh:
     validator_info_evidence: str
     git_persistence: str
     git_persistence_evidence: str
+    source_row_counts: str = "not-applicable"
     validator_scope_errors_count: int | None = None
     validator_scope_errors_evidence: str = "not-applicable"
     validator_external_errors_count: int | None = None
@@ -182,6 +183,43 @@ def format_validator_findings_breakdown(findings: list[dict[str, Any]]) -> str:
     return "; ".join(f"{name}={counts[name]}" for name in counts)
 
 
+def source_row_counts_for_scopes(ft_root: Path, scope_ids: list[str] | None) -> str:
+    """Return source-row counts from the linked current inventories."""
+
+    if not scope_ids:
+        return "not-applicable"
+    counts: list[str] = []
+    handoff_root = ft_root / "work" / "stage-handoffs"
+    for scope_id in scope_ids:
+        handoffs = sorted(path for path in handoff_root.glob(f"{scope_id}-*") if path.is_dir())
+        if len(handoffs) != 1:
+            return "not-applicable"
+        workflow_path = handoffs[0] / "workflow-state.yaml"
+        try:
+            state = artifact_validator.parse_workflow_state(workflow_path)
+        except (FileNotFoundError, UnicodeDecodeError):
+            return "not-applicable"
+        inventory_paths = artifact_validator.workflow_artifact_paths_by_name(
+            state,
+            workflow_path,
+            ft_root,
+            ft_root,
+            "source-row-inventory.md",
+        )
+        if len(inventory_paths) != 1:
+            return "not-applicable"
+        try:
+            count = len(
+                artifact_validator.parsed_source_row_inventory_rows(
+                    inventory_paths[0].read_text(encoding="utf-8")
+                )
+            )
+        except UnicodeDecodeError:
+            return "not-applicable"
+        counts.append(f"{scope_id}={count}")
+    return "; ".join(counts)
+
+
 def build_refresh(
     root: Path,
     summary_path: Path,
@@ -242,6 +280,7 @@ def build_refresh(
         validator_info_evidence=str(validator_summary["validator_info_evidence"]),
         git_persistence=git_persistence.value,
         git_persistence_evidence=git_persistence.evidence,
+        source_row_counts=source_row_counts_for_scopes(primary_root, scope_ids),
         validator_scope_errors_count=scope_error_count,
         validator_scope_errors_evidence=scope_error_evidence,
         validator_external_errors_count=external_error_count,
@@ -267,6 +306,7 @@ def format_field_rows(refresh: SummaryRefresh) -> str:
         ("validator_info_evidence", refresh.validator_info_evidence),
         ("git_persistence", refresh.git_persistence),
         ("git_persistence_evidence", refresh.git_persistence_evidence),
+        ("source_row_counts", refresh.source_row_counts),
     ]
     if refresh.validator_scope_errors_count is not None:
         rows.extend(

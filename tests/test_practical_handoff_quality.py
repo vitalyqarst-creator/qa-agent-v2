@@ -547,6 +547,60 @@ class PracticalHandoffQualityTests(unittest.TestCase):
         finding_ids = {finding.id for finding in findings}
         self.assertIn("practical-scope-brief-aggregated-field-obligations", finding_ids)
 
+    def test_scope_brief_rejects_multiple_autofill_targets_in_one_atom(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            brief = root / "scope-brief.md"
+            self.write_scope_brief(brief)
+            brief.write_text(
+                brief.read_text(encoding="utf-8").replace(
+                    "Действие выполняется для подготовленного объекта.",
+                    "Выбор подсказки DaData заполняет полное наименование, юридический адрес и ИНН.",
+                ),
+                encoding="utf-8",
+            )
+
+            findings, _ = self.validator.validate_practical_scope_brief(brief, root)
+
+        finding_ids = {finding.id for finding in findings}
+        self.assertIn("practical-scope-brief-aggregated-autofill-targets", finding_ids)
+
+    def test_scope_brief_rejects_mixed_autofill_and_manual_entry(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            brief = root / "scope-brief.md"
+            self.write_scope_brief(brief)
+            brief.write_text(
+                brief.read_text(encoding="utf-8").replace(
+                    "Действие выполняется для подготовленного объекта.",
+                    "КПП допускает автозаполнение DaData или ручной ввод как текст.",
+                ),
+                encoding="utf-8",
+            )
+
+            findings, _ = self.validator.validate_practical_scope_brief(brief, root)
+
+        finding_ids = {finding.id for finding in findings}
+        self.assertIn("practical-scope-brief-mixed-input-mechanisms", finding_ids)
+
+    def test_scope_brief_rejects_cancel_and_close_as_one_check(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            brief = root / "scope-brief.md"
+            self.write_scope_brief(brief)
+            brief.write_text(
+                brief.read_text(encoding="utf-8").replace(
+                    "Действие выполняется для подготовленного объекта.",
+                    "Отмена и закрытие окна закрывают форму без сохранения.",
+                ),
+                encoding="utf-8",
+            )
+
+            findings, _ = self.validator.validate_practical_scope_brief(brief, root)
+
+        finding_ids = {finding.id for finding in findings}
+        self.assertIn("practical-scope-brief-aggregated-ui-controls", finding_ids)
+
     def test_scope_brief_rejects_generic_calendar_date_check(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -577,6 +631,108 @@ class PracticalHandoffQualityTests(unittest.TestCase):
         )
 
         self.assertIn("scope=05:verdict=blocked requires next_stage_transition=writer blocked", issues)
+
+    def test_matrix_not_created_is_a_neutral_pre_matrix_state(self) -> None:
+        issues = self.validator.practical_scope_transition_decision_issues(
+            {
+                "scope": "05",
+                "verdict": "matrix-not-created",
+                "next_stage_transition": "writer conditional",
+                "source_contradiction": "no",
+                "tc_with_status_decision": "not-applicable",
+            }
+        )
+
+        self.assertEqual([], issues)
+
+    def test_pre_matrix_state_cannot_make_round_cap_status_decision(self) -> None:
+        issues = self.validator.practical_scope_transition_decision_issues(
+            {
+                "scope": "05",
+                "verdict": "matrix-not-created",
+                "next_stage_transition": "writer conditional",
+                "source_contradiction": "no",
+                "tc_with_status_decision": "write-with-statuses",
+            }
+        )
+
+        self.assertIn(
+            "scope=05:verdict=matrix-not-created requires tc_with_status_decision=not-applicable",
+            issues,
+        )
+
+    def test_practical_handoff_rejects_intermediate_chunks(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            handoff = root / "work" / "stage-handoffs" / "05-scope"
+            handoff.mkdir(parents=True)
+            (handoff / "workflow-state.yaml").write_text("route_profile: practical_v0_8\n", encoding="utf-8")
+            (handoff / "chunks").mkdir()
+
+            findings, _ = self.validator.validate_practical_handoff_intermediate_artifacts(
+                {"route_profile": "practical_v0_8"},
+                handoff / "workflow-state.yaml",
+                root,
+            )
+
+        finding_ids = {finding.id for finding in findings}
+        self.assertIn("practical-handoff-intermediate-artifacts-present", finding_ids)
+
+    def test_scope_analysis_source_row_count_must_match_linked_inventory(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            ft_root = root / "fts" / "Sample"
+            handoff = ft_root / "work" / "stage-handoffs" / "05-scope"
+            handoff.mkdir(parents=True)
+            inventory = handoff / "source-row-inventory.md"
+            inventory.write_text(
+                "\n".join(
+                    [
+                        "## Source Row Inventory",
+                        "",
+                        "| source_row_id | package_id | field_or_action | source_ref | requirement_codes | in_scope | mapped_atom_or_gap |",
+                        "| --- | --- | --- | --- | --- | --- | --- |",
+                        "| `SRC-001` | `PKG-01` | Поле A | Таблица 1 | `AS.1` | `yes` | `ATOM-001` |",
+                        "| `SRC-002` | `PKG-01` | Поле B | Таблица 1 | `AS.2` | `yes` | `ATOM-002` |",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            (handoff / "workflow-state.yaml").write_text(
+                "\n".join(
+                    [
+                        "route_profile: practical_v0_8",
+                        "latest_artifacts:",
+                        "  source_row_inventory: work/stage-handoffs/05-scope/source-row-inventory.md",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            issues = self.validator.practical_stage_summary_source_row_count_issues(
+                {
+                    "summary_stage": "scope-analysis",
+                    "ft_package_root": str(ft_root),
+                    "active_scope_ids": "05",
+                    "source_row_counts": "05=1",
+                },
+                root,
+            )
+
+        self.assertTrue(any("scope=05:declared=1; actual=2" in issue for issue in issues))
+
+    def test_scope_analysis_source_row_count_rejects_duplicate_scope_id(self) -> None:
+        issues = self.validator.practical_stage_summary_source_row_count_issues(
+            {
+                "summary_stage": "scope-analysis",
+                "ft_package_root": "C:/sample",
+                "active_scope_ids": "05",
+                "source_row_counts": "05=2; 05=3",
+            },
+            Path("C:/"),
+        )
+
+        self.assertEqual(["source_row_counts has duplicate scope ids: 05=2; 05=3"], issues)
 
     def test_practical_writer_prompt_does_not_require_legacy_gap_artifact(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

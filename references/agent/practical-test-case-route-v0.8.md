@@ -242,7 +242,8 @@ The summary must list:
   current turn/stage;
 - a `Prior state context` section for older history that explains current state
   but was not performed in this stage;
-- `next_stage_transition`: exactly one of `writer allowed`,
+- `next_stage_transition`: exactly one of `matrix-review allowed`,
+  `matrix-review conditional`, `matrix-review blocked`, `writer allowed`,
   `writer conditional`, `writer blocked`, `tc-review allowed`,
   `tc-review conditional`, `tc-review blocked`, or `not-applicable`.
 
@@ -354,8 +355,8 @@ evidence ids from the latest report. Stale counts or stale finding ids block the
 next practical stage.
 Use
 `python scripts/refresh_practical_stage_summary.py --root . --summary <path> --scope-id <two-digit scope id> --print-fields`
-to compute the current validator counts/evidence, including info findings, and
-`git_persistence` before updating the summary.
+to compute the current validator counts/evidence, including info findings,
+`git_persistence` and `source_row_counts` before updating the summary.
 When the active transition prompt names a revision `rN` / `round-N`, the same
 current revision must be recorded in `workflow-state.yaml.current_round` and in
 the routing fields of a single-scope summary (`summary_stage` and
@@ -467,9 +468,15 @@ planned TC), use the fast path inside this same route:
    - `scope-brief.md` uses Russian visible prose and three execution tables; its
      linked source-row inventory path must resolve. Map one `AS.*` / `SO-NEG-*` / `SO-REQ-*`
      to one `ATOM-*` or `GAP-*`, with actor, state, `SETUP-*`, evidence and status;
-     name every target field of an auto-fill requirement exactly. Generic labels
-     such as “basic attributes”, “listed attributes” or “all attributes” are not
-     coverage and cannot be accepted.
+      name every target field of an auto-fill requirement exactly. Generic labels
+      such as “basic attributes”, “listed attributes” or “all attributes” are not
+      coverage and cannot be accepted. One auto-fill target field is one `ATOM-*`:
+      split even when the source gives one common trigger. For one field, split
+      auto-fill and manual input into separate `ATOM-*`; they use different
+      actions and observability. Likewise, separate independent UI controls (for
+      example, `Отмена` and closing a window) even when their expected result is
+      the same. A source-backed fixed value list for one field may remain one
+      parameterized check only when its trigger and expected result are identical.
      sibling atoms repeat setup. `ready` needs `FX-*` or source-backed
      `поле=значение` preparation, otherwise use `needs-test-data`.
 
