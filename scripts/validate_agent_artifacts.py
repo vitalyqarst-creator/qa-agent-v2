@@ -3324,6 +3324,255 @@ def extract_prompt_refs(content: str) -> list[str]:
     return refs
 
 
+PRACTICAL_V08_ROUTE_PROFILES = {
+    "practical_v0_8",
+    "practical-route-v0.8",
+    "practical route v0.8",
+}
+PRACTICAL_HANDOFF_ALLOWED_ASCII_WORDS = {
+    "api",
+    "atom",
+    "bsr",
+    "clr",
+    "dadata",
+    "dict",
+    "docx",
+    "ft",
+    "gap",
+    "gsr",
+    "id",
+    "json",
+    "pdf",
+    "req",
+    "tc",
+    "ui",
+    "utf",
+    "xhtml",
+    "yaml",
+}
+PRACTICAL_PROMPT_PERMANENT_GUARDRAILS = {
+    "source assertions": r"\bsource[- ]assertions?\b",
+    "semantic bridge": r"\bsemantic[- ]bridge\b",
+    "benchmark": r"\bbenchmark(?:s)?\b",
+    "sharding": r"\bsharding\b",
+    "immutable run": r"\bimmutable (?:run|attempt)\b",
+    "XLSX duplicate": r"\bxlsx\b",
+    "reviewer dispatch": r"\btop-level reviewer session\b",
+    "encoding policy": r"\bencoding (?:policy|fallback)\b",
+}
+
+
+def is_practical_v08_route(state: dict[str, Any]) -> bool:
+    return str(state.get("route_profile", "")).strip().casefold() in PRACTICAL_V08_ROUTE_PROFILES
+
+
+def extract_markdown_section_prefix(content: str, prefix: str) -> str | None:
+    match = re.search(
+        rf"^#{{1,6}}\s+{re.escape(prefix)}(?:\s|$).*?$",
+        content,
+        flags=re.IGNORECASE | re.MULTILINE,
+    )
+    if match is None:
+        return None
+    next_heading = re.search(r"^#{1,6}\s+", content[match.end():], flags=re.MULTILINE)
+    section_end = match.end() + next_heading.start() if next_heading else len(content)
+    return content[match.end():section_end]
+
+
+def practical_handoff_english_evidence(content: str) -> list[str]:
+    """Return visible English prose that violates Russian practical handoff policy.
+
+    Source quotations and inline identifiers are deliberately ignored: the rule
+    governs the agent-authored headings, table labels and explanatory prose.
+    """
+
+    evidence: list[str] = []
+    in_fence = False
+    for line_number, raw_line in enumerate(content.splitlines(), start=1):
+        stripped = raw_line.strip()
+        if stripped.startswith("```"):
+            in_fence = not in_fence
+            continue
+        if in_fence or not stripped or "source_quote:" in stripped or "Текст из ФТ" in stripped:
+            continue
+        visible = re.sub(r"`[^`]*`", "", stripped)
+        words = [
+            word.casefold()
+            for word in re.findall(r"[A-Za-z][A-Za-z-]{2,}", visible)
+            if word.casefold() not in PRACTICAL_HANDOFF_ALLOWED_ASCII_WORDS
+        ]
+        is_heading = visible.startswith("#")
+        if (is_heading and words) or (not is_heading and len(words) >= 3):
+            evidence.append(f"line={line_number}:words={','.join(words[:6])}")
+    return evidence
+
+
+def validate_practical_handoff_language(path: Path, root: Path) -> tuple[list[Finding], list[Check]]:
+    content = path.read_text(encoding="utf-8")
+    evidence = practical_handoff_english_evidence(content)
+    display_path = rel(path, root)
+    findings: list[Finding] = []
+    if evidence:
+        findings.append(
+            Finding(
+                id="practical-handoff-non-russian-visible-text",
+                severity="error",
+                category="practical-handoff",
+                title="Practical handoff contains English visible prose",
+                details=(
+                    "Practical scope briefs, clarification requests and active prompts are user-facing Russian "
+                    "artifacts. Only IDs, paths and approved metadata enums may remain English."
+                ),
+                path=display_path,
+                evidence=evidence[:20],
+                recommended_action="Rewrite the agent-authored visible headings, table labels and prose in Russian.",
+            )
+        )
+    checks = [
+        Check(
+            "practical-handoff-russian-visible-text",
+            "fail" if evidence else "pass",
+            "English visible prose found." if evidence else "Visible prose is Russian.",
+            display_path,
+        )
+    ]
+    return findings, checks
+
+
+def _practical_table_column_indexes(rows: list[list[str]], required: dict[str, set[str]]) -> dict[str, int] | None:
+    if not rows:
+        return None
+    header = [cell.strip().casefold() for cell in rows[0]]
+    indexes: dict[str, int] = {}
+    for key, aliases in required.items():
+        match = next((index for index, cell in enumerate(header) if cell in aliases), None)
+        if match is None:
+            return None
+        indexes[key] = match
+    return indexes
+
+
+def validate_practical_scope_brief(path: Path, root: Path) -> tuple[list[Finding], list[Check]]:
+    """Validate status inheritance for a practical scope brief before writer launch."""
+
+    content = path.read_text(encoding="utf-8")
+    display_path = rel(path, root)
+    findings, checks = validate_practical_handoff_language(path, root)
+    checks = [check for check in checks if check.name != "practical-handoff-russian-visible-text"]
+
+    planned_section = extract_markdown_section_prefix(content, "Планируемые проверки")
+    planned_rows = markdown_table_rows_from_text(planned_section or "")
+    planned_columns = _practical_table_column_indexes(
+        planned_rows,
+        {
+            "id": {"идентификатор"},
+            "status": {"статус исполнения"},
+        },
+    )
+    if planned_columns is None:
+        findings.append(
+            Finding(
+                id="practical-scope-brief-planned-checks-contract",
+                severity="error",
+                category="practical-handoff",
+                title="Practical scope brief lacks the planned-checks table",
+                details=(
+                    "A practical scope brief must expose `## Планируемые проверки` with Russian "
+                    "`Идентификатор` and `Статус исполнения` columns before writer launch."
+                ),
+                path=display_path,
+                evidence=[],
+                recommended_action="Add the canonical planned-checks table to scope-brief.md.",
+            )
+        )
+        checks.append(Check("practical-scope-brief-data-dependencies", "fail", "Planned checks table is missing.", display_path))
+        return findings, checks
+
+    needs_test_data_ids: set[str] = set()
+    for row in planned_rows[1:]:
+        if max(planned_columns.values()) >= len(row):
+            continue
+        status = normalize_markdown_field_value(row[planned_columns["status"]]).casefold()
+        if status == "needs-test-data":
+            needs_test_data_ids.update(re.findall(r"\bATOM-[A-Z0-9-]+\b", row[planned_columns["id"]], flags=re.IGNORECASE))
+
+    if not needs_test_data_ids:
+        checks.append(Check("practical-scope-brief-data-dependencies", "pass", "No needs-test-data planned checks.", display_path))
+        return findings, checks
+
+    dependency_section = extract_markdown_section(content, "Зависимости от тестовых данных")
+    dependency_rows = markdown_table_rows_from_text(dependency_section or "")
+    dependency_columns = _practical_table_column_indexes(
+        dependency_rows,
+        {
+            "affected": {"затронутые проверки"},
+            "status": {"статус исполнения"},
+        },
+    )
+    if dependency_columns is None:
+        findings.append(
+            Finding(
+                id="practical-scope-brief-needs-test-data-dependencies-missing",
+                severity="error",
+                category="practical-handoff",
+                title="needs-test-data checks have no structured dependency mapping",
+                details=(
+                    "Each planned needs-test-data check must be mapped to the missing setup in "
+                    "`## Зависимости от тестовых данных`."
+                ),
+                path=display_path,
+                evidence=sorted(needs_test_data_ids),
+                recommended_action="Add a Russian dependency table with preparation, affected checks and execution status.",
+            )
+        )
+        checks.append(Check("practical-scope-brief-data-dependencies", "fail", "Structured data dependencies are missing.", display_path))
+        return findings, checks
+
+    mapped_ids: set[str] = set()
+    mismatched_ids: set[str] = set()
+    for row in dependency_rows[1:]:
+        if max(dependency_columns.values()) >= len(row):
+            continue
+        ids = set(re.findall(r"\bATOM-[A-Z0-9-]+\b", row[dependency_columns["affected"]], flags=re.IGNORECASE))
+        if not ids:
+            continue
+        mapped_ids.update(ids)
+        status = normalize_markdown_field_value(row[dependency_columns["status"]]).casefold()
+        if status != "needs-test-data":
+            mismatched_ids.update(ids)
+
+    missing_ids = needs_test_data_ids - mapped_ids
+    invalid_ids = (mapped_ids - needs_test_data_ids) | mismatched_ids
+    if missing_ids or invalid_ids:
+        findings.append(
+            Finding(
+                id="practical-scope-brief-data-dependency-status-mismatch",
+                severity="error",
+                category="practical-handoff",
+                title="Practical scope brief has inconsistent data-dependency statuses",
+                details=(
+                    "Affected checks and the planned-checks table must agree on `needs-test-data`; otherwise "
+                    "writer/reviewer can silently treat an unavailable setup as ready."
+                ),
+                path=display_path,
+                evidence=[
+                    *(f"missing={item}" for item in sorted(missing_ids)),
+                    *(f"invalid={item}" for item in sorted(invalid_ids)),
+                ][:20],
+                recommended_action="Synchronize affected ATOM-* rows and status values in the scope brief.",
+            )
+        )
+    checks.append(
+        Check(
+            "practical-scope-brief-data-dependencies",
+            "fail" if missing_ids or invalid_ids else "pass",
+            "Data-dependency statuses are inconsistent." if missing_ids or invalid_ids else "Data-dependency statuses are consistent.",
+            display_path,
+        )
+    )
+    return findings, checks
+
+
 def validate_active_transition_prompt(
     prompt_path: Path,
     workflow_path: Path,
@@ -3418,11 +3667,7 @@ def validate_active_transition_prompt(
             *flatten_string_values(state.get("required_inputs")),
             *flatten_string_values(state.get("latest_artifacts")),
         ]
-        is_practical_scope_to_writer = (
-            prompt_path.name == "prompt.scope-to-writer.md"
-            and str(state.get("route_profile", "")).strip().casefold()
-            in {"practical_v0_8", "practical-route-v0.8", "practical route v0.8"}
-        )
+        is_practical_scope_to_writer = prompt_path.name == "prompt.scope-to-writer.md" and is_practical_v08_route(state)
         required_scope_input_names = {
             "source-selection.md",
             "scope-coverage-gaps.md",
@@ -3512,6 +3757,32 @@ def validate_active_transition_prompt(
                     ),
                 )
             )
+
+        if is_practical_scope_to_writer:
+            copied_guardrails = [
+                label
+                for label, pattern in PRACTICAL_PROMPT_PERMANENT_GUARDRAILS.items()
+                if re.search(pattern, content, flags=re.IGNORECASE)
+            ]
+            if copied_guardrails:
+                findings.append(
+                    Finding(
+                        id="practical-prompt-copies-permanent-guardrails",
+                        severity="error",
+                        category="prompt-format",
+                        title="Practical scope prompt repeats permanent guardrails",
+                        details=(
+                            "A practical scope-to-writer prompt is a compact scope-specific delta, not a copy "
+                            "of permanent route, reviewer or runtime instructions."
+                        ),
+                        path=display_path,
+                        evidence=copied_guardrails,
+                        recommended_action="Keep only scope-specific boundaries, statuses, inputs, outputs and gate.",
+                    )
+                )
+
+            language_findings, _ = validate_practical_handoff_language(prompt_path, root)
+            findings.extend(language_findings)
 
     has_errors = any(finding.severity == "error" for finding in findings)
     checks.append(
@@ -23470,11 +23741,7 @@ def validate_workflow_state(
         and next_skill in {"ft-test-case-writer", "ft-test-case-iteration"}
     ):
         scope_handoff_values = [*required_input_values, *latest_artifact_values]
-        is_practical_scope_to_writer = (
-            next_skill == "ft-test-case-writer"
-            and str(state.get("route_profile", "")).strip().casefold()
-            in {"practical_v0_8", "practical-route-v0.8", "practical route v0.8"}
-        )
+        is_practical_scope_to_writer = next_skill == "ft-test-case-writer" and is_practical_v08_route(state)
         required_scope_handoff_names = {
             "source-selection.md",
             "scope-coverage-gaps.md",
@@ -23514,6 +23781,31 @@ def validate_workflow_state(
             checks.append(Check("workflow-state-scope-analyzer-handoff-artifacts", "fail", "Required scope handoff artifacts are missing.", display_path))
         else:
             checks.append(Check("workflow-state-scope-analyzer-handoff-artifacts", "pass", "Required scope handoff artifacts resolve.", display_path))
+
+        if is_practical_scope_to_writer:
+            scope_brief_path = resolving_artifact_by_name(
+                "scope-brief.md",
+                scope_handoff_values,
+                path,
+                root,
+                ft_root,
+            )
+            if scope_brief_path is not None:
+                brief_findings, brief_checks = validate_practical_scope_brief(scope_brief_path, root)
+                findings.extend(brief_findings)
+                checks.extend(brief_checks)
+
+            clarification_path = resolving_artifact_by_name(
+                "scope-clarification-requests.md",
+                scope_handoff_values,
+                path,
+                root,
+                ft_root,
+            )
+            if clarification_path is not None:
+                language_findings, language_checks = validate_practical_handoff_language(clarification_path, root)
+                findings.extend(language_findings)
+                checks.extend(language_checks)
 
         scope_gaps_path = resolving_artifact_by_name(
             "scope-coverage-gaps.md",
