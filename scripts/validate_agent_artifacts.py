@@ -3528,6 +3528,7 @@ def validate_practical_scope_brief(path: Path, root: Path) -> tuple[list[Finding
             "affected": {"затронутые проверки"},
             "actor": {"исполнитель"},
             "object_state": {"объект и исходное состояние"},
+            "preparation_evidence": {"подтверждение подготовки"},
             "status": {"статус исполнения"},
         },
     )
@@ -3539,14 +3540,14 @@ def validate_practical_scope_brief(path: Path, root: Path) -> tuple[list[Finding
                 category="practical-handoff",
                 title="Practical scope brief lacks execution-prerequisite mapping",
                 details=(
-                    "Every planned check must have an actor, object/initial-state and execution-status mapping "
-                    "before writer launch."
+                    "Every planned check must have an actor, object/initial-state, preparation-evidence and "
+                    "execution-status mapping before writer launch."
                 ),
                 path=display_path,
                 evidence=sorted(planned_statuses),
                 recommended_action=(
-                    "Add `## Предпосылки исполнения` with affected checks, actor, object/initial state and "
-                    "execution status."
+                    "Add `## Предпосылки исполнения` with affected checks, actor, object/initial state, "
+                    "preparation evidence and execution status."
                 ),
             )
         )
@@ -3562,11 +3563,17 @@ def validate_practical_scope_brief(path: Path, root: Path) -> tuple[list[Finding
         execution_statuses: dict[str, str] = {}
         duplicated_ids: set[str] = set()
         incomplete_needs_data_ids: set[str] = set()
+        incomplete_preparation_evidence_ids: set[str] = set()
+        unverified_ready_preparation_ids: set[str] = set()
+        generic_ready_actor_ids: set[str] = set()
         for row in execution_rows[1:]:
             if max(execution_columns.values()) >= len(row):
                 continue
             actor = normalize_markdown_field_value(row[execution_columns["actor"]]).casefold().strip(" .;:")
             object_state = normalize_markdown_field_value(row[execution_columns["object_state"]]).casefold().strip(" .;:")
+            preparation_evidence = normalize_markdown_field_value(
+                row[execution_columns["preparation_evidence"]]
+            ).casefold().strip(" .;:")
             status = normalize_markdown_field_value(row[execution_columns["status"]]).casefold()
             for atom_id in re.findall(r"\bATOM-[A-Z0-9-]+\b", row[execution_columns["affected"]], flags=re.IGNORECASE):
                 atom_id = atom_id.upper()
@@ -3575,6 +3582,34 @@ def validate_practical_scope_brief(path: Path, root: Path) -> tuple[list[Finding
                 execution_statuses[atom_id] = status
                 if status == "needs-test-data" and (not actor or not object_state or actor == "не требуется" or object_state == "не требуется"):
                     incomplete_needs_data_ids.add(atom_id)
+                if not preparation_evidence or preparation_evidence == "не требуется":
+                    incomplete_preparation_evidence_ids.add(atom_id)
+                if status == "ready":
+                    requires_preparation = bool(
+                        re.search(
+                            r"(?:подготовлен|существующ|завед[её]н|выбран|заполненн|"
+                            r"статус|индикатор|уч[её]тн|партн[её]р|реквизит|объект)",
+                            object_state,
+                            flags=re.IGNORECASE,
+                        )
+                    )
+                    has_reproducible_evidence = bool(
+                        re.search(
+                            r"(?:\bfx-[a-z0-9-]+\b|фикстур|fixture|воспроизводим|"
+                            r"явн\w*\s+шаг|шаг\w*\s+подготовк|созда\w*\s+(?:через|в|на)|"
+                            r"подготов\w*\s+(?:через|в|на)|выбрать\w*\s+(?:из|в)|"
+                            r"исходн\w*\s+данн\w*\s*[:—-])",
+                            preparation_evidence,
+                            flags=re.IGNORECASE,
+                        )
+                    )
+                    if requires_preparation and not has_reproducible_evidence:
+                        unverified_ready_preparation_ids.add(atom_id)
+                    if (
+                        actor in {"тестировщик", "пользователь", "исполнитель"}
+                        and re.search(r"(?:администратор|роль|прав|доступ)", object_state, flags=re.IGNORECASE)
+                    ):
+                        generic_ready_actor_ids.add(atom_id)
 
         missing_ids = set(planned_statuses) - set(execution_statuses)
         unknown_ids = set(execution_statuses) - set(planned_statuses)
@@ -3583,16 +3618,17 @@ def validate_practical_scope_brief(path: Path, root: Path) -> tuple[list[Finding
             for atom_id, status in execution_statuses.items()
             if planned_statuses.get(atom_id) != status
         }
-        if missing_ids or unknown_ids or duplicated_ids or mismatched_ids or incomplete_needs_data_ids:
+        if missing_ids or unknown_ids or duplicated_ids or mismatched_ids or incomplete_needs_data_ids or incomplete_preparation_evidence_ids or unverified_ready_preparation_ids or generic_ready_actor_ids:
             findings.append(
                 Finding(
-                    id="practical-scope-brief-execution-prerequisites-inconsistent",
+                    id="practical-scope-brief-execution-prerequisites-incomplete",
                     severity="error",
                     category="practical-handoff",
                     title="Practical scope brief has incomplete execution prerequisites",
                     details=(
                         "Execution prerequisites must cover each planned ATOM exactly once, match its status, and "
-                        "name actor plus object/initial state for needs-test-data checks."
+                        "name actor, object/initial state and preparation evidence. A ready check with a pre-existing "
+                        "object/state needs a verified fixture or reproducible setup."
                     ),
                     path=display_path,
                     evidence=[
@@ -3601,18 +3637,22 @@ def validate_practical_scope_brief(path: Path, root: Path) -> tuple[list[Finding
                         *(f"duplicate={item}" for item in sorted(duplicated_ids)),
                         *(f"status-mismatch={item}" for item in sorted(mismatched_ids)),
                         *(f"incomplete-needs-data={item}" for item in sorted(incomplete_needs_data_ids)),
+                        *(f"missing-preparation-evidence={item}" for item in sorted(incomplete_preparation_evidence_ids)),
+                        *(f"unverified-ready-preparation={item}" for item in sorted(unverified_ready_preparation_ids)),
+                        *(f"generic-ready-actor={item}" for item in sorted(generic_ready_actor_ids)),
                     ][:20],
                     recommended_action=(
-                        "Map every planned ATOM to one actor/object-state prerequisite and synchronize its status."
+                        "Map every planned ATOM to one actor/object-state prerequisite with verified fixture or "
+                        "reproducible preparation, then synchronize its status."
                     ),
                 )
             )
         checks.append(
             Check(
                 "practical-scope-brief-execution-prerequisites",
-                "fail" if missing_ids or unknown_ids or duplicated_ids or mismatched_ids or incomplete_needs_data_ids else "pass",
+                "fail" if missing_ids or unknown_ids or duplicated_ids or mismatched_ids or incomplete_needs_data_ids or incomplete_preparation_evidence_ids or unverified_ready_preparation_ids or generic_ready_actor_ids else "pass",
                 "Execution prerequisites are inconsistent."
-                if missing_ids or unknown_ids or duplicated_ids or mismatched_ids or incomplete_needs_data_ids
+                if missing_ids or unknown_ids or duplicated_ids or mismatched_ids or incomplete_needs_data_ids or incomplete_preparation_evidence_ids or unverified_ready_preparation_ids or generic_ready_actor_ids
                 else "Execution prerequisites cover all planned checks.",
                 display_path,
             )

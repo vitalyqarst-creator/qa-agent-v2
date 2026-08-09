@@ -461,9 +461,8 @@ planned TC), use the fast path inside this same route:
      - candidate UI-calibration points.
    - `scope-brief.md` uses Russian visible prose and tables `Планируемые проверки`,
      `Предпосылки исполнения` and `Зависимости от тестовых данных`. The second maps
-     every `ATOM-*` to actor, object/initial state and matching status; the third
-     lists unavailable setup. Lifecycle/access/visibility setup covers action,
-     transition and result with `needs-test-data`.
+     every `ATOM-*` to actor, state, `Подтверждение подготовки` and status.
+     `ready` needs a fixture or reproducible setup; otherwise `needs-test-data`.
 
 3. `ft-test-case-writer` — design-matrix-only pass
    - Create or update exactly these required artifacts:
