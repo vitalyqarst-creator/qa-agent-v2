@@ -3463,6 +3463,37 @@ def validate_practical_handoff_language(path: Path, root: Path) -> tuple[list[Fi
     return findings, checks
 
 
+def practical_source_row_inventory_language_evidence(content: str) -> list[str]:
+    """Return English prose from agent-authored practical inventory fields.
+
+    Inventory schema headers intentionally remain canonical English.  This check
+    therefore inspects only the human-facing ``field_or_action`` values and
+    non-table explanatory prose; source quotations and inline identifiers stay
+    outside its scope.
+    """
+
+    evidence: list[str] = []
+    for index, row in enumerate(parsed_source_row_inventory_rows(content), start=2):
+        visible = re.sub(r"`[^`]*`", "", row.get("field_or_action", "")).strip()
+        words = [
+            word.casefold()
+            for word in re.findall(r"[A-Za-z][A-Za-z-]{2,}", visible)
+            if word.casefold() not in PRACTICAL_HANDOFF_ALLOWED_ASCII_WORDS
+        ]
+        if words:
+            source_row_id = row.get("source_row_id", "").strip() or f"row-{index}"
+            evidence.append(f"row={source_row_id}:words={','.join(words[:6])}")
+
+    prose_lines: list[str] = []
+    for raw_line in content.splitlines():
+        stripped = raw_line.strip()
+        if stripped.startswith("|") or re.fullmatch(r"#{1,6}\s+Source Row Inventory\s*", stripped, flags=re.IGNORECASE):
+            continue
+        prose_lines.append(raw_line)
+    evidence.extend(practical_handoff_english_evidence("\n".join(prose_lines)))
+    return evidence
+
+
 def _practical_table_column_indexes(rows: list[list[str]], required: dict[str, set[str]]) -> dict[str, int] | None:
     if not rows:
         return None
@@ -3539,6 +3570,7 @@ def validate_practical_scope_brief(path: Path, root: Path) -> tuple[list[Finding
             planned_statuses[atom_id.upper()] = status
 
     execution_statuses: dict[str, str] = {}
+    execution_actors: dict[str, str] = {}
     execution_setup_keys: dict[str, set[str]] = {}
 
     execution_section = extract_markdown_section(content, "Предпосылки исполнения")
@@ -3640,6 +3672,7 @@ def validate_practical_scope_brief(path: Path, root: Path) -> tuple[list[Finding
                 if atom_id in execution_statuses:
                     duplicated_ids.add(atom_id)
                 execution_statuses[atom_id] = status
+                execution_actors[atom_id] = actor
                 execution_setup_keys[atom_id] = setup_keys
                 if status == "needs-test-data" and (not actor or not object_state or actor == "не требуется" or object_state == "не требуется"):
                     incomplete_needs_data_ids.add(atom_id)
@@ -3727,11 +3760,17 @@ def validate_practical_scope_brief(path: Path, root: Path) -> tuple[list[Finding
 
     source_row_mapping_mismatches: list[str] = []
     operation_setup_inheritance_mismatches: list[str] = []
+    operation_actor_inheritance_mismatches: list[str] = []
+    source_row_inventory_language_mismatches: list[str] = []
     for inventory_path in practical_scope_brief_source_inventory_paths(content, path, root):
         try:
             inventory_content = inventory_path.read_text(encoding="utf-8")
         except UnicodeDecodeError:
             continue
+        source_row_inventory_language_mismatches.extend(
+            f"{rel(inventory_path, root)}:{item}"
+            for item in practical_source_row_inventory_language_evidence(inventory_content)
+        )
         for index, inventory_row in enumerate(parsed_source_row_inventory_rows(inventory_content), start=2):
             source_row_id = inventory_row.get("source_row_id", "").strip() or f"row {index}"
             if inventory_row.get("in_scope", "").strip().strip("`").casefold() != "yes":
@@ -3759,10 +3798,28 @@ def validate_practical_scope_brief(path: Path, root: Path) -> tuple[list[Finding
                 continue
 
             relevant_atoms = sorted(atom_id for atom_id in mapped_atoms if atom_id in planned_statuses)
-            if (
-                len(relevant_atoms) < 2
-                or any(planned_statuses[atom_id] != "needs-test-data" for atom_id in relevant_atoms)
-            ):
+            if len(relevant_atoms) < 2:
+                continue
+            role_restricted = any(
+                re.search(r"(?:администратор|роль|прав|доступ)", execution_actors.get(atom_id, ""), flags=re.IGNORECASE)
+                for atom_id in relevant_atoms
+            )
+            generic_actor_atoms = [
+                atom_id
+                for atom_id in relevant_atoms
+                if execution_actors.get(atom_id, "") in {"тестировщик", "пользователь", "исполнитель"}
+            ]
+            if role_restricted and generic_actor_atoms:
+                actor_details = "; ".join(
+                    f"{atom_id}={execution_actors.get(atom_id, '-') or '-'}"
+                    for atom_id in relevant_atoms
+                )
+                operation_actor_inheritance_mismatches.append(
+                    f"{rel(inventory_path, root)}:{source_row_id}:atoms={','.join(relevant_atoms)};"
+                    f"actors={actor_details}"
+                )
+
+            if any(planned_statuses[atom_id] != "needs-test-data" for atom_id in relevant_atoms):
                 continue
             setup_sets = [execution_setup_keys.get(atom_id, set()) for atom_id in relevant_atoms]
             union_setup_keys = set().union(*setup_sets)
@@ -3813,13 +3870,62 @@ def validate_practical_scope_brief(path: Path, root: Path) -> tuple[list[Finding
                 ),
             )
         )
+    if operation_actor_inheritance_mismatches:
+        findings.append(
+            Finding(
+                id="practical-scope-brief-operation-actor-inheritance-incomplete",
+                severity="error",
+                category="practical-handoff",
+                title="Atomic checks of one restricted action lack a specific actor",
+                details=(
+                    "When one source action includes a role or access restriction, every resulting ATOM-* must "
+                    "name an actor with the required capability. A generic tester or user makes the future test "
+                    "non-reproducible."
+                ),
+                path=display_path,
+                evidence=operation_actor_inheritance_mismatches[:20],
+                recommended_action=(
+                    "Repeat the source-backed role or access capability in the actor column for every ATOM of "
+                    "the affected action."
+                ),
+            )
+        )
+    if source_row_inventory_language_mismatches:
+        findings.append(
+            Finding(
+                id="practical-scope-brief-source-row-inventory-non-russian-visible-text",
+                severity="error",
+                category="practical-handoff",
+                title="Practical source inventory contains English visible prose",
+                details=(
+                    "The inventory schema may use canonical technical column names, but agent-authored field/action "
+                    "values and explanatory prose are user-facing and must be Russian."
+                ),
+                path=display_path,
+                evidence=source_row_inventory_language_mismatches[:20],
+                recommended_action=(
+                    "Rewrite the inventory field/action values and explanatory prose in Russian; retain only IDs, "
+                    "paths and approved technical identifiers in English."
+                ),
+            )
+        )
     checks.append(
         Check(
             "practical-scope-brief-source-row-action-coverage",
-            "fail" if source_row_mapping_mismatches or operation_setup_inheritance_mismatches else "pass",
+            "fail" if source_row_mapping_mismatches or operation_setup_inheritance_mismatches or operation_actor_inheritance_mismatches else "pass",
             "Source-row action coverage is incomplete."
-            if source_row_mapping_mismatches or operation_setup_inheritance_mismatches
+            if source_row_mapping_mismatches or operation_setup_inheritance_mismatches or operation_actor_inheritance_mismatches
             else "Source-row action coverage and setup inheritance are consistent.",
+            display_path,
+        )
+    )
+    checks.append(
+        Check(
+            "practical-scope-brief-source-row-inventory-russian-visible-text",
+            "fail" if source_row_inventory_language_mismatches else "pass",
+            "English visible prose found in the source inventory."
+            if source_row_inventory_language_mismatches
+            else "Source inventory visible prose is Russian.",
             display_path,
         )
     )

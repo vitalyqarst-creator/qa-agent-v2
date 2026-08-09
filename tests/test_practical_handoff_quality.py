@@ -307,6 +307,41 @@ class PracticalHandoffQualityTests(unittest.TestCase):
         finding_ids = {finding.id for finding in findings}
         self.assertIn("practical-scope-brief-operation-setup-inheritance-incomplete", finding_ids)
 
+    def test_scope_brief_requires_specific_actor_for_atomic_checks_of_one_restricted_action(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            brief = self.write_multi_action_brief(root, mapped_atoms="`ATOM-001`; `ATOM-002`")
+            brief.write_text(
+                brief.read_text(encoding="utf-8").replace(
+                    "| `ATOM-001` | Администратор | Партнер в статусе «Подтвержден». |",
+                    "| `ATOM-001` | Тестировщик | Партнер в статусе «Подтвержден». |",
+                ),
+                encoding="utf-8",
+            )
+
+            findings, _ = self.validator.validate_practical_scope_brief(brief, root)
+
+        finding_ids = {finding.id for finding in findings}
+        self.assertIn("practical-scope-brief-operation-actor-inheritance-incomplete", finding_ids)
+
+    def test_scope_brief_rejects_english_visible_source_inventory_text(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            brief = self.write_multi_action_brief(root, mapped_atoms="`ATOM-001`; `ATOM-002`")
+            inventory = root / "work" / "stage-handoffs" / "scope" / "source-row-inventory.md"
+            inventory.write_text(
+                inventory.read_text(encoding="utf-8").replace(
+                    "Архивирование партнера",
+                    "Partner widget",
+                ) + "\n\n- This compact registry source is ready.\n",
+                encoding="utf-8",
+            )
+
+            findings, _ = self.validator.validate_practical_scope_brief(brief, root)
+
+        finding_ids = {finding.id for finding in findings}
+        self.assertIn("practical-scope-brief-source-row-inventory-non-russian-visible-text", finding_ids)
+
     def test_scope_brief_propagates_missing_setup_to_every_dependent_atom(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
