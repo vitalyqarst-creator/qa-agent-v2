@@ -45,6 +45,7 @@
 - `bindings` непустой;
 - `binding_id` уникален и имеет формат `FID-*`;
 - `atom_id` и `obligation_id` существуют, причем obligation ссылается именно на этот atom;
+- `binding_id` указан ровно в одной строке handoff `source-row-inventory.md`, а `mapped_atom_or_gap` этой строки содержит тот же `atom_id`; нельзя использовать один `FID-*` для другого поля, действия или literal/unit rule;
 - `source_ref` и `source_text` непустые;
 - допустимые `required_targets`: `atomic_statement`, `required_behavior`, `single_expected_behavior`.
 

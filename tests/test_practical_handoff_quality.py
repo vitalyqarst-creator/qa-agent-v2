@@ -332,6 +332,122 @@ class PracticalHandoffQualityTests(unittest.TestCase):
         finding_ids = {finding.id for finding in findings}
         self.assertIn("practical-scope-brief-aggregated-oracle-obligations", finding_ids)
 
+    def test_scope_brief_rejects_negative_obligation_for_multiple_atoms(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            brief = root / "scope-brief.md"
+            self.write_scope_brief(brief)
+            brief.write_text(
+                brief.read_text(encoding="utf-8")
+                + "\n\n## Кандидаты отрицательных проверок\n\n"
+                + "| Идентификатор | Связанный ATOM |\n"
+                + "| --- | --- |\n"
+                + "| `SO-NEG-001` | `ATOM-001`; `ATOM-002` |\n",
+                encoding="utf-8",
+            )
+
+            findings, _ = self.validator.validate_practical_scope_brief(brief, root)
+
+        finding_ids = {finding.id for finding in findings}
+        self.assertIn("practical-scope-brief-negative-obligation-aggregated-fields", finding_ids)
+
+    def test_scope_brief_requires_atom_link_for_negative_candidates(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            brief = root / "scope-brief.md"
+            self.write_scope_brief(brief)
+            brief.write_text(
+                brief.read_text(encoding="utf-8")
+                + "\n\n## Кандидаты отрицательных проверок\n\n"
+                + "| Идентификатор | Вход |\n"
+                + "| --- | --- |\n"
+                + "| `SO-NEG-001` | Невалидное значение |\n",
+                encoding="utf-8",
+            )
+
+            findings, _ = self.validator.validate_practical_scope_brief(brief, root)
+
+        finding_ids = {finding.id for finding in findings}
+        self.assertIn("practical-scope-brief-negative-obligation-atom-link-missing", finding_ids)
+
+    def test_fidelity_binding_must_match_inventory_atom(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            handoff = root / "work" / "stage-handoffs" / "06-scope"
+            handoff.mkdir(parents=True)
+            inventory = handoff / "source-row-inventory.md"
+            inventory.write_text(
+                "\n".join(
+                    [
+                        "## Source Row Inventory",
+                        "",
+                        "| source_row_id | package_id | field_or_action | source_ref | requirement_codes | in_scope | mapped_atom_or_gap |",
+                        "| --- | --- | --- | --- | --- | --- | --- |",
+                        "| `SRC-001` | `PKG-01` | Зеленый индикатор | Таблица 9 | `AS.44` | yes | `ATOM-002`; `FID-001` |",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            fidelity = handoff / "source-to-package-fidelity.json"
+            fidelity.write_text(
+                '{"version":1,"bindings":[{"binding_id":"FID-001","atom_id":"ATOM-001"}]}',
+                encoding="utf-8",
+            )
+            state = {
+                "route_profile": "practical_v0_8",
+                "latest_artifacts": {"source_to_package_fidelity": str(fidelity)},
+            }
+
+            findings, _ = self.validator.validate_practical_fidelity_inventory_bindings(
+                state,
+                handoff / "workflow-state.yaml",
+                root,
+                root,
+                [inventory],
+            )
+
+        finding_ids = {finding.id for finding in findings}
+        self.assertIn("practical-fidelity-inventory-binding-mismatch", finding_ids)
+
+    def test_fidelity_binding_accepts_exactly_one_matching_inventory_row(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            handoff = root / "work" / "stage-handoffs" / "06-scope"
+            handoff.mkdir(parents=True)
+            inventory = handoff / "source-row-inventory.md"
+            inventory.write_text(
+                "\n".join(
+                    [
+                        "## Source Row Inventory",
+                        "",
+                        "| source_row_id | package_id | field_or_action | source_ref | requirement_codes | in_scope | mapped_atom_or_gap |",
+                        "| --- | --- | --- | --- | --- | --- | --- |",
+                        "| `SRC-001` | `PKG-01` | Зеленый индикатор | Таблица 9 | `AS.44` | yes | `ATOM-002`; `FID-001` |",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            fidelity = handoff / "source-to-package-fidelity.json"
+            fidelity.write_text(
+                '{"version":1,"bindings":[{"binding_id":"FID-001","atom_id":"ATOM-002"}]}',
+                encoding="utf-8",
+            )
+            state = {
+                "route_profile": "practical_v0_8",
+                "latest_artifacts": {"source_to_package_fidelity": str(fidelity)},
+            }
+
+            findings, checks = self.validator.validate_practical_fidelity_inventory_bindings(
+                state,
+                handoff / "workflow-state.yaml",
+                root,
+                root,
+                [inventory],
+            )
+
+        self.assertEqual([], findings)
+        self.assertTrue(all(check.status == "pass" for check in checks))
+
     def test_scope_gap_language_rejects_english_explanatory_prose(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

@@ -57,6 +57,7 @@ registry с inventory, а не только совпадение множест�
 - Writer-side `Source Row Inventory` должен сохранять все in-scope rows из handoff inventory. Нельзя удалять source row только потому, что writer не планирует писать по ней TC: используй `GAP-*` или явное out-of-scope решение.
 - `ready-for-review` должен блокироваться, если writer-side inventory не содержит in-scope/unclear `source_row_id` из handoff `source-row-inventory.md`.
 - `in_scope = yes` требует `mapped_atom_or_gap` с существующим `ATOM-*` или `GAP-*`.
+- Если строка использует `source-to-package-fidelity.json`, `mapped_atom_or_gap` дополнительно содержит ее `FID-*`; один `FID-*` допускается ровно в одной source row и рядом с тем же `ATOM-*`, что объявлен в JSON binding.
 - `in_scope = unclear` требует `GAP-*` или clarification question.
 - `in_scope = no | out-of-scope` требует понятного решения scope, но не требует `ATOM-*`.
 - В source-first v3 строки `in_scope = no` не удаляются из expected registry:

@@ -3707,6 +3707,106 @@ def validate_practical_scope_brief(path: Path, root: Path) -> tuple[list[Finding
         ):
             unspecified_date_constraints.append(atom_label)
 
+    negative_candidates = markdown_table_rows_from_text(
+        extract_markdown_section_prefix(content, "Кандидаты отрицательных проверок") or ""
+    )
+    if negative_candidates:
+        negative_columns = _practical_table_column_indexes(
+            negative_candidates,
+            {
+                "obligation": {"идентификатор"},
+                "atom": {"связанный atom"},
+            },
+        )
+        if negative_columns is None:
+            findings.append(
+                Finding(
+                    id="practical-scope-brief-negative-obligation-atom-link-missing",
+                    severity="error",
+                    category="practical-handoff",
+                    title="Practical negative-obligation rows do not identify their one affected ATOM",
+                    details=(
+                        "A compact practical handoff must make each SO-NEG-* independently traceable to one "
+                        "planned ATOM-*. Otherwise a shared restriction can silently become one generic future test."
+                    ),
+                    path=display_path,
+                    evidence=["required columns: Идентификатор; Связанный ATOM"],
+                    recommended_action=(
+                        "Add `Связанный ATOM` and create one SO-NEG-* row for each affected field/ATOM."
+                    ),
+                )
+            )
+        else:
+            duplicate_obligations: list[str] = []
+            aggregate_atom_links: list[str] = []
+            unknown_atom_links: list[str] = []
+            seen_obligations: set[str] = set()
+            for row in negative_candidates[1:]:
+                if max(negative_columns.values()) >= len(row):
+                    continue
+                obligation_ids = {
+                    item.upper()
+                    for item in re.findall(
+                        r"\bSO-NEG-[A-Z0-9-]+\b",
+                        row[negative_columns["obligation"]],
+                        flags=re.IGNORECASE,
+                    )
+                }
+                atom_ids = {
+                    item.upper()
+                    for item in re.findall(
+                        r"\bATOM-[A-Z0-9-]+\b",
+                        row[negative_columns["atom"]],
+                        flags=re.IGNORECASE,
+                    )
+                }
+                if len(obligation_ids) != 1:
+                    aggregate_atom_links.append(
+                        "obligations=" + ",".join(sorted(obligation_ids) or ["<missing>"])
+                    )
+                for obligation_id in obligation_ids:
+                    if obligation_id in seen_obligations:
+                        duplicate_obligations.append(obligation_id)
+                    seen_obligations.add(obligation_id)
+                    if len(atom_ids) != 1:
+                        aggregate_atom_links.append(
+                            f"{obligation_id}:atoms={','.join(sorted(atom_ids)) or '<missing>'}"
+                        )
+                for atom_id in atom_ids:
+                    if atom_id not in planned_statuses:
+                        unknown_atom_links.append(atom_id)
+            if duplicate_obligations or aggregate_atom_links:
+                findings.append(
+                    Finding(
+                        id="practical-scope-brief-negative-obligation-aggregated-fields",
+                        severity="error",
+                        category="practical-handoff",
+                        title="Practical negative obligation combines different fields or checks",
+                        details=(
+                            "One SO-NEG-* must represent one invalid condition for one atomic field/action check. "
+                            "Shared type restrictions must be expanded into separate child obligations before matrix writing."
+                        ),
+                        path=display_path,
+                        evidence=[*sorted(set(duplicate_obligations))[:10], *aggregate_atom_links[:10]],
+                        recommended_action=(
+                            "Create a separate SO-NEG-* row for each affected ATOM and keep one explicit ATOM link."
+                        ),
+                    )
+                )
+            if unknown_atom_links:
+                findings.append(
+                    Finding(
+                        id="practical-scope-brief-negative-obligation-unknown-atom",
+                        severity="error",
+                        category="practical-handoff",
+                        title="Practical negative obligation links an unknown ATOM",
+                        details="Every negative candidate must link to an ATOM from the planned-checks table.",
+                        path=display_path,
+                        evidence=sorted(set(unknown_atom_links))[:20],
+                        recommended_action="Correct the `Связанный ATOM` values or add the missing planned ATOM rows.",
+                    )
+                )
+
     if aggregated_oracle_obligations:
         findings.append(
             Finding(
@@ -6436,6 +6536,133 @@ def validate_practical_handoff_intermediate_artifacts(
             display_path,
         )
     ]
+
+
+FIDELITY_BINDING_ID_RE = re.compile(r"\bFID-[A-Z0-9_.-]+\b", flags=re.IGNORECASE)
+
+
+def validate_practical_fidelity_inventory_bindings(
+    state: dict[str, Any],
+    workflow_path: Path,
+    root: Path,
+    ft_root: Path,
+    inventory_paths: list[Path],
+) -> tuple[list[Finding], list[Check]]:
+    """Require FID bindings to identify the same inventory source row and ATOM."""
+
+    if not is_practical_v08_route(state):
+        return [], []
+    fidelity_paths = workflow_artifact_paths_by_name(
+        state,
+        workflow_path,
+        root,
+        ft_root,
+        "source-to-package-fidelity.json",
+    )
+    if not fidelity_paths:
+        return [], []
+
+    display_path = rel(workflow_path, root)
+    if len(fidelity_paths) != 1 or len(inventory_paths) != 1:
+        return [], []
+    fidelity_path = fidelity_paths[0]
+    inventory_path = inventory_paths[0]
+    try:
+        raw_fidelity = json.loads(fidelity_path.read_text(encoding="utf-8"))
+        inventory_rows = parsed_source_row_inventory_rows(inventory_path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        return [
+            Finding(
+                id="practical-fidelity-inventory-bindings-unreadable",
+                severity="error",
+                category="practical-handoff",
+                title="Practical fidelity binding cannot be compared with source inventory",
+                details=str(exc),
+                path=display_path,
+                evidence=[rel(fidelity_path, root), rel(inventory_path, root)],
+                recommended_action="Save both artifacts as valid UTF-8 and repair the fidelity JSON.",
+            )
+        ], [Check("practical-fidelity-inventory-bindings", "fail", "Fidelity/inventory artifacts are unreadable.", display_path)]
+
+    bindings = raw_fidelity.get("bindings") if isinstance(raw_fidelity, dict) else None
+    if not isinstance(bindings, list):
+        return [
+            Finding(
+                id="practical-fidelity-inventory-bindings-invalid",
+                severity="error",
+                category="practical-handoff",
+                title="Practical fidelity artifact has no bindings list",
+                details="A linked source-to-package fidelity artifact must expose a bindings array.",
+                path=display_path,
+                evidence=[rel(fidelity_path, root)],
+                recommended_action="Use the canonical source-to-package-fidelity JSON format.",
+            )
+        ], [Check("practical-fidelity-inventory-bindings", "fail", "Fidelity bindings are invalid.", display_path)]
+
+    inventory_by_fidelity_id: dict[str, list[tuple[str, set[str]]]] = {}
+    for index, row in enumerate(inventory_rows, start=2):
+        mapped = row.get("mapped_atom_or_gap", "")
+        atom_ids = set(extract_any_atom_ids_from_text(mapped))
+        for fidelity_id in FIDELITY_BINDING_ID_RE.findall(mapped):
+            inventory_by_fidelity_id.setdefault(fidelity_id.upper(), []).append(
+                (row.get("source_row_id", "").strip() or f"row {index}", atom_ids)
+            )
+
+    binding_by_id: dict[str, str] = {}
+    invalid_binding_rows: list[str] = []
+    for index, binding in enumerate(bindings, start=1):
+        if not isinstance(binding, dict):
+            invalid_binding_rows.append(f"bindings[{index}]=not-object")
+            continue
+        binding_id = str(binding.get("binding_id", "")).strip().upper()
+        atom_id = str(binding.get("atom_id", "")).strip().upper()
+        if not FIDELITY_BINDING_ID_RE.fullmatch(binding_id) or not atom_id:
+            invalid_binding_rows.append(f"bindings[{index}]:id={binding_id or '<missing>'};atom={atom_id or '<missing>'}")
+            continue
+        if binding_id in binding_by_id:
+            invalid_binding_rows.append(f"duplicate={binding_id}")
+            continue
+        binding_by_id[binding_id] = atom_id
+
+    issues: list[str] = [*invalid_binding_rows]
+    for fidelity_id in sorted(set(inventory_by_fidelity_id) - set(binding_by_id)):
+        issues.append(f"{fidelity_id}:missing-from-fidelity-json")
+    for fidelity_id in sorted(set(binding_by_id) - set(inventory_by_fidelity_id)):
+        issues.append(f"{fidelity_id}:missing-from-source-row-inventory")
+    for fidelity_id in sorted(set(inventory_by_fidelity_id) & set(binding_by_id)):
+        inventory_rows_for_fidelity = inventory_by_fidelity_id[fidelity_id]
+        if len(inventory_rows_for_fidelity) != 1:
+            issues.append(
+                f"{fidelity_id}:inventory_rows="
+                f"{','.join(source_row_id for source_row_id, _ in inventory_rows_for_fidelity)}"
+            )
+            continue
+        inventory_atoms = inventory_rows_for_fidelity[0][1]
+        if inventory_atoms != {binding_by_id[fidelity_id]}:
+            issues.append(
+                f"{fidelity_id}:inventory_atoms={','.join(sorted(inventory_atoms)) or '<missing>'}; "
+                f"fidelity_atom={binding_by_id[fidelity_id]}"
+            )
+
+    if issues:
+        return [
+            Finding(
+                id="practical-fidelity-inventory-binding-mismatch",
+                severity="error",
+                category="practical-handoff",
+                title="Practical fidelity bindings do not match source-row inventory",
+                details=(
+                    "Every FID-* must be recorded once on the inventory row for the same atomic requirement that "
+                    "its JSON binding declares. This prevents a literal or unit rule from being attached to another behavior."
+                ),
+                path=display_path,
+                evidence=issues[:20],
+                recommended_action=(
+                    "Align each FID-* in source-row-inventory.md with exactly one JSON binding and the same ATOM-*."
+                ),
+            )
+        ], [Check("practical-fidelity-inventory-bindings", "fail", "FID/ATOM mapping differs between inventory and fidelity JSON.", display_path)]
+    return [], [Check("practical-fidelity-inventory-bindings", "pass", "FID bindings match source-row inventory.", display_path)]
 
 
 def normalized_path_text(value: str) -> str:
@@ -24439,6 +24666,16 @@ def validate_workflow_state(
         )
         findings.extend(inventory_findings)
         checks.extend(inventory_checks)
+
+    fidelity_findings, fidelity_checks = validate_practical_fidelity_inventory_bindings(
+        state,
+        path,
+        root,
+        ft_root,
+        linked_source_row_inventory_paths,
+    )
+    findings.extend(fidelity_findings)
+    checks.extend(fidelity_checks)
 
     scope_analyzer_ready_state = (
         current_stage == "ft-scope-analyzer"

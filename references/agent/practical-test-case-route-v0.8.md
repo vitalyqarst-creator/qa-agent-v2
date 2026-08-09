@@ -468,7 +468,9 @@ planned TC), use the fast path inside this same route:
    - `scope-brief.md` uses Russian visible prose and three execution tables; its
      linked source-row inventory path must resolve. Map one `AS.*` / `SO-NEG-*` / `SO-REQ-*`
      to one `ATOM-*` or `GAP-*`, with actor, state, `SETUP-*`, evidence and status;
-      name every target field of an auto-fill requirement exactly. Generic labels
+     `Кандидаты отрицательных проверок` содержит `Связанный ATOM`: один
+     `SO-NEG-*` на одно поле/ATOM.
+     name every target field of an auto-fill requirement exactly. Generic labels
       such as “basic attributes”, “listed attributes” or “all attributes” are not
       coverage and cannot be accepted. One auto-fill target field is one `ATOM-*`:
       split even when the source gives one common trigger. For one field, split
