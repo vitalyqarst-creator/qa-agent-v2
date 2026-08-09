@@ -3350,6 +3350,27 @@ PRACTICAL_HANDOFF_ALLOWED_ASCII_WORDS = {
     "xhtml",
     "yaml",
 }
+PRACTICAL_HANDOFF_FORBIDDEN_ENGLISH_WORDS = {
+    "artifact",
+    "artifacts",
+    "gate",
+    "input",
+    "inputs",
+    "inventory",
+    "matrix",
+    "output",
+    "outputs",
+    "planned",
+    "review",
+    "reviewer",
+    "route",
+    "scope",
+    "source",
+    "status",
+    "summary",
+    "version",
+    "writer",
+}
 PRACTICAL_PROMPT_PERMANENT_GUARDRAILS = {
     "source assertions": r"\bsource[- ]assertions?\b",
     "semantic bridge": r"\bsemantic[- ]bridge\b",
@@ -3401,9 +3422,12 @@ def practical_handoff_english_evidence(content: str) -> list[str]:
             for word in re.findall(r"[A-Za-z][A-Za-z-]{2,}", visible)
             if word.casefold() not in PRACTICAL_HANDOFF_ALLOWED_ASCII_WORDS
         ]
+        forbidden_words = [
+            word for word in words if word in PRACTICAL_HANDOFF_FORBIDDEN_ENGLISH_WORDS
+        ]
         is_heading = visible.startswith("#")
-        if (is_heading and words) or (not is_heading and len(words) >= 3):
-            evidence.append(f"line={line_number}:words={','.join(words[:6])}")
+        if forbidden_words or (is_heading and words) or (not is_heading and len(words) >= 3):
+            evidence.append(f"line={line_number}:words={','.join((forbidden_words or words)[:6])}")
     return evidence
 
 
@@ -5423,6 +5447,72 @@ def current_git_commit_for_code_root(code_root: str) -> str | None:
         return None
     commit = result.stdout.strip().lower()
     return commit if result.returncode == 0 and re.fullmatch(r"[0-9a-f]{40}", commit) else None
+
+
+def validate_practical_workflow_version_gate(
+    state: dict[str, Any],
+    path: Path,
+    root: Path,
+) -> tuple[list[Finding], list[Check]]:
+    """Verify an explicit practical workflow version gate against its code root.
+
+    The check is conditional for compatibility with old lightweight fixtures, but
+    once a workflow records either root-consistency or version-gate data, both
+    records must agree with the actual checkout.
+    """
+
+    if not is_practical_v08_route(state):
+        return [], []
+
+    root_consistency = state.get("root_consistency")
+    version_gate = state.get("code_version_gate")
+    if not isinstance(root_consistency, dict) and not isinstance(version_gate, dict):
+        return [], []
+
+    display_path = rel(path, root)
+    code_root = str(root_consistency.get("code_root", "")).strip() if isinstance(root_consistency, dict) else ""
+    recorded_commit = str(version_gate.get("code_commit", "")).strip().casefold() if isinstance(version_gate, dict) else ""
+    missing = [
+        name
+        for name, value in (("root_consistency.code_root", code_root), ("code_version_gate.code_commit", recorded_commit))
+        if not value
+    ]
+    if missing:
+        return [
+            Finding(
+                id="workflow-state-practical-code-version-gate-incomplete",
+                severity="error",
+                category="workflow-state",
+                title="Practical workflow version gate is incomplete",
+                details=(
+                    "A practical workflow that records root or version data must record both the version-gated "
+                    "code root and its exact commit before downstream routing."
+                ),
+                path=display_path,
+                evidence=missing,
+                recommended_action="Record code_root and the exact git HEAD in workflow-state.yaml.",
+            )
+        ], [Check("workflow-state-practical-code-version-gate", "fail", "Code version gate is incomplete.", display_path)]
+
+    current_commit = current_git_commit_for_code_root(code_root)
+    if current_commit and recorded_commit != current_commit:
+        return [
+            Finding(
+                id="workflow-state-practical-code-version-stale",
+                severity="error",
+                category="workflow-state",
+                title="Practical workflow records a stale code commit",
+                details=(
+                    "The workflow-state version gate differs from the current HEAD of its declared code root. "
+                    "A final stage report must use this same verified HEAD, not a commit copied from a prior log."
+                ),
+                path=display_path,
+                evidence=[f"recorded_commit={recorded_commit}", f"current_commit={current_commit}"],
+                recommended_action="Rerun git rev-parse HEAD and refresh the workflow version gate before routing.",
+            )
+        ], [Check("workflow-state-practical-code-version-gate", "fail", "Recorded commit is stale.", display_path)]
+
+    return [], [Check("workflow-state-practical-code-version-gate", "pass", "Recorded commit matches code root HEAD.", display_path)]
 
 
 def normalized_path_text(value: str) -> str:
@@ -22876,6 +22966,10 @@ def validate_workflow_state(
             display_path,
         )
     )
+
+    version_findings, version_checks = validate_practical_workflow_version_gate(state, path, root)
+    findings.extend(version_findings)
+    checks.extend(version_checks)
 
     missing_fields = sorted(REQUIRED_WORKFLOW_FIELDS - set(state))
     if missing_fields:

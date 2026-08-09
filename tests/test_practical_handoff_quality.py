@@ -79,6 +79,45 @@ class PracticalHandoffQualityTests(unittest.TestCase):
         finding_ids = {finding.id for finding in findings}
         self.assertIn("practical-handoff-non-russian-visible-text", finding_ids)
 
+    def test_scope_brief_rejects_single_english_process_label(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            brief = root / "scope-brief.md"
+            self.write_scope_brief(brief)
+            brief.write_text(
+                brief.read_text(encoding="utf-8") + "\n| Version gate | `passed` |\n",
+                encoding="utf-8",
+            )
+
+            findings, _ = self.validator.validate_practical_scope_brief(brief, root)
+
+        finding_ids = {finding.id for finding in findings}
+        self.assertIn("practical-handoff-non-russian-visible-text", finding_ids)
+
+    def test_practical_workflow_rejects_stale_code_version_gate(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            workflow = root / "workflow-state.yaml"
+            workflow.write_text("route_profile: practical_v0_8\n", encoding="utf-8")
+            state = {
+                "route_profile": "practical_v0_8",
+                "root_consistency": {"code_root": str(root)},
+                "code_version_gate": {"code_commit": "0" * 40},
+            }
+            original = self.validator.current_git_commit_for_code_root
+            self.validator.current_git_commit_for_code_root = lambda _: "a" * 40
+            try:
+                findings, _ = self.validator.validate_practical_workflow_version_gate(
+                    state,
+                    workflow,
+                    root,
+                )
+            finally:
+                self.validator.current_git_commit_for_code_root = original
+
+        finding_ids = {finding.id for finding in findings}
+        self.assertIn("workflow-state-practical-code-version-stale", finding_ids)
+
     def test_practical_writer_prompt_rejects_copied_permanent_guardrails(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

@@ -459,11 +459,10 @@ planned TC), use the fast path inside this same route:
      - dictionary values required by the scope;
      - open questions and assumptions;
      - candidate UI-calibration points.
-   - In `scope-brief.md`, use Russian visible prose and two compact tables:
-     `## Планируемые проверки` (`Идентификатор`, `Статус исполнения`) and,
-     when setup is unavailable, `## Зависимости от тестовых данных`
-     (`Подготовка`, `Затронутые проверки`, `Статус исполнения`). Every listed
-     affected check inherits `needs-test-data`.
+   - `scope-brief.md` uses Russian visible prose, tables `Планируемые проверки`
+     and `Зависимости от тестовых данных`, and one `needs-test-data` status for
+     every affected check. Lifecycle/access/visibility setup names actor, object,
+     initial state, action, transition and result.
 
 3. `ft-test-case-writer` — design-matrix-only pass
    - Create or update exactly these required artifacts:
