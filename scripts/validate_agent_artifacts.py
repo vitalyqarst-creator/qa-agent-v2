@@ -3418,10 +3418,15 @@ def validate_active_transition_prompt(
             *flatten_string_values(state.get("required_inputs")),
             *flatten_string_values(state.get("latest_artifacts")),
         ]
+        is_practical_scope_to_writer = (
+            prompt_path.name == "prompt.scope-to-writer.md"
+            and str(state.get("route_profile", "")).strip().casefold()
+            in {"practical_v0_8", "practical-route-v0.8", "practical route v0.8"}
+        )
         required_scope_input_names = {
             "source-selection.md",
-            "scope-contract.md",
             "scope-coverage-gaps.md",
+            "scope-brief.md" if is_practical_scope_to_writer else "scope-contract.md",
         }
         if prompt_path.name == "prompt.scope-gaps-to-reviewer.md":
             required_scope_input_names.add("workflow-state.yaml")
@@ -23465,10 +23470,15 @@ def validate_workflow_state(
         and next_skill in {"ft-test-case-writer", "ft-test-case-iteration"}
     ):
         scope_handoff_values = [*required_input_values, *latest_artifact_values]
+        is_practical_scope_to_writer = (
+            next_skill == "ft-test-case-writer"
+            and str(state.get("route_profile", "")).strip().casefold()
+            in {"practical_v0_8", "practical-route-v0.8", "practical route v0.8"}
+        )
         required_scope_handoff_names = {
             "source-selection.md",
-            "scope-contract.md",
             "scope-coverage-gaps.md",
+            "scope-brief.md" if is_practical_scope_to_writer else "scope-contract.md",
         }
         required_scope_handoff_names.add(
             "prompt.scope-to-writer.md"
@@ -23489,7 +23499,8 @@ def validate_workflow_state(
                     category="artifact-links",
                     title="Scope analyzer ready handoff misses required artifacts",
                     details=(
-                        "`ft-scope-analyzer` cannot route to writer/iteration without a resolving scope contract, "
+                        "`ft-scope-analyzer` cannot route to writer/iteration without a resolving "
+                        f"{'scope brief' if is_practical_scope_to_writer else 'scope contract'}, "
                         "coverage-gaps artifact, and the matching scope-to-* prompt."
                     ),
                     path=display_path,

@@ -37,7 +37,8 @@ Required guardrails:
 Обязательные входы для `prompt.scope-to-writer.md`:
 
 - `source-selection.md`;
-- `scope-contract.md`;
+- для legacy/session/production route — `scope-contract.md`;
+- для `practical_v0_8` matrix-only pass — `scope-brief.md` вместо `scope-contract.md`;
 - `scope-coverage-gaps.md`;
 - `workflow-state.yaml`;
 - `source-parity-check.md`, если для основного ФТ доступны DOCX и PDF; если artifact должен быть, но отсутствует, prompt должен фиксировать blocking input issue вместо запуска writer-а;
@@ -148,7 +149,7 @@ Prompt-файлы хранятся в:
 - есть секция входных артефактов;
 - есть секция ограничений / guardrails;
 - секция входных артефактов содержит хотя бы одну ссылку на artifact, который разрешается в текущем checkout.
-- Для `prompt.scope-to-writer.md` и `prompt.scope-to-iteration.md` секция входных артефактов должна содержать resolving ссылки на `source-selection.md`, `scope-contract.md`, `scope-coverage-gaps.md`; если workflow включает `source-parity-check.md`, `source-row-inventory.md`, `mockup-visual-inventory.md` или `scope-clarification-requests.md`, prompt должен ссылаться и на них.
+- Для `prompt.scope-to-writer.md` и `prompt.scope-to-iteration.md` секция входных артефактов должна содержать resolving ссылки на `source-selection.md`, `scope-coverage-gaps.md` и `scope-contract.md`; для `practical_v0_8` matrix-only `prompt.scope-to-writer.md` вместо `scope-contract.md` обязателен `scope-brief.md`. Если workflow включает `source-parity-check.md`, `source-row-inventory.md`, `mockup-visual-inventory.md` или `scope-clarification-requests.md`, prompt должен ссылаться и на них.
 - Для `prompt.scope-gaps-to-reviewer.md` секция входных артефактов должна содержать resolving ссылки на `source-selection.md`, `scope-contract.md`, `scope-coverage-gaps.md`, `scope-clarification-requests.md` и `workflow-state.yaml`; если workflow включает `source-parity-check.md`, `source-row-inventory.md` или `mockup-visual-inventory.md`, prompt должен ссылаться и на них.
 - Для `prompt.scope-assertions-to-reviewer.md` секция входных артефактов должна содержать resolving ссылки на `source-selection.md`, `scope-contract.md`, `scope-coverage-gaps.md`, `workflow-state.yaml`, `source-row-inventory.md`, `source-row-extraction-spec.json`, `source-row-baseline.json` и `source-assertions.json`; если workflow включает `source-parity-check.md` или `mockup-visual-inventory.md`, prompt должен ссылаться и на них.
 
