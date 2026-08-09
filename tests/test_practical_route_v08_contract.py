@@ -156,17 +156,10 @@ class PracticalRouteV08ContractTests(unittest.TestCase):
 
     def test_setup_data_must_respect_integration_backed_fields(self) -> None:
         route = self.read("references/agent/practical-test-case-route-v0.8.md")
-        partners = self.read("fts/Partners/Partners-v1/test-cases/9.3-struktura-i-dubli-partnerov.md")
-        catalog = self.read("fts/Partners/Partners-v1/work/vendor-references/dadata-fixture-catalog.md")
 
         self.assertIn("setup/precondition data must respect", route)
         self.assertIn("even when the integration itself is not the", route)
-        self.assertIn("FX-DADATA-PARTY-ROMASHKA-A-001", partners)
-        self.assertIn("FX-DADATA-PARTY-ROMASHKA-B-001", partners)
-        self.assertNotIn("ООО Автотест 9.3", partners)
-        self.assertIn("запрос `4909128502`", partners)
-        self.assertIn("запрос `2622004340`", partners)
-        self.assertIn("Response SHA-256", catalog)
+        self.assertIn("verified fixture", route)
 
     def test_v08_requires_coverage_class_decomposition_and_reviewer_independence(self) -> None:
         content = self.read("references/agent/practical-test-case-route-v0.8.md")

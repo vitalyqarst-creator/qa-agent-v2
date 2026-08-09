@@ -34,6 +34,7 @@ ALLOWED_CURRENT_STAGES = {
 }
 ALLOWED_STAGE_STATUSES = {
     "ready-for-next-stage",
+    "awaiting-user-scope-selection",
     "ready-for-gap-review",
     "ready-for-review",
     "ready-for-writer-revision",
@@ -22945,6 +22946,37 @@ def validate_workflow_state(
                     "pass",
                     "blocked-quality-gate correctly routes to writer.",
                     display_path,
+                )
+            )
+
+    if stage_status == "awaiting-user-scope-selection":
+        selection_errors: list[str] = []
+        if current_stage != "ft-scope-analyzer":
+            selection_errors.append(f"current_stage={current_stage!r}")
+        if next_skill != "ft-scope-analyzer":
+            selection_errors.append(f"next_skill={next_skill!r}")
+        if state.get("blocking_reasons") not in (None, "", "[]", [], "{}", {}):
+            selection_errors.append("blocking_reasons must be empty")
+        for alias in ("scope_options", "scope_selection_prompts"):
+            if not state.get("latest_artifacts", {}).get(alias):
+                selection_errors.append(f"latest_artifacts.{alias}=<missing>")
+        if selection_errors:
+            findings.append(
+                Finding(
+                    id="workflow-state-awaiting-user-scope-selection-invalid-routing",
+                    severity="error",
+                    category="workflow-state",
+                    title="awaiting-user-scope-selection has invalid routing",
+                    details=(
+                        "Scope selection is a user decision, not a missing input. It must remain in "
+                        "ft-scope-analyzer with an empty blocking_reasons list and both selection artifacts."
+                    ),
+                    path=display_path,
+                    evidence=selection_errors,
+                    recommended_action=(
+                        "Use current_stage and next_skill `ft-scope-analyzer`, set blocking_reasons to `[]`, "
+                        "and link scope_options plus scope_selection_prompts."
+                    ),
                 )
             )
 

@@ -46,6 +46,31 @@ class PracticalRouteV08DefaultsTests(unittest.TestCase):
         self.assertIn("fast path", route)
         self.assertIn("without user confirmation", routing)
 
+    def test_scope_selection_is_compact_and_not_a_false_input_blocker(self) -> None:
+        route = (ROOT_DIR / "references" / "agent" / "practical-test-case-route-v0.8.md").read_text(
+            encoding="utf-8"
+        )
+        workflow = (ROOT_DIR / "references" / "agent" / "workflow-state-format.md").read_text(
+            encoding="utf-8"
+        )
+        analyzer = (ROOT_DIR / "skills" / "ft-scope-analyzer" / "SKILL.md").read_text(
+            encoding="utf-8"
+        )
+        prompts = (ROOT_DIR / "references" / "agent" / "scope-selection-prompts-format.md").read_text(
+            encoding="utf-8"
+        )
+        scope_options = (ROOT_DIR / "references" / "agent" / "scope-options-format.md").read_text(
+            encoding="utf-8"
+        )
+
+        for content in (route, workflow, analyzer, prompts):
+            self.assertIn("awaiting-user-scope-selection", content)
+        self.assertIn("The prompt contains only the FT package path", route)
+        self.assertIn("the selected `scope_slug`", route)
+        self.assertIn("не перечисляет route restrictions", prompts)
+        self.assertNotIn("source_assertion_review", prompts)
+        self.assertNotIn("source_assertion_review", scope_options)
+
     def test_matrix_review_requires_stage_summary_before_next_prompt(self) -> None:
         route = (ROOT_DIR / "references" / "agent" / "practical-test-case-route-v0.8.md").read_text(
             encoding="utf-8"

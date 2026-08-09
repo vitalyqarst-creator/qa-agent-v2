@@ -28,6 +28,15 @@ start those heavier routes as alternatives. If a prompt is ambiguous, choose
 this practical route and record any remaining uncertainty as TC status, BA
 question, or UI-calibration candidate.
 
+## Scope-selection boundary
+
+Before an external scope is selected, `ft-scope-analyzer` creates only
+`scope-options.md` and a compact `scope-selection-prompts.md`; its status is
+`awaiting-user-scope-selection`, not `blocked-input`. Do not create
+scope-local artifacts or BA questions until selection, except a contradiction
+that prevents decomposition. The prompt contains only the FT package path and
+the selected `scope_slug`.
+
 ## Macro-stage execution
 
 Default user-facing execution for "write test cases for this scope" is one

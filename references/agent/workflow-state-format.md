@@ -39,7 +39,7 @@ fts/<ft-slug>/work/stage-handoffs/NN-<scope-slug>/workflow-state.yaml
 ## Допустимые значения
 
 - `current_stage` = `ft-source-locator | ft-scope-analyzer | ft-test-case-writer | ft-test-case-reviewer | ft-test-case-iteration | ft-ui-automation-prep`
-- `stage_status` = `ready-for-next-stage | ready-for-gap-review | ready-for-review | ready-for-writer-revision | signed-off | round-cap-reached | blocked-input | blocked-quality-gate`
+- `stage_status` = `ready-for-next-stage | awaiting-user-scope-selection | ready-for-gap-review | ready-for-review | ready-for-writer-revision | signed-off | round-cap-reached | blocked-input | blocked-quality-gate`
 - `next_skill` = `ft-source-locator | ft-scope-analyzer | ft-test-case-writer | ft-test-case-reviewer | ft-test-case-iteration | ft-ui-automation-prep | none`
 - `current_round` — целое число, где `0` допустим для pre-writer handoff
 
@@ -69,6 +69,7 @@ fts/<ft-slug>/work/stage-handoffs/NN-<scope-slug>/workflow-state.yaml
 - Для session-based review-cycle итогов `latest_artifacts` должен содержать canonical aliases: `cycle_state`, `final_findings`, `final_traceability_matrix`, `final_writer_response` если была revision, and `signed_off_snapshot` или `round_cap_snapshot`. XLSX companion artifacts are optional only when the route or user explicitly requests XLSX.
 - `open_questions` — список еще не снятых неоднозначностей по scope или coverage.
 - `blocking_reasons` — список причин, почему этап нельзя продвигать дальше.
+- `awaiting-user-scope-selection` используют только после `agent-proposed-scope`, когда источники достаточны, но пользователь ещё не выбрал один внешний scope. Это не `blocked-input`: `current_stage` и `next_skill` остаются `ft-scope-analyzer`, `blocking_reasons` пуст, а `latest_artifacts` содержит `scope_options` и `scope_selection_prompts`.
 - `accepted_risks` — необязательный список явно принятых blocking `GAP-*`, если владелец продукта/аналитик разрешил передать набор дальше без закрытия gap.
 - Каждый ключ YAML может встречаться только один раз в одном mapping. Не создавай второй `blocking_reasons`, `latest_artifacts` или иной верхнеуровневый ключ для новой записи: обнови единственное каноническое значение. Повтор ключа имеет last-key-wins семантику и делает routing неоднозначным.
 

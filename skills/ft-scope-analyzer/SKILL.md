@@ -166,19 +166,14 @@ Minimum for `prompt.scope-gaps-to-reviewer.md`:
 - краткое резюме границ анализа;
 - список `coverage gaps` и открытых вопросов;
 - выбранный режим scope: `manual-scope` или `agent-proposed-scope`;
-- `scope-options.md` и `scope-selection-prompts.md`, если агент предлагает несколько вариантов scope;
+- при `agent-proposed-scope`: только options/prompts и `awaiting-user-scope-selection`;
 - `scope-contract.md` с подтвержденными границами анализа;
 - `source-parity-check.md`, если для основного ФТ доступны DOCX и PDF;
 - `source-row-inventory.md`, если `source-parity-check.md` содержит row-level/table parity или scope основан на таблице полей/действий;
-- `source-assertions.json` для нового production/promotion-capable workflow;
-- `prompt.scope-assertions-to-reviewer.md` для независимой проверки source model;
 - `mockup-visual-inventory.md`, если подтвержденный UI scope включает mockup / screen image / `mockups/`;
 - `scope-coverage-gaps.md` с неоднозначностями и отсутствующими данными;
-- `scope-clarification-requests.md`, если в `scope-coverage-gaps.md` есть хотя бы один gap;
-- `scope-execution-options.md` с рекомендуемым следующим шагом;
-- `prompt.scope-gaps-to-reviewer.md`, если в `scope-coverage-gaps.md` есть хотя бы один `GAP-*`;
-- `prompt.scope-to-writer.md`, только если scope подтвержден и следующий этап действительно writer;
-- `prompt.scope-to-iteration.md`, если scope подтвержден и доступен полный writer-reviewer loop;
+- для подтвержденного practical scope: `scope-brief.md`, обязательные source-parity/row/mockup artifacts, `scope-coverage-gaps.md` и `scope-clarification-requests.md` только при конкретных scope-local gaps;
+- один активный handoff к matrix-only writer, если scope готов к следующей стадии;
 - при необходимости результаты `resolve_sections()` или `preview_chunks()`.
 
 ## Workflow
@@ -194,7 +189,7 @@ Minimum for `prompt.scope-gaps-to-reviewer.md`:
 2. Если для FT-пакета есть `AGENT-NOTES.md`, учти его как обязательный package-specific context.
 3. Если PDF-версия основного ФТ доступна, используй ее для сверки структуры разделов, заголовков и границ выбранного scope; PDF не заменяет DOCX или XHTML.
 4. Примени `scope-decomposition-policy.md`: если пользователь просит большое ФТ, весь документ или несколько разнородных разделов, сначала создай карту внешних candidate scope-ов по разделам/подразделам ФТ в режиме `agent-proposed-scope`.
-5. При `agent-proposed-scope` сохрани `scope-options.md` и `scope-selection-prompts.md` в контейнере `00-<container-slug>/`; не создавай handoff к writer и не создавай `scope-contract.md`, `source-parity-check.md`, `prompt.scope-to-writer.md` или `prompt.scope-to-iteration.md`, пока пользователь не выбрал один candidate scope.
+5. При `agent-proposed-scope` сохрани options/prompts в `00-<container-slug>/`; установи `awaiting-user-scope-selection`, `next_skill: ft-scope-analyzer` и пустой `blocking_reasons`. До выбора не создавай writer/scope-local/BA artifacts или `scope-contract.md`; scope-зависимую неизвестность укажи только как риск option. Исключение — source contradiction, исключающее безопасное разбиение.
 5a. Все source/scope handoff artifacts сохраняй только в numbered-папке `fts/<ft-slug>/work/stage-handoffs/NN-<scope-or-container-slug>/`. Не создавай `source-selection.md`, `scope-options.md`, `scope-selection-prompts.md`, `workflow-state.yaml` или session logs в корне FT-пакета.
 6. Если пользователь уже выбрал конкретный внешний scope, зафиксируй режим `manual-scope`.
 7. Если раздел большой, используй `preview_chunks()` и выдели только нужные фрагменты внутри выбранного внешнего scope.

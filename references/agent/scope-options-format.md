@@ -97,9 +97,8 @@
 
 ## Правила использования
 
-- `scope-options.md` не заменяет `scope-contract.md`.
-- Пока пользователь не утвердил один конкретный scope, не создавай `prompt.scope-to-writer.md` или `prompt.scope-to-iteration.md`.
-- После выбора одного candidate scope следующий шаг должен выпускать `scope-contract.md`, `scope-coverage-gaps.md`, source-first artifacts и `prompt.scope-assertions-to-reviewer.md`.
-- Writer/iteration prompts появляются только после accepted `source_assertion_review` либо в явно legacy/non-promotion route.
+- До выбора scope используй `awaiting-user-scope-selection`, а не `blocked-input`; создай только options/prompts, без scope-contract, writer/BA artifacts. Исключение — противоречие, не позволяющее безопасно выделить варианты.
+- После выбора `ft-scope-analyzer` создаёт scope brief и обязательные scope-local artifacts; practical route передаёт matrix-only writer, а canonical TC — только после accepted matrix review.
+- `scope-selection-prompts.md` содержит лишь путь FT и `scope_slug`.
 - Для новых candidate scope-ов фиксируй `Scope Order` и `Stage Handoff Dir`, чтобы пользователю не приходилось восстанавливать порядок по содержимому файлов.
 - Все человекочитаемые поля должны быть на русском языке.
