@@ -331,6 +331,26 @@ class PracticalStageSummaryValidatorTests(unittest.TestCase):
 
         self.assertIn("practical-stage-summary-validator-info-count-stale", ids)
 
+    def test_rejects_raw_error_count_that_does_not_match_validator(self) -> None:
+        root = self.make_package()
+        summary = root / "work" / "practical-stage-summary.md"
+        text = summary.read_text(encoding="utf-8").replace(
+            "| validator_errors_count | `0` |",
+            "\n".join(
+                [
+                    "| validator_raw_errors_count | `1` |",
+                    "| validator_errors_count | `0` |",
+                    "| validator_summary_self_check_errors_count | `0` |",
+                    "| validator_summary_self_check_errors_evidence | `not-applicable` |",
+                ]
+            ),
+        )
+        summary.write_text(text, encoding="utf-8")
+
+        ids = self.finding_ids(root)
+
+        self.assertIn("practical-stage-summary-validator-raw-error-count-stale", ids)
+
     def test_rejects_unapproved_split_between_code_and_ft_package_roots(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             base = Path(tmp)

@@ -26,7 +26,10 @@ v0.8.3. The file is a user-facing handoff and a machine-checkable gate.
 | validator_primary_root | `<absolute FT package root or not-applicable>` |
 | validator_supplementary_command | `<repo-root validator command or not-run>` |
 | validator_findings_breakdown | `tc_quality=<n>; process_artifact=<n>; validator_path_resolution=<n>; unrelated_repo=<n>` |
-| validator_errors_count | `<integer>` |
+| validator_raw_errors_count | `<integer: все ошибки package-root validator, включая self-check других stage summary>` |
+| validator_errors_count | `<integer: ошибки, влияющие на маршрутизацию; без practical-stage-summary self-check>` |
+| validator_summary_self_check_errors_count | `<integer: исключенный технический слой self-check>` |
+| validator_summary_self_check_errors_evidence | `<finding id и путь или not-applicable>` |
 | validator_scope_errors_count | `<integer for active_scope_ids, or not-applicable>` |
 | validator_scope_errors_evidence | `<finding ids or not-applicable>` |
 | validator_external_errors_count | `<integer for other scopes, or not-applicable>` |
@@ -142,9 +145,10 @@ v0.8.3. The file is a user-facing handoff and a machine-checkable gate.
 - Classify validator warning/error findings in `validator_findings_breakdown` as:
   `tc_quality`, `process_artifact`, `validator_path_resolution` or
   `unrelated_repo`.
+- `validator_raw_errors_count` показывает число из полного JSON-вывода primary validator. `validator_errors_count` — routing count: он не включает `practical-stage-summary` self-check, чтобы текущий summary не создавал циклический gate. `validator_raw_errors_count` должен равняться `validator_errors_count + validator_summary_self_check_errors_count`.
 - Если `validator_errors_classification = pre-existing-unrelated` или `mixed`, обязательно заполни `validator_scope_errors_*` и `validator_external_errors_*`: их количества должны в сумме давать `validator_errors_count`, а evidence для ненулевой части содержит каждый `finding id` и путь. Нельзя объявить ошибку «внешней» только текстом без проверяемого идентификатора и пути.
 - `validator_errors_count`, `validator_warnings_count` and
-  `validator_info_count` are the canonical counts. Do not repeat them as
+  `validator_info_count` are the canonical routing counts. Do not repeat them as
   unprefixed `errors_count`, `warnings_count` or `info_count`; if a secondary
   report table keeps such fields for a consumer, every duplicate must exactly
   match the canonical fields and the same validator run.

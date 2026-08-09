@@ -57,6 +57,58 @@ class RefreshPracticalStageSummaryTests(unittest.TestCase):
         self.assertEqual(result["validator_info_count"], 1)
         self.assertEqual(result["validator_info_evidence"], "source-quality-many-untitled-sections")
 
+    def test_error_layers_keep_raw_validator_output_auditable(self) -> None:
+        helper = self.load_helper()
+
+        result = helper.summarize_validator_error_layers(
+            [
+                {
+                    "severity": "error",
+                    "category": "practical-stage-summary",
+                    "id": "practical-stage-summary-validator-error-count-stale",
+                    "path": "work/practical/other/practical-stage-summary.md",
+                },
+                {
+                    "severity": "error",
+                    "category": "workflow-state",
+                    "id": "workflow-state-practical-code-version-stale",
+                    "path": "work/stage-handoffs/02-other/workflow-state.yaml",
+                },
+                {
+                    "severity": "warning",
+                    "category": "coverage",
+                    "id": "ignored-warning",
+                    "path": "work/coverage.md",
+                },
+            ]
+        )
+
+        self.assertEqual(result["validator_raw_errors_count"], 2)
+        self.assertEqual(result["validator_summary_self_check_errors_count"], 1)
+        self.assertEqual(
+            result["validator_summary_self_check_errors_evidence"],
+            "practical-stage-summary-validator-error-count-stale @ "
+            "work/practical/other/practical-stage-summary.md",
+        )
+        routing_ids = {
+            finding["id"]
+            for finding in helper.routing_validator_findings(
+                [
+                    {
+                        "severity": "error",
+                        "category": "practical-stage-summary",
+                        "id": "summary-self-check",
+                    },
+                    {
+                        "severity": "error",
+                        "category": "workflow-state",
+                        "id": "external-workflow-error",
+                    },
+                ]
+            )
+        }
+        self.assertEqual(routing_ids, {"external-workflow-error"})
+
     def test_validator_findings_breakdown_classifies_actionable_groups(self) -> None:
         helper = self.load_helper()
 
@@ -171,6 +223,9 @@ class RefreshPracticalStageSummaryTests(unittest.TestCase):
             validator_info_evidence="info-a; info-b",
             git_persistence="ignored-by-git",
             git_persistence_evidence=".gitignore:1:fts/* fts/Partners/Partners-v1",
+            validator_raw_errors_count=3,
+            validator_summary_self_check_errors_count=1,
+            validator_summary_self_check_errors_evidence="summary-check @ work/practical/other/practical-stage-summary.md",
         )
 
         output = helper.format_field_rows(refresh)
@@ -179,6 +234,8 @@ class RefreshPracticalStageSummaryTests(unittest.TestCase):
         self.assertIn("| validator_supplementary_command | `python scripts/validate_agent_artifacts.py --root . --json` |", output)
         self.assertIn("| validator_findings_breakdown | `tc_quality=0; process_artifact=3; validator_path_resolution=0; unrelated_repo=0` |", output)
         self.assertIn("| validator_errors_count | `0` |", output)
+        self.assertIn("| validator_raw_errors_count | `3` |", output)
+        self.assertIn("| validator_summary_self_check_errors_count | `1` |", output)
         self.assertIn("| validator_warnings_count | `3` |", output)
         self.assertIn("| validator_info_count | `4` |", output)
         self.assertIn("| git_persistence | `ignored-by-git` |", output)

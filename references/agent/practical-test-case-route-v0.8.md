@@ -264,7 +264,10 @@ not proof that the current scope test cases are bad.
 | validator_primary_root | `<absolute FT package root>` |
 | validator_supplementary_command | `<repo-root validator command or not-run>` |
 | validator_findings_breakdown | `tc_quality=<n>; process_artifact=<n>; validator_path_resolution=<n>; unrelated_repo=<n>` |
-| validator_errors_count | `<integer>` |
+| validator_raw_errors_count | `<integer: все ошибки package-root validator>` |
+| validator_errors_count | `<integer: routing count без practical-stage-summary self-check>` |
+| validator_summary_self_check_errors_count | `<integer>` |
+| validator_summary_self_check_errors_evidence | `<finding id и путь или not-applicable>` |
 | validator_scope_errors_count | `<integer for active_scope_ids, or not-applicable>` |
 | validator_scope_errors_evidence | `<finding ids and paths, or not-applicable>` |
 | validator_external_errors_count | `<integer for other scopes, or not-applicable>` |
@@ -283,6 +286,13 @@ not proof that the current scope test cases are bad.
 | source_restore_sha256 | `<SHA-256 bindings for restored files, or not-applicable>` |
 | review_launch_preflight_status | `not-run / allowed / blocked / not-applicable` |
 | review_launch_preflight_receipt | `<FT-relative review-launch-preflight-rN.json or not-applicable>` |
+
+`validator_raw_errors_count` — это полное число ошибок JSON-вывода primary
+validator. `validator_errors_count` — routing count, в который не входят
+технические `practical-stage-summary` self-check: иначе summary создавал бы
+циклическую проверку самого себя. Полный count обязан равняться
+`validator_errors_count + validator_summary_self_check_errors_count`; evidence
+исключенного слоя обязательно указывается отдельно.
 
 When `validator_errors_count > 0`, the summary must not say unconditional
 `writer allowed` or `tc-review allowed`. It must classify the errors and use a

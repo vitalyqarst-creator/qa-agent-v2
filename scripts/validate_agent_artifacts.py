@@ -8168,7 +8168,18 @@ def validate_practical_stage_summary_report_consistency(
         for finding in existing_findings
         if finding.category != "practical-stage-summary"
     ]
+    summary_self_check_findings = [
+        finding
+        for finding in existing_findings
+        if finding.category == "practical-stage-summary"
+    ]
     actual_errors_count = sum(1 for finding in counted_findings if finding.severity == "error")
+    actual_raw_errors_count = sum(
+        1 for finding in existing_findings if finding.severity == "error"
+    )
+    actual_summary_self_check_errors_count = sum(
+        1 for finding in summary_self_check_findings if finding.severity == "error"
+    )
     actual_warnings_count = sum(1 for finding in counted_findings if finding.severity == "warning")
     actual_info_count = sum(1 for finding in counted_findings if finding.severity == "info")
     actual_finding_ids = {finding.id for finding in counted_findings}
@@ -8209,6 +8220,151 @@ def validate_practical_stage_summary_report_consistency(
                 recommended_action="Rerun the validator after repair and update validator_errors_count before handoff.",
             )
         )
+
+    # `validator_errors_count` is deliberately routing-safe: it omits
+    # practical-stage-summary self-checks to avoid a circular gate. New
+    # summaries also expose the raw CLI count and the omitted layer so the
+    # two views are auditable without changing legacy summaries.
+    if "validator_raw_errors_count" in fields:
+        declared_raw_errors_count = parse_nonnegative_int(
+            fields["validator_raw_errors_count"]
+        )
+        if declared_raw_errors_count is None:
+            findings.append(
+                Finding(
+                    id="practical-stage-summary-validator-raw-error-count-invalid",
+                    severity="error",
+                    category="practical-stage-summary",
+                    title="Practical stage summary has an invalid raw validator error count",
+                    details=(
+                        "validator_raw_errors_count must be a non-negative integer from the complete "
+                        "package-root validator result."
+                    ),
+                    path=display_path,
+                    evidence=[
+                        f"validator_raw_errors_count={fields.get('validator_raw_errors_count', '<missing>')}"
+                    ],
+                    recommended_action=(
+                        "Refresh the summary and copy validator_raw_errors_count from "
+                        "refresh_practical_stage_summary.py."
+                    ),
+                )
+            )
+        elif declared_raw_errors_count != actual_raw_errors_count:
+            findings.append(
+                Finding(
+                    id="practical-stage-summary-validator-raw-error-count-stale",
+                    severity="error",
+                    category="practical-stage-summary",
+                    title="Practical stage summary has a stale raw validator error count",
+                    details=(
+                        "validator_raw_errors_count must match all errors emitted by the package-root "
+                        "validator, including practical-stage-summary self-checks from other scopes."
+                    ),
+                    path=display_path,
+                    evidence=[
+                        f"declared={declared_raw_errors_count}",
+                        f"actual={actual_raw_errors_count}",
+                    ],
+                    recommended_action=(
+                        "Rerun refresh_practical_stage_summary.py after every repair and update the raw count."
+                    ),
+                )
+            )
+
+        if "validator_summary_self_check_errors_count" not in fields:
+            findings.append(
+                Finding(
+                    id="practical-stage-summary-validator-self-check-layer-missing",
+                    severity="error",
+                    category="practical-stage-summary",
+                    title="Practical stage summary does not explain omitted self-check errors",
+                    details=(
+                        "A summary that reports validator_raw_errors_count must also state how many "
+                        "practical-stage-summary self-check errors are excluded from routing."
+                    ),
+                    path=display_path,
+                    evidence=["validator_summary_self_check_errors_count=<missing>"],
+                    recommended_action=(
+                        "Refresh the summary and include the self-check error count and evidence fields."
+                    ),
+                )
+            )
+        else:
+            declared_summary_self_check_errors_count = parse_nonnegative_int(
+                fields["validator_summary_self_check_errors_count"]
+            )
+            if declared_summary_self_check_errors_count is None:
+                findings.append(
+                    Finding(
+                        id="practical-stage-summary-validator-self-check-layer-invalid",
+                        severity="error",
+                        category="practical-stage-summary",
+                        title="Practical stage summary has an invalid self-check error count",
+                        details=(
+                            "validator_summary_self_check_errors_count must be a non-negative integer."
+                        ),
+                        path=display_path,
+                        evidence=[
+                            "validator_summary_self_check_errors_count="
+                            f"{fields.get('validator_summary_self_check_errors_count', '<missing>')}"
+                        ],
+                        recommended_action=(
+                            "Refresh the summary and copy the generated self-check error count."
+                        ),
+                    )
+                )
+            elif (
+                declared_summary_self_check_errors_count
+                != actual_summary_self_check_errors_count
+            ):
+                findings.append(
+                    Finding(
+                        id="practical-stage-summary-validator-self-check-layer-stale",
+                        severity="error",
+                        category="practical-stage-summary",
+                        title="Practical stage summary has a stale self-check error count",
+                        details=(
+                            "The self-check layer must match the practical-stage-summary errors emitted by "
+                            "the package-root validator."
+                        ),
+                        path=display_path,
+                        evidence=[
+                            f"declared={declared_summary_self_check_errors_count}",
+                            f"actual={actual_summary_self_check_errors_count}",
+                        ],
+                        recommended_action=(
+                            "Refresh the summary after repairing other practical stage summaries."
+                        ),
+                    )
+                )
+            elif (
+                declared_raw_errors_count is not None
+                and declared_errors_count is not None
+                and declared_raw_errors_count
+                != declared_errors_count + declared_summary_self_check_errors_count
+            ):
+                findings.append(
+                    Finding(
+                        id="practical-stage-summary-validator-error-layer-count-mismatch",
+                        severity="error",
+                        category="practical-stage-summary",
+                        title="Practical stage summary has inconsistent raw and routing error counts",
+                        details=(
+                            "The raw count must equal the routing count plus practical-stage-summary self-check "
+                            "errors, so users can reconcile the stage summary with validator CLI output."
+                        ),
+                        path=display_path,
+                        evidence=[
+                            f"raw={declared_raw_errors_count}",
+                            f"routing={declared_errors_count}",
+                            f"self_check={declared_summary_self_check_errors_count}",
+                        ],
+                        recommended_action=(
+                            "Refresh all three validator error-layer fields from one validator run."
+                        ),
+                    )
+                )
 
     if "validator_warnings_count" in fields and declared_warnings_count is None:
         findings.append(

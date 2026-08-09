@@ -45,6 +45,12 @@ class SummaryRefresh:
     validator_scope_errors_evidence: str = "not-applicable"
     validator_external_errors_count: int | None = None
     validator_external_errors_evidence: str = "not-applicable"
+    # The canonical routing count intentionally omits practical-stage-summary
+    # self-checks to avoid a circular handoff gate. Keep the raw count visible
+    # nevertheless, so a user can reconcile this summary with the validator CLI.
+    validator_raw_errors_count: int = 0
+    validator_summary_self_check_errors_count: int = 0
+    validator_summary_self_check_errors_evidence: str = "not-applicable"
 
 
 def _relative_to_root(root: Path, path: Path) -> str:
@@ -90,12 +96,18 @@ def detect_git_persistence(root: Path, summary_path: Path) -> GitPersistence:
     return GitPersistence("not-applicable", f"not tracked and not ignored: {rel}")
 
 
-def summarize_validator_findings(findings: list[dict[str, Any]]) -> dict[str, Any]:
-    counted = [
+def routing_validator_findings(findings: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Return findings that are eligible for a next-stage routing decision."""
+
+    return [
         finding
         for finding in findings
         if str(finding.get("category", "")) != SUMMARY_CATEGORY
     ]
+
+
+def summarize_validator_findings(findings: list[dict[str, Any]]) -> dict[str, Any]:
+    counted = routing_validator_findings(findings)
     error_ids = sorted(
         {
             str(finding.get("id", "<missing-id>"))
@@ -132,6 +144,32 @@ def summarize_validator_findings(findings: list[dict[str, Any]]) -> dict[str, An
             [finding for finding in counted if finding.get("severity") == "info"]
         ),
         "validator_info_evidence": "; ".join(info_ids) if info_ids else "not-applicable",
+    }
+
+
+def summarize_validator_error_layers(findings: list[dict[str, Any]]) -> dict[str, Any]:
+    """Expose raw error output separately from routing-safe summary self-checks."""
+
+    raw_errors = [finding for finding in findings if finding.get("severity") == "error"]
+    summary_self_checks = [
+        finding
+        for finding in raw_errors
+        if str(finding.get("category", "")) == SUMMARY_CATEGORY
+    ]
+
+    def evidence(rows: list[dict[str, Any]]) -> str:
+        items = sorted(
+            {
+                f"{finding.get('id', '<missing-id>')} @ {finding.get('path', '<missing-path>')}"
+                for finding in rows
+            }
+        )
+        return "; ".join(items) if items else "not-applicable"
+
+    return {
+        "validator_raw_errors_count": len(raw_errors),
+        "validator_summary_self_check_errors_count": len(summary_self_checks),
+        "validator_summary_self_check_errors_evidence": evidence(summary_self_checks),
     }
 
 
@@ -231,7 +269,10 @@ def build_refresh(
     primary_root = primary_root.resolve()
     primary_root_display = _relative_to_root(root, primary_root)
     report = artifact_validator.validate(primary_root)
-    validator_summary = summarize_validator_findings(report.get("findings", []))
+    report_findings = report.get("findings", [])
+    validator_summary = summarize_validator_findings(report_findings)
+    validator_error_layers = summarize_validator_error_layers(report_findings)
+    routing_findings = routing_validator_findings(report_findings)
     validator_findings_breakdown = format_validator_findings_breakdown(
         report.get("findings", [])
     )
@@ -250,7 +291,7 @@ def build_refresh(
             external_error_count = 0
         else:
             partition = review_preflight.partition_validator_errors(
-                report.get("findings", []), descriptors, primary_root
+                routing_findings, descriptors, primary_root
             )
             scope_error_count = len(partition["scope_relevant"]) + len(
                 partition["package_global"]
@@ -285,6 +326,13 @@ def build_refresh(
         validator_scope_errors_evidence=scope_error_evidence,
         validator_external_errors_count=external_error_count,
         validator_external_errors_evidence=external_error_evidence,
+        validator_raw_errors_count=int(validator_error_layers["validator_raw_errors_count"]),
+        validator_summary_self_check_errors_count=int(
+            validator_error_layers["validator_summary_self_check_errors_count"]
+        ),
+        validator_summary_self_check_errors_evidence=str(
+            validator_error_layers["validator_summary_self_check_errors_evidence"]
+        ),
     )
 
 
@@ -298,7 +346,16 @@ def format_field_rows(refresh: SummaryRefresh) -> str:
         ("validator_primary_root", refresh.validator_primary_root),
         ("validator_supplementary_command", refresh.validator_supplementary_command),
         ("validator_findings_breakdown", refresh.validator_findings_breakdown),
+        ("validator_raw_errors_count", refresh.validator_raw_errors_count),
         ("validator_errors_count", refresh.validator_errors_count),
+        (
+            "validator_summary_self_check_errors_count",
+            refresh.validator_summary_self_check_errors_count,
+        ),
+        (
+            "validator_summary_self_check_errors_evidence",
+            refresh.validator_summary_self_check_errors_evidence,
+        ),
         ("validator_errors_evidence", refresh.validator_errors_evidence),
         ("validator_warnings_count", refresh.validator_warnings_count),
         ("validator_warnings_evidence", refresh.validator_warnings_evidence),
