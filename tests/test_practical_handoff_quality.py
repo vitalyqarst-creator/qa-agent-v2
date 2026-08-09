@@ -40,6 +40,13 @@ class PracticalHandoffQualityTests(unittest.TestCase):
                     "| `ATOM-001` | Действие выполняется для подготовленного объекта. | `ready` |",
                     "| `ATOM-002` | Действие доступно пользователю с заданными правами. | `needs-test-data` |",
                     "",
+                    "## Предпосылки исполнения",
+                    "",
+                    "| Затронутые проверки | Исполнитель | Объект и исходное состояние | Статус исполнения |",
+                    "| --- | --- | --- | --- |",
+                    "| `ATOM-001` | Пользователь с доступом. | Подготовленный объект. | `ready` |",
+                    "| `ATOM-002` | Пользователь с заданными правами. | Подготовленный объект. | `needs-test-data` |",
+                    "",
                     "## Зависимости от тестовых данных",
                     "",
                     "| Подготовка | Затронутые проверки | Статус исполнения |",
@@ -60,6 +67,42 @@ class PracticalHandoffQualityTests(unittest.TestCase):
 
         finding_ids = {finding.id for finding in findings}
         self.assertIn("practical-scope-brief-data-dependency-status-mismatch", finding_ids)
+
+    def test_scope_brief_requires_prerequisites_for_every_planned_check(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            brief = root / "scope-brief.md"
+            self.write_scope_brief(brief)
+            brief.write_text(
+                brief.read_text(encoding="utf-8").replace(
+                    "| `ATOM-002` | Пользователь с заданными правами. | Подготовленный объект. | `needs-test-data` |\n",
+                    "",
+                ),
+                encoding="utf-8",
+            )
+
+            findings, _ = self.validator.validate_practical_scope_brief(brief, root)
+
+        finding_ids = {finding.id for finding in findings}
+        self.assertIn("practical-scope-brief-execution-prerequisites-inconsistent", finding_ids)
+
+    def test_scope_brief_requires_actor_and_initial_state_for_missing_data(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            brief = root / "scope-brief.md"
+            self.write_scope_brief(brief)
+            brief.write_text(
+                brief.read_text(encoding="utf-8").replace(
+                    "| `ATOM-002` | Пользователь с заданными правами. | Подготовленный объект. | `needs-test-data` |",
+                    "| `ATOM-002` | Не требуется. | Не требуется. | `needs-test-data` |",
+                ),
+                encoding="utf-8",
+            )
+
+            findings, _ = self.validator.validate_practical_scope_brief(brief, root)
+
+        finding_ids = {finding.id for finding in findings}
+        self.assertIn("practical-scope-brief-execution-prerequisites-inconsistent", finding_ids)
 
     def test_scope_brief_rejects_english_visible_handoff_text(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

@@ -3512,13 +3512,115 @@ def validate_practical_scope_brief(path: Path, root: Path) -> tuple[list[Finding
         checks.append(Check("practical-scope-brief-data-dependencies", "fail", "Planned checks table is missing.", display_path))
         return findings, checks
 
-    needs_test_data_ids: set[str] = set()
+    planned_statuses: dict[str, str] = {}
     for row in planned_rows[1:]:
         if max(planned_columns.values()) >= len(row):
             continue
         status = normalize_markdown_field_value(row[planned_columns["status"]]).casefold()
-        if status == "needs-test-data":
-            needs_test_data_ids.update(re.findall(r"\bATOM-[A-Z0-9-]+\b", row[planned_columns["id"]], flags=re.IGNORECASE))
+        for atom_id in re.findall(r"\bATOM-[A-Z0-9-]+\b", row[planned_columns["id"]], flags=re.IGNORECASE):
+            planned_statuses[atom_id.upper()] = status
+
+    execution_section = extract_markdown_section(content, "Предпосылки исполнения")
+    execution_rows = markdown_table_rows_from_text(execution_section or "")
+    execution_columns = _practical_table_column_indexes(
+        execution_rows,
+        {
+            "affected": {"затронутые проверки"},
+            "actor": {"исполнитель"},
+            "object_state": {"объект и исходное состояние"},
+            "status": {"статус исполнения"},
+        },
+    )
+    if execution_columns is None:
+        findings.append(
+            Finding(
+                id="practical-scope-brief-execution-prerequisites-missing",
+                severity="error",
+                category="practical-handoff",
+                title="Practical scope brief lacks execution-prerequisite mapping",
+                details=(
+                    "Every planned check must have an actor, object/initial-state and execution-status mapping "
+                    "before writer launch."
+                ),
+                path=display_path,
+                evidence=sorted(planned_statuses),
+                recommended_action=(
+                    "Add `## Предпосылки исполнения` with affected checks, actor, object/initial state and "
+                    "execution status."
+                ),
+            )
+        )
+        checks.append(
+            Check(
+                "practical-scope-brief-execution-prerequisites",
+                "fail",
+                "Execution-prerequisite table is missing.",
+                display_path,
+            )
+        )
+    else:
+        execution_statuses: dict[str, str] = {}
+        duplicated_ids: set[str] = set()
+        incomplete_needs_data_ids: set[str] = set()
+        for row in execution_rows[1:]:
+            if max(execution_columns.values()) >= len(row):
+                continue
+            actor = normalize_markdown_field_value(row[execution_columns["actor"]]).casefold().strip(" .;:")
+            object_state = normalize_markdown_field_value(row[execution_columns["object_state"]]).casefold().strip(" .;:")
+            status = normalize_markdown_field_value(row[execution_columns["status"]]).casefold()
+            for atom_id in re.findall(r"\bATOM-[A-Z0-9-]+\b", row[execution_columns["affected"]], flags=re.IGNORECASE):
+                atom_id = atom_id.upper()
+                if atom_id in execution_statuses:
+                    duplicated_ids.add(atom_id)
+                execution_statuses[atom_id] = status
+                if status == "needs-test-data" and (not actor or not object_state or actor == "не требуется" or object_state == "не требуется"):
+                    incomplete_needs_data_ids.add(atom_id)
+
+        missing_ids = set(planned_statuses) - set(execution_statuses)
+        unknown_ids = set(execution_statuses) - set(planned_statuses)
+        mismatched_ids = {
+            atom_id
+            for atom_id, status in execution_statuses.items()
+            if planned_statuses.get(atom_id) != status
+        }
+        if missing_ids or unknown_ids or duplicated_ids or mismatched_ids or incomplete_needs_data_ids:
+            findings.append(
+                Finding(
+                    id="practical-scope-brief-execution-prerequisites-inconsistent",
+                    severity="error",
+                    category="practical-handoff",
+                    title="Practical scope brief has incomplete execution prerequisites",
+                    details=(
+                        "Execution prerequisites must cover each planned ATOM exactly once, match its status, and "
+                        "name actor plus object/initial state for needs-test-data checks."
+                    ),
+                    path=display_path,
+                    evidence=[
+                        *(f"missing={item}" for item in sorted(missing_ids)),
+                        *(f"unknown={item}" for item in sorted(unknown_ids)),
+                        *(f"duplicate={item}" for item in sorted(duplicated_ids)),
+                        *(f"status-mismatch={item}" for item in sorted(mismatched_ids)),
+                        *(f"incomplete-needs-data={item}" for item in sorted(incomplete_needs_data_ids)),
+                    ][:20],
+                    recommended_action=(
+                        "Map every planned ATOM to one actor/object-state prerequisite and synchronize its status."
+                    ),
+                )
+            )
+        checks.append(
+            Check(
+                "practical-scope-brief-execution-prerequisites",
+                "fail" if missing_ids or unknown_ids or duplicated_ids or mismatched_ids or incomplete_needs_data_ids else "pass",
+                "Execution prerequisites are inconsistent."
+                if missing_ids or unknown_ids or duplicated_ids or mismatched_ids or incomplete_needs_data_ids
+                else "Execution prerequisites cover all planned checks.",
+                display_path,
+            )
+        )
+
+    needs_test_data_ids = {
+        atom_id for atom_id, status in planned_statuses.items() if status == "needs-test-data"
+    }
 
     if not needs_test_data_ids:
         checks.append(Check("practical-scope-brief-data-dependencies", "pass", "No needs-test-data planned checks.", display_path))
