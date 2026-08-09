@@ -92,6 +92,120 @@ class PracticalHandoffQualityTests(unittest.TestCase):
         self.assertEqual([], findings)
         self.assertTrue(all(check.status == "pass" for check in checks))
 
+    def test_scope_brief_requires_one_uncertainty_type_for_each_gap(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            brief = root / "scope-brief.md"
+            self.write_scope_brief(brief)
+            brief.write_text(
+                brief.read_text(encoding="utf-8")
+                + "\n## Открытые вопросы\n\n- `GAP-001`: Не определено продуктовое правило.\n",
+                encoding="utf-8",
+            )
+
+            findings, _ = self.validator.validate_practical_scope_brief(brief, root)
+
+        finding_ids = {finding.id for finding in findings}
+        self.assertIn("practical-scope-brief-uncertainty-classification-missing", finding_ids)
+
+    def test_scope_brief_accepts_complete_uncertainty_classification(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            brief = root / "scope-brief.md"
+            self.write_scope_brief(brief)
+            brief.write_text(
+                brief.read_text(encoding="utf-8")
+                + "\n## Открытые вопросы\n\n- `GAP-001`: Не определено продуктовое правило.\n"
+                + "\n## Неопределённости и классификация\n\n"
+                + "| Идентификатор | Тип неопределённости | Дальнейшее действие |\n"
+                + "| --- | --- | --- |\n"
+                + "| `GAP-001` | `ba-business-ambiguity` | Задать вопрос БА. |\n",
+                encoding="utf-8",
+            )
+
+            findings, checks = self.validator.validate_practical_scope_brief(brief, root)
+
+        self.assertEqual([], findings)
+        self.assertTrue(all(check.status == "pass" for check in checks))
+
+    def test_scope_brief_rejects_candidate_ui_status_that_hides_missing_setup(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            brief = root / "scope-brief.md"
+            self.write_scope_brief(brief)
+            brief.write_text(
+                brief.read_text(encoding="utf-8")
+                .replace("| `ATOM-002` | Действие доступно пользователю с заданными правами. | `needs-test-data` |", "| `ATOM-002` | Действие доступно пользователю с заданными правами. | `candidate-ui-calibration` |")
+                .replace("| `ATOM-002` | Пользователь с заданными правами. | Подготовленный объект. | `SETUP-ACCESS-001` | Отсутствует: учетная запись с заданными правами. | `needs-test-data` |", "| `ATOM-002` | Пользователь с заданными правами. | Подготовленный объект. | `SETUP-ACCESS-001` | Отсутствует: учетная запись с заданными правами. | `candidate-ui-calibration` |"),
+                encoding="utf-8",
+            )
+
+            findings, _ = self.validator.validate_practical_scope_brief(brief, root)
+
+        finding_ids = {finding.id for finding in findings}
+        self.assertIn("practical-scope-brief-execution-prerequisites-incomplete", finding_ids)
+
+    def test_scope_brief_rejects_renamed_gap_in_linked_parity_artifact(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            brief = root / "scope-brief.md"
+            self.write_scope_brief(brief)
+            (root / "source-parity-check.md").write_text(
+                "# Сверка источников\n\n- `GAP-OTHER-001`: Расхождение источников.\n",
+                encoding="utf-8",
+            )
+            brief.write_text(
+                brief.read_text(encoding="utf-8")
+                + "\n## Источники\n\n- `source-parity-check.md`\n"
+                + "\n## Открытые вопросы\n\n- `GAP-001`: Не определено продуктовое правило.\n"
+                + "\n## Неопределённости и классификация\n\n"
+                + "| Идентификатор | Тип неопределённости | Дальнейшее действие |\n"
+                + "| --- | --- | --- |\n"
+                + "| `GAP-001` | `ba-business-ambiguity` | Задать вопрос БА. |\n",
+                encoding="utf-8",
+            )
+
+            findings, _ = self.validator.validate_practical_scope_brief(brief, root)
+
+        finding_ids = {finding.id for finding in findings}
+        self.assertIn("practical-scope-brief-linked-gap-id-mismatch", finding_ids)
+
+    def test_practical_clarification_rejects_ui_detail_and_external_boundary_questions(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            clarification = root / "scope-clarification-requests.md"
+            clarification.write_text(
+                "\n".join(
+                    [
+                        "## Clarification Requests",
+                        "",
+                        "```yaml",
+                        "clarification_id: CLR-001",
+                        "gap_id: GAP-001",
+                        "request_kind: ba-business-ambiguity",
+                        "question: Какой экран или видимый признак подтверждает успешный переход?",
+                        "```",
+                        "",
+                        "```yaml",
+                        "clarification_id: CLR-002",
+                        "gap_id: GAP-002",
+                        "request_kind: ba-business-ambiguity",
+                        "question: Какие роли будут описаны в ФТ 11?",
+                        "```",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            findings, _ = self.validator.validate_practical_clarification_requests(
+                clarification,
+                root,
+                {"GAP-001", "GAP-002"},
+            )
+
+        finding_ids = {finding.id for finding in findings}
+        self.assertIn("practical-clarification-request-classification-invalid", finding_ids)
+
     def test_scope_brief_does_not_require_fixture_data_for_a_simple_screen_entry(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -942,6 +1056,34 @@ class PracticalHandoffQualityTests(unittest.TestCase):
 
         finding_ids = {finding.id for finding in findings}
         self.assertIn("practical-scope-analyzer-legacy-artifacts-present", finding_ids)
+
+    def test_practical_route_does_not_emit_legacy_log_findings(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            handoff = root / "work" / "stage-handoffs" / "01-menu"
+            handoff.mkdir(parents=True)
+            workflow = handoff / "workflow-state.yaml"
+            workflow.write_text(
+                "\n".join(
+                    [
+                        "ft_slug: Sample",
+                        "scope_slug: menu",
+                        "route_profile: practical_v0_8",
+                        "current_stage: ft-scope-analyzer",
+                        "stage_status: blocked-input",
+                        "next_skill: none",
+                        "required_inputs: []",
+                        "latest_artifacts: {}",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            findings, _ = self.validator.validate_workflow_state(workflow, root)
+
+        finding_ids = {finding.id for finding in findings}
+        self.assertNotIn("workflow-state-missing-session-log", finding_ids)
+        self.assertNotIn("workflow-state-missing-decision-log", finding_ids)
 
 
 if __name__ == "__main__":

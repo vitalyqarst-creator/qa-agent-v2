@@ -215,7 +215,9 @@ TEST_CASE_ID_RE = re.compile(r"\bTC-[A-Za-z0-9_-]+\b")
 ATOM_ID_RE = re.compile(r"\bATOM-\d{3,}\b")
 SCOPED_ATOM_ID_RE = re.compile(r"[A-Z0-9-]+-ATOM-\d{3,}")
 ANY_ATOM_ID_RE = re.compile(r"\b(?:[A-Z0-9-]+-)?ATOM-\d{3,}\b")
-GAP_ID_RE = re.compile(r"\b(?:GAP-\d{3,}|coverage_gap:[a-z0-9][a-z0-9_-]*)\b")
+GAP_ID_RE = re.compile(
+    r"\b(?:GAP-(?:[A-Za-z0-9]+-)*\d{3,}|coverage_gap:[a-z0-9][a-z0-9_-]*)\b"
+)
 DICT_ID_PATTERN = r"DICT-[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9])?"
 DICT_ID_RE = re.compile(rf"\b{DICT_ID_PATTERN}\b")
 FINDING_ID_RE = re.compile(r"\b(?:USER-)?FINDING(?:-[A-Z]+)?-\d{3,}\b")
@@ -3553,6 +3555,153 @@ PRACTICAL_GAP_AGENT_PROSE_LABELS = {
     "reviewer rule",
 }
 
+PRACTICAL_UNCERTAINTY_KINDS = {
+    "ba-business-ambiguity",
+    "ui-calibration",
+    "external-scope-boundary",
+    "test-data-setup",
+}
+PRACTICAL_BA_REQUEST_KIND = "ba-business-ambiguity"
+
+
+def practical_uncertainty_classification_section(content: str) -> str | None:
+    """Return the optional practical uncertainty-classification section."""
+
+    match = re.search(
+        r"^#{1,6}\s+Неопредел[её]нност\w*\s+и\s+классификац\w*.*$",
+        content,
+        flags=re.IGNORECASE | re.MULTILINE,
+    )
+    if match is None:
+        return None
+    next_heading = re.search(r"^#{1,6}\s+", content[match.end():], flags=re.MULTILINE)
+    end = match.end() + next_heading.start() if next_heading else len(content)
+    return content[match.end():end]
+
+
+def practical_scope_brief_uncertainty_ids(content: str) -> set[str]:
+    """Return GAP identifiers declared by the compact practical brief."""
+
+    return {gap_id.upper() for gap_id in extract_gap_ids_from_text(content)}
+
+
+def practical_scope_brief_artifact_paths(
+    content: str,
+    path: Path,
+    root: Path,
+    artifact_name: str,
+) -> list[Path]:
+    """Resolve only explicitly linked supporting artefacts from a scope brief."""
+
+    ft_root = nearest_ft_package_root(path) or path.parent
+    paths: list[Path] = []
+    for raw_path in extract_prompt_refs(content):
+        if Path(strip_quotes(raw_path)).name != artifact_name:
+            continue
+        paths.extend(
+            candidate
+            for candidate in prompt_ref_candidates(raw_path, path, root, ft_root)
+            if candidate.is_file()
+        )
+    return [candidate for candidate in dedupe_paths(paths) if candidate.is_file()]
+
+
+def validate_practical_clarification_requests(
+    path: Path,
+    root: Path,
+    declared_gap_ids: set[str],
+) -> tuple[list[Finding], list[Check]]:
+    """Validate that practical CLR cards request only business decisions.
+
+    The route must not turn UI calibration, test setup or a future FT boundary
+    into a BA question.  We intentionally keep this parser small: it reads only
+    the typed YAML blocks supplied by the canonical clarification format.
+    """
+
+    content = path.read_text(encoding="utf-8")
+    display_path = rel(path, root)
+    cards: list[dict[str, str]] = []
+    for block in re.findall(r"```(?:yaml|yml)\s*\n(.*?)```", content, flags=re.IGNORECASE | re.DOTALL):
+        card = {
+            key.casefold(): normalize_markdown_field_value(value)
+            for key, value in re.findall(r"^([A-Za-z_][A-Za-z0-9_-]*):\s*(.*?)\s*$", block, flags=re.MULTILINE)
+        }
+        if "clarification_id" in card:
+            cards.append(card)
+
+    missing_kind_ids: list[str] = []
+    invalid_kind_ids: list[str] = []
+    unknown_gap_ids: list[str] = []
+    external_boundary_ids: list[str] = []
+    ui_detail_ids: list[str] = []
+    for card in cards:
+        clarification_id = card.get("clarification_id", "CLR-?")
+        request_kind = card.get("request_kind", "").casefold()
+        gap_id = card.get("gap_id", "").upper()
+        if not request_kind:
+            missing_kind_ids.append(clarification_id)
+        elif request_kind != PRACTICAL_BA_REQUEST_KIND:
+            invalid_kind_ids.append(f"{clarification_id}={request_kind}")
+        if gap_id and gap_id not in declared_gap_ids:
+            unknown_gap_ids.append(f"{clarification_id}={gap_id}")
+
+        question = card.get("question", "")
+        normalized_question = question.casefold()
+        future_ft_reference = bool(
+            re.search(
+                r"(?:буд(?:ет|ут)\s+(?:описан\w*|определ[её]н\w*|реализован\w*).{0,80}(?:ф[тt]|ft)\s*\d+|"
+                r"(?:ф[тt]|ft)\s*\d+.{0,80}буд(?:ет|ут)\s+(?:описан\w*|определ[её]н\w*|реализован\w*))",
+                normalized_question,
+                flags=re.IGNORECASE,
+            )
+        )
+        if future_ft_reference:
+            external_boundary_ids.append(clarification_id)
+        if re.search(
+            r"(?:какой\s+(?:экран|раздел|форма|видим\w*\s+признак)|"
+            r"какое\s+(?:сообщение|уведомление)|какая\s+подсветк\w*)",
+            normalized_question,
+            flags=re.IGNORECASE,
+        ):
+            ui_detail_ids.append(clarification_id)
+
+    findings: list[Finding] = []
+    if missing_kind_ids or invalid_kind_ids or unknown_gap_ids or external_boundary_ids or ui_detail_ids:
+        findings.append(
+            Finding(
+                id="practical-clarification-request-classification-invalid",
+                severity="error",
+                category="practical-handoff",
+                title="Practical clarification requests contain a non-BA uncertainty",
+                details=(
+                    "A practical CLR card is reserved for one unresolved business rule inside the selected scope. "
+                    "UI details, test setup and future/external FT boundaries belong in scope-brief.md."
+                ),
+                path=display_path,
+                evidence=[
+                    *(f"missing-request-kind={item}" for item in missing_kind_ids),
+                    *(f"invalid-request-kind={item}" for item in invalid_kind_ids),
+                    *(f"unknown-gap={item}" for item in unknown_gap_ids),
+                    *(f"external-scope-boundary={item}" for item in external_boundary_ids),
+                    *(f"ui-calibration={item}" for item in ui_detail_ids),
+                ][:20],
+                recommended_action=(
+                    "Keep only `request_kind: ba-business-ambiguity` cards in this file; classify the other "
+                    "uncertainties in scope-brief.md and link each valid card to its exact GAP-* id."
+                ),
+            )
+        )
+    return findings, [
+        Check(
+            "practical-clarification-request-classification",
+            "fail" if findings else "pass",
+            "Clarification requests contain a non-BA uncertainty."
+            if findings
+            else "Clarification requests are limited to business ambiguity.",
+            display_path,
+        )
+    ]
+
 
 def practical_scope_gap_language_evidence(content: str) -> list[str]:
     """Return English in explanatory gap values, not schema labels or quotes."""
@@ -3706,6 +3855,126 @@ def validate_practical_scope_brief(path: Path, root: Path) -> tuple[list[Finding
             flags=re.IGNORECASE,
         ):
             unspecified_date_constraints.append(atom_label)
+
+    declared_gap_ids = practical_scope_brief_uncertainty_ids(content)
+    uncertainty_section = practical_uncertainty_classification_section(content)
+    if declared_gap_ids and uncertainty_section is None:
+        findings.append(
+            Finding(
+                id="practical-scope-brief-uncertainty-classification-missing",
+                severity="error",
+                category="practical-handoff",
+                title="Practical scope brief does not classify its uncertainties",
+                details=(
+                    "Every GAP-* in a practical handoff must be classified before matrix writing so a BA question, "
+                    "UI calibration, external boundary and missing test setup cannot be confused."
+                ),
+                path=display_path,
+                evidence=sorted(declared_gap_ids)[:20],
+                recommended_action=(
+                    "Add `## Неопределённости и классификация` with one row per GAP-* and a permitted "
+                    "uncertainty type."
+                ),
+            )
+        )
+        checks.append(
+            Check(
+                "practical-scope-brief-uncertainty-classification",
+                "fail",
+                "GAP-* items have no uncertainty classification.",
+                display_path,
+            )
+        )
+    elif uncertainty_section is not None:
+        uncertainty_rows = markdown_table_rows_from_text(uncertainty_section)
+        uncertainty_columns = _practical_table_column_indexes(
+            uncertainty_rows,
+            {
+                "id": {"идентификатор"},
+                "kind": {"тип неопределенности", "тип неопределённости"},
+                "handling": {"дальнейшее действие", "обработка"},
+            },
+        )
+        classified_gap_ids: set[str] = set()
+        duplicate_gap_ids: set[str] = set()
+        invalid_kind_rows: list[str] = []
+        invalid_handling_rows: list[str] = []
+        if uncertainty_columns is None:
+            invalid_handling_rows.append("missing-required-columns")
+        else:
+            for row in uncertainty_rows[1:]:
+                if max(uncertainty_columns.values()) >= len(row):
+                    continue
+                row_gap_ids = {
+                    gap_id.upper()
+                    for gap_id in re.findall(
+                        r"\bGAP-[A-Z0-9-]+\b",
+                        row[uncertainty_columns["id"]],
+                        flags=re.IGNORECASE,
+                    )
+                }
+                kind = normalize_markdown_field_value(row[uncertainty_columns["kind"]]).strip("`").casefold()
+                handling = normalize_markdown_field_value(row[uncertainty_columns["handling"]]).casefold()
+                for gap_id in row_gap_ids:
+                    if gap_id in classified_gap_ids:
+                        duplicate_gap_ids.add(gap_id)
+                    classified_gap_ids.add(gap_id)
+                    if kind not in PRACTICAL_UNCERTAINTY_KINDS:
+                        invalid_kind_rows.append(f"{gap_id}={kind or '-'}")
+                    required_hint = {
+                        "ba-business-ambiguity": "вопрос",
+                        "ui-calibration": "калибров",
+                        "external-scope-boundary": "вне",
+                        "test-data-setup": "тестов",
+                    }.get(kind)
+                    if required_hint and required_hint not in handling:
+                        invalid_handling_rows.append(f"{gap_id}={kind}")
+        missing_classifications = declared_gap_ids - classified_gap_ids
+        unknown_classifications = classified_gap_ids - declared_gap_ids
+        if missing_classifications or unknown_classifications or duplicate_gap_ids or invalid_kind_rows or invalid_handling_rows:
+            findings.append(
+                Finding(
+                    id="practical-scope-brief-uncertainty-classification-invalid",
+                    severity="error",
+                    category="practical-handoff",
+                    title="Practical scope brief has an invalid uncertainty classification",
+                    details=(
+                        "Each GAP-* must have one permitted uncertainty type and a matching handling decision before "
+                        "writer launch."
+                    ),
+                    path=display_path,
+                    evidence=[
+                        *(f"missing={item}" for item in sorted(missing_classifications)),
+                        *(f"unknown={item}" for item in sorted(unknown_classifications)),
+                        *(f"duplicate={item}" for item in sorted(duplicate_gap_ids)),
+                        *(f"invalid-kind={item}" for item in invalid_kind_rows),
+                        *(f"invalid-handling={item}" for item in invalid_handling_rows),
+                    ][:20],
+                    recommended_action=(
+                        "Classify every declared GAP-* exactly once as business ambiguity, UI calibration, external "
+                        "scope boundary or test-data setup, then record the matching next action."
+                    ),
+                )
+            )
+        checks.append(
+            Check(
+                "practical-scope-brief-uncertainty-classification",
+                "fail" if missing_classifications or unknown_classifications or duplicate_gap_ids or invalid_kind_rows or invalid_handling_rows else "pass",
+                "Uncertainty classification is inconsistent."
+                if missing_classifications or unknown_classifications or duplicate_gap_ids or invalid_kind_rows or invalid_handling_rows
+                else "All GAP-* items have one valid uncertainty classification.",
+                display_path,
+            )
+        )
+    else:
+        checks.append(
+            Check(
+                "practical-scope-brief-uncertainty-classification",
+                "pass",
+                "No GAP-* items require uncertainty classification.",
+                display_path,
+            )
+        )
 
     negative_candidates = markdown_table_rows_from_text(
         extract_markdown_section_prefix(content, "Кандидаты отрицательных проверок") or ""
@@ -3989,6 +4258,7 @@ def validate_practical_scope_brief(path: Path, root: Path) -> tuple[list[Finding
         invalid_setup_key_ids: set[str] = set()
         role_or_state_without_fixture_ids: set[str] = set()
         generic_ready_actor_ids: set[str] = set()
+        missing_setup_hidden_by_status_ids: set[str] = set()
         for row in execution_rows[1:]:
             if max(execution_columns.values()) >= len(row):
                 continue
@@ -4047,6 +4317,8 @@ def validate_practical_scope_brief(path: Path, root: Path) -> tuple[list[Finding
                     incomplete_preparation_evidence_ids.add(atom_id)
                 if (no_setup_needed and setup_keys) or (not no_setup_needed and not setup_keys):
                     invalid_setup_key_ids.add(atom_id)
+                if missing_setup_evidence and status != "needs-test-data":
+                    missing_setup_hidden_by_status_ids.add(atom_id)
                 if status == "ready":
                     requires_preparation = bool(
                         re.search(
@@ -4082,7 +4354,7 @@ def validate_practical_scope_brief(path: Path, root: Path) -> tuple[list[Finding
             for atom_id, status in execution_statuses.items()
             if planned_statuses.get(atom_id) != status
         }
-        if missing_ids or unknown_ids or duplicated_ids or mismatched_ids or incomplete_needs_data_ids or incomplete_preparation_evidence_ids or unverified_ready_preparation_ids or unsupported_preparation_evidence_ids or invalid_setup_key_ids or role_or_state_without_fixture_ids or generic_ready_actor_ids:
+        if missing_ids or unknown_ids or duplicated_ids or mismatched_ids or incomplete_needs_data_ids or incomplete_preparation_evidence_ids or unverified_ready_preparation_ids or unsupported_preparation_evidence_ids or invalid_setup_key_ids or role_or_state_without_fixture_ids or generic_ready_actor_ids or missing_setup_hidden_by_status_ids:
             findings.append(
                 Finding(
                     id="practical-scope-brief-execution-prerequisites-incomplete",
@@ -4107,6 +4379,7 @@ def validate_practical_scope_brief(path: Path, root: Path) -> tuple[list[Finding
                         *(f"invalid-setup-key={item}" for item in sorted(invalid_setup_key_ids)),
                         *(f"role-or-status-without-fixture={item}" for item in sorted(role_or_state_without_fixture_ids)),
                         *(f"generic-ready-actor={item}" for item in sorted(generic_ready_actor_ids)),
+                        *(f"missing-setup-hidden-by-status={item}" for item in sorted(missing_setup_hidden_by_status_ids)),
                     ][:20],
                     recommended_action=(
                         "Map every planned ATOM to one actor/object-state prerequisite with setup key and valid "
@@ -4117,9 +4390,9 @@ def validate_practical_scope_brief(path: Path, root: Path) -> tuple[list[Finding
         checks.append(
             Check(
                 "practical-scope-brief-execution-prerequisites",
-                "fail" if missing_ids or unknown_ids or duplicated_ids or mismatched_ids or incomplete_needs_data_ids or incomplete_preparation_evidence_ids or unverified_ready_preparation_ids or unsupported_preparation_evidence_ids or invalid_setup_key_ids or role_or_state_without_fixture_ids or generic_ready_actor_ids else "pass",
+                "fail" if missing_ids or unknown_ids or duplicated_ids or mismatched_ids or incomplete_needs_data_ids or incomplete_preparation_evidence_ids or unverified_ready_preparation_ids or unsupported_preparation_evidence_ids or invalid_setup_key_ids or role_or_state_without_fixture_ids or generic_ready_actor_ids or missing_setup_hidden_by_status_ids else "pass",
                 "Execution prerequisites are inconsistent."
-                if missing_ids or unknown_ids or duplicated_ids or mismatched_ids or incomplete_needs_data_ids or incomplete_preparation_evidence_ids or unverified_ready_preparation_ids or unsupported_preparation_evidence_ids or invalid_setup_key_ids or role_or_state_without_fixture_ids or generic_ready_actor_ids
+                if missing_ids or unknown_ids or duplicated_ids or mismatched_ids or incomplete_needs_data_ids or incomplete_preparation_evidence_ids or unverified_ready_preparation_ids or unsupported_preparation_evidence_ids or invalid_setup_key_ids or role_or_state_without_fixture_ids or generic_ready_actor_ids or missing_setup_hidden_by_status_ids
                 else "Execution prerequisites cover all planned checks.",
                 display_path,
             )
@@ -4147,11 +4420,17 @@ def validate_practical_scope_brief(path: Path, root: Path) -> tuple[list[Finding
     operation_setup_inheritance_mismatches: list[str] = []
     operation_actor_inheritance_mismatches: list[str] = []
     source_row_inventory_language_mismatches: list[str] = []
+    linked_gap_id_mismatches: list[str] = []
     for inventory_path in source_inventory_paths:
         try:
             inventory_content = inventory_path.read_text(encoding="utf-8")
         except UnicodeDecodeError:
             continue
+        extra_gap_ids = practical_scope_brief_uncertainty_ids(inventory_content) - declared_gap_ids
+        if extra_gap_ids:
+            linked_gap_id_mismatches.append(
+                f"{rel(inventory_path, root)}:extra={','.join(sorted(extra_gap_ids))}"
+            )
         source_row_inventory_language_mismatches.extend(
             f"{rel(inventory_path, root)}:{item}"
             for item in practical_source_row_inventory_language_evidence(inventory_content)
@@ -4218,6 +4497,17 @@ def validate_practical_scope_brief(path: Path, root: Path) -> tuple[list[Finding
                     f"setup={'; '.join(setup_details)}"
                 )
 
+    for parity_path in practical_scope_brief_artifact_paths(content, path, root, "source-parity-check.md"):
+        try:
+            parity_content = parity_path.read_text(encoding="utf-8")
+        except UnicodeDecodeError:
+            continue
+        extra_gap_ids = practical_scope_brief_uncertainty_ids(parity_content) - declared_gap_ids
+        if extra_gap_ids:
+            linked_gap_id_mismatches.append(
+                f"{rel(parity_path, root)}:extra={','.join(sorted(extra_gap_ids))}"
+            )
+
     if source_row_mapping_mismatches:
         findings.append(
             Finding(
@@ -4275,6 +4565,22 @@ def validate_practical_scope_brief(path: Path, root: Path) -> tuple[list[Finding
                 ),
             )
         )
+    if linked_gap_id_mismatches:
+        findings.append(
+            Finding(
+                id="practical-scope-brief-linked-gap-id-mismatch",
+                severity="error",
+                category="practical-handoff",
+                title="Linked practical artifacts rename a GAP identifier",
+                details=(
+                    "A GAP-* is one scope-local uncertainty. Source inventory and parity artifacts must reuse the "
+                    "identifier declared in scope-brief.md instead of creating a local alias."
+                ),
+                path=display_path,
+                evidence=linked_gap_id_mismatches[:20],
+                recommended_action="Use the exact scope-brief GAP-* identifiers in all linked practical artifacts.",
+            )
+        )
     if source_row_inventory_language_mismatches:
         findings.append(
             Finding(
@@ -4301,6 +4607,16 @@ def validate_practical_scope_brief(path: Path, root: Path) -> tuple[list[Finding
             "Source-row action coverage is incomplete."
             if source_row_mapping_mismatches or operation_setup_inheritance_mismatches or operation_actor_inheritance_mismatches or unresolved_source_inventory_refs
             else "Source-row action coverage and setup inheritance are consistent.",
+            display_path,
+        )
+    )
+    checks.append(
+        Check(
+            "practical-scope-brief-linked-gap-ids",
+            "fail" if linked_gap_id_mismatches else "pass",
+            "Linked artifacts use renamed GAP-* identifiers."
+            if linked_gap_id_mismatches
+            else "Linked artifact GAP-* identifiers match the brief.",
             display_path,
         )
     )
@@ -25464,6 +25780,17 @@ def validate_workflow_state(
                 findings.extend(language_findings)
                 checks.extend(language_checks)
                 try:
+                    scope_brief_content = scope_brief_path.read_text(encoding="utf-8") if scope_brief_path is not None else ""
+                except UnicodeDecodeError:
+                    scope_brief_content = ""
+                clarification_findings, clarification_checks = validate_practical_clarification_requests(
+                    clarification_path,
+                    root,
+                    practical_scope_brief_uncertainty_ids(scope_brief_content),
+                )
+                findings.extend(clarification_findings)
+                checks.extend(clarification_checks)
+                try:
                     clarification_content = clarification_path.read_text(encoding="utf-8")
                 except UnicodeDecodeError:
                     clarification_content = ""
@@ -26083,7 +26410,7 @@ def validate_workflow_state(
                     )
                 )
 
-    if current_stage in SESSION_LOG_REQUIRED_STAGES:
+    if current_stage in SESSION_LOG_REQUIRED_STAGES and not is_practical_v08_route(state):
         session_log_paths = resolve_workflow_session_logs(state, path, root, ft_root)
         session_log_severity = "warning" if session_log_policy == "strict" else "info"
         session_log_check_status = "warn" if session_log_policy == "strict" else "pass"
@@ -26163,7 +26490,7 @@ def validate_workflow_state(
                     )
                 )
 
-    if current_stage in DECISION_LOG_REQUIRED_STAGES:
+    if current_stage in DECISION_LOG_REQUIRED_STAGES and not is_practical_v08_route(state):
         decision_log_paths = resolve_workflow_decision_logs(state, path, root, ft_root)
         decision_log_severity = "warning" if decision_log_policy == "strict" else "info"
         decision_log_check_status = "warn" if decision_log_policy == "strict" else "pass"

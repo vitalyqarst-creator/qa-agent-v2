@@ -491,6 +491,20 @@ planned TC), use the fast path inside this same route:
       parameterized check only when its trigger and expected result are identical.
      sibling atoms repeat setup. `ready` needs `FX-*` or source-backed
      `поле=значение` preparation, otherwise use `needs-test-data`.
+   - Before writer handoff classify every uncertainty in the brief as exactly
+     one of `ba-business-ambiguity`, `ui-calibration`,
+     `external-scope-boundary` or `test-data-setup`. Only the first type may
+     create a `CLR-*` BA question; do not ask BA to choose an UI screen,
+     supply a fixture or describe a future/external FT section.
+   - Use one exact `GAP-*` identifier across the brief, linked source-row
+     inventory, parity artifact and any `CLR-*`; a renamed local copy is a
+     handoff error, not a new gap.
+   - A planned check with missing role/object/state/fixture preparation must
+     be `needs-test-data` and name the same `SETUP-*` in both execution and
+     dependency tables. `candidate-ui-calibration` cannot conceal a missing
+     setup. A navigation action with two named destinations becomes separate
+     `ATOM-*` checks unless the brief records that the same start state,
+     user action and observable result make one parameterized check valid.
 
 3. `ft-test-case-writer` — design-matrix-only pass
    - Create or update exactly these required artifacts:
