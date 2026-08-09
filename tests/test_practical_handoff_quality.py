@@ -887,6 +887,62 @@ class PracticalHandoffQualityTests(unittest.TestCase):
         finding_ids = {finding.id for finding in findings}
         self.assertNotIn("prompt-format-missing-required-scope-inputs", finding_ids)
 
+    def test_practical_scope_analyzer_rejects_legacy_gap_review_route(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            handoff = root / "work" / "stage-handoffs" / "01-menu"
+            handoff.mkdir(parents=True)
+            workflow = handoff / "workflow-state.yaml"
+            workflow.write_text(
+                "\n".join(
+                    [
+                        "ft_slug: Sample",
+                        "scope_slug: menu",
+                        "route_profile: practical_v0_8",
+                        "current_stage: ft-scope-analyzer",
+                        "stage_status: ready-for-gap-review",
+                        "next_skill: ft-test-case-reviewer",
+                        "review_mode: scope_gap_review",
+                        "required_inputs: []",
+                        "latest_artifacts: {}",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            findings, _ = self.validator.validate_workflow_state(workflow, root)
+
+        finding_ids = {finding.id for finding in findings}
+        self.assertIn("practical-scope-analyzer-forbidden-gap-review", finding_ids)
+
+    def test_practical_scope_analyzer_rejects_legacy_artifacts(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            handoff = root / "work" / "stage-handoffs" / "01-menu"
+            handoff.mkdir(parents=True)
+            (handoff / "scope-contract.md").write_text("# Контракт\n", encoding="utf-8")
+            workflow = handoff / "workflow-state.yaml"
+            workflow.write_text(
+                "\n".join(
+                    [
+                        "ft_slug: Sample",
+                        "scope_slug: menu",
+                        "route_profile: practical_v0_8",
+                        "current_stage: ft-scope-analyzer",
+                        "stage_status: blocked-input",
+                        "next_skill: none",
+                        "required_inputs: []",
+                        "latest_artifacts: {}",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            findings, _ = self.validator.validate_workflow_state(workflow, root)
+
+        finding_ids = {finding.id for finding in findings}
+        self.assertIn("practical-scope-analyzer-legacy-artifacts-present", finding_ids)
+
 
 if __name__ == "__main__":
     unittest.main()

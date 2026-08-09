@@ -73,6 +73,8 @@ class PracticalRouteV08ContractTests(unittest.TestCase):
         self.assertIn("before canonical test-case writing", reviewer)
         self.assertIn("must not require source assertion receipts", reviewer)
         self.assertIn("review-independence.md", reviewer)
+        self.assertIn("Mandatory route gate", scope)
+        self.assertIn("does **not** authorize a pre-writer `scope_gap_review`", scope)
         self.assertIn("Re-derive coverage from FT DOCX/PDF/XHTML", reviewer)
         self.assertIn("advisory-review-findings.md", reviewer)
         self.assertIn("controller_authorized_advisory_revision", reviewer)

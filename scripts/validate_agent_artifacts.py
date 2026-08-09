@@ -24688,6 +24688,142 @@ def validate_workflow_state(
             )
         )
 
+    if is_practical_v08_route(state) and current_stage == "ft-scope-analyzer":
+        forbidden_gap_review = (
+            stage_status == "ready-for-gap-review"
+            or next_skill == "ft-test-case-reviewer"
+            or str(state.get("review_mode", "")).strip().casefold() == "scope_gap_review"
+        )
+        if forbidden_gap_review:
+            findings.append(
+                Finding(
+                    id="practical-scope-analyzer-forbidden-gap-review",
+                    severity="error",
+                    category="stage-transition",
+                    title="Practical scope analysis must not route through scope-gap review",
+                    details=(
+                        "The practical route keeps non-blocking uncertainty in scope-brief.md and routes the "
+                        "selected scope directly to the matrix-only writer. scope_gap_review is a legacy/session "
+                        "stage and cannot be enabled merely because a GAP-* exists."
+                    ),
+                    path=display_path,
+                    evidence=[
+                        f"stage_status={stage_status}",
+                        f"next_skill={next_skill}",
+                        f"review_mode={state.get('review_mode')}",
+                    ],
+                    recommended_action=(
+                        "Replace the gap-review handoff with a compact practical scope brief and route to "
+                        "ft-test-case-writer in practical_v0_8_matrix mode; keep only concrete BA questions."
+                    ),
+                )
+            )
+            checks.append(
+                Check(
+                    "practical-scope-analyzer-route",
+                    "fail",
+                    "Practical scope analysis incorrectly routes to scope-gap review.",
+                    display_path,
+                )
+            )
+        elif stage_status == "ready-for-next-stage":
+            routing_issues: list[str] = []
+            if next_skill != "ft-test-case-writer":
+                routing_issues.append(f"next_skill={next_skill!r}")
+            if str(state.get("writer_mode", "")).strip() != "practical_v0_8_matrix":
+                routing_issues.append(f"writer_mode={state.get('writer_mode')!r}")
+            if not workflow_artifact_paths_by_name(state, path, root, ft_root, "scope-brief.md"):
+                routing_issues.append("scope-brief.md is not linked")
+            if routing_issues:
+                findings.append(
+                    Finding(
+                        id="practical-scope-analyzer-invalid-writer-handoff",
+                        severity="error",
+                        category="stage-transition",
+                        title="Practical scope analysis has no matrix-only writer handoff",
+                        details=(
+                            "A ready practical scope must link scope-brief.md and route directly to the first "
+                            "writer pass in practical_v0_8_matrix mode."
+                        ),
+                        path=display_path,
+                        evidence=routing_issues,
+                        recommended_action=(
+                            "Create/link scope-brief.md, set next_skill to ft-test-case-writer and set writer_mode "
+                            "to practical_v0_8_matrix."
+                        ),
+                    )
+                )
+                checks.append(
+                    Check(
+                        "practical-scope-analyzer-route",
+                        "fail",
+                        "Practical scope writer handoff is incomplete.",
+                        display_path,
+                    )
+                )
+            else:
+                checks.append(
+                    Check(
+                        "practical-scope-analyzer-route",
+                        "pass",
+                        "Practical scope routes directly to the matrix-only writer.",
+                        display_path,
+                    )
+                )
+
+        legacy_artifact_names = {
+            "scope-contract.md",
+            "scope-coverage-gaps.md",
+            "prompt.scope-gaps-to-reviewer.md",
+            "negative-oracle-inventory.md",
+            "requiredness-oracle-inventory.md",
+            "scope-analyzer-session-log.md",
+            "source-locator-session-log.md",
+            "agent-decision-log.md",
+        }
+        legacy_artifact_paths = [
+            rel(candidate, root)
+            for name in sorted(legacy_artifact_names)
+            for candidate in [path.parent / name]
+            if candidate.exists()
+        ]
+        if legacy_artifact_paths:
+            findings.append(
+                Finding(
+                    id="practical-scope-analyzer-legacy-artifacts-present",
+                    severity="error",
+                    category="artifact-links",
+                    title="Practical scope handoff contains legacy-only artifacts",
+                    details=(
+                        "The compact practical route must not leave scope contracts, full gap inventories, "
+                        "scope-gap-review prompts or audit logs in the scope handoff folder."
+                    ),
+                    path=display_path,
+                    evidence=legacy_artifact_paths,
+                    recommended_action=(
+                        "Rematerialize the scope as scope-brief.md plus only required parity, row, mockup and "
+                        "concrete clarification artifacts; remove legacy-only files from this practical handoff."
+                    ),
+                )
+            )
+            checks.append(
+                Check(
+                    "practical-scope-analyzer-legacy-artifacts",
+                    "fail",
+                    "Legacy-only artifacts remain in the practical handoff.",
+                    display_path,
+                )
+            )
+        else:
+            checks.append(
+                Check(
+                    "practical-scope-analyzer-legacy-artifacts",
+                    "pass",
+                    "No legacy-only artifacts remain in the practical handoff.",
+                    display_path,
+                )
+            )
+
     if stage_status == "blocked-quality-gate":
         routing_errors: list[str] = []
         if current_stage != "ft-test-case-writer":

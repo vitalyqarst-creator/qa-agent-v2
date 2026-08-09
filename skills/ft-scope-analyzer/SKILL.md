@@ -29,6 +29,19 @@ Do not create `scope-contract.md`, a separate `scope-coverage-gaps.md`, oracle
 inventories, session/decision logs or heavy/source-first artifacts in
 `practical_v0_8`; those belong to legacy, diagnostic or explicitly selected routes.
 
+### Mandatory route gate
+
+Choose the route once, before creating any scope-local artifact. For
+`practical_v0_8`, a `GAP-*`, a cross-FT reference or an unresolved UI oracle
+does **not** authorize a pre-writer `scope_gap_review`. Keep the uncertainty
+compactly in `scope-brief.md` and, only when a concrete product decision is
+missing, in `scope-clarification-requests.md`. Route directly to the
+matrix-only writer.
+
+The legacy/session instructions below are available only when that route was
+explicitly selected. Do not borrow its artifacts, statuses or reviewer stages
+into a practical handoff.
+
 ## Bounded lean-production path
 
 Если scope удовлетворяет eligibility из
@@ -103,9 +116,12 @@ receipt with the exact manifest digest may route to writer/iteration. Compiler v
 remains diagnostic-only and cannot be promoted. This contract is not part of
 `practical_v0_8`.
 
-## Rules for `prompt.scope-gaps-to-reviewer.md`
+## Legacy/session route only: Rules for `prompt.scope-gaps-to-reviewer.md`
 
-If confirmed scope analysis creates at least one `GAP-*` in `scope-coverage-gaps.md`, create `prompt.scope-gaps-to-reviewer.md` and make it the active transition before writer starts.
+Only if the user explicitly selected the legacy/session route and confirmed
+scope analysis creates at least one `GAP-*` in `scope-coverage-gaps.md`, create
+`prompt.scope-gaps-to-reviewer.md` and make it the active transition before
+writer starts. This section never applies to `practical_v0_8`.
 
 Minimum for `prompt.scope-gaps-to-reviewer.md`:
 
@@ -199,6 +215,8 @@ Minimum for `prompt.scope-gaps-to-reviewer.md`:
 13. Если PDF для structural cross-check отсутствует, явно укажи это в промежуточных заметках или `coverage gaps`, а не оставляй неявным.
 14. Отдельно перечисли отсутствующие данные и неоднозначности как `coverage gaps`; для каждого gap укажи точное утверждение ФТ, к которому он относится: раздел, GSR/код, таблицу/строку, поле/условие, цитату или `ATOM-*`, если атом уже создан.
 14a. В practical route ставь `blocking: yes` только когда gap не позволяет построить даже статусный candidate TC для затронутого `ATOM-*` или есть source contradiction. Частичный вопрос об обязательности, редактируемости или UI oracle не блокирует остальные проверки: он остаётся в `scope-clarification-requests.md`, а затронутый `ATOM-*` получает корректный статус (`candidate-ui-calibration`, `needs-test-data` или `blocked-observability`).
+14a.1. Ссылка ФТ на будущий или внешний документ сама по себе не является вопросом к БА: зафиксируй соответствующую проверку как out-of-scope, пока этот документ не предоставлен. Вопрос допустим только если для уже входящего в scope утверждения не хватает конкретного продуктового правила.
+14a.2. Если source подтверждает действие, но не задаёт детальный UI-признак результата, не проси БА проектировать интерфейс. Сформируй узкий `candidate-ui-calibration` TC с явно ограниченным source-backed ожиданием; вопрос к БА нужен только при реальной неоднозначности бизнес-правила.
 14b. До `CLR-*` проверь DOCX/XHTML/PDF/support. Спрашивай БА только о
 неразрешенном продуктовом правиле; account/object/fixture и роль с заданными
 source правами — `needs-test-data`, не вопрос к БА. В предпосылках укажи для
