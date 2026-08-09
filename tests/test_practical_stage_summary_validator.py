@@ -37,6 +37,9 @@ class PracticalStageSummaryValidatorTests(unittest.TestCase):
         root_split_allowed: str = "no",
         root_split_authority: str = "not-applicable",
         validator_errors_count: int = 0,
+        validator_raw_errors_count: int = 0,
+        validator_summary_self_check_errors_count: int = 0,
+        validator_summary_self_check_errors_evidence: str = "not-applicable",
         validator_errors_classification: str = "none",
         validator_errors_evidence: str = "not-applicable",
         validator_scope_errors_count: int | None = None,
@@ -83,6 +86,11 @@ class PracticalStageSummaryValidatorTests(unittest.TestCase):
                     f"| root_split_allowed | `{root_split_allowed}` |",
                     f"| root_split_authority | `{root_split_authority}` |",
                     f"| validator_errors_count | `{validator_errors_count}` |",
+                    f"| validator_raw_errors_count | `{validator_raw_errors_count}` |",
+                    "| validator_summary_self_check_errors_count | "
+                    f"`{validator_summary_self_check_errors_count}` |",
+                    "| validator_summary_self_check_errors_evidence | "
+                    f"`{validator_summary_self_check_errors_evidence}` |",
                     f"| validator_errors_classification | `{validator_errors_classification}` |",
                     f"| validator_errors_evidence | `{validator_errors_evidence}` |",
                     f"| validator_warnings_count | `{validator_warnings_count}` |",
@@ -189,6 +197,7 @@ class PracticalStageSummaryValidatorTests(unittest.TestCase):
         self.assertNotIn("practical-stage-summary-missing-operational-fields", ids)
         self.assertNotIn("practical-stage-summary-validator-warnings-unclassified", ids)
         self.assertNotIn("practical-stage-summary-validator-warning-count-stale", ids)
+        self.assertNotIn("practical-stage-summary-validator-error-layers-missing", ids)
         self.assertNotIn("practical-stage-summary-current-prior-sections-missing", ids)
 
     def test_ignores_immutable_controller_snapshot_summary(self) -> None:
@@ -335,21 +344,49 @@ class PracticalStageSummaryValidatorTests(unittest.TestCase):
         root = self.make_package()
         summary = root / "work" / "practical-stage-summary.md"
         text = summary.read_text(encoding="utf-8").replace(
-            "| validator_errors_count | `0` |",
-            "\n".join(
-                [
-                    "| validator_raw_errors_count | `1` |",
-                    "| validator_errors_count | `0` |",
-                    "| validator_summary_self_check_errors_count | `0` |",
-                    "| validator_summary_self_check_errors_evidence | `not-applicable` |",
-                ]
-            ),
+            "| validator_raw_errors_count | `0` |",
+            "| validator_raw_errors_count | `1` |",
         )
         summary.write_text(text, encoding="utf-8")
 
         ids = self.finding_ids(root)
 
         self.assertIn("practical-stage-summary-validator-raw-error-count-stale", ids)
+
+    def test_rejects_missing_validator_error_layers(self) -> None:
+        root = self.make_package()
+        summary = root / "work" / "practical-stage-summary.md"
+        text = "\n".join(
+            line
+            for line in summary.read_text(encoding="utf-8").splitlines()
+            if not any(
+                field in line
+                for field in (
+                    "validator_raw_errors_count",
+                    "validator_summary_self_check_errors_count",
+                    "validator_summary_self_check_errors_evidence",
+                )
+            )
+        )
+        summary.write_text(text, encoding="utf-8")
+
+        ids = self.finding_ids(root)
+
+        self.assertIn("practical-stage-summary-validator-error-layers-missing", ids)
+
+    def test_rejects_unexpected_zero_self_check_evidence(self) -> None:
+        ids = self.finding_ids(
+            self.make_package(
+                validator_summary_self_check_errors_evidence=(
+                    "summary-check @ work/practical/other/practical-stage-summary.md"
+                )
+            )
+        )
+
+        self.assertIn(
+            "practical-stage-summary-validator-self-check-evidence-unexpected",
+            ids,
+        )
 
     def test_rejects_unapproved_split_between_code_and_ft_package_roots(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

@@ -8221,6 +8221,34 @@ def validate_practical_stage_summary_report_consistency(
             )
         )
 
+    required_error_layer_fields = (
+        "validator_raw_errors_count",
+        "validator_summary_self_check_errors_count",
+        "validator_summary_self_check_errors_evidence",
+    )
+    missing_error_layer_fields = [
+        field for field in required_error_layer_fields if field not in fields
+    ]
+    if missing_error_layer_fields:
+        findings.append(
+            Finding(
+                id="practical-stage-summary-validator-error-layers-missing",
+                severity="error",
+                category="practical-stage-summary",
+                title="Practical stage summary lacks required validator error layers",
+                details=(
+                    "A practical summary must show the raw package-validator count and the excluded "
+                    "practical-stage-summary self-check layer, alongside the routing count."
+                ),
+                path=display_path,
+                evidence=[f"missing={','.join(missing_error_layer_fields)}"],
+                recommended_action=(
+                    "Run refresh_practical_stage_summary.py and copy all generated validator error-layer "
+                    "fields into the summary before the next stage."
+                ),
+            )
+        )
+
     # `validator_errors_count` is deliberately routing-safe: it omits
     # practical-stage-summary self-checks to avoid a circular gate. New
     # summaries also expose the raw CLI count and the omitted layer so the
@@ -8365,6 +8393,61 @@ def validate_practical_stage_summary_report_consistency(
                         ),
                     )
                 )
+
+    declared_summary_self_check_errors_count = parse_nonnegative_int(
+        fields.get("validator_summary_self_check_errors_count", "")
+    )
+    if "validator_summary_self_check_errors_evidence" in fields:
+        self_check_evidence = fields["validator_summary_self_check_errors_evidence"]
+        if (
+            declared_summary_self_check_errors_count == 0
+            and not field_is_not_applicable(self_check_evidence)
+        ):
+            findings.append(
+                Finding(
+                    id="practical-stage-summary-validator-self-check-evidence-unexpected",
+                    severity="error",
+                    category="practical-stage-summary",
+                    title="Practical stage summary has unexpected self-check error evidence",
+                    details=(
+                        "Self-check evidence must be not-applicable when the declared self-check error "
+                        "count is zero."
+                    ),
+                    path=display_path,
+                    evidence=[
+                        f"validator_summary_self_check_errors_count={declared_summary_self_check_errors_count}",
+                        f"validator_summary_self_check_errors_evidence={self_check_evidence}",
+                    ],
+                    recommended_action=(
+                        "Use not-applicable for zero self-check errors or refresh the count and evidence together."
+                    ),
+                )
+            )
+        elif (
+            declared_summary_self_check_errors_count is not None
+            and declared_summary_self_check_errors_count > 0
+            and not practical_stage_summary_has_specific_finding_evidence(self_check_evidence)
+        ):
+            findings.append(
+                Finding(
+                    id="practical-stage-summary-validator-self-check-evidence-unproven",
+                    severity="error",
+                    category="practical-stage-summary",
+                    title="Practical stage summary does not prove its self-check error layer",
+                    details=(
+                        "Nonzero self-check errors require the finding id and path for each excluded "
+                        "practical-stage-summary error."
+                    ),
+                    path=display_path,
+                    evidence=[
+                        f"validator_summary_self_check_errors_count={declared_summary_self_check_errors_count}",
+                        f"validator_summary_self_check_errors_evidence={self_check_evidence}",
+                    ],
+                    recommended_action=(
+                        "Refresh the summary and preserve the generated self-check evidence."
+                    ),
+                )
+            )
 
     if "validator_warnings_count" in fields and declared_warnings_count is None:
         findings.append(
