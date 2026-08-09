@@ -86,7 +86,10 @@ Review in two practical gates:
    current canonical suite, re-derive coverage from FT/PDF/XHTML/support and
    check that `ready` cases have no unresolved confirmation, fixture, data,
    access or observability dependency; one unprepared shared prerequisite makes
-   every dependent matrix/TC line `needs-test-data`.
+   every dependent matrix/TC line `needs-test-data`. For atomized checks of one
+   action, re-derive and propagate the source role and starting-state conditions
+   to hover, availability and result lines; a generic executor does not prove
+   the required application access.
 2. Test design: positive, negative, boundary, dictionary, dependency,
    repeatable-block and independent-creation classes from
    [../../references/qa/coverage-class-catalog.md](../../references/qa/coverage-class-catalog.md)

@@ -27,7 +27,22 @@ class PracticalHandoffQualityTests(unittest.TestCase):
     def setUp(self) -> None:
         self.validator = load_validator_module()
 
-    def write_scope_brief(self, path: Path, *, dependency_status: str = "needs-test-data") -> None:
+    def write_scope_brief(
+        self,
+        path: Path,
+        *,
+        dependency_status: str = "needs-test-data",
+        include_ready_dependency: bool = False,
+    ) -> None:
+        dependency_rows = [
+            "| Ключ подготовки | Подготовка | Затронутые проверки | Статус исполнения |",
+            "| --- | --- | --- | --- |",
+            f"| `SETUP-ACCESS-001` | Подготовить учетную запись с заданными правами. | `ATOM-002` | `{dependency_status}` |",
+        ]
+        if include_ready_dependency:
+            dependency_rows.append(
+                "| `SETUP-OBJECT-001` | Подготовить объект. | `ATOM-001` | `needs-test-data` |"
+            )
         path.write_text(
             "\n".join(
                 [
@@ -42,16 +57,14 @@ class PracticalHandoffQualityTests(unittest.TestCase):
                     "",
                     "## Предпосылки исполнения",
                     "",
-                    "| Затронутые проверки | Исполнитель | Объект и исходное состояние | Подтверждение подготовки | Статус исполнения |",
-                    "| --- | --- | --- | --- | --- |",
-                    "| `ATOM-001` | Пользователь с доступом. | Подготовленный объект. | Явные шаги подготовки: создать объект через форму. | `ready` |",
-                    "| `ATOM-002` | Пользователь с заданными правами. | Подготовленный объект. | Не подготовлена учетная запись с заданными правами. | `needs-test-data` |",
+                    "| Затронутые проверки | Исполнитель | Объект и исходное состояние | Ключ подготовки | Подтверждение подготовки | Статус исполнения |",
+                    "| --- | --- | --- | --- | --- | --- |",
+                    "| `ATOM-001` | Пользователь с доступом. | Подготовленный объект. | `SETUP-OBJECT-001` | Шаги подготовки: создать объект по AS.10; данные: проверенные значения. | `ready` |",
+                    "| `ATOM-002` | Пользователь с заданными правами. | Подготовленный объект. | `SETUP-ACCESS-001` | Отсутствует: учетная запись с заданными правами. | `needs-test-data` |",
                     "",
                     "## Зависимости от тестовых данных",
                     "",
-                    "| Подготовка | Затронутые проверки | Статус исполнения |",
-                    "| --- | --- | --- |",
-                    f"| Подготовить учетную запись с заданными правами. | `ATOM-001`; `ATOM-002` | `{dependency_status}` |",
+                    *dependency_rows,
                 ]
             ),
             encoding="utf-8",
@@ -61,12 +74,23 @@ class PracticalHandoffQualityTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             brief = root / "scope-brief.md"
-            self.write_scope_brief(brief)
+            self.write_scope_brief(brief, include_ready_dependency=True)
 
             findings, _ = self.validator.validate_practical_scope_brief(brief, root)
 
         finding_ids = {finding.id for finding in findings}
         self.assertIn("practical-scope-brief-data-dependency-status-mismatch", finding_ids)
+
+    def test_scope_brief_accepts_structured_preparation_and_setup_keys(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            brief = root / "scope-brief.md"
+            self.write_scope_brief(brief)
+
+            findings, checks = self.validator.validate_practical_scope_brief(brief, root)
+
+        self.assertEqual([], findings)
+        self.assertTrue(all(check.status == "pass" for check in checks))
 
     def test_scope_brief_requires_prerequisites_for_every_planned_check(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -75,7 +99,7 @@ class PracticalHandoffQualityTests(unittest.TestCase):
             self.write_scope_brief(brief)
             brief.write_text(
                 brief.read_text(encoding="utf-8").replace(
-                    "| `ATOM-002` | Пользователь с заданными правами. | Подготовленный объект. | Не подготовлена учетная запись с заданными правами. | `needs-test-data` |\n",
+                    "| `ATOM-002` | Пользователь с заданными правами. | Подготовленный объект. | `SETUP-ACCESS-001` | Отсутствует: учетная запись с заданными правами. | `needs-test-data` |\n",
                     "",
                 ),
                 encoding="utf-8",
@@ -93,8 +117,8 @@ class PracticalHandoffQualityTests(unittest.TestCase):
             self.write_scope_brief(brief)
             brief.write_text(
                 brief.read_text(encoding="utf-8").replace(
-                    "| `ATOM-002` | Пользователь с заданными правами. | Подготовленный объект. | Не подготовлена учетная запись с заданными правами. | `needs-test-data` |",
-                    "| `ATOM-002` | Не требуется. | Не требуется. | Не подготовлена учетная запись с заданными правами. | `needs-test-data` |",
+                    "| `ATOM-002` | Пользователь с заданными правами. | Подготовленный объект. | `SETUP-ACCESS-001` | Отсутствует: учетная запись с заданными правами. | `needs-test-data` |",
+                    "| `ATOM-002` | Не требуется. | Не требуется. | `SETUP-ACCESS-001` | Отсутствует: учетная запись с заданными правами. | `needs-test-data` |",
                 ),
                 encoding="utf-8",
             )
@@ -111,7 +135,7 @@ class PracticalHandoffQualityTests(unittest.TestCase):
             self.write_scope_brief(brief)
             brief.write_text(
                 brief.read_text(encoding="utf-8").replace(
-                    "Явные шаги подготовки: создать объект через форму.",
+                    "Шаги подготовки: создать объект по AS.10; данные: проверенные значения.",
                     "Подготовленный объект уже существует.",
                 ),
                 encoding="utf-8",
@@ -129,8 +153,8 @@ class PracticalHandoffQualityTests(unittest.TestCase):
             self.write_scope_brief(brief)
             brief.write_text(
                 brief.read_text(encoding="utf-8").replace(
-                    "| `ATOM-001` | Пользователь с доступом. | Подготовленный объект. | Явные шаги подготовки: создать объект через форму. | `ready` |",
-                    "| `ATOM-001` | Тестировщик | Объект доступен только администратору. | Явные шаги подготовки: создать объект через форму. | `ready` |",
+                    "| `ATOM-001` | Пользователь с доступом. | Подготовленный объект. | `SETUP-OBJECT-001` | Шаги подготовки: создать объект по AS.10; данные: проверенные значения. | `ready` |",
+                    "| `ATOM-001` | Тестировщик | Объект доступен только администратору. | `SETUP-OBJECT-001` | Шаги подготовки: создать объект по AS.10; данные: проверенные значения. | `ready` |",
                 ),
                 encoding="utf-8",
             )
@@ -139,6 +163,63 @@ class PracticalHandoffQualityTests(unittest.TestCase):
 
         finding_ids = {finding.id for finding in findings}
         self.assertIn("practical-scope-brief-execution-prerequisites-incomplete", finding_ids)
+
+    def test_scope_brief_requires_fixture_for_ready_role_and_status_state(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            brief = root / "scope-brief.md"
+            self.write_scope_brief(brief)
+            brief.write_text(
+                brief.read_text(encoding="utf-8").replace(
+                    "| `ATOM-001` | Пользователь с доступом. | Подготовленный объект. | `SETUP-OBJECT-001` | Шаги подготовки: создать объект по AS.10; данные: проверенные значения. | `ready` |",
+                    "| `ATOM-001` | Администратор | Объект в статусе «Подтвержден». | `SETUP-ADMIN-001` | Шаги подготовки: создать объект по AS.10; данные: проверенные значения. | `ready` |",
+                ),
+                encoding="utf-8",
+            )
+
+            findings, _ = self.validator.validate_practical_scope_brief(brief, root)
+
+        finding_ids = {finding.id for finding in findings}
+        self.assertIn("practical-scope-brief-execution-prerequisites-incomplete", finding_ids)
+
+    def test_scope_brief_rejects_free_text_as_ready_preparation_evidence(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            brief = root / "scope-brief.md"
+            self.write_scope_brief(brief)
+            brief.write_text(
+                brief.read_text(encoding="utf-8").replace(
+                    "Шаги подготовки: создать объект по AS.10; данные: проверенные значения.",
+                    "Исходные данные: создать или выбрать объект.",
+                ),
+                encoding="utf-8",
+            )
+
+            findings, _ = self.validator.validate_practical_scope_brief(brief, root)
+
+        finding_ids = {finding.id for finding in findings}
+        self.assertIn("practical-scope-brief-execution-prerequisites-incomplete", finding_ids)
+
+    def test_scope_brief_propagates_missing_setup_to_every_dependent_atom(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            brief = root / "scope-brief.md"
+            self.write_scope_brief(brief)
+            brief.write_text(
+                brief.read_text(encoding="utf-8").replace(
+                    "| `ATOM-001` | Пользователь с доступом. | Подготовленный объект. | `SETUP-OBJECT-001` | Шаги подготовки: создать объект по AS.10; данные: проверенные значения. | `ready` |",
+                    "| `ATOM-001` | Пользователь с доступом. | Подготовленный объект. | `SETUP-ACCESS-001` | Шаги подготовки: создать объект по AS.10; данные: проверенные значения. | `ready` |",
+                ).replace(
+                    "| `SETUP-ACCESS-001` | Подготовить учетную запись с заданными правами. | `ATOM-002` | `needs-test-data` |",
+                    "| `SETUP-ACCESS-001` | Подготовить учетную запись с заданными правами. | `ATOM-001`; `ATOM-002` | `needs-test-data` |",
+                ),
+                encoding="utf-8",
+            )
+
+            findings, _ = self.validator.validate_practical_scope_brief(brief, root)
+
+        finding_ids = {finding.id for finding in findings}
+        self.assertIn("practical-scope-brief-data-dependency-status-mismatch", finding_ids)
 
     def test_scope_brief_rejects_english_visible_handoff_text(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

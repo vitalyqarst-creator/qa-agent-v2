@@ -3528,6 +3528,7 @@ def validate_practical_scope_brief(path: Path, root: Path) -> tuple[list[Finding
             "affected": {"затронутые проверки"},
             "actor": {"исполнитель"},
             "object_state": {"объект и исходное состояние"},
+            "setup_key": {"ключ подготовки"},
             "preparation_evidence": {"подтверждение подготовки"},
             "status": {"статус исполнения"},
         },
@@ -3540,13 +3541,13 @@ def validate_practical_scope_brief(path: Path, root: Path) -> tuple[list[Finding
                 category="practical-handoff",
                 title="Practical scope brief lacks execution-prerequisite mapping",
                 details=(
-                    "Every planned check must have an actor, object/initial-state, preparation-evidence and "
+                    "Every planned check must have actor, object/initial-state, setup-key, preparation-evidence and "
                     "execution-status mapping before writer launch."
                 ),
                 path=display_path,
                 evidence=sorted(planned_statuses),
                 recommended_action=(
-                    "Add `## Предпосылки исполнения` with affected checks, actor, object/initial state, "
+                    "Add `## Предпосылки исполнения` with affected checks, actor, object/initial state, setup key, "
                     "preparation evidence and execution status."
                 ),
             )
@@ -3561,29 +3562,60 @@ def validate_practical_scope_brief(path: Path, root: Path) -> tuple[list[Finding
         )
     else:
         execution_statuses: dict[str, str] = {}
+        execution_setup_keys: dict[str, set[str]] = {}
         duplicated_ids: set[str] = set()
         incomplete_needs_data_ids: set[str] = set()
         incomplete_preparation_evidence_ids: set[str] = set()
         unverified_ready_preparation_ids: set[str] = set()
+        unsupported_preparation_evidence_ids: set[str] = set()
+        invalid_setup_key_ids: set[str] = set()
+        role_or_state_without_fixture_ids: set[str] = set()
         generic_ready_actor_ids: set[str] = set()
         for row in execution_rows[1:]:
             if max(execution_columns.values()) >= len(row):
                 continue
             actor = normalize_markdown_field_value(row[execution_columns["actor"]]).casefold().strip(" .;:")
             object_state = normalize_markdown_field_value(row[execution_columns["object_state"]]).casefold().strip(" .;:")
+            setup_key_text = normalize_markdown_field_value(row[execution_columns["setup_key"]]).casefold().strip(" .;:")
             preparation_evidence = normalize_markdown_field_value(
                 row[execution_columns["preparation_evidence"]]
             ).casefold().strip(" .;:")
             status = normalize_markdown_field_value(row[execution_columns["status"]]).casefold()
+            setup_keys = {
+                key.upper()
+                for key in re.findall(r"\bSETUP-[A-Z0-9-]+\b", setup_key_text, flags=re.IGNORECASE)
+            }
+            no_setup_needed = setup_key_text == "не требуется"
+            fixture_evidence = bool(
+                re.match(
+                    r"^(?:проверенн\w*\s+)?(?:фикстур\w*|fixture)\s*:\s*.*\bfx-[a-z0-9-]+\b",
+                    preparation_evidence,
+                    flags=re.IGNORECASE,
+                )
+            )
+            setup_steps_evidence = bool(
+                re.match(r"^шаг\w*\s+подготовк\w*\s*:\s*.+", preparation_evidence, flags=re.IGNORECASE)
+                and re.search(r"(?:\b(?:as|bsr|gsr)\.?\s*\d+\b|таблиц\w*\s*\d+|раздел\w*\s*\d+)", preparation_evidence, flags=re.IGNORECASE)
+                and re.search(r"(?:данн\w*\s*[:—-]|значен\w*\s*[:—-]|\bfx-[a-z0-9-]+\b)", preparation_evidence, flags=re.IGNORECASE)
+            )
+            no_setup_evidence = bool(
+                re.match(r"^подготовк\w*\s+не требуется\s*:\s*.+", preparation_evidence, flags=re.IGNORECASE)
+            )
+            missing_setup_evidence = bool(
+                re.match(r"^отсутств\w*\s*:\s*.+", preparation_evidence, flags=re.IGNORECASE)
+            )
             for atom_id in re.findall(r"\bATOM-[A-Z0-9-]+\b", row[execution_columns["affected"]], flags=re.IGNORECASE):
                 atom_id = atom_id.upper()
                 if atom_id in execution_statuses:
                     duplicated_ids.add(atom_id)
                 execution_statuses[atom_id] = status
+                execution_setup_keys[atom_id] = setup_keys
                 if status == "needs-test-data" and (not actor or not object_state or actor == "не требуется" or object_state == "не требуется"):
                     incomplete_needs_data_ids.add(atom_id)
                 if not preparation_evidence or preparation_evidence == "не требуется":
                     incomplete_preparation_evidence_ids.add(atom_id)
+                if (no_setup_needed and setup_keys) or (not no_setup_needed and not setup_keys):
+                    invalid_setup_key_ids.add(atom_id)
                 if status == "ready":
                     requires_preparation = bool(
                         re.search(
@@ -3593,23 +3625,23 @@ def validate_practical_scope_brief(path: Path, root: Path) -> tuple[list[Finding
                             flags=re.IGNORECASE,
                         )
                     )
-                    has_reproducible_evidence = bool(
-                        re.search(
-                            r"(?:\bfx-[a-z0-9-]+\b|фикстур|fixture|воспроизводим|"
-                            r"явн\w*\s+шаг|шаг\w*\s+подготовк|созда\w*\s+(?:через|в|на)|"
-                            r"подготов\w*\s+(?:через|в|на)|выбрать\w*\s+(?:из|в)|"
-                            r"исходн\w*\s+данн\w*\s*[:—-])",
-                            preparation_evidence,
-                            flags=re.IGNORECASE,
-                        )
-                    )
-                    if requires_preparation and not has_reproducible_evidence:
+                    if not (fixture_evidence or setup_steps_evidence or no_setup_evidence):
+                        unsupported_preparation_evidence_ids.add(atom_id)
+                    if requires_preparation and not (fixture_evidence or setup_steps_evidence):
                         unverified_ready_preparation_ids.add(atom_id)
+                    if (
+                        (re.search(r"(?:администратор|роль|прав)", actor, flags=re.IGNORECASE)
+                        or re.search(r"(?:статус|индикатор)", object_state, flags=re.IGNORECASE))
+                        and not fixture_evidence
+                    ):
+                        role_or_state_without_fixture_ids.add(atom_id)
                     if (
                         actor in {"тестировщик", "пользователь", "исполнитель"}
                         and re.search(r"(?:администратор|роль|прав|доступ)", object_state, flags=re.IGNORECASE)
                     ):
                         generic_ready_actor_ids.add(atom_id)
+                elif status == "needs-test-data" and not missing_setup_evidence:
+                    unsupported_preparation_evidence_ids.add(atom_id)
 
         missing_ids = set(planned_statuses) - set(execution_statuses)
         unknown_ids = set(execution_statuses) - set(planned_statuses)
@@ -3618,7 +3650,7 @@ def validate_practical_scope_brief(path: Path, root: Path) -> tuple[list[Finding
             for atom_id, status in execution_statuses.items()
             if planned_statuses.get(atom_id) != status
         }
-        if missing_ids or unknown_ids or duplicated_ids or mismatched_ids or incomplete_needs_data_ids or incomplete_preparation_evidence_ids or unverified_ready_preparation_ids or generic_ready_actor_ids:
+        if missing_ids or unknown_ids or duplicated_ids or mismatched_ids or incomplete_needs_data_ids or incomplete_preparation_evidence_ids or unverified_ready_preparation_ids or unsupported_preparation_evidence_ids or invalid_setup_key_ids or role_or_state_without_fixture_ids or generic_ready_actor_ids:
             findings.append(
                 Finding(
                     id="practical-scope-brief-execution-prerequisites-incomplete",
@@ -3627,8 +3659,8 @@ def validate_practical_scope_brief(path: Path, root: Path) -> tuple[list[Finding
                     title="Practical scope brief has incomplete execution prerequisites",
                     details=(
                         "Execution prerequisites must cover each planned ATOM exactly once, match its status, and "
-                        "name actor, object/initial state and preparation evidence. A ready check with a pre-existing "
-                        "object/state needs a verified fixture or reproducible setup."
+                        "name actor, object/initial state, setup key and preparation evidence. A ready check with a "
+                        "role or status state needs a verified fixture."
                     ),
                     path=display_path,
                     evidence=[
@@ -3639,20 +3671,23 @@ def validate_practical_scope_brief(path: Path, root: Path) -> tuple[list[Finding
                         *(f"incomplete-needs-data={item}" for item in sorted(incomplete_needs_data_ids)),
                         *(f"missing-preparation-evidence={item}" for item in sorted(incomplete_preparation_evidence_ids)),
                         *(f"unverified-ready-preparation={item}" for item in sorted(unverified_ready_preparation_ids)),
+                        *(f"unsupported-preparation-evidence={item}" for item in sorted(unsupported_preparation_evidence_ids)),
+                        *(f"invalid-setup-key={item}" for item in sorted(invalid_setup_key_ids)),
+                        *(f"role-or-status-without-fixture={item}" for item in sorted(role_or_state_without_fixture_ids)),
                         *(f"generic-ready-actor={item}" for item in sorted(generic_ready_actor_ids)),
                     ][:20],
                     recommended_action=(
-                        "Map every planned ATOM to one actor/object-state prerequisite with verified fixture or "
-                        "reproducible preparation, then synchronize its status."
+                        "Map every planned ATOM to one actor/object-state prerequisite with setup key and valid "
+                        "fixture or preparation evidence, then synchronize its status."
                     ),
                 )
             )
         checks.append(
             Check(
                 "practical-scope-brief-execution-prerequisites",
-                "fail" if missing_ids or unknown_ids or duplicated_ids or mismatched_ids or incomplete_needs_data_ids or incomplete_preparation_evidence_ids or unverified_ready_preparation_ids or generic_ready_actor_ids else "pass",
+                "fail" if missing_ids or unknown_ids or duplicated_ids or mismatched_ids or incomplete_needs_data_ids or incomplete_preparation_evidence_ids or unverified_ready_preparation_ids or unsupported_preparation_evidence_ids or invalid_setup_key_ids or role_or_state_without_fixture_ids or generic_ready_actor_ids else "pass",
                 "Execution prerequisites are inconsistent."
-                if missing_ids or unknown_ids or duplicated_ids or mismatched_ids or incomplete_needs_data_ids or incomplete_preparation_evidence_ids or unverified_ready_preparation_ids or generic_ready_actor_ids
+                if missing_ids or unknown_ids or duplicated_ids or mismatched_ids or incomplete_needs_data_ids or incomplete_preparation_evidence_ids or unverified_ready_preparation_ids or unsupported_preparation_evidence_ids or invalid_setup_key_ids or role_or_state_without_fixture_ids or generic_ready_actor_ids
                 else "Execution prerequisites cover all planned checks.",
                 display_path,
             )
@@ -3671,6 +3706,7 @@ def validate_practical_scope_brief(path: Path, root: Path) -> tuple[list[Finding
     dependency_columns = _practical_table_column_indexes(
         dependency_rows,
         {
+            "setup_key": {"ключ подготовки"},
             "affected": {"затронутые проверки"},
             "status": {"статус исполнения"},
         },
@@ -3688,7 +3724,7 @@ def validate_practical_scope_brief(path: Path, root: Path) -> tuple[list[Finding
                 ),
                 path=display_path,
                 evidence=sorted(needs_test_data_ids),
-                recommended_action="Add a Russian dependency table with preparation, affected checks and execution status.",
+                recommended_action="Add a Russian dependency table with setup key, preparation, affected checks and execution status.",
             )
         )
         checks.append(Check("practical-scope-brief-data-dependencies", "fail", "Structured data dependencies are missing.", display_path))
@@ -3696,12 +3732,28 @@ def validate_practical_scope_brief(path: Path, root: Path) -> tuple[list[Finding
 
     mapped_ids: set[str] = set()
     mismatched_ids: set[str] = set()
+    dependency_setup_keys: set[str] = set()
+    missing_dependency_setup_keys: list[str] = []
+    setup_key_affected_ids: dict[str, set[str]] = {}
     for row in dependency_rows[1:]:
         if max(dependency_columns.values()) >= len(row):
             continue
+        setup_keys = {
+            key.upper()
+            for key in re.findall(
+                r"\bSETUP-[A-Z0-9-]+\b",
+                normalize_markdown_field_value(row[dependency_columns["setup_key"]]),
+                flags=re.IGNORECASE,
+            )
+        }
         ids = set(re.findall(r"\bATOM-[A-Z0-9-]+\b", row[dependency_columns["affected"]], flags=re.IGNORECASE))
-        if not ids:
+        if not ids or not setup_keys:
+            if ids:
+                missing_dependency_setup_keys.extend(sorted(ids))
             continue
+        dependency_setup_keys.update(setup_keys)
+        for setup_key in setup_keys:
+            setup_key_affected_ids.setdefault(setup_key, set()).update(ids)
         mapped_ids.update(ids)
         status = normalize_markdown_field_value(row[dependency_columns["status"]]).casefold()
         if status != "needs-test-data":
@@ -3709,7 +3761,28 @@ def validate_practical_scope_brief(path: Path, root: Path) -> tuple[list[Finding
 
     missing_ids = needs_test_data_ids - mapped_ids
     invalid_ids = (mapped_ids - needs_test_data_ids) | mismatched_ids
-    if missing_ids or invalid_ids:
+    missing_setup_key_ids = {
+        atom_id
+        for atom_id in needs_test_data_ids
+        if not execution_setup_keys.get(atom_id) or execution_setup_keys[atom_id].isdisjoint(dependency_setup_keys)
+    }
+    dependency_key_coverage_mismatches: list[str] = []
+    for setup_key, dependent_ids in setup_key_affected_ids.items():
+        actual_ids = {
+            atom_id
+            for atom_id, setup_keys in execution_setup_keys.items()
+            if setup_key in setup_keys
+        }
+        if dependent_ids != actual_ids:
+            dependency_key_coverage_mismatches.append(
+                f"{setup_key}:expected={','.join(sorted(actual_ids)) or '-'};actual={','.join(sorted(dependent_ids)) or '-'}"
+            )
+    shared_missing_setup_ids = {
+        atom_id
+        for atom_id, setup_keys in execution_setup_keys.items()
+        if planned_statuses.get(atom_id) != "needs-test-data" and not setup_keys.isdisjoint(dependency_setup_keys)
+    }
+    if missing_ids or invalid_ids or missing_dependency_setup_keys or missing_setup_key_ids or dependency_key_coverage_mismatches or shared_missing_setup_ids:
         findings.append(
             Finding(
                 id="practical-scope-brief-data-dependency-status-mismatch",
@@ -3717,22 +3790,28 @@ def validate_practical_scope_brief(path: Path, root: Path) -> tuple[list[Finding
                 category="practical-handoff",
                 title="Practical scope brief has inconsistent data-dependency statuses",
                 details=(
-                    "Affected checks and the planned-checks table must agree on `needs-test-data`; otherwise "
-                    "writer/reviewer can silently treat an unavailable setup as ready."
+                    "Affected checks, setup keys and the planned-checks table must agree on `needs-test-data`; "
+                    "otherwise writer/reviewer can silently treat an unavailable setup as ready."
                 ),
                 path=display_path,
                 evidence=[
                     *(f"missing={item}" for item in sorted(missing_ids)),
                     *(f"invalid={item}" for item in sorted(invalid_ids)),
+                    *(f"missing-dependency-setup-key={item}" for item in sorted(set(missing_dependency_setup_keys))),
+                    *(f"unmapped-setup-key={item}" for item in sorted(missing_setup_key_ids)),
+                    *(f"setup-key-coverage={item}" for item in dependency_key_coverage_mismatches),
+                    *(f"shared-missing-setup={item}" for item in sorted(shared_missing_setup_ids)),
                 ][:20],
-                recommended_action="Synchronize affected ATOM-* rows and status values in the scope brief.",
+                recommended_action="Synchronize setup keys, affected ATOM-* rows and status values in the scope brief.",
             )
         )
     checks.append(
         Check(
             "practical-scope-brief-data-dependencies",
-            "fail" if missing_ids or invalid_ids else "pass",
-            "Data-dependency statuses are inconsistent." if missing_ids or invalid_ids else "Data-dependency statuses are consistent.",
+            "fail" if missing_ids or invalid_ids or missing_dependency_setup_keys or missing_setup_key_ids or dependency_key_coverage_mismatches or shared_missing_setup_ids else "pass",
+            "Data-dependency statuses are inconsistent."
+            if missing_ids or invalid_ids or missing_dependency_setup_keys or missing_setup_key_ids or dependency_key_coverage_mismatches or shared_missing_setup_ids
+            else "Data-dependency statuses are consistent.",
             display_path,
         )
     )
