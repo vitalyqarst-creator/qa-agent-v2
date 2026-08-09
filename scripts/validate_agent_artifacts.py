@@ -3641,6 +3641,9 @@ def validate_practical_scope_brief(path: Path, root: Path) -> tuple[list[Finding
 
     planned_statuses: dict[str, str] = {}
     aggregated_oracle_obligations: list[str] = []
+    unspecified_autofill_targets: list[str] = []
+    aggregated_field_obligations: list[str] = []
+    unspecified_date_constraints: list[str] = []
     for row in planned_rows[1:]:
         if max(planned_columns.values()) >= len(row):
             continue
@@ -3664,6 +3667,31 @@ def validate_practical_scope_brief(path: Path, root: Path) -> tuple[list[Finding
                 f"{next(iter(atom_ids))}:obligations={','.join(sorted(oracle_obligations))}"
             )
 
+        planned_check_text = " ".join(row)
+        atom_label = ",".join(sorted(atom_ids)) or "<missing-atom>"
+        if re.search(
+            r"автозаполн|автоматическ\w*\s+заполн|заполня\w*.*атрибут",
+            planned_check_text,
+            flags=re.IGNORECASE,
+        ) and re.search(
+            r"\b(?:перечисленн\w*\s+)?(?:базов\w*\s+)?атрибут\w*\b|\bвсе\s+атрибут\w*\b",
+            planned_check_text,
+            flags=re.IGNORECASE,
+        ):
+            unspecified_autofill_targets.append(atom_label)
+        if re.search(
+            r"\b(?:поле|поля)\s+.+?,\s*.+?\s+и\s+.+?\s+(?:имеют|должны|принимают|сохраняются|проверяются)\b",
+            planned_check_text,
+            flags=re.IGNORECASE,
+        ):
+            aggregated_field_obligations.append(atom_label)
+        if re.search(r"\bдат[аы]\b.*\bкорректн\w*\s+календарн\w*\b", planned_check_text, flags=re.IGNORECASE) and not re.search(
+            r"\b(?:диапазон|границ\w*|формат|високосн\w*|timezone|часов\w*|1900|9999)\b",
+            planned_check_text,
+            flags=re.IGNORECASE,
+        ):
+            unspecified_date_constraints.append(atom_label)
+
     if aggregated_oracle_obligations:
         findings.append(
             Finding(
@@ -3678,6 +3706,66 @@ def validate_practical_scope_brief(path: Path, root: Path) -> tuple[list[Finding
                 path=display_path,
                 evidence=aggregated_oracle_obligations[:20],
                 recommended_action="Split the planned row so each oracle obligation maps to one ATOM-*.",
+            )
+        )
+
+    if unspecified_autofill_targets:
+        findings.append(
+            Finding(
+                id="practical-scope-brief-autofill-targets-unspecified",
+                severity="error",
+                category="practical-handoff",
+                title="Practical scope brief hides auto-fill targets behind generic wording",
+                details=(
+                    "An auto-fill check must name every affected field exactly, or point to one explicit fixed "
+                    "field list. Phrases such as 'basic attributes' make coverage and later automation ambiguous."
+                ),
+                path=display_path,
+                evidence=unspecified_autofill_targets[:20],
+                recommended_action=(
+                    "Replace generic auto-fill wording with the exact field names and split distinct field behavior "
+                    "into separate ATOM rows where it has a different source, trigger or expected result."
+                ),
+            )
+        )
+
+    if aggregated_field_obligations:
+        findings.append(
+            Finding(
+                id="practical-scope-brief-aggregated-field-obligations",
+                severity="error",
+                category="practical-handoff",
+                title="Practical scope brief groups independent field obligations",
+                details=(
+                    "A single planned row groups several named fields under one assertion. This hides distinct "
+                    "test-design obligations and leads to non-atomic test cases."
+                ),
+                path=display_path,
+                evidence=aggregated_field_obligations[:20],
+                recommended_action=(
+                    "Split the row into separate ATOM checks, unless the source explicitly defines one inseparable "
+                    "combined outcome and the brief records the exact shared trigger and result."
+                ),
+            )
+        )
+
+    if unspecified_date_constraints:
+        findings.append(
+            Finding(
+                id="practical-scope-brief-date-constraints-unspecified",
+                severity="error",
+                category="practical-handoff",
+                title="Practical scope brief reduces date design to one generic valid-date check",
+                details=(
+                    "A generic 'correct calendar date' assertion does not preserve source-backed date format, "
+                    "range, calendar-boundary or timezone obligations."
+                ),
+                path=display_path,
+                evidence=unspecified_date_constraints[:20],
+                recommended_action=(
+                    "Add distinct source rows and ATOM checks for every applicable date constraint, or record a "
+                    "specific GAP when the source does not define a constraint."
+                ),
             )
         )
 
@@ -4280,11 +4368,11 @@ def validate_active_transition_prompt(
             *flatten_string_values(state.get("latest_artifacts")),
         ]
         is_practical_scope_to_writer = prompt_path.name == "prompt.scope-to-writer.md" and is_practical_v08_route(state)
-        required_scope_input_names = {
-            "source-selection.md",
-            "scope-coverage-gaps.md",
-            "scope-brief.md" if is_practical_scope_to_writer else "scope-contract.md",
-        }
+        required_scope_input_names = (
+            {"source-selection.md", "scope-brief.md", "workflow-state.yaml"}
+            if is_practical_scope_to_writer
+            else {"source-selection.md", "scope-coverage-gaps.md", "scope-contract.md"}
+        )
         if prompt_path.name == "prompt.scope-gaps-to-reviewer.md":
             required_scope_input_names.add("workflow-state.yaml")
         if prompt_path.name == "prompt.scope-assertions-to-reviewer.md":
@@ -5956,6 +6044,8 @@ def practical_scope_transition_decision_issues(record: Mapping[str, str]) -> lis
     """Validate the exact round-cap policy rather than matching status prose."""
 
     scope = record.get("scope", "<missing>")
+    verdict = record.get("verdict", "").casefold()
+    next_stage_transition = record.get("next_stage_transition", "").casefold()
     source_contradiction = record.get("source_contradiction", "").casefold()
     decision = record.get("tc_with_status_decision", "").casefold()
     issues: list[str] = []
@@ -5971,6 +6061,10 @@ def practical_scope_transition_decision_issues(record: Mapping[str, str]) -> lis
         issues.append(f"scope={scope}:source_contradiction=yes requires tc_with_status_decision=block-source-contradiction")
     elif source_contradiction == "not-applicable" and decision != "not-applicable":
         issues.append(f"scope={scope}:source_contradiction=not-applicable requires tc_with_status_decision=not-applicable")
+    if verdict == "blocked" and next_stage_transition != "writer blocked":
+        issues.append(
+            f"scope={scope}:verdict=blocked requires next_stage_transition=writer blocked"
+        )
     return issues
 
 
@@ -24087,7 +24181,12 @@ def validate_workflow_state(
         and stage_status in {"ready-for-gap-review", "ready-for-next-stage"}
         and next_skill in {"ft-test-case-reviewer", "ft-test-case-writer", "ft-test-case-iteration"}
     )
-    if scope_analyzer_ready_state:
+    # The compact practical route records its individual SO-NEG/SO-REQ
+    # obligations directly in scope-brief.md. Requiring the legacy oracle
+    # inventories here would make a valid practical handoff impossible while
+    # adding no new evidence. The practical scope-brief validator runs below
+    # before the writer transition instead.
+    if scope_analyzer_ready_state and not is_practical_v08_route(state):
         oracle_requirements = [
             (
                 NEGATIVE_ORACLE_INVENTORY_NAME,
@@ -24488,6 +24587,47 @@ def validate_workflow_state(
                 language_findings, language_checks = validate_practical_handoff_language(clarification_path, root)
                 findings.extend(language_findings)
                 checks.extend(language_checks)
+                try:
+                    clarification_content = clarification_path.read_text(encoding="utf-8")
+                except UnicodeDecodeError:
+                    clarification_content = ""
+                if re.search(r"(?im)^\s*blocking\s*:\s*yes\s*$", clarification_content):
+                    findings.append(
+                        Finding(
+                            id="workflow-state-practical-ready-with-blocking-clarification",
+                            severity="error",
+                            category="stage-transition",
+                            title="Practical writer handoff conflicts with a blocking clarification",
+                            details=(
+                                "A clarification marked blocking=yes means the affected source obligation cannot "
+                                "proceed to writer as a status-marked candidate. The workflow cannot simultaneously "
+                                "be ready for the practical writer."
+                            ),
+                            path=display_path,
+                            evidence=[rel(clarification_path, root)],
+                            recommended_action=(
+                                "Either keep the workflow blocked, or reclassify the clarification as a partial "
+                                "non-blocking gap and give its affected ATOM an explicit execution status."
+                            ),
+                        )
+                    )
+                    checks.append(
+                        Check(
+                            "workflow-state-practical-blocking-clarification",
+                            "fail",
+                            "Practical writer handoff has a blocking clarification.",
+                            display_path,
+                        )
+                    )
+                else:
+                    checks.append(
+                        Check(
+                            "workflow-state-practical-blocking-clarification",
+                            "pass",
+                            "No unresolved blocking clarification is linked.",
+                            display_path,
+                        )
+                    )
 
         scope_gaps_path = resolving_artifact_by_name(
             "scope-coverage-gaps.md",

@@ -511,6 +511,110 @@ class PracticalHandoffQualityTests(unittest.TestCase):
         finding_ids = {finding.id for finding in findings}
         self.assertIn("practical-prompt-copies-permanent-guardrails", finding_ids)
 
+    def test_scope_brief_rejects_generic_autofill_target_names(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            brief = root / "scope-brief.md"
+            self.write_scope_brief(brief)
+            brief.write_text(
+                brief.read_text(encoding="utf-8").replace(
+                    "Действие выполняется для подготовленного объекта.",
+                    "Автозаполнение базовых атрибутов выполняется после выбора подсказки.",
+                ),
+                encoding="utf-8",
+            )
+
+            findings, _ = self.validator.validate_practical_scope_brief(brief, root)
+
+        finding_ids = {finding.id for finding in findings}
+        self.assertIn("practical-scope-brief-autofill-targets-unspecified", finding_ids)
+
+    def test_scope_brief_rejects_aggregated_field_obligations(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            brief = root / "scope-brief.md"
+            self.write_scope_brief(brief)
+            brief.write_text(
+                brief.read_text(encoding="utf-8").replace(
+                    "Действие выполняется для подготовленного объекта.",
+                    "Поля Юр. адрес, КПП и ОГРН имеют корректный формат.",
+                ),
+                encoding="utf-8",
+            )
+
+            findings, _ = self.validator.validate_practical_scope_brief(brief, root)
+
+        finding_ids = {finding.id for finding in findings}
+        self.assertIn("practical-scope-brief-aggregated-field-obligations", finding_ids)
+
+    def test_scope_brief_rejects_generic_calendar_date_check(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            brief = root / "scope-brief.md"
+            self.write_scope_brief(brief)
+            brief.write_text(
+                brief.read_text(encoding="utf-8").replace(
+                    "Действие выполняется для подготовленного объекта.",
+                    "Дата аккредитации принимает корректную календарную дату.",
+                ),
+                encoding="utf-8",
+            )
+
+            findings, _ = self.validator.validate_practical_scope_brief(brief, root)
+
+        finding_ids = {finding.id for finding in findings}
+        self.assertIn("practical-scope-brief-date-constraints-unspecified", finding_ids)
+
+    def test_blocked_scope_transition_cannot_route_writer_conditionally(self) -> None:
+        issues = self.validator.practical_scope_transition_decision_issues(
+            {
+                "scope": "05",
+                "verdict": "blocked",
+                "next_stage_transition": "writer conditional",
+                "source_contradiction": "yes",
+                "tc_with_status_decision": "block-source-contradiction",
+            }
+        )
+
+        self.assertIn("scope=05:verdict=blocked requires next_stage_transition=writer blocked", issues)
+
+    def test_practical_writer_prompt_does_not_require_legacy_gap_artifact(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            handoff = root / "handoff"
+            handoff.mkdir()
+            for name in ("source-selection.md", "scope-brief.md"):
+                (handoff / name).write_text("# Артефакт\n", encoding="utf-8")
+            workflow = handoff / "workflow-state.yaml"
+            workflow.write_text("route_profile: practical_v0_8\n", encoding="utf-8")
+            prompt = handoff / "prompt.scope-to-writer.md"
+            prompt.write_text(
+                "\n".join(
+                    [
+                        "## Цель этапа",
+                        "Подготовить матрицу тест-дизайна.",
+                        "## Входные артефакты",
+                        "- `source-selection.md`",
+                        "- `scope-brief.md`",
+                        "- `workflow-state.yaml`",
+                        "## Обязательные действия",
+                        "- Создать матрицу.",
+                        "## Не делать",
+                        "- Не создавать тест-кейсы.",
+                        "## Ожидаемые выходы",
+                        "- `test-design-matrix.md`.",
+                        "## Условие завершения",
+                        "Матрица подготовлена.",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            findings, _ = self.validator.validate_active_transition_prompt(prompt, workflow, root, root)
+
+        finding_ids = {finding.id for finding in findings}
+        self.assertNotIn("prompt-format-missing-required-scope-inputs", finding_ids)
+
 
 if __name__ == "__main__":
     unittest.main()

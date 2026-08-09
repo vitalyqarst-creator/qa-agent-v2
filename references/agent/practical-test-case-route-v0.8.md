@@ -450,6 +450,11 @@ planned TC), use the fast path inside this same route:
      status rows, create a compact `source-row-inventory.md` before writer
      handoff. It may be lightweight, but it must name every in-scope row/value
      class the writer must cover or defer.
+   - Apply document-global type constraints to every relevant table field before
+     creating the inventory: text length, date format/range/calendar/timezone,
+     numeric bounds and other explicit shared restrictions. Record each
+     independent restriction as a source row and separate `ATOM-*` or
+     `SO-NEG-*`; do not collapse it into a generic field row.
    - The brief must contain:
      - scope boundary and source references;
      - relevant FT text / table rows / PDF pages;
@@ -462,6 +467,9 @@ planned TC), use the fast path inside this same route:
    - `scope-brief.md` uses Russian visible prose and three execution tables; its
      linked source-row inventory path must resolve. Map one `AS.*` / `SO-NEG-*` / `SO-REQ-*`
      to one `ATOM-*` or `GAP-*`, with actor, state, `SETUP-*`, evidence and status;
+     name every target field of an auto-fill requirement exactly. Generic labels
+     such as “basic attributes”, “listed attributes” or “all attributes” are not
+     coverage and cannot be accepted.
      sibling atoms repeat setup. `ready` needs `FX-*` or source-backed
      `поле=значение` preparation, otherwise use `needs-test-data`.
 
@@ -499,7 +507,9 @@ planned TC), use the fast path inside this same route:
    - Re-derive the coverage plan from FT/PDF/XHTML/support before trusting the
      writer matrix. Check visible field names, button/action labels, table rows,
      mockup figures and disputed source/support notes directly against the
-     source package. A matrix cannot be accepted when reviewer only validates
+     source package. Re-derive applicable document-global type constraints and
+     exact auto-fill target lists rather than trusting a summarized field row.
+     A matrix cannot be accepted when reviewer only validates
      matrix formatting or traceability tokens.
    - Do not review canonical test cases in this pass. The expected current TC file
      state is "not created yet" or "old draft ignored".

@@ -38,21 +38,32 @@ Required guardrails:
 входов, границы, статусы/неизвестности, результат и gate. Постоянные правила
 skill-а, общий маршрут, технические детали и generic запреты не копируй.
 
-Обязательные входы для `prompt.scope-to-writer.md`:
+Обязательные входы для `prompt.scope-to-writer.md` зависят от маршрута.
+
+Для `practical_v0_8` обязательны:
 
 - `source-selection.md`;
-- для legacy/session/production route — `scope-contract.md`;
-- для `practical_v0_8` matrix-only pass — `scope-brief.md` вместо `scope-contract.md`;
+- `scope-brief.md` — единственный компактный источник для границ, `ATOM-*`, `GAP-*`, `SO-NEG-*` / `SO-REQ-*`, статусов и предпосылок исполнения;
+- `workflow-state.yaml`.
+
+Для legacy/session/production route обязательны:
+
+- `source-selection.md`;
+- `scope-contract.md`;
 - `scope-coverage-gaps.md`;
-- `workflow-state.yaml`;
+- `workflow-state.yaml`.
+
+Для обоих маршрутов добавляй только реально существующие условные source artifacts:
 - `source-parity-check.md`, если для основного ФТ доступны DOCX и PDF; если artifact должен быть, но отсутствует, prompt должен фиксировать blocking input issue вместо запуска writer-а;
 - `source-row-inventory.md`, если `source-parity-check.md` содержит row-level/table parity или scope основан на таблице полей/действий; если artifact должен быть, но отсутствует, prompt должен фиксировать blocking input issue вместо запуска writer-а;
 - `mockup-visual-inventory.md`, если подтвержденный UI scope содержит mockup / screen image / `mockups/`; если artifact должен быть, но отсутствует или `opened != yes`, prompt должен фиксировать blocking input issue вместо запуска writer-а;
-- `scope-clarification-requests.md`, если есть хотя бы один `GAP-*` или открытый вопрос;
-- `scope-gap-review.md`, если pre-writer `scope_gap_review` уже выполнен;
+- `scope-clarification-requests.md`, если в нём есть конкретный открытый вопрос;
+- `scope-gap-review.md`, только для legacy/session/production route, если pre-writer `scope_gap_review` уже выполнен;
 - package-specific `AGENT-NOTES.md`, если он есть в FT-пакете;
-- regression/baseline artifacts, явно перечисленные в `scope-contract.md`, `source-parity-check.md`, `scope-coverage-gaps.md`, previous review/eval reports или workflow `latest_artifacts`;
+- regression/baseline artifacts, явно перечисленные в `scope-brief.md` (practical) или в `scope-contract.md` / `scope-coverage-gaps.md` (legacy), previous review/eval reports или workflow `latest_artifacts`;
 - основной FT и разрешенные support materials, если writer должен извлекать детали требований.
+
+В `practical_v0_8` не добавляй ссылки на `scope-contract.md`, отдельный `scope-coverage-gaps.md`, oracle inventories или `scope-gap-review.md`: эти legacy artifacts не заменяют и не дополняют `scope-brief.md`.
 
 Обязательные правила, которые должны быть явно продублированы в `prompt.scope-to-writer.md`, а не только спрятаны во вложенных артефактах:
 
@@ -155,7 +166,7 @@ Prompt-файлы хранятся в:
 - есть секция входных артефактов;
 - есть секция ограничений / guardrails;
 - секция входных артефактов содержит хотя бы одну ссылку на artifact, который разрешается в текущем checkout.
-- Для `prompt.scope-to-writer.md` и `prompt.scope-to-iteration.md` секция входных артефактов должна содержать resolving ссылки на `source-selection.md`, `scope-coverage-gaps.md` и `scope-contract.md`; для `practical_v0_8` matrix-only `prompt.scope-to-writer.md` вместо `scope-contract.md` обязателен `scope-brief.md`. Если workflow включает `source-parity-check.md`, `source-row-inventory.md`, `mockup-visual-inventory.md` или `scope-clarification-requests.md`, prompt должен ссылаться и на них.
+- Для legacy `prompt.scope-to-writer.md` и `prompt.scope-to-iteration.md` секция входных артефактов содержит resolving ссылки на `source-selection.md`, `scope-coverage-gaps.md` и `scope-contract.md`. Для `practical_v0_8` matrix-only `prompt.scope-to-writer.md` обязательны только `source-selection.md`, `scope-brief.md`, `workflow-state.yaml` и условные source/parity/row/mockup/BA artifacts, которые реально существуют для scope. Practical prompt не должен ссылаться на legacy artifacts.
 - Для `prompt.scope-gaps-to-reviewer.md` секция входных артефактов должна содержать resolving ссылки на `source-selection.md`, `scope-contract.md`, `scope-coverage-gaps.md`, `scope-clarification-requests.md` и `workflow-state.yaml`; если workflow включает `source-parity-check.md`, `source-row-inventory.md` или `mockup-visual-inventory.md`, prompt должен ссылаться и на них.
 - Для `prompt.scope-assertions-to-reviewer.md` секция входных артефактов должна содержать resolving ссылки на `source-selection.md`, `scope-contract.md`, `scope-coverage-gaps.md`, `workflow-state.yaml`, `source-row-inventory.md`, `source-row-extraction-spec.json`, `source-row-baseline.json` и `source-assertions.json`; если workflow включает `source-parity-check.md` или `mockup-visual-inventory.md`, prompt должен ссылаться и на них.
 

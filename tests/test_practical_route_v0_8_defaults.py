@@ -337,6 +337,7 @@ class PracticalRouteV08DefaultsTests(unittest.TestCase):
                         "- `source-selection.md`",
                         "- `scope-coverage-gaps.md`",
                         "- `scope-brief.md`",
+                        "- `workflow-state.yaml`",
                         "## Обязательные действия",
                         "- Изучить входные артефакты.",
                         "## Не делать",
