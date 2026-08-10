@@ -4583,11 +4583,7 @@ def validate_practical_scope_brief(path: Path, root: Path) -> tuple[list[Finding
                         f"{rel(inventory_path, root)}:{source_row_id}:missing-plan-link={atom_id}"
                     )
             source_statement = " ".join(inventory_row.values())
-            if re.search(
-                r"\b(?:все|всех|остальн\w*|кажд\w*)\s+рол",
-                source_statement,
-                flags=re.IGNORECASE,
-            ):
+            if UNIVERSAL_ROLE_REQUIREMENT_RE.search(source_statement):
                 universal_role_source_rows.append(
                     (rel(inventory_path, root), source_row_id.upper(), mapped_atoms)
                 )
@@ -4957,10 +4953,8 @@ def validate_practical_scope_brief(path: Path, root: Path) -> tuple[list[Finding
         for atom_id, setup_keys in execution_setup_keys.items()
         if "SETUP-ROLE-INVENTORY" in setup_keys
         and atom_id in planned_statuses
-        and not re.search(
-            r"\b(?:все|всех|остальн\w*|кажд\w*)\s+(?:настроенн\w*\s+)?рол",
-            " ".join([planned_text_by_atom.get(atom_id, ""), execution_contexts.get(atom_id, "")]),
-            flags=re.IGNORECASE,
+        and not UNIVERSAL_ROLE_REQUIREMENT_RE.search(
+            " ".join([planned_text_by_atom.get(atom_id, ""), execution_contexts.get(atom_id, "")])
         )
     ]
     if overbroad_role_inventory_atoms:
@@ -4998,11 +4992,7 @@ def validate_practical_scope_brief(path: Path, root: Path) -> tuple[list[Finding
         quantified_atoms = [
             atom_id
             for atom_id in sorted(mapped_atoms)
-            if re.search(
-                r"\b(?:все|всех|остальн\w*|кажд\w*)\s+(?:настроенн\w*\s+)?рол",
-                planned_text_by_atom.get(atom_id, ""),
-                flags=re.IGNORECASE,
-            )
+            if UNIVERSAL_ROLE_REQUIREMENT_RE.search(planned_text_by_atom.get(atom_id, ""))
         ]
         if not quantified_atoms:
             universal_role_coverage_mismatches.append(
@@ -7109,6 +7099,242 @@ def validate_practical_workflow_version_gate(
         ], [Check("workflow-state-practical-code-version-gate", "fail", "Recorded commit is stale.", display_path)]
 
     return [], [Check("workflow-state-practical-code-version-gate", "pass", "Recorded commit matches code root HEAD.", display_path)]
+
+
+def validate_practical_instruction_context(
+    state: dict[str, Any],
+    path: Path,
+    root: Path,
+) -> tuple[list[Finding], list[Check]]:
+    """Require resumed practical stages to prove that their current skill was reloaded."""
+
+    expected_skill = str(state.get("current_stage") or "").strip()
+    if not is_practical_v08_route(state) or expected_skill not in {
+        "ft-scope-analyzer",
+        "ft-test-case-writer",
+        "ft-test-case-reviewer",
+    }:
+        return [], []
+
+    version_gate = state.get("code_version_gate")
+    root_consistency = state.get("root_consistency")
+    if not isinstance(version_gate, dict) or not isinstance(root_consistency, dict):
+        return [], []
+    recorded_commit = str(version_gate.get("code_commit") or "").strip().casefold()
+    current_commit = current_git_commit_for_code_root(str(root_consistency.get("code_root") or ""))
+    if not current_commit or current_commit != recorded_commit:
+        return [], []
+
+    context = state.get("instruction_context")
+    loaded_skill = str(context.get("loaded_skill") or "").strip() if isinstance(context, dict) else ""
+    loaded_commit = str(context.get("code_commit") or "").strip().casefold() if isinstance(context, dict) else ""
+    display_path = rel(path, root)
+    if loaded_skill != expected_skill or loaded_commit != recorded_commit:
+        return [
+            Finding(
+                id="workflow-state-practical-instruction-context-stale",
+                severity="error",
+                category="workflow-state",
+                title="Practical workflow does not prove current instruction reload",
+                details=(
+                    "Refreshing only the recorded git SHA can leave a resumed agent using an obsolete skill or route. "
+                    "The active-stage instruction context must be bound to the same commit as the version gate."
+                ),
+                path=display_path,
+                evidence=[
+                    f"expected_skill={expected_skill}",
+                    f"loaded_skill={loaded_skill or '<missing>'}",
+                    f"recorded_commit={recorded_commit}",
+                    f"loaded_commit={loaded_commit or '<missing>'}",
+                ],
+                recommended_action=(
+                    "Reread the active skill and practical route, then record instruction_context.loaded_skill and "
+                    "instruction_context.code_commit in workflow-state.yaml."
+                ),
+            )
+        ], [Check("workflow-state-practical-instruction-context", "fail", "Instruction context is missing or stale.", display_path)]
+
+    return [], [Check("workflow-state-practical-instruction-context", "pass", "Instruction context matches active skill and version gate.", display_path)]
+
+
+def practical_scope_section_key(scope_slug: str) -> tuple[int, ...] | None:
+    """Return the leading numeric FT section from either dotted or dashed scope slug."""
+
+    match = re.match(r"^(\d+(?:[.-]\d+)*)", scope_slug.strip())
+    if match is None:
+        return None
+    try:
+        return tuple(int(part) for part in re.split(r"[.-]", match.group(1)))
+    except ValueError:
+        return None
+
+
+def practical_scope_range_contains(value: str, target: tuple[int, ...]) -> bool:
+    """Match a section id in a comma list or an inclusive dotted section range."""
+
+    def normalized(parts: tuple[int, ...], width: int) -> tuple[int, ...]:
+        return parts + (0,) * (width - len(parts))
+
+    for start_raw, end_raw in re.findall(r"(\d+(?:\.\d+)*)\s*[–—-]\s*(\d+(?:\.\d+)*)", value):
+        start = tuple(int(part) for part in start_raw.split("."))
+        end = tuple(int(part) for part in end_raw.split("."))
+        width = max(len(start), len(end), len(target))
+        if normalized(start, width) <= normalized(target, width) <= normalized(end, width):
+            return True
+    return any(
+        tuple(int(part) for part in candidate.split(".")) == target
+        for candidate in re.findall(r"\d+(?:\.\d+)+", value)
+    )
+
+
+def practical_scope_input_closure_candidates(
+    state: dict[str, Any],
+    path: Path,
+    root: Path,
+    ft_root: Path,
+) -> list[str]:
+    """Find optional visual and BA inputs that are relevant to the selected scope."""
+
+    scope_key = practical_scope_section_key(str(state.get("scope_slug") or ""))
+    if scope_key is None:
+        return []
+    source_selection_paths = workflow_artifact_paths_by_name(state, path, root, ft_root, "source-selection.md")
+    selection_text = "\n".join(
+        candidate.read_text(encoding="utf-8")
+        for candidate in source_selection_paths
+        if candidate.is_file()
+    )
+    candidates: list[str] = []
+    for index_path in sorted((ft_root / "support" / "figma").glob("figma-design-index.md")) if (ft_root / "support" / "figma").is_dir() else []:
+        relative = index_path.relative_to(ft_root).as_posix()
+        if relative not in selection_text:
+            continue
+        rows = markdown_table_rows_from_text(index_path.read_text(encoding="utf-8"))
+        if not rows:
+            continue
+        header = {normalize_markdown_field_name(value): index for index, value in enumerate(rows[0])}
+        scope_column = header.get("relevant_scopes")
+        if scope_column is None:
+            continue
+        if any(
+            scope_column < len(row) and practical_scope_range_contains(row[scope_column], scope_key)
+            for row in rows[1:]
+        ):
+            candidates.append(relative)
+
+    brief_path_value = state.get("latest_artifacts", {}).get("scope_brief") if isinstance(state.get("latest_artifacts"), dict) else None
+    brief_path = resolve_artifact_path(brief_path_value, path, root, ft_root) if isinstance(brief_path_value, str) else None
+    brief_text = brief_path.read_text(encoding="utf-8") if brief_path and brief_path.is_file() else ""
+    scope_codes = {
+        code.upper()
+        for code in re.findall(r"\bAS\.\d+\b", brief_text, flags=re.IGNORECASE)
+    }
+    scope_text = ".".join(str(part) for part in scope_key)
+    for support_path in sorted((ft_root / "support").glob("*ba-*.md")) if (ft_root / "support").is_dir() else []:
+        content = support_path.read_text(encoding="utf-8")
+        has_matching_code = bool(
+            scope_codes
+            & {
+                code.upper()
+                for code in re.findall(r"\bAS\.\d+\b", content, flags=re.IGNORECASE)
+            }
+        )
+        if has_matching_code or scope_text in content:
+            candidates.append(support_path.relative_to(ft_root).as_posix())
+    return sorted(set(candidates))
+
+
+def validate_practical_scope_input_closure(
+    state: dict[str, Any],
+    path: Path,
+    root: Path,
+    ft_root: Path,
+) -> tuple[list[Finding], list[Check]]:
+    """Ensure relevant Figma and BA material reaches all matrix-writer inputs."""
+
+    if not is_practical_v08_route(state) or str(state.get("current_stage") or "") != "ft-scope-analyzer":
+        return [], []
+    candidates = practical_scope_input_closure_candidates(state, path, root, ft_root)
+    if not candidates:
+        return [], [Check("practical-scope-input-closure", "pass", "No additional relevant support inputs discovered.", rel(path, root))]
+
+    required_inputs = {
+        value.replace("\\", "/").strip()
+        for value in flatten_string_values(state.get("required_inputs"))
+    }
+    latest_artifacts = state.get("latest_artifacts") if isinstance(state.get("latest_artifacts"), dict) else {}
+    brief_value = latest_artifacts.get("scope_brief")
+    brief_path = resolve_artifact_path(brief_value, path, root, ft_root) if isinstance(brief_value, str) else None
+    brief_text = brief_path.read_text(encoding="utf-8") if brief_path and brief_path.is_file() else ""
+    prompt_value = explicit_active_transition_prompt_value(state)
+    prompt_path = resolve_artifact_path(prompt_value, path, root, ft_root) if prompt_value else None
+    prompt_text = prompt_path.read_text(encoding="utf-8") if prompt_path and prompt_path.is_file() else ""
+    missing: list[str] = []
+    for candidate in candidates:
+        if candidate not in required_inputs:
+            missing.append(f"workflow:{candidate}")
+        if candidate not in brief_text:
+            missing.append(f"brief:{candidate}")
+        if candidate not in prompt_text:
+            missing.append(f"prompt:{candidate}")
+    display_path = rel(path, root)
+    if missing:
+        return [
+            Finding(
+                id="practical-scope-input-closure-incomplete",
+                severity="error",
+                category="practical-handoff",
+                title="Relevant Figma or BA support is absent from the scope handoff",
+                details=(
+                    "A writer must receive every scope-relevant optional visual index and BA answer file through "
+                    "workflow-state, scope brief and active prompt; source selection alone is not sufficient."
+                ),
+                path=display_path,
+                evidence=missing[:20],
+                recommended_action="Add each listed relative path to required_inputs, scope brief and active writer prompt.",
+            )
+        ], [Check("practical-scope-input-closure", "fail", "Relevant support inputs are not fully propagated.", display_path)]
+    return [], [Check("practical-scope-input-closure", "pass", "Relevant support inputs are propagated.", display_path)]
+
+
+def validate_practical_linked_visual_inventory_language(
+    state: dict[str, Any],
+    path: Path,
+    root: Path,
+    ft_root: Path,
+) -> tuple[list[Finding], list[Check]]:
+    """Keep practical linked visual inventories user-readable in Russian."""
+
+    if not is_practical_v08_route(state):
+        return [], []
+    evidence: list[str] = []
+    for inventory_path in workflow_mockup_visual_inventory_paths(state, path, root, ft_root):
+        try:
+            content = inventory_path.read_text(encoding="utf-8")
+        except UnicodeDecodeError:
+            continue
+        evidence.extend(
+            f"{rel(inventory_path, root)}:{item}"
+            for item in practical_handoff_english_evidence(content)
+        )
+    display_path = rel(path, root)
+    if evidence:
+        return [
+            Finding(
+                id="practical-linked-visual-inventory-non-russian-visible-text",
+                severity="error",
+                category="practical-handoff",
+                title="Linked mockup visual inventory contains English visible prose",
+                details=(
+                    "A practical handoff may keep technical metadata enums in English, but its headings, table labels "
+                    "and explanatory prose must remain Russian for the user and downstream manual tester."
+                ),
+                path=display_path,
+                evidence=evidence[:20],
+                recommended_action="Rewrite the linked mockup-visual-inventory.md using the Russian canonical template.",
+            )
+        ], [Check("practical-linked-visual-inventory-language", "fail", "Visual inventory visible text is not Russian.", display_path)]
+    return [], [Check("practical-linked-visual-inventory-language", "pass", "Visual inventory visible text is Russian.", display_path)]
 
 
 def validate_practical_post_finalization_gate(
@@ -11857,6 +12083,12 @@ MOCKUP_VISUAL_INVENTORY_REQUIRED_TERM_ALIASES = {
         "не используется как источник требований",
     },
 }
+
+UNIVERSAL_ROLE_REQUIREMENT_RE = re.compile(
+    r"(?:\b(?:все|всех|всем|остальн\w*|кажд\w*)\s+(?:настроенн\w*\s+)?рол)|"
+    r"(?:\b(?:все|всех|всем)\b[^.\n;]{0,60}\bкроме\s+(?:роли\s+)?администратор)",
+    flags=re.IGNORECASE,
+)
 
 MOCKUP_SOURCE_RE = re.compile(
     r"\bmockup\b|mockups?[\\/]|макет|макеты|\.(?:png|jpe?g|webp)\b",
@@ -25173,6 +25405,9 @@ def validate_workflow_state(
     version_findings, version_checks = validate_practical_workflow_version_gate(state, path, root)
     findings.extend(version_findings)
     checks.extend(version_checks)
+    instruction_findings, instruction_checks = validate_practical_instruction_context(state, path, root)
+    findings.extend(instruction_findings)
+    checks.extend(instruction_checks)
     post_finalization_findings, post_finalization_checks = validate_practical_post_finalization_gate(
         state, path, root
     )
@@ -25201,6 +25436,16 @@ def validate_workflow_state(
         checks.append(Check("workflow-state-required-fields", "pass", "Required fields present.", display_path))
 
     ft_root = find_ft_root(path, root, state)
+    scope_input_findings, scope_input_checks = validate_practical_scope_input_closure(
+        state, path, root, ft_root
+    )
+    findings.extend(scope_input_findings)
+    checks.extend(scope_input_checks)
+    visual_inventory_findings, visual_inventory_checks = validate_practical_linked_visual_inventory_language(
+        state, path, root, ft_root
+    )
+    findings.extend(visual_inventory_findings)
+    checks.extend(visual_inventory_checks)
     authoritative_cycle_state = find_authoritative_session_cycle_state(state, path, root, ft_root)
     workflow_superseded_by_session_cycle = authoritative_cycle_state is not None
     if authoritative_cycle_state is not None:

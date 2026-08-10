@@ -476,6 +476,9 @@ planned TC), use the fast path inside this same route:
      next step.
 
 2. `ft-scope-analyzer`
+   - When resuming after a changed code gate, reread the active skill and this
+     route before editing artifacts; record the loaded skill and the verified
+     commit in `workflow-state.yaml.instruction_context`.
    - Before narrowing a scope, resolve the canonical source-selection artifact.
      First read `work/stage-handoffs/00-source-selection/workflow-state.yaml`
      and its `latest_artifacts.source_selection`; then use

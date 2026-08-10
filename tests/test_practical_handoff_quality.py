@@ -562,7 +562,7 @@ class PracticalHandoffQualityTests(unittest.TestCase):
                     "",
                     "| source_row_id | package_id | field_or_action | source_ref | requirement_codes | in_scope | mapped_atom_or_gap |",
                     "| --- | --- | --- | --- | --- | --- | --- |",
-                    "| `SRC-001` | `PKG-01` | Скрытый партнер виден администратору и скрыт для остальных ролей. | Таблица статусов | `AS.11` | `yes` | `ATOM-001` |",
+                    "| `SRC-001` | `PKG-01` | Скрытый партнер скрыт для всех, кроме администратора. | Таблица статусов | `AS.11` | `yes` | `ATOM-001` |",
                 ]
             ),
             encoding="utf-8",
@@ -997,6 +997,129 @@ class PracticalHandoffQualityTests(unittest.TestCase):
 
         finding_ids = {finding.id for finding in findings}
         self.assertIn("workflow-state-practical-code-version-stale", finding_ids)
+
+    def test_practical_workflow_requires_current_instruction_context(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            workflow = root / "workflow-state.yaml"
+            workflow.write_text("route_profile: practical_v0_8\n", encoding="utf-8")
+            state = {
+                "route_profile": "practical_v0_8",
+                "current_stage": "ft-scope-analyzer",
+                "root_consistency": {"code_root": str(root)},
+                "code_version_gate": {"code_commit": "a" * 40},
+            }
+            original = self.validator.current_git_commit_for_code_root
+            self.validator.current_git_commit_for_code_root = lambda _: "a" * 40
+            try:
+                findings, _ = self.validator.validate_practical_instruction_context(state, workflow, root)
+                state["instruction_context"] = {
+                    "loaded_skill": "ft-scope-analyzer",
+                    "code_commit": "a" * 40,
+                }
+                accepted_findings, _ = self.validator.validate_practical_instruction_context(state, workflow, root)
+            finally:
+                self.validator.current_git_commit_for_code_root = original
+
+        self.assertIn(
+            "workflow-state-practical-instruction-context-stale",
+            {finding.id for finding in findings},
+        )
+        self.assertEqual([], accepted_findings)
+
+    def test_practical_scope_input_closure_requires_relevant_figma_and_ba_inputs(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            ft_root = root / "fts" / "Partners" / "Partners-v1"
+            handoff = ft_root / "work" / "stage-handoffs" / "scope"
+            handoff.mkdir(parents=True)
+            workflow = handoff / "workflow-state.yaml"
+            workflow.write_text("route_profile: practical_v0_8\n", encoding="utf-8")
+            source_selection = handoff / "source-selection.md"
+            source_selection.write_text(
+                "# Отбор источников\n\n- `support/figma/figma-design-index.md`\n",
+                encoding="utf-8",
+            )
+            brief = handoff / "scope-brief.md"
+            brief.write_text("# Краткое описание области\n\n- `AS.13`\n", encoding="utf-8")
+            prompt = handoff / "prompt.scope-to-writer.md"
+            prompt.write_text("# Следующий этап\n", encoding="utf-8")
+            figma_index = ft_root / "support" / "figma" / "figma-design-index.md"
+            figma_index.parent.mkdir(parents=True)
+            figma_index.write_text(
+                "| figma_id | relevant_scopes |\n| --- | --- |\n| `FIGMA-001` | `9.1–9.3.3` |\n",
+                encoding="utf-8",
+            )
+            ba_answers = ft_root / "support" / "partners-v1-ba-answers.md"
+            ba_answers.parent.mkdir(parents=True, exist_ok=True)
+            ba_answers.write_text("# Ответы БА\n\n- `AS.13`: уточнение.\n", encoding="utf-8")
+            state = {
+                "route_profile": "practical_v0_8",
+                "current_stage": "ft-scope-analyzer",
+                "scope_slug": "9-3-1-partner-directory",
+                "required_inputs": ["source/main.docx"],
+                "latest_artifacts": {
+                    "source_selection": "work/stage-handoffs/scope/source-selection.md",
+                    "scope_brief": "work/stage-handoffs/scope/scope-brief.md",
+                    "active_transition_prompt": "work/stage-handoffs/scope/prompt.scope-to-writer.md",
+                },
+            }
+
+            findings, _ = self.validator.validate_practical_scope_input_closure(
+                state, workflow, root, ft_root
+            )
+            required_paths = [
+                "support/figma/figma-design-index.md",
+                "support/partners-v1-ba-answers.md",
+            ]
+            state["required_inputs"].extend(required_paths)
+            brief.write_text(
+                brief.read_text(encoding="utf-8")
+                + "\n".join(f"- `{value}`" for value in required_paths)
+                + "\n",
+                encoding="utf-8",
+            )
+            prompt.write_text(
+                "\n".join(f"- `{value}`" for value in required_paths) + "\n",
+                encoding="utf-8",
+            )
+            accepted_findings, _ = self.validator.validate_practical_scope_input_closure(
+                state, workflow, root, ft_root
+            )
+
+        self.assertIn("practical-scope-input-closure-incomplete", {finding.id for finding in findings})
+        self.assertEqual([], accepted_findings)
+
+    def test_practical_workflow_rejects_english_linked_visual_inventory(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            ft_root = root / "fts" / "Partners" / "Partners-v1"
+            handoff = ft_root / "work" / "stage-handoffs" / "scope"
+            handoff.mkdir(parents=True)
+            workflow = handoff / "workflow-state.yaml"
+            workflow.write_text("route_profile: practical_v0_8\n", encoding="utf-8")
+            inventory = handoff / "mockup-visual-inventory.md"
+            inventory.write_text("# Mockup Visual Inventory\n\n## Metadata\n", encoding="utf-8")
+            state = {
+                "route_profile": "practical_v0_8",
+                "latest_artifacts": {
+                    "mockup_visual_inventory": "work/stage-handoffs/scope/mockup-visual-inventory.md"
+                },
+            }
+
+            findings, _ = self.validator.validate_practical_linked_visual_inventory_language(
+                state, workflow, root, ft_root
+            )
+            inventory.write_text("# Визуальный инвентарь макета\n\n## Метаданные\n", encoding="utf-8")
+            accepted_findings, _ = self.validator.validate_practical_linked_visual_inventory_language(
+                state, workflow, root, ft_root
+            )
+
+        self.assertIn(
+            "practical-linked-visual-inventory-non-russian-visible-text",
+            {finding.id for finding in findings},
+        )
+        self.assertEqual([], accepted_findings)
 
     def test_practical_writer_prompt_rejects_copied_permanent_guardrails(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
