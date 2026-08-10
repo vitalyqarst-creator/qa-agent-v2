@@ -145,6 +145,36 @@ class PracticalHandoffQualityTests(unittest.TestCase):
         finding_ids = {finding.id for finding in findings}
         self.assertIn("practical-scope-brief-execution-prerequisites-incomplete", finding_ids)
 
+    def test_scope_brief_rejects_abstract_source_setup_hidden_by_ui_calibration_status(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            brief = root / "scope-brief.md"
+            self.write_scope_brief(brief)
+            brief.write_text(
+                brief.read_text(encoding="utf-8")
+                .replace(
+                    "| `ATOM-002` | Действие доступно пользователю с заданными правами. | Действие доступно. | `needs-test-data` |",
+                    "| `ATOM-002` | Открытие подготовленного объекта требует уточнения UI. | Действие доступно. | `candidate-ui-calibration` |",
+                )
+                .replace(
+                    "| `ATOM-002` | Пользователь с заданными правами. | Подготовленный объект. | `SETUP-ACCESS-001` | Отсутствует: учетная запись с заданными правами. | `needs-test-data` |",
+                    "| `ATOM-002` | Пользователь с заданными правами. | Подготовленный объект. | `SETUP-ACCESS-001` | Шаги подготовки: Таблица 3; данные: объект = существующий. | `candidate-ui-calibration` |",
+                ),
+                encoding="utf-8",
+            )
+
+            findings, _ = self.validator.validate_practical_scope_brief(brief, root)
+
+        finding_ids = {finding.id for finding in findings}
+        self.assertIn("practical-scope-brief-execution-prerequisites-incomplete", finding_ids)
+        evidence = "\n".join(
+            item
+            for finding in findings
+            if finding.id == "practical-scope-brief-execution-prerequisites-incomplete"
+            for item in finding.evidence
+        )
+        self.assertIn("missing-setup-hidden-by-status=ATOM-002", evidence)
+
     def test_scope_brief_rejects_role_inventory_for_administrator_only_atom(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -643,6 +673,28 @@ class PracticalHandoffQualityTests(unittest.TestCase):
 
         finding_ids = {finding.id for finding in findings}
         self.assertNotIn("practical-scope-brief-universal-role-coverage-incomplete", finding_ids)
+
+    def test_scope_brief_rejects_phased_multi_actor_row_even_with_parameterization_proof(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            brief = self.write_universal_role_brief(root, quantified=True)
+            brief.write_text(
+                brief.read_text(encoding="utf-8").replace(
+                    "| `ATOM-001` | Пользователь с каждой настроенной ролью, кроме администратора |",
+                    "| `ATOM-001` | Администратор, затем пользователь с каждой настроенной ролью, кроме администратора |",
+                ),
+                encoding="utf-8",
+            )
+
+            findings, _ = self.validator.validate_practical_scope_brief(brief, root)
+
+        evidence = "\n".join(
+            item
+            for finding in findings
+            if finding.id == "practical-scope-brief-execution-prerequisites-incomplete"
+            for item in finding.evidence
+        )
+        self.assertIn("phased-multiple-actors=ATOM-001", evidence)
 
     def test_scope_brief_rejects_unresolved_source_inventory_reference(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

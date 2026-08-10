@@ -546,7 +546,10 @@ planned TC), use the fast path inside this same route:
    - A planned check with missing role/object/state/fixture preparation must
      be `needs-test-data` and name the same `SETUP-*` in both execution and
      dependency tables. `candidate-ui-calibration` cannot conceal a missing
-     setup. A navigation action with two named destinations becomes separate
+     setup: a source anchor or a value such as "existing object" is not
+     preparation evidence. A state-changing action by one actor that only
+     prepares a later role-matrix check belongs in `SETUP-*`, not in that
+     check's executor column. A navigation action with two named destinations becomes separate
      `ATOM-*` checks unless the brief records that the same start state,
      user action and observable result make one parameterized check valid.
    - Enforce atomization before handing the brief to the matrix writer. Split
@@ -566,6 +569,11 @@ planned TC), use the fast path inside this same route:
      rejected unless `Обоснование параметризации ATOM` proves, for that ATOM,
      the same start screen, UI level, navigation path, action, trigger and
      expected result for every actor.
+   - For bounded rematerialization, first run the current scope-local
+     validator and collect all findings. Apply one coherent repair patch; a
+     second patch is justified only by a newly revealed validator finding.
+     Do not update only the version gate and discover the remaining handoff
+     gaps one by one.
    - Keep temporary inspection scripts, renders, duplicate manifests and
      partial writes outside the final handoff. On a successful scope-analysis
      run, delete only temporary artifacts created by the current run. Files in

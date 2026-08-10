@@ -4367,6 +4367,7 @@ def validate_practical_scope_brief(path: Path, root: Path) -> tuple[list[Finding
         generic_ready_actor_ids: set[str] = set()
         missing_setup_hidden_by_status_ids: set[str] = set()
         multi_actor_without_proof_ids: set[str] = set()
+        phased_multi_actor_ids: set[str] = set()
         for row in execution_rows[1:]:
             if max(execution_columns.values()) >= len(row):
                 continue
@@ -4406,6 +4407,15 @@ def validate_practical_scope_brief(path: Path, root: Path) -> tuple[list[Finding
                     )
                 )
             )
+            abstract_setup_data = bool(
+                re.search(
+                    r"(?:данн\w*|значен\w*)\s*[:—-][^|\n]*?=\s*`?"
+                    r"(?:существующ\w*|подготовлен\w*|созданн\w*|выбран\w*|"
+                    r"завед[её]н\w*|сохраненн\w*|известн\w*)\b",
+                    preparation_evidence,
+                    flags=re.IGNORECASE,
+                )
+            )
             no_setup_evidence = bool(
                 re.match(r"^подготовк\w*\s+не требуется\s*:\s*.+", preparation_evidence, flags=re.IGNORECASE)
             )
@@ -4421,6 +4431,9 @@ def validate_practical_scope_brief(path: Path, root: Path) -> tuple[list[Finding
                     flags=re.IGNORECASE,
                 )
             )
+            actor_has_phased_principals = actor_has_multiple_principals and bool(
+                re.search(r"\b(?:затем|после|до)\b", actor, flags=re.IGNORECASE)
+            )
             for atom_id in re.findall(r"\bATOM-[A-Z0-9-]+\b", row[execution_columns["affected"]], flags=re.IGNORECASE):
                 atom_id = atom_id.upper()
                 if atom_id in execution_statuses:
@@ -4433,6 +4446,8 @@ def validate_practical_scope_brief(path: Path, root: Path) -> tuple[list[Finding
                 )
                 if actor_has_multiple_principals and atom_id not in parameterized_actor_atoms:
                     multi_actor_without_proof_ids.add(atom_id)
+                if actor_has_phased_principals:
+                    phased_multi_actor_ids.add(atom_id)
                 if status == "needs-test-data" and (not actor or not object_state or actor == "не требуется" or object_state == "не требуется"):
                     incomplete_needs_data_ids.add(atom_id)
                 if not preparation_evidence or preparation_evidence == "не требуется":
@@ -4441,19 +4456,21 @@ def validate_practical_scope_brief(path: Path, root: Path) -> tuple[list[Finding
                     invalid_setup_key_ids.add(atom_id)
                 if missing_setup_evidence and status != "needs-test-data":
                     missing_setup_hidden_by_status_ids.add(atom_id)
-                if status == "ready":
-                    requires_preparation = bool(
-                        re.search(
-                            r"(?:подготовлен|существующ|завед[её]н|выбран|заполненн|сохраненн|"
-                            r"статус|индикатор|уч[её]тн\w*\s+запис|"
-                            r"(?:виджет|карточк\w*|строк\w*)\s+(?:партн[её]р|реквизит|объект))",
-                            object_state,
-                            flags=re.IGNORECASE,
-                        )
+                requires_preparation = bool(
+                    re.search(
+                        r"(?:подготовлен|существующ|завед[её]н|выбран|заполненн|сохраненн|"
+                        r"статус|индикатор|уч[её]тн\w*\s+запис|"
+                        r"(?:виджет|карточк\w*|строк\w*)\s+(?:партн[её]р|реквизит|объект))",
+                        object_state,
+                        flags=re.IGNORECASE,
                     )
+                )
+                if status == "ready":
                     if not (fixture_evidence or setup_steps_evidence or no_setup_evidence):
                         unsupported_preparation_evidence_ids.add(atom_id)
-                    if requires_preparation and not (fixture_evidence or setup_steps_with_concrete_data):
+                    if requires_preparation and not (
+                        fixture_evidence or (setup_steps_with_concrete_data and not abstract_setup_data)
+                    ):
                         unverified_ready_preparation_ids.add(atom_id)
                     if (
                         (re.search(r"(?:администратор|роль|прав)", actor, flags=re.IGNORECASE)
@@ -4466,8 +4483,13 @@ def validate_practical_scope_brief(path: Path, root: Path) -> tuple[list[Finding
                         and re.search(r"(?:администратор|роль|прав|доступ)", object_state, flags=re.IGNORECASE)
                     ):
                         generic_ready_actor_ids.add(atom_id)
-                elif status == "needs-test-data" and not missing_setup_evidence:
-                    unsupported_preparation_evidence_ids.add(atom_id)
+                elif status == "needs-test-data":
+                    if not missing_setup_evidence:
+                        unsupported_preparation_evidence_ids.add(atom_id)
+                elif status == "candidate-ui-calibration" and requires_preparation and not (
+                    fixture_evidence or (setup_steps_with_concrete_data and not abstract_setup_data)
+                ):
+                    missing_setup_hidden_by_status_ids.add(atom_id)
 
         missing_ids = set(planned_statuses) - set(execution_statuses)
         unknown_ids = set(execution_statuses) - set(planned_statuses)
@@ -4476,7 +4498,7 @@ def validate_practical_scope_brief(path: Path, root: Path) -> tuple[list[Finding
             for atom_id, status in execution_statuses.items()
             if planned_statuses.get(atom_id) != status
         }
-        if missing_ids or unknown_ids or duplicated_ids or mismatched_ids or incomplete_needs_data_ids or incomplete_preparation_evidence_ids or unverified_ready_preparation_ids or unsupported_preparation_evidence_ids or invalid_setup_key_ids or role_or_state_without_fixture_ids or generic_ready_actor_ids or missing_setup_hidden_by_status_ids or multi_actor_without_proof_ids:
+        if missing_ids or unknown_ids or duplicated_ids or mismatched_ids or incomplete_needs_data_ids or incomplete_preparation_evidence_ids or unverified_ready_preparation_ids or unsupported_preparation_evidence_ids or invalid_setup_key_ids or role_or_state_without_fixture_ids or generic_ready_actor_ids or missing_setup_hidden_by_status_ids or multi_actor_without_proof_ids or phased_multi_actor_ids:
             findings.append(
                 Finding(
                     id="practical-scope-brief-execution-prerequisites-incomplete",
@@ -4503,20 +4525,22 @@ def validate_practical_scope_brief(path: Path, root: Path) -> tuple[list[Finding
                         *(f"generic-ready-actor={item}" for item in sorted(generic_ready_actor_ids)),
                         *(f"missing-setup-hidden-by-status={item}" for item in sorted(missing_setup_hidden_by_status_ids)),
                         *(f"multiple-actors-without-proof={item}" for item in sorted(multi_actor_without_proof_ids)),
+                        *(f"phased-multiple-actors={item}" for item in sorted(phased_multi_actor_ids)),
                     ][:20],
                     recommended_action=(
                         "Map every planned ATOM to one actor/object-state prerequisite with setup key and valid "
-                        "fixture or preparation evidence, then synchronize its status. Split a multi-actor row, "
-                        "unless the brief contains a complete `Обоснование параметризации ATOM`."
+                        "fixture or preparation evidence, then synchronize its status. A phased multi-actor flow "
+                        "must move the state-changing action into `SETUP-*`; only same-phase role parameterization "
+                        "may use `Обоснование параметризации ATOM`."
                     ),
                 )
             )
         checks.append(
             Check(
                 "practical-scope-brief-execution-prerequisites",
-                "fail" if missing_ids or unknown_ids or duplicated_ids or mismatched_ids or incomplete_needs_data_ids or incomplete_preparation_evidence_ids or unverified_ready_preparation_ids or unsupported_preparation_evidence_ids or invalid_setup_key_ids or role_or_state_without_fixture_ids or generic_ready_actor_ids or missing_setup_hidden_by_status_ids or multi_actor_without_proof_ids else "pass",
+                "fail" if missing_ids or unknown_ids or duplicated_ids or mismatched_ids or incomplete_needs_data_ids or incomplete_preparation_evidence_ids or unverified_ready_preparation_ids or unsupported_preparation_evidence_ids or invalid_setup_key_ids or role_or_state_without_fixture_ids or generic_ready_actor_ids or missing_setup_hidden_by_status_ids or multi_actor_without_proof_ids or phased_multi_actor_ids else "pass",
                 "Execution prerequisites are inconsistent."
-                if missing_ids or unknown_ids or duplicated_ids or mismatched_ids or incomplete_needs_data_ids or incomplete_preparation_evidence_ids or unverified_ready_preparation_ids or unsupported_preparation_evidence_ids or invalid_setup_key_ids or role_or_state_without_fixture_ids or generic_ready_actor_ids or missing_setup_hidden_by_status_ids or multi_actor_without_proof_ids
+                if missing_ids or unknown_ids or duplicated_ids or mismatched_ids or incomplete_needs_data_ids or incomplete_preparation_evidence_ids or unverified_ready_preparation_ids or unsupported_preparation_evidence_ids or invalid_setup_key_ids or role_or_state_without_fixture_ids or generic_ready_actor_ids or missing_setup_hidden_by_status_ids or multi_actor_without_proof_ids or phased_multi_actor_ids
                 else "Execution prerequisites cover all planned checks.",
                 display_path,
             )
