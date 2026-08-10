@@ -1439,6 +1439,7 @@ def iter_session_logs(root: Path) -> list[Path]:
 def is_historical_or_scratch_artifact(path: Path) -> bool:
     return (
         "versions" in path.parts
+        or any(part.casefold() == "history" for part in path.parts)
         or "_artifact_write" in path.parts
         or any(part.endswith(".controller-state") for part in path.parts)
     )
@@ -1505,11 +1506,18 @@ def is_practical_controller_artifact(path: Path, root: Path) -> bool:
 
 def iter_practical_controller_artifacts(root: Path) -> list[Path]:
     if root.is_file():
-        return [root] if is_practical_controller_artifact(root, root.parent) else []
+        return [root] if (
+            is_practical_controller_artifact(root, root.parent)
+            and not is_historical_or_scratch_artifact(root)
+        ) else []
     return sorted(
         path
         for path in validation_scope(root).rglob("*")
-        if path.is_file() and is_practical_controller_artifact(path, root)
+        if (
+            path.is_file()
+            and not is_historical_or_scratch_artifact(path)
+            and is_practical_controller_artifact(path, root)
+        )
     )
 
 
@@ -3463,6 +3471,57 @@ def validate_practical_handoff_language(path: Path, root: Path) -> tuple[list[Fi
         )
     ]
     return findings, checks
+
+
+def validate_practical_test_design_matrix_language(path: Path, root: Path) -> tuple[list[Finding], list[Check]]:
+    """Require Russian labels in the small, user-facing practical matrix."""
+
+    content = path.read_text(encoding="utf-8")
+    display_path = rel(path, root)
+    evidence: list[str] = []
+    if re.search(r"(?im)^##\s+Test-design Applicability Matrix\s*$", content):
+        evidence.append("heading=Test-design Applicability Matrix")
+    section = extract_test_design_applicability_section(content)
+    if section is not None:
+        rows = markdown_table_rows_from_text(section)
+        if rows:
+            raw_header = [cell.strip().strip("`").casefold() for cell in rows[0]]
+            english_headers = [
+                header
+                for header in raw_header
+                if header in APPLICABILITY_MATRIX_REQUIRED_COLUMNS
+            ]
+            if english_headers:
+                evidence.append(f"table_header={','.join(english_headers)}")
+
+    findings: list[Finding] = []
+    if evidence:
+        findings.append(
+            Finding(
+                id="practical-test-design-matrix-non-russian-visible-text",
+                severity="error",
+                category="practical-handoff",
+                title="Практическая матрица тест-дизайна содержит английские пользовательские подписи",
+                details=(
+                    "Матрица является пользовательским артефактом. Названия разделов и столбцов должны быть "
+                    "русскими; стабильные значения перечислений и технические идентификаторы остаются без перевода."
+                ),
+                path=display_path,
+                evidence=evidence,
+                recommended_action=(
+                    "Используйте заголовок `Матрица применимости тест-дизайна` и русские подписи столбцов; "
+                    "валидатор сохранит их сопоставление с машинными ключами."
+                ),
+            )
+        )
+    return findings, [
+        Check(
+            "practical-test-design-matrix-russian-visible-text",
+            "fail" if evidence else "pass",
+            "Обнаружены английские пользовательские подписи." if evidence else "Пользовательские подписи на русском.",
+            display_path,
+        )
+    ]
 
 
 def practical_source_row_inventory_language_evidence(content: str) -> list[str]:
@@ -5558,7 +5617,7 @@ def markdown_table_rows(path: Path) -> list[list[str]]:
 
 def extract_test_design_applicability_section(content: str) -> str | None:
     match = re.search(
-        r"^##\s+Test-design Applicability Matrix\s*$",
+        r"^##\s+(?:Матрица применимости тест-дизайна|Test-design Applicability Matrix)\s*$",
         content,
         flags=re.IGNORECASE | re.MULTILINE,
     )
@@ -5582,6 +5641,70 @@ def extract_markdown_section(content: str, heading: str) -> str | None:
     next_heading = re.search(r"^#{1,6}\s+", content[match.end():], flags=re.MULTILINE)
     section_end = match.end() + next_heading.start() if next_heading else len(content)
     return content[match.end():section_end]
+
+
+def extract_practical_stage_summary_section(content: str, section_key: str) -> str | None:
+    """Read a practical-summary section with Russian current labels and legacy aliases."""
+
+    for heading in PRACTICAL_STAGE_SUMMARY_SECTION_ALIASES[section_key]:
+        section = extract_markdown_section(content, heading)
+        if section is not None:
+            return section
+    return None
+
+
+def practical_stage_summary_has_section(content: str, section_key: str) -> bool:
+    return extract_practical_stage_summary_section(content, section_key) is not None
+
+
+def normalize_practical_table_header(cells: list[str], aliases: Mapping[str, str]) -> list[str]:
+    """Keep stable machine keys while allowing Russian visible Markdown headers."""
+
+    normalized: list[str] = []
+    for cell in cells:
+        visible = cell.strip().strip("`").casefold()
+        normalized.append(aliases.get(visible, normalize_markdown_field_name(visible)))
+    return normalized
+
+
+def practical_route_uses_russian_visible_labels(fields: Mapping[str, str]) -> bool:
+    """Apply the stricter labels contract only to the current practical release."""
+
+    route_profile = fields.get("route_profile", "")
+    match = re.search(r"v?0\.(\d+)\.(\d+)", route_profile, flags=re.IGNORECASE)
+    if match is None:
+        return False
+    return (int(match.group(1)), int(match.group(2))) >= (8, 5)
+
+
+def practical_active_artifact_reference_issues(
+    state: Mapping[str, Any],
+    workflow_path: Path,
+    root: Path,
+    ft_root: Path,
+    values: Sequence[str],
+) -> list[str]:
+    """Reject stale practical links from one scope into another scope's active state."""
+
+    if not is_practical_v08_route(dict(state)):
+        return []
+    scope_slug = str(state.get("scope_slug", "")).strip()
+    if not scope_slug:
+        return []
+    expected_marker = f"work/practical/{scope_slug}/"
+    issues: list[str] = []
+    for raw_value in values:
+        raw_path = strip_quotes(raw_value).replace("\\", "/").lstrip("./")
+        if "/work/practical/" not in f"/{raw_path}":
+            continue
+        if expected_marker in raw_path:
+            continue
+        resolved = resolve_artifact_path(raw_value, workflow_path, root, ft_root)
+        resolved_text = rel(resolved, ft_root) if resolved is not None else raw_path
+        issues.append(
+            f"reference={raw_value}; expected_under={expected_marker}; resolved={resolved_text}"
+        )
+    return list(dict.fromkeys(issues))
 
 
 def extract_coverage_gaps_section(content: str) -> str | None:
@@ -6655,6 +6778,49 @@ PRACTICAL_STAGE_SUMMARY_HUMAN_FIELDS = {
     "writer_stage_continuation",
     "reviewer_stage_continuation",
 }
+PRACTICAL_STAGE_SUMMARY_SECTION_ALIASES = {
+    "summary": ("Сводка", "Summary"),
+    "tc_review_snapshot": ("Снимок TC-review", "TC Review Snapshot"),
+    "scope_transitions": ("Переходы по областям", "Scope transitions"),
+    "current_stage_actions": ("Действия текущего этапа", "Current stage actions"),
+    "prior_state_context": ("Контекст предыдущих этапов", "Prior state context"),
+    "code_version_gate": ("Контроль версии кода", "Code Version Gate"),
+    "completed_legacy": ("Завершено на этом этапе", "Completed In This Stage"),
+}
+PRACTICAL_SCOPE_TRANSITION_HEADER_ALIASES = {
+    "область": "scope",
+    "вердикт": "verdict",
+    "следующий переход": "next_stage_transition",
+    "противоречие источнику": "source_contradiction",
+    "решение по tc со статусами": "tc_with_status_decision",
+    "причина": "reason",
+}
+PRACTICAL_TC_REVIEW_SNAPSHOT_HEADER_ALIASES = {
+    "область": "scope",
+    "вердикт": "verdict",
+    "число блокирующих замечаний": "blocking_finding_count",
+    "задача или сессия ревьюера": "reviewer_task_or_session",
+    "среда выполнения ревьюера": "reviewer_execution_surface",
+}
+PRACTICAL_CODE_VERSION_GATE_HEADER_ALIASES = {
+    "поле": "field",
+    "ожидаемое значение": "expected",
+    "фактическое значение": "actual",
+    "результат": "result",
+    "статус": "status",
+}
+PRACTICAL_APPLICABILITY_MATRIX_HEADER_ALIASES = {
+    "измерение": "dimension",
+    "применимость": "applicable",
+    "ссылка на источник": "source_ref",
+    "обоснование": "reason",
+    "связанные атомы": "linked_atoms",
+    "плановые тест-кейсы": "linked_test_cases",
+    "идентификатор gap": "gap_id",
+}
+PRACTICAL_STAGE_SUMMARY_ENGLISH_VISIBLE_HEADINGS = tuple(
+    aliases[1] for aliases in PRACTICAL_STAGE_SUMMARY_SECTION_ALIASES.values()
+)
 PRACTICAL_STAGE_SUMMARY_ALLOWED_ENGLISH_TOKENS = {
     "api",
     "codex",
@@ -6865,13 +7031,13 @@ def practical_scope_transition_records(content: str) -> tuple[list[dict[str, str
     infer that decision from free prose or from a list of execution statuses.
     """
 
-    section = extract_markdown_section(content, "Scope transitions")
+    section = extract_practical_stage_summary_section(content, "scope_transitions")
     if section is None:
         return [], ["section=Scope transitions is missing"]
     rows = markdown_table_rows_from_text(section)
     if not rows:
         return [], ["Scope transitions has no table"]
-    header = normalize_table_header(rows[0])
+    header = normalize_practical_table_header(rows[0], PRACTICAL_SCOPE_TRANSITION_HEADER_ALIASES)
     missing = [column for column in PRACTICAL_SCOPE_TRANSITION_COLUMNS if column not in header]
     if missing:
         return [], [f"Scope transitions missing columns={', '.join(missing)}"]
@@ -7066,13 +7232,13 @@ def revision_summary_revision_type(content: str) -> str:
 def practical_summary_recorded_commit(content: str) -> str:
     """Extract the actual commit from the Code Version Gate table."""
 
-    section = extract_markdown_section(content, "Code Version Gate")
+    section = extract_practical_stage_summary_section(content, "code_version_gate")
     if not section:
         return ""
     rows = markdown_table_rows_from_text(section)
     if len(rows) < 2:
         return ""
-    header = normalize_table_header(rows[0])
+    header = normalize_practical_table_header(rows[0], PRACTICAL_CODE_VERSION_GATE_HEADER_ALIASES)
     if "field" not in header or "actual" not in header:
         return ""
     field_index = header.index("field")
@@ -8156,8 +8322,8 @@ def practical_stage_summary_nonrussian_prose_issues(content: str, fields: Mappin
         if len(english_words) >= 2:
             issues.append(f"field:{field_name}:english_prose={','.join(english_words[:8])}")
 
-    for heading in ("Current stage actions", "Prior state context"):
-        section = extract_markdown_section(content, heading)
+    for section_key in ("current_stage_actions", "prior_state_context"):
+        section = extract_practical_stage_summary_section(content, section_key)
         if section is None:
             continue
         for line_number, line in enumerate(section.splitlines(), start=1):
@@ -8165,13 +8331,13 @@ def practical_stage_summary_nonrussian_prose_issues(content: str, fields: Mappin
                 continue
             english_words = english_prose_words(line)
             if len(english_words) >= 2:
-                issues.append(f"section:{heading}:line={line_number}:english_prose={','.join(english_words[:8])}")
+                issues.append(f"section:{section_key}:line={line_number}:english_prose={','.join(english_words[:8])}")
 
-    transition_section = extract_markdown_section(content, "Scope transitions")
+    transition_section = extract_practical_stage_summary_section(content, "scope_transitions")
     if transition_section:
         rows = markdown_table_rows_from_text(transition_section)
         if rows:
-            header = normalize_table_header(rows[0])
+            header = normalize_practical_table_header(rows[0], PRACTICAL_SCOPE_TRANSITION_HEADER_ALIASES)
             if "reason" in header:
                 reason_index = header.index("reason")
                 for row_index, row in enumerate(rows[1:], start=2):
@@ -8182,6 +8348,31 @@ def practical_stage_summary_nonrussian_prose_issues(content: str, fields: Mappin
                         issues.append(
                             f"scope-transitions:row={row_index}:reason:english_prose={','.join(english_words[:8])}"
                         )
+
+    if practical_route_uses_russian_visible_labels(fields):
+        for heading in PRACTICAL_STAGE_SUMMARY_ENGLISH_VISIBLE_HEADINGS:
+            if re.search(rf"(?im)^##\s+{re.escape(heading)}\s*$", content):
+                issues.append(f"heading:{heading}:must-be-russian")
+        english_table_headers = {
+            "field": "поле",
+            "value": "значение",
+            "expected": "ожидаемое значение",
+            "actual": "фактическое значение",
+            "result": "результат",
+            "scope": "область",
+            "verdict": "вердикт",
+            "reason": "причина",
+            "blocking_finding_count": "число блокирующих замечаний",
+        }
+        for line_number, raw_line in enumerate(content.splitlines(), start=1):
+            if not raw_line.lstrip().startswith("|") or "---" in raw_line:
+                continue
+            cells = [cell.strip().strip("`").casefold() for cell in raw_line.strip().strip("|").split("|")]
+            english_cells = [cell for cell in cells if cell in english_table_headers]
+            if english_cells:
+                issues.append(
+                    f"table-header:line={line_number}:english_labels={','.join(english_cells[:6])}"
+                )
     return issues
 
 
@@ -8247,13 +8438,13 @@ def current_tc_review_records(root: Path) -> dict[str, dict[str, str | int]]:
 
 
 def tc_review_snapshot_issues(content: str, root: Path) -> list[str]:
-    section = extract_markdown_section(content, "TC Review Snapshot")
+    section = extract_practical_stage_summary_section(content, "tc_review_snapshot")
     if section is None:
         return ["missing-section"]
     rows = markdown_table_rows_from_text(section)
     if not rows:
         return ["missing-table"]
-    header = normalize_table_header(rows[0])
+    header = normalize_practical_table_header(rows[0], PRACTICAL_TC_REVIEW_SNAPSHOT_HEADER_ALIASES)
     missing_columns = sorted(PRACTICAL_TC_REVIEW_SNAPSHOT_COLUMNS - set(header))
     if missing_columns:
         return [f"missing-columns={','.join(missing_columns)}"]
@@ -8289,6 +8480,34 @@ def tc_review_snapshot_issues(content: str, root: Path) -> list[str]:
     return issues
 
 
+def practical_stage_summary_preflight_status_issues(fields: Mapping[str, str]) -> list[str]:
+    """Keep transient --check-only evidence distinct from a materialized launch receipt."""
+
+    status = strip_markdown_code(fields.get("review_launch_preflight_status", "")).casefold()
+    receipt = strip_markdown_code(fields.get("review_launch_preflight_receipt", ""))
+    evidence = strip_markdown_code(fields.get("review_launch_preflight_evidence", ""))
+    allowed_statuses = {
+        "not-run",
+        "check-only-allowed",
+        "allowed",
+        "blocked",
+        "not-applicable",
+    }
+    if status not in allowed_statuses:
+        return [f"review_launch_preflight_status={status or '<missing>'}; invalid-status"]
+    if status == "check-only-allowed":
+        issues: list[str] = []
+        if not field_is_not_applicable(receipt):
+            issues.append("check-only-allowed requires review_launch_preflight_receipt=not-applicable")
+        normalized_evidence = evidence.casefold()
+        if "--check-only" not in normalized_evidence or "allowed" not in normalized_evidence:
+            issues.append("check-only-allowed requires --check-only allowed evidence")
+        return issues
+    if status == "allowed" and field_is_not_applicable(receipt):
+        return ["allowed requires a materialized review_launch_preflight_receipt"]
+    return []
+
+
 def validate_practical_stage_summary(path: Path, root: Path) -> tuple[list[Finding], list[Check]]:
     findings: list[Finding] = []
     checks: list[Check] = []
@@ -8312,9 +8531,9 @@ def validate_practical_stage_summary(path: Path, root: Path) -> tuple[list[Findi
         return findings, checks
 
     fields = parse_markdown_key_value_fields(content)
-    has_current_stage_actions = bool(re.search(r"(?im)^##\s+Current stage actions\s*$", content))
-    has_prior_state_context = bool(re.search(r"(?im)^##\s+Prior state context\s*$", content))
-    has_legacy_completed_stage_section = bool(re.search(r"(?im)^##\s+Completed In This Stage\s*$", content))
+    has_current_stage_actions = practical_stage_summary_has_section(content, "current_stage_actions")
+    has_prior_state_context = practical_stage_summary_has_section(content, "prior_state_context")
+    has_legacy_completed_stage_section = practical_stage_summary_has_section(content, "completed_legacy")
     summary_stage = normalize_markdown_field_name(fields.get("summary_stage", ""))
     requires_stage_context_split = not field_is_not_applicable(summary_stage)
     if requires_stage_context_split and (not has_current_stage_actions or not has_prior_state_context):
@@ -8360,6 +8579,26 @@ def validate_practical_stage_summary(path: Path, root: Path) -> tuple[list[Findi
                 recommended_action=(
                     "Replace legacy Completed In This Stage sections with separate Current stage actions and "
                     "Prior state context sections."
+                ),
+            )
+        )
+    preflight_status_issues = practical_stage_summary_preflight_status_issues(fields)
+    if preflight_status_issues:
+        findings.append(
+            Finding(
+                id="practical-stage-summary-preflight-status-invalid",
+                severity="error",
+                category="practical-stage-summary",
+                title="Практическая сводка некорректно фиксирует результат предварительной проверки",
+                details=(
+                    "`--check-only` является неперсистентной проверкой: успешный результат нельзя записывать "
+                    "как сохранённую квитанцию, а выполненный check-only нельзя обозначать как `not-run`."
+                ),
+                path=display_path,
+                evidence=preflight_status_issues,
+                recommended_action=(
+                    "Для успешного `--check-only` укажите `check-only-allowed`, отсутствие receipt и краткое "
+                    "evidence команды; для dispatch используйте `allowed` только с materialized receipt."
                 ),
             )
         )
@@ -9148,7 +9387,7 @@ def validate_practical_stage_summary(path: Path, root: Path) -> tuple[list[Findi
 
     summary_stage = normalize_markdown_field_name(fields.get("summary_stage", ""))
     is_tc_review_summary = "tc-review" in summary_stage or "tc_review" in summary_stage
-    if is_tc_review_summary and not re.search(r"(?im)^##\s+TC Review Snapshot\s*$", content):
+    if is_tc_review_summary and not practical_stage_summary_has_section(content, "tc_review_snapshot"):
         findings.append(
             Finding(
                 id="practical-stage-summary-tc-review-snapshot-missing",
@@ -9954,7 +10193,7 @@ def parsed_test_design_applicability_rows(content: str) -> list[dict[str, str]]:
     if not rows:
         return []
 
-    header = normalize_table_header(rows[0])
+    header = normalize_practical_table_header(rows[0], PRACTICAL_APPLICABILITY_MATRIX_HEADER_ALIASES)
     if not APPLICABILITY_MATRIX_REQUIRED_COLUMNS.issubset(set(header)):
         return []
 
@@ -10035,7 +10274,7 @@ def validate_test_design_applicability_matrix(
         checks.append(Check("test-design-applicability-matrix", "warn", "Applicability matrix table is missing.", display_path))
         return findings, checks
 
-    header = normalize_table_header(rows[0])
+    header = normalize_practical_table_header(rows[0], PRACTICAL_APPLICABILITY_MATRIX_HEADER_ALIASES)
     missing_columns = sorted(APPLICABILITY_MATRIX_REQUIRED_COLUMNS - set(header))
     if missing_columns:
         findings.append(
@@ -25596,6 +25835,77 @@ def validate_workflow_state(
     latest_artifact_values = flatten_string_values(latest_artifacts)
     required_inputs = state.get("required_inputs")
     required_input_values = flatten_string_values(required_inputs)
+
+    active_artifact_reference_issues = practical_active_artifact_reference_issues(
+        state,
+        path,
+        root,
+        ft_root,
+        [*required_input_values, *latest_artifact_values],
+    )
+    if active_artifact_reference_issues:
+        findings.append(
+            Finding(
+                id="workflow-state-practical-active-artifact-outside-scope-root",
+                severity="error",
+                category="artifact-links",
+                title="Активный practical-артефакт находится вне текущего scope",
+                details=(
+                    "workflow-state.yaml может ссылаться на practical-артефакты только из "
+                    "`work/practical/<scope_slug>/`. Ссылка на прошлый scope делает следующий этап "
+                    "неаудируемым и может подменить текущий вход устаревшим результатом."
+                ),
+                path=display_path,
+                evidence=active_artifact_reference_issues[:20],
+                recommended_action=(
+                    "Переместите или пересоздайте active practical-артефакт в папке текущего scope и обновите "
+                    "оба указателя: required_inputs и latest_artifacts."
+                ),
+            )
+        )
+        checks.append(
+            Check(
+                "workflow-state-practical-active-artifact-scope-root",
+                "fail",
+                "Найдены ссылки на practical-артефакты другого scope.",
+                display_path,
+            )
+        )
+    else:
+        checks.append(
+            Check(
+                "workflow-state-practical-active-artifact-scope-root",
+                "pass",
+                "Все active practical-ссылки принадлежат текущему scope.",
+                display_path,
+            )
+        )
+
+    summary_path = resolving_artifact_by_name(
+        PRACTICAL_STAGE_SUMMARY_NAME,
+        [*latest_artifact_values, *required_input_values],
+        path,
+        root,
+        ft_root,
+    )
+    matrix_path = resolving_artifact_by_name(
+        "test-design-matrix.md",
+        [*latest_artifact_values, *required_input_values],
+        path,
+        root,
+        ft_root,
+    )
+    if summary_path is not None and matrix_path is not None:
+        try:
+            summary_fields = parse_markdown_key_value_fields(summary_path.read_text(encoding="utf-8"))
+        except UnicodeDecodeError:
+            summary_fields = {}
+        if practical_route_uses_russian_visible_labels(summary_fields):
+            matrix_language_findings, matrix_language_checks = validate_practical_test_design_matrix_language(
+                matrix_path, root
+            )
+            findings.extend(matrix_language_findings)
+            checks.extend(matrix_language_checks)
     scope_metrics: dict[str, int | str | None] | None = None
     loop_summary_metrics: dict[str, Any] | None = None
     loop_summary_path: Path | None = None

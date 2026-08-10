@@ -276,13 +276,15 @@ def verify_controller_snapshot(
 
 
 def code_version_gate_values(content: str) -> dict[str, str]:
-    section = artifact_validator.extract_markdown_section(content, "Code Version Gate")
+    section = artifact_validator.extract_practical_stage_summary_section(content, "code_version_gate")
     if not section:
         return {}
     rows = artifact_validator.markdown_table_rows_from_text(section)
     if len(rows) < 2:
         return {}
-    header = artifact_validator.normalize_table_header(rows[0])
+    header = artifact_validator.normalize_practical_table_header(
+        rows[0], artifact_validator.PRACTICAL_CODE_VERSION_GATE_HEADER_ALIASES
+    )
     if "field" not in header:
         return {}
     value_column = "actual" if "actual" in header else "value"

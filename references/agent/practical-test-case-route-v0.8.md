@@ -161,10 +161,15 @@ the exact version-gated `code_root`:
 python scripts/practical_review_preflight.py --repo-root . --ft-package-root <FT package root> --summary <practical-stage-summary.md> --scope-id <two-digit scope id> --review-mode <matrix_review|tc_review> --output <FT package root>/work/practical/<scope-slug>/review-launch-preflight.json
 ```
 
-Сначала выполни тот же preflight с `--check-only`. Только если он вернул
-`allowed: true`, один раз материализуй launch receipt через `--output`; между
-этими двумя командами не меняй controller-owned state. Only a JSON result with
-`allowed: true` permits `create_thread`. The preflight
+Сначала выполни тот же preflight с `--check-only`. Если он вернул
+`allowed: true`, сразу зафиксируй в `practical-stage-summary.md`
+`review_launch_preflight_status = check-only-allowed`,
+`review_launch_preflight_receipt = not-applicable` и короткое
+`review_launch_preflight_evidence` с командой и результатом. Не записывай
+выполненный check-only как `not-run` и не выдавай его за сохранённый receipt.
+Только после этого один раз материализуй launch receipt через `--output`; между
+этими двумя командами не меняй controller-owned state. Только JSON-результат с
+`allowed: true` разрешает `create_thread`. Preflight
 checks the real working directory, Git branch/commit and tracked state against
 the summary's Code Version Gate, keeps code/data/artifact roots consistent,
 checks requested scope routing, and reruns the package validator. Errors of the
@@ -280,10 +285,9 @@ The summary must list:
 - the concrete reason each scope is blocked or capped;
 - whether TC can still be written with explicit statuses;
 - the next safe step for each scope;
-- a `Current stage actions` section that lists only actions performed in the
-  current turn/stage;
-- a `Prior state context` section for older history that explains current state
-  but was not performed in this stage;
+- раздел `Действия текущего этапа`, содержащий только действия текущего этапа;
+- раздел `Контекст предыдущих этапов` для более ранней истории, объясняющей
+  текущее состояние;
 - `next_stage_transition`: exactly one of `matrix-review allowed`,
   `matrix-review conditional`, `matrix-review blocked`, `writer allowed`,
   `writer conditional`, `writer blocked`, `tc-review allowed`,
