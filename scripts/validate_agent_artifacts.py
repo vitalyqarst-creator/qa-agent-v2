@@ -26164,17 +26164,9 @@ def validate_workflow_state(
             )
             checks.append(Check("source-row-inventory-handoff", "warn", "source-row-inventory.md is not UTF-8.", rel(source_row_inventory_path, root)))
             continue
-        normalized_inventory_content = source_row_inventory_content
-        if re.search(r"^#\s+Source Row Inventory\s*$", normalized_inventory_content, flags=re.MULTILINE):
-            normalized_inventory_content = re.sub(
-                r"^#\s+Source Row Inventory\s*$",
-                "## Source Row Inventory",
-                normalized_inventory_content,
-                count=1,
-                flags=re.MULTILINE,
-            )
-        elif extract_markdown_section(normalized_inventory_content, "Source Row Inventory") is None:
-            normalized_inventory_content = "## Source Row Inventory\n\n" + normalized_inventory_content
+        normalized_inventory_content = normalized_source_row_inventory_content(
+            source_row_inventory_content
+        )
 
         inventory_findings, inventory_checks = validate_source_row_inventory(
             normalized_inventory_content,

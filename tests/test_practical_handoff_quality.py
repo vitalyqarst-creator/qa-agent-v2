@@ -1576,6 +1576,54 @@ class PracticalHandoffQualityTests(unittest.TestCase):
         finding_ids = {finding.id for finding in findings}
         self.assertIn("practical-scope-analyzer-forbidden-gap-review", finding_ids)
 
+    def test_workflow_state_parses_visible_russian_source_inventory_heading(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            handoff = root / "fts" / "Sample" / "work" / "stage-handoffs" / "01-menu"
+            handoff.mkdir(parents=True)
+            inventory = handoff / "source-row-inventory.md"
+            inventory.write_text(
+                "\n".join(
+                    [
+                        "# Реестр строк источника",
+                        "",
+                        "| source_row_id | package_id | field_or_action | source_ref | requirement_codes | in_scope | mapped_atom_or_gap |",
+                        "| --- | --- | --- | --- | --- | --- | --- |",
+                        "| `SRC-001` | `PKG-01` | Поле | Таблица 1 | `AS.1` | `yes` | `ATOM-001` |",
+                        "",
+                        "## Source Table Normalization",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            workflow = handoff / "workflow-state.yaml"
+            workflow.write_text(
+                "\n".join(
+                    [
+                        "ft_slug: Sample",
+                        "scope_slug: menu",
+                        "route_profile: practical_v0_8",
+                        "current_stage: ft-scope-analyzer",
+                        "stage_status: blocked-input",
+                        "next_skill: none",
+                        "required_inputs:",
+                        "  - work/stage-handoffs/01-menu/source-row-inventory.md",
+                        "latest_artifacts:",
+                        "  source_row_inventory: work/stage-handoffs/01-menu/source-row-inventory.md",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            findings, checks = self.validator.validate_workflow_state(workflow, root)
+
+        finding_ids = {finding.id for finding in findings}
+        self.assertNotIn("source-row-inventory-no-table", finding_ids)
+        inventory_checks = [
+            check for check in checks if check.name == "source-row-inventory"
+        ]
+        self.assertEqual(["pass"], [check.status for check in inventory_checks])
+
     def test_practical_scope_analyzer_rejects_legacy_artifacts(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
