@@ -148,10 +148,47 @@ def summarize_validator_findings(findings: list[dict[str, Any]]) -> dict[str, An
     }
 
 
-def summarize_validator_error_layers(findings: list[dict[str, Any]]) -> dict[str, Any]:
+def summarize_validator_error_layers(
+    findings: list[dict[str, Any]],
+    summary_relative_path: str,
+) -> dict[str, Any]:
     """Expose raw error output separately from routing-safe summary self-checks."""
 
-    raw_errors = [finding for finding in findings if finding.get("severity") == "error"]
+    # Report-consistency findings are emitted only after each summary has already
+    # been evaluated.  Feeding those generated ``validator-*`` findings back
+    # into the refresh makes the declared count chase its own output instead of
+    # reaching the same fixed point used by the validator's summary check.
+    refresh_self_checks = {
+        "practical-stage-summary-validator-error-count-invalid",
+        "practical-stage-summary-validator-error-count-stale",
+        "practical-stage-summary-validator-error-layers-missing",
+        "practical-stage-summary-validator-error-layer-count-mismatch",
+        "practical-stage-summary-validator-evidence-stale",
+        "practical-stage-summary-validator-info-count-invalid",
+        "practical-stage-summary-validator-info-count-stale",
+        "practical-stage-summary-validator-raw-error-count-invalid",
+        "practical-stage-summary-validator-raw-error-count-stale",
+        "practical-stage-summary-validator-self-check-layer-invalid",
+        "practical-stage-summary-validator-self-check-layer-missing",
+        "practical-stage-summary-validator-self-check-layer-stale",
+        "practical-stage-summary-validator-warning-count-invalid",
+        "practical-stage-summary-validator-warning-count-stale",
+    }
+    def is_visible_to_target_summary(finding: dict[str, Any]) -> bool:
+        finding_id = str(finding.get("id", ""))
+        if finding_id not in refresh_self_checks:
+            return True
+        # The validator checks summaries in path order.  A target summary sees
+        # consistency findings already emitted for preceding summaries, but not
+        # its own or later findings.  Mirror that order here.
+        finding_path = str(finding.get("path", "")).replace("\\", "/")
+        return finding_path < summary_relative_path
+
+    raw_errors = [
+        finding
+        for finding in findings
+        if finding.get("severity") == "error" and is_visible_to_target_summary(finding)
+    ]
     summary_self_checks = [
         finding
         for finding in raw_errors
@@ -272,7 +309,10 @@ def build_refresh(
     report = artifact_validator.validate(primary_root)
     report_findings = report.get("findings", [])
     validator_summary = summarize_validator_findings(report_findings)
-    validator_error_layers = summarize_validator_error_layers(report_findings)
+    validator_error_layers = summarize_validator_error_layers(
+        report_findings,
+        _relative_to_root(primary_root, summary_abs),
+    )
     routing_findings = routing_validator_findings(report_findings)
     validator_findings_breakdown = format_validator_findings_breakdown(
         report.get("findings", [])
