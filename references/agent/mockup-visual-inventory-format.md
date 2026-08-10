@@ -28,51 +28,51 @@
 ## Минимальный Формат
 
 ```md
-# Mockup Visual Inventory
+# Визуальный инвентарь макета
 
-## Metadata
+## Метаданные
 
-| item | value | evidence |
+| Поле | Значение | Доказательство |
 | --- | --- | --- |
-| mockup_path | `fts/<ft-slug>/mockups/<file>` | `<path/hash/size>` |
-| opened | `yes | no` | `<tool/method/time>` |
-| method | `visual-inspection | OCR | image-viewer | other` | `<how inspected>` |
-| screen_name | `<UI screen name>` | `<mockup caption/source>` |
-| source_priority | `FT-over-mockup` | `AGENTS.md / scope-contract.md` |
+| Путь к макету | `fts/<ft-slug>/mockups/<file>` | `<путь/hash/размер>` |
+| Открыт | `yes | no` | `<инструмент/способ/время>` |
+| Способ просмотра | `visual-inspection | OCR | image-viewer | other` | `<как проверено>` |
+| Экран | `<название UI-экрана>` | `<подпись макета/источник>` |
+| Приоритет источника | `FT-over-mockup` | `AGENTS.md / scope-contract.md` |
 
-## Visual Inventory
+## Состав макета
 
-| item_type | label_from_mockup | canonical_ft_name | visible_state | notes |
+| Тип элемента | Подпись на макете | Каноническое имя ФТ | Видимое состояние | Примечание |
 | --- | --- | --- | --- | --- |
 | `visible_blocks` | `<block label>` | `<FT block/path>` | `visible` | `<ordering/position>` |
 | `visible_fields` | `<field label>` | `<FT field/path>` | `visible/editable/readonly/unclear` | `<alias or mismatch>` |
 | `visible_actions` | `<button/action label>` | `<FT action/path>` | `visible/enabled/disabled/unclear` | `<interaction hint>` |
 
-## Interaction Hints
+## Подсказки по взаимодействию
 
-| element | interaction_hint | source | used_for_steps | limitation |
+| Элемент | Способ действия | Источник | Используется в шагах | Ограничение |
 | --- | --- | --- | --- | --- |
-| `<field/action>` | `<click/select/type/check/open modal>` | `mockup` | `yes/no` | `<not a business rule>` |
+| `<поле/действие>` | `<нажать/выбрать/ввести/проверить/открыть окно>` | `mockup` | `yes/no` | `<не является бизнес-правилом>` |
 
-## Mockup-Only Items
+## Элементы только макета
 
-| item | mockup_observation | ft_reference | handling |
+| Элемент | Наблюдение на макете | Ссылка на ФТ | Обработка |
 | --- | --- | --- | --- |
-| `<item>` | `<what is visible>` | `<missing/conflict/source ref>` | `gap | alias-only | ignore-out-of-scope` |
+| `<элемент>` | `<что видно>` | `<нет в ФТ/конфликт/ссылка>` | `gap | alias-only | ignore-out-of-scope` |
 
-## FT Conflicts
+## Конфликты с ФТ
 
-| item | ft_statement | mockup_observation | decision |
+| Элемент | Утверждение ФТ | Наблюдение на макете | Решение |
 | --- | --- | --- | --- |
-| `<item>` | `<FT quote/ref>` | `<mockup observation>` | `FT wins | gap | clarification` |
+| `<элемент>` | `<цитата/ссылка ФТ>` | `<наблюдение>` | `FT wins | gap | clarification` |
 
-## Usage Decision
+## Решение об использовании
 
-| item | value | evidence |
+| Поле | Значение | Доказательство |
 | --- | --- | --- |
-| used_for_steps | `yes/no` | `<which TC/package/design rows>` |
-| not_used_as_requirement_source | `yes` | `mockup refines interaction only; FT/support define behavior` |
-| open_questions | `<GAP-* or ->` | `<questions>` |
+| Используется в шагах | `yes/no` | `<какие TC/package/design rows>` |
+| Не используется как источник требований | `yes` | `макет уточняет только взаимодействие; поведение задают ФТ/support` |
+| Открытые вопросы | `<GAP-* or ->` | `<вопросы>` |
 ```
 
 ## Writer Rules

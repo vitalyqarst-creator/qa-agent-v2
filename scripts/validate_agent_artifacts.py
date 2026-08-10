@@ -4952,6 +4952,47 @@ def validate_practical_scope_brief(path: Path, root: Path) -> tuple[list[Finding
         )
     )
 
+    overbroad_role_inventory_atoms = [
+        atom_id
+        for atom_id, setup_keys in execution_setup_keys.items()
+        if "SETUP-ROLE-INVENTORY" in setup_keys
+        and atom_id in planned_statuses
+        and not re.search(
+            r"\b(?:все|всех|остальн\w*|кажд\w*)\s+(?:настроенн\w*\s+)?рол",
+            " ".join([planned_text_by_atom.get(atom_id, ""), execution_contexts.get(atom_id, "")]),
+            flags=re.IGNORECASE,
+        )
+    ]
+    if overbroad_role_inventory_atoms:
+        findings.append(
+            Finding(
+                id="practical-scope-brief-overbroad-role-inventory-setup",
+                severity="error",
+                category="practical-handoff",
+                title="Role inventory setup is attached to atoms without universal role coverage",
+                details=(
+                    "A complete role inventory is required only for an atom that verifies every applicable role. "
+                    "Administrator-only actions must require only the actor and object state they actually use."
+                ),
+                path=display_path,
+                evidence=sorted(overbroad_role_inventory_atoms)[:20],
+                recommended_action=(
+                    "Remove `SETUP-ROLE-INVENTORY` from atoms that do not quantify role coverage, or state the "
+                    "universal role obligation and parameterization explicitly."
+                ),
+            )
+        )
+    checks.append(
+        Check(
+            "practical-scope-brief-role-inventory-minimality",
+            "fail" if overbroad_role_inventory_atoms else "pass",
+            "Role inventory setup is broader than the atom obligation."
+            if overbroad_role_inventory_atoms
+            else "Role inventory setup is limited to quantified role checks.",
+            display_path,
+        )
+    )
+
     universal_role_coverage_mismatches: list[str] = []
     for inventory_display_path, source_row_id, mapped_atoms in universal_role_source_rows:
         quantified_atoms = [
@@ -11799,19 +11840,22 @@ INTERNAL_RUNTIME_ACTION_ID_RE = re.compile(
     flags=re.IGNORECASE,
 )
 
-MOCKUP_VISUAL_INVENTORY_REQUIRED_TERMS = {
-    "mockup_path",
-    "opened",
-    "method",
-    "screen_name",
-    "visible_blocks",
-    "visible_fields",
-    "visible_actions",
-    "interaction_hints",
-    "mockup_only_items",
-    "ft_conflicts",
-    "used_for_steps",
-    "not_used_as_requirement_source",
+MOCKUP_VISUAL_INVENTORY_REQUIRED_TERM_ALIASES = {
+    "путь к макету": {"mockup_path", "путь к макету"},
+    "открыт": {"opened", "открыт"},
+    "способ просмотра": {"method", "способ просмотра"},
+    "экран": {"screen_name", "экран"},
+    "видимые блоки": {"visible_blocks", "состав макета", "видимые блоки"},
+    "видимые поля": {"visible_fields", "состав макета", "видимые поля"},
+    "видимые действия": {"visible_actions", "состав макета", "видимые действия"},
+    "подсказки по взаимодействию": {"interaction_hints", "подсказки по взаимодействию"},
+    "элементы только макета": {"mockup_only_items", "элементы только макета"},
+    "конфликты с фт": {"ft_conflicts", "конфликты с фт"},
+    "используется в шагах": {"used_for_steps", "используется в шагах"},
+    "не используется как источник требований": {
+        "not_used_as_requirement_source",
+        "не используется как источник требований",
+    },
 }
 
 MOCKUP_SOURCE_RE = re.compile(
@@ -23018,9 +23062,9 @@ def validate_mockup_visual_inventory(path: Path, root: Path) -> tuple[list[Findi
 
     normalized = content.lower()
     missing_terms = sorted(
-        term
-        for term in MOCKUP_VISUAL_INVENTORY_REQUIRED_TERMS
-        if term.lower() not in normalized
+        canonical
+        for canonical, aliases in MOCKUP_VISUAL_INVENTORY_REQUIRED_TERM_ALIASES.items()
+        if not any(alias.lower() in normalized for alias in aliases)
     )
     if missing_terms:
         findings.append(
@@ -23040,7 +23084,7 @@ def validate_mockup_visual_inventory(path: Path, root: Path) -> tuple[list[Findi
         )
 
     opened_no = re.search(
-        r"(?im)^\|\s*opened\s*\|\s*`?(?:no|false|blocked|not[-\s]?opened)",
+        r"(?im)^\|\s*(?:opened|открыт)\s*\|\s*`?(?:no|false|blocked|not[-\s]?opened|нет)",
         content,
     )
     if opened_no:
@@ -23061,7 +23105,7 @@ def validate_mockup_visual_inventory(path: Path, root: Path) -> tuple[list[Findi
         )
 
     no_requirement_guard = re.search(
-        r"(?im)^\|\s*not_used_as_requirement_source\s*\|\s*`?(?:no|false)",
+        r"(?im)^\|\s*(?:not_used_as_requirement_source|не используется как источник требований)\s*\|\s*`?(?:no|false|нет)",
         content,
     ) or re.search(
         (

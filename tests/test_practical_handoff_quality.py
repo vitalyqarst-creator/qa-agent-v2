@@ -145,6 +145,89 @@ class PracticalHandoffQualityTests(unittest.TestCase):
         finding_ids = {finding.id for finding in findings}
         self.assertIn("practical-scope-brief-execution-prerequisites-incomplete", finding_ids)
 
+    def test_scope_brief_rejects_role_inventory_for_administrator_only_atom(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            brief = root / "scope-brief.md"
+            self.write_scope_brief(brief)
+            brief.write_text(
+                brief.read_text(encoding="utf-8")
+                .replace(
+                    "| `ATOM-002` | Пользователь с заданными правами. | Подготовленный объект. | `SETUP-ACCESS-001` | Отсутствует: учетная запись с заданными правами. | `needs-test-data` |",
+                    "| `ATOM-002` | Администратор. | Подготовленный объект. | `SETUP-ACCESS-001`; `SETUP-ROLE-INVENTORY` | Отсутствует: учетная запись администратора и полный перечень ролей. | `needs-test-data` |",
+                )
+                .replace(
+                    "| `SETUP-ACCESS-001` | Подготовить учетную запись с заданными правами. | `ATOM-002` | `needs-test-data` |",
+                    "| `SETUP-ACCESS-001`; `SETUP-ROLE-INVENTORY` | Подготовить учетную запись администратора и полный перечень ролей. | `ATOM-002` | `needs-test-data` |",
+                ),
+                encoding="utf-8",
+            )
+
+            findings, _ = self.validator.validate_practical_scope_brief(brief, root)
+
+        finding_ids = {finding.id for finding in findings}
+        self.assertIn("practical-scope-brief-overbroad-role-inventory-setup", finding_ids)
+
+    def test_mockup_inventory_accepts_russian_visible_headers(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            inventory = root / "mockup-visual-inventory.md"
+            inventory.write_text(
+                "\n".join(
+                    [
+                        "# Визуальный инвентарь макета",
+                        "",
+                        "## Метаданные",
+                        "",
+                        "| Поле | Значение | Доказательство |",
+                        "| --- | --- | --- |",
+                        "| Путь к макету | `mockups/sample.png` | SHA-256 `abc` |",
+                        "| Открыт | `yes` | просмотр изображения |",
+                        "| Способ просмотра | `visual-inspection` | вручную |",
+                        "| Экран | `Партнеры` | подпись макета |",
+                        "",
+                        "## Состав макета",
+                        "",
+                        "| Тип элемента | Подпись на макете | Каноническое имя ФТ | Видимое состояние | Примечание |",
+                        "| --- | --- | --- | --- | --- |",
+                        "| `visible_blocks` | `Партнеры` | `Партнеры` | `visible` | заголовок |",
+                        "| `visible_fields` | `Название` | `Название` | `visible` | поле |",
+                        "| `visible_actions` | `Добавить` | `Добавить` | `visible` | кнопка |",
+                        "",
+                        "## Подсказки по взаимодействию",
+                        "",
+                        "| Элемент | Способ действия | Источник | Используется в шагах | Ограничение |",
+                        "| --- | --- | --- | --- | --- |",
+                        "| `Добавить` | нажать кнопку | макет | `yes` | не является бизнес-правилом |",
+                        "",
+                        "## Элементы только макета",
+                        "",
+                        "| Элемент | Наблюдение на макете | Ссылка на ФТ | Обработка |",
+                        "| --- | --- | --- | --- |",
+                        "| `-` | нет | `-` | `ignore-out-of-scope` |",
+                        "",
+                        "## Конфликты с ФТ",
+                        "",
+                        "| Элемент | Утверждение ФТ | Наблюдение на макете | Решение |",
+                        "| --- | --- | --- | --- |",
+                        "| `-` | нет | нет | `FT wins` |",
+                        "",
+                        "## Решение об использовании",
+                        "",
+                        "| Поле | Значение | Доказательство |",
+                        "| --- | --- | --- |",
+                        "| Используется в шагах | `yes` | шаги проверки |",
+                        "| Не используется как источник требований | `yes` | ФТ определяет поведение |",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            findings, checks = self.validator.validate_mockup_visual_inventory(inventory, root)
+
+        self.assertEqual([], findings)
+        self.assertTrue(all(check.status == "pass" for check in checks))
+
     def test_scope_brief_rejects_renamed_gap_in_linked_parity_artifact(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

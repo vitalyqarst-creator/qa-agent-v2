@@ -504,7 +504,11 @@ planned TC), use the fast path inside this same route:
      - relevant FT text / table rows / PDF pages;
      - source parity conclusions and mandatory requirement IDs, when
        `source-parity-check.md` exists;
-     - relevant mockups and support references;
+     - relevant mockups, Figma-index and support references. Before writing the
+       brief, close inputs: include every support file whose scope heading,
+       requirement code or table row matches the selected scope in the brief,
+       `workflow-state.yaml` and downstream prompt. An unavailable optional
+       Figma node remains a brief limitation, not a blocker;
      - dictionary values required by the scope;
      - open questions and assumptions;
      - candidate UI-calibration points.
@@ -524,7 +528,9 @@ planned TC), use the fast path inside this same route:
       example, `Отмена` and closing a window) even when their expected result is
       the same. A source-backed fixed value list for one field may remain one
       parameterized check only when its trigger and expected result are identical.
-     sibling atoms repeat setup. `ready` needs `FX-*` or source-backed
+     Repeat a `SETUP-*` only for atoms with the same required actor, object and
+     initial state. Do not propagate a complete role inventory from a universal
+     role check to an administrator-only operation. `ready` needs `FX-*` or source-backed
      `поле=значение` preparation, otherwise use `needs-test-data`.
    - Before writer handoff classify every uncertainty in the brief as exactly
      one of `ba-business-ambiguity`, `ui-calibration`,

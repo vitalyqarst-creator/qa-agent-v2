@@ -201,7 +201,7 @@ Minimum for `prompt.scope-gaps-to-reviewer.md`:
 7. Если раздел большой, используй `preview_chunks()` и выдели только нужные фрагменты внутри выбранного внешнего scope.
 8. Зафиксируй, какие требования входят в scope, а какие не входят.
 9. Если для основного ФТ доступны DOCX и PDF, создай `source-parity-check.md` по `source-parity-check-format.md`: сверяй коды требований, таблицы, строки, примечания и границы только выбранного scope.
-   Если подтвержденный UI scope содержит mockup / screen image / `mockups/`, открой изображение визуально и создай `mockup-visual-inventory.md` по `mockup-visual-inventory-format.md` до handoff к writer. Инвентарь должен фиксировать видимые блоки, поля, действия, interaction hints, mockup-only элементы, конфликты с ФТ и решение `not_used_as_requirement_source = yes`. Если макет нельзя открыть или проверить визуально, переведи workflow в `blocked-input`, а не передавай writer-у задачу с догадками по UI-шагам. Доступный относящийся Figma-узел внеси в этот же inventory; недоступный `optional_visual_reference` укажи как limitation в `scope-brief.md`.
+   Если подтвержденный UI scope содержит mockup / screen image / `mockups/`, открой изображение визуально и создай `mockup-visual-inventory.md` по `mockup-visual-inventory-format.md` до handoff к writer. Инвентарь должен фиксировать видимые блоки, поля, действия, interaction hints, mockup-only элементы, конфликты с ФТ и решение `not_used_as_requirement_source = yes`. Если макет нельзя открыть или проверить визуально, переведи workflow в `blocked-input`, а не передавай writer-у задачу с догадками по UI-шагам. Если source-selection регистрирует Figma-узел, относящийся к scope, внеси его index в `required_inputs`, brief и prompt; доступный узел — в inventory, недоступный `optional_visual_reference` — как limitation в brief.
 9a. Если `source-parity-check.md` содержит секцию `Table / Row Parity` или подтвержденный scope основан на таблице полей/действий, создай отдельный `source-row-inventory.md` по `source-row-inventory-format.md` до handoff к writer. В inventory должны попасть все source rows выбранного scope, включая `in_scope = no`, применимые document-global/ancestor/cross-referenced constraints, rows/list values из XHTML, строки с PDF-only requirement codes и строки, которые могут стать `GAP-*`. Для compiler v3 заполни exact `source_path`, `source_locator`, `bounded_source_text`, `source_context_class` и `requirement_codes`; downstream manifest обязан совпасть с этим registry полностью. Не передавай writer-у табличный scope только с `source-parity-check.md`: writer должен получить независимый row inventory.
 9b. Для табличного scope проверь расшифровку колонок, сокращений и локальных кодов; неподтвержденное значение, влияющее на test design, фиксируй как `GAP-*` типа `missing-source-definition`, а не как догадку.
 9c. Для каждого поля из таблицы перенеси в `source-row-inventory.md` все применимые document-global ограничения его типа: например, длину текста, формат/диапазон/календарную корректность даты, границы числового значения и timezone-поведение. Каждое независимое ограничение получит собственную source row и отдельный `ATOM-*` либо `SO-NEG-*`; не заменяй их фразой «и т. п.».
@@ -222,9 +222,10 @@ Minimum for `prompt.scope-gaps-to-reviewer.md`:
 неразрешенном продуктовом правиле; account/object/fixture и роль с заданными
 source правами — `needs-test-data`, не вопрос к БА. В предпосылках укажи для
 каждого атома исполнителя, состояние, `SETUP-*`, статус и `FX-*`, шаги ФТ с
-`поле=значение` или отсутствующую предпосылку. ATOM одной команды повторяют
-общий `SETUP-*`; роль, состояние или fixture не разделяй. Таблица отображения /
-действий и «создать или выбрать» не доказывают подготовку.
+`поле=значение` или отсутствующую предпосылку. Повторяй общий `SETUP-*` только
+у атомов с одинаковыми исполнителем, объектом и исходным состоянием; не
+распространяй полный перечень ролей на проверки только администратора. Таблица
+отображения / действий и «создать или выбрать» не доказывают подготовку.
 Широкий gap по нескольким
 obligations/полям/validation classes разложи на отдельные `CLR-*` или
 нумерованный checklist. Не задавай БА umbrella-вопрос; при intake закрывай
