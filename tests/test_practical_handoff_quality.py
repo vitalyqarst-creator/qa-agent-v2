@@ -411,6 +411,156 @@ class PracticalHandoffQualityTests(unittest.TestCase):
         finding_ids = {finding.id for finding in findings}
         self.assertIn("practical-scope-brief-source-row-atom-coverage-incomplete", finding_ids)
 
+    def test_scope_brief_requires_reciprocal_source_row_atom_bindings(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            inventory = root / "work" / "stage-handoffs" / "scope" / "source-row-inventory.md"
+            inventory.parent.mkdir(parents=True)
+            inventory.write_text(
+                "\n".join(
+                    [
+                        "## Source Row Inventory",
+                        "",
+                        "| source_row_id | package_id | field_or_action | source_ref | requirement_codes | in_scope | mapped_atom_or_gap |",
+                        "| --- | --- | --- | --- | --- | --- | --- |",
+                        "| `SRC-001` | `PKG-01` | Первое действие. | Таблица 1 | `AS.10` | `yes` | `ATOM-001` |",
+                        "| `SRC-002` | `PKG-01` | Второе действие. | Таблица 1 | `AS.11` | `yes` | `ATOM-002` |",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            brief = root / "scope-brief.md"
+            brief.write_text(
+                "\n".join(
+                    [
+                        "# Краткое описание области",
+                        "",
+                        "## Источники",
+                        "",
+                        "- `work/stage-handoffs/scope/source-row-inventory.md`",
+                        "",
+                        "## Планируемые проверки",
+                        "",
+                        "| Идентификатор | Источник | Проверяемое утверждение | Основной ожидаемый результат | Статус исполнения |",
+                        "| --- | --- | --- | --- | --- |",
+                        "| `ATOM-001` | `AS.10`; `SRC-002` | Первое действие. | Первое действие выполнено. | `needs-test-data` |",
+                        "| `ATOM-002` | `AS.11`; `SRC-001` | Второе действие. | Второе действие выполнено. | `needs-test-data` |",
+                        "",
+                        "## Предпосылки исполнения",
+                        "",
+                        "| Затронутые проверки | Исполнитель | Объект и исходное состояние | Ключ подготовки | Подтверждение подготовки | Статус исполнения |",
+                        "| --- | --- | --- | --- | --- | --- |",
+                        "| `ATOM-001` | Пользователь с доступом. | Подготовленный объект. | `SETUP-001` | Отсутствует: подготовленный объект. | `needs-test-data` |",
+                        "| `ATOM-002` | Пользователь с доступом. | Подготовленный объект. | `SETUP-002` | Отсутствует: подготовленный объект. | `needs-test-data` |",
+                        "",
+                        "## Зависимости от тестовых данных",
+                        "",
+                        "| Ключ подготовки | Подготовка | Затронутые проверки | Статус исполнения |",
+                        "| --- | --- | --- | --- |",
+                        "| `SETUP-001` | Подготовить первый объект. | `ATOM-001` | `needs-test-data` |",
+                        "| `SETUP-002` | Подготовить второй объект. | `ATOM-002` | `needs-test-data` |",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            findings, _ = self.validator.validate_practical_scope_brief(brief, root)
+
+        finding_ids = {finding.id for finding in findings}
+        self.assertIn("practical-scope-brief-source-row-atom-bindings-inconsistent", finding_ids)
+
+    def write_universal_role_brief(self, root: Path, *, quantified: bool) -> Path:
+        inventory = root / "work" / "stage-handoffs" / "scope" / "source-row-inventory.md"
+        inventory.parent.mkdir(parents=True)
+        inventory.write_text(
+            "\n".join(
+                [
+                    "## Source Row Inventory",
+                    "",
+                    "| source_row_id | package_id | field_or_action | source_ref | requirement_codes | in_scope | mapped_atom_or_gap |",
+                    "| --- | --- | --- | --- | --- | --- | --- |",
+                    "| `SRC-001` | `PKG-01` | Скрытый партнер виден администратору и скрыт для остальных ролей. | Таблица статусов | `AS.11` | `yes` | `ATOM-001` |",
+                ]
+            ),
+            encoding="utf-8",
+        )
+        assertion = (
+            "Скрытый партнер не отображается для каждой настроенной роли, кроме администратора."
+            if quantified
+            else "Скрытый партнер не отображается для пользователя без роли администратора."
+        )
+        actor = (
+            "Пользователь с каждой настроенной ролью, кроме администратора"
+            if quantified
+            else "Пользователь без роли администратора"
+        )
+        dependency = (
+            "Полный перечень настроенных ролей, кроме администратора, и учетные записи для каждой роли."
+            if quantified
+            else "Учетная запись пользователя без роли администратора."
+        )
+        proof = (
+            "\n## Обоснование параметризации ATOM\n\n"
+            "| Атом | Стартовый экран | UI-уровень | Навигация | Действие | Триггер | Ожидаемый результат |\n"
+            "| --- | --- | --- | --- | --- | --- |\n"
+            "| `ATOM-001` | Список партнеров | Карточка партнера | Открыть список | Найти партнера | Вход каждой ролью | Скрытый партнер не отображается. |\n"
+            if quantified
+            else ""
+        )
+        brief = root / "scope-brief.md"
+        brief.write_text(
+            "\n".join(
+                [
+                    "# Краткое описание области",
+                    "",
+                    "## Источники",
+                    "",
+                    "- `work/stage-handoffs/scope/source-row-inventory.md`",
+                    "",
+                    "## Планируемые проверки",
+                    "",
+                    "| Идентификатор | Источник | Проверяемое утверждение | Основной ожидаемый результат | Статус исполнения |",
+                    "| --- | --- | --- | --- | --- |",
+                    f"| `ATOM-001` | `AS.11`; `SRC-001` | {assertion} | Скрытый партнер не отображается. | `needs-test-data` |",
+                    "",
+                    "## Предпосылки исполнения",
+                    "",
+                    "| Затронутые проверки | Исполнитель | Объект и исходное состояние | Ключ подготовки | Подтверждение подготовки | Статус исполнения |",
+                    "| --- | --- | --- | --- | --- | --- |",
+                    f"| `ATOM-001` | {actor} | Скрытый партнер. | `SETUP-ROLES-001` | Отсутствует: {dependency} | `needs-test-data` |",
+                    "",
+                    "## Зависимости от тестовых данных",
+                    "",
+                    "| Ключ подготовки | Подготовка | Затронутые проверки | Статус исполнения |",
+                    "| --- | --- | --- | --- |",
+                    f"| `SETUP-ROLES-001` | {dependency} | `ATOM-001` | `needs-test-data` |",
+                    proof,
+                ]
+            ),
+            encoding="utf-8",
+        )
+        return brief
+
+    def test_scope_brief_rejects_single_user_for_universal_role_requirement(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            brief = self.write_universal_role_brief(root, quantified=False)
+
+            findings, _ = self.validator.validate_practical_scope_brief(brief, root)
+
+        finding_ids = {finding.id for finding in findings}
+        self.assertIn("practical-scope-brief-universal-role-coverage-incomplete", finding_ids)
+
+    def test_scope_brief_accepts_quantified_role_coverage_with_full_setup(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            brief = self.write_universal_role_brief(root, quantified=True)
+
+            findings, _ = self.validator.validate_practical_scope_brief(brief, root)
+
+        finding_ids = {finding.id for finding in findings}
+        self.assertNotIn("practical-scope-brief-universal-role-coverage-incomplete", finding_ids)
+
     def test_scope_brief_rejects_unresolved_source_inventory_reference(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

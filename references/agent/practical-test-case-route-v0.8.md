@@ -484,7 +484,9 @@ planned TC), use the fast path inside this same route:
      - open questions and assumptions;
      - candidate UI-calibration points.
    - `scope-brief.md` uses Russian visible prose and three execution tables; its
-     linked source-row inventory path must resolve. Map one `AS.*` / `SO-NEG-*` / `SO-REQ-*`
+     linked source-row inventory path must resolve. In a row/table scope, each
+     planned `Источник` names its exact `SRC-*` and the reciprocal `SRC-*` ↔
+     `ATOM-*` mapping agrees with `source-row-inventory.md`. Map one `AS.*` / `SO-NEG-*` / `SO-REQ-*`
      to one `ATOM-*` or `GAP-*`, with actor, state, `SETUP-*`, evidence and status;
      `Кандидаты отрицательных проверок` содержит `Связанный ATOM`: один
      `SO-NEG-*` на одно поле/ATOM.
@@ -522,7 +524,9 @@ planned TC), use the fast path inside this same route:
      level, navigation path, user action, trigger and observable result for
      every value. Do not leave an aggregated `ATOM-*` with an instruction for
      the matrix writer to decide whether it should be split: make that decision
-     in the scope-analysis stage.
+     in the scope-analysis stage. A requirement for every/remaining role needs a
+     quantified, parameterized role check plus complete runtime role inventory and
+     accounts as `needs-test-data`; this is test-data setup, not a BA question.
      The pre-writer validator requires one `ATOM-*` and one `Основной ожидаемый
      результат` per planned row. An execution row with several named actors is
      rejected unless `Обоснование параметризации ATOM` proves, for that ATOM,

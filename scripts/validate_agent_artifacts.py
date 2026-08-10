@@ -3791,6 +3791,17 @@ def validate_practical_scope_brief(path: Path, root: Path) -> tuple[list[Finding
         return findings, checks
 
     planned_statuses: dict[str, str] = {}
+    planned_source_rows: dict[str, set[str]] = {}
+    planned_text_by_atom: dict[str, str] = {}
+    planned_header = [cell.strip().casefold() for cell in planned_rows[0]]
+    planned_source_column = next(
+        (
+            index
+            for index, header in enumerate(planned_header)
+            if header in {"источник", "источники", "строки источника", "source rows"}
+        ),
+        None,
+    )
     aggregated_planned_atom_rows: list[str] = []
     missing_planned_expected_results: list[str] = []
     aggregated_oracle_obligations: list[str] = []
@@ -3811,8 +3822,19 @@ def validate_practical_scope_brief(path: Path, root: Path) -> tuple[list[Finding
         expected_result = normalize_markdown_field_value(
             row[planned_columns["expected"]]
         ).casefold()
+        planned_check_text = " ".join(row)
         for atom_id in atom_ids:
             planned_statuses[atom_id.upper()] = status
+            planned_text_by_atom[atom_id.upper()] = planned_check_text
+            if planned_source_column is not None and planned_source_column < len(row):
+                planned_source_rows[atom_id.upper()] = {
+                    source_row_id.upper()
+                    for source_row_id in re.findall(
+                        r"\bSRC-[A-Z0-9-]+\b",
+                        row[planned_source_column],
+                        flags=re.IGNORECASE,
+                    )
+                }
             if not expected_result:
                 missing_planned_expected_results.append(atom_id.upper())
         if len(atom_ids) != 1:
@@ -3832,7 +3854,6 @@ def validate_practical_scope_brief(path: Path, root: Path) -> tuple[list[Finding
                 f"{next(iter(atom_ids))}:obligations={','.join(sorted(oracle_obligations))}"
             )
 
-        planned_check_text = " ".join(row)
         atom_label = ",".join(sorted(atom_ids)) or "<missing-atom>"
         has_autofill = bool(re.search(
             r"автозаполн|автоматическ\w*\s+заполн|заполня\w*.*атрибут",
@@ -4258,6 +4279,7 @@ def validate_practical_scope_brief(path: Path, root: Path) -> tuple[list[Finding
     execution_statuses: dict[str, str] = {}
     execution_actors: dict[str, str] = {}
     execution_setup_keys: dict[str, set[str]] = {}
+    execution_contexts: dict[str, str] = {}
 
     parameterization_section = extract_markdown_section_prefix(content, "Обоснование параметризации ATOM")
     parameterization_rows = markdown_table_rows_from_text(parameterization_section or "")
@@ -4406,6 +4428,9 @@ def validate_practical_scope_brief(path: Path, root: Path) -> tuple[list[Finding
                 execution_statuses[atom_id] = status
                 execution_actors[atom_id] = actor
                 execution_setup_keys[atom_id] = setup_keys
+                execution_contexts[atom_id] = " ".join(
+                    [actor, object_state, preparation_evidence]
+                )
                 if actor_has_multiple_principals and atom_id not in parameterized_actor_atoms:
                     multi_actor_without_proof_ids.add(atom_id)
                 if status == "needs-test-data" and (not actor or not object_state or actor == "не требуется" or object_state == "не требуется"):
@@ -4516,6 +4541,9 @@ def validate_practical_scope_brief(path: Path, root: Path) -> tuple[list[Finding
         )
 
     source_row_mapping_mismatches: list[str] = []
+    source_row_atom_binding_mismatches: list[str] = []
+    universal_role_source_rows: list[tuple[str, str, set[str]]] = []
+    inventory_atoms_by_source_row: dict[str, set[str]] = {}
     operation_setup_inheritance_mismatches: list[str] = []
     operation_actor_inheritance_mismatches: list[str] = []
     source_row_inventory_language_mismatches: list[str] = []
@@ -4538,6 +4566,31 @@ def validate_practical_scope_brief(path: Path, root: Path) -> tuple[list[Finding
             source_row_id = inventory_row.get("source_row_id", "").strip() or f"row {index}"
             if inventory_row.get("in_scope", "").strip().strip("`").casefold() != "yes":
                 continue
+            mapped_text = inventory_row.get("mapped_atom_or_gap", "")
+            mapped_atoms = set(extract_any_atom_ids_from_text(mapped_text))
+            inventory_atoms_by_source_row[source_row_id.upper()] = mapped_atoms
+            if mapped_atoms and planned_source_column is None:
+                source_row_atom_binding_mismatches.append(
+                    f"{rel(inventory_path, root)}:{source_row_id}:planned-source-column-missing"
+                )
+            for atom_id in sorted(mapped_atoms):
+                if atom_id not in planned_statuses:
+                    source_row_atom_binding_mismatches.append(
+                        f"{rel(inventory_path, root)}:{source_row_id}:unknown-planned-atom={atom_id}"
+                    )
+                elif source_row_id.upper() not in planned_source_rows.get(atom_id, set()):
+                    source_row_atom_binding_mismatches.append(
+                        f"{rel(inventory_path, root)}:{source_row_id}:missing-plan-link={atom_id}"
+                    )
+            source_statement = " ".join(inventory_row.values())
+            if re.search(
+                r"\b(?:все|всех|остальн\w*|кажд\w*)\s+рол",
+                source_statement,
+                flags=re.IGNORECASE,
+            ):
+                universal_role_source_rows.append(
+                    (rel(inventory_path, root), source_row_id.upper(), mapped_atoms)
+                )
             action_codes = sorted(
                 {
                     f"AS.{match.group(1)}"
@@ -4550,8 +4603,6 @@ def validate_practical_scope_brief(path: Path, root: Path) -> tuple[list[Finding
             )
             if len(action_codes) < 2:
                 continue
-            mapped_text = inventory_row.get("mapped_atom_or_gap", "")
-            mapped_atoms = set(extract_any_atom_ids_from_text(mapped_text))
             mapped_gaps = set(extract_gap_ids_from_text(mapped_text))
             if len(mapped_atoms) + len(mapped_gaps) < len(action_codes):
                 source_row_mapping_mismatches.append(
@@ -4596,6 +4647,18 @@ def validate_practical_scope_brief(path: Path, root: Path) -> tuple[list[Finding
                     f"setup={'; '.join(setup_details)}"
                 )
 
+    for atom_id, source_row_ids in planned_source_rows.items():
+        for source_row_id in sorted(source_row_ids):
+            mapped_atoms = inventory_atoms_by_source_row.get(source_row_id)
+            if mapped_atoms is None:
+                source_row_atom_binding_mismatches.append(
+                    f"planned:{atom_id}:unknown-source-row={source_row_id}"
+                )
+            elif atom_id not in mapped_atoms:
+                source_row_atom_binding_mismatches.append(
+                    f"planned:{atom_id}:inventory-does-not-map={source_row_id}"
+                )
+
     for parity_path in practical_scope_brief_artifact_paths(content, path, root, "source-parity-check.md"):
         try:
             parity_content = parity_path.read_text(encoding="utf-8")
@@ -4622,6 +4685,26 @@ def validate_practical_scope_brief(path: Path, root: Path) -> tuple[list[Finding
                 evidence=source_row_mapping_mismatches[:20],
                 recommended_action=(
                     "Complete mapped_atom_or_gap for the affected source row and synchronize the planned-checks table."
+                ),
+            )
+        )
+    if source_row_atom_binding_mismatches:
+        findings.append(
+            Finding(
+                id="practical-scope-brief-source-row-atom-bindings-inconsistent",
+                severity="error",
+                category="practical-handoff",
+                title="Practical source-row inventory and planned checks disagree on ATOM bindings",
+                details=(
+                    "Every in-scope inventory row mapped to an ATOM-* must be linked from that planned row through "
+                    "the exact SRC-* identifier, and the planned row must not claim a different source row. "
+                    "This prevents a valid but stale ATOM number from silently changing the requirement it covers."
+                ),
+                path=display_path,
+                evidence=source_row_atom_binding_mismatches[:20],
+                recommended_action=(
+                    "Add the exact SRC-* anchor to the `Источник` column of each planned ATOM row and make its "
+                    "source-row-inventory mapping reciprocal before writer launch."
                 ),
             )
         )
@@ -4701,6 +4784,16 @@ def validate_practical_scope_brief(path: Path, root: Path) -> tuple[list[Finding
         )
     checks.append(
         Check(
+            "practical-scope-brief-source-row-atom-bindings",
+            "fail" if source_row_atom_binding_mismatches else "pass",
+            "Source-row and ATOM bindings are inconsistent."
+            if source_row_atom_binding_mismatches
+            else "Source-row and ATOM bindings are reciprocal.",
+            display_path,
+        )
+    )
+    checks.append(
+        Check(
             "practical-scope-brief-source-row-action-coverage",
             "fail" if source_row_mapping_mismatches or operation_setup_inheritance_mismatches or operation_actor_inheritance_mismatches or unresolved_source_inventory_refs else "pass",
             "Source-row action coverage is incomplete."
@@ -4772,6 +4865,7 @@ def validate_practical_scope_brief(path: Path, root: Path) -> tuple[list[Finding
     dependency_setup_keys: set[str] = set()
     missing_dependency_setup_keys: list[str] = []
     setup_key_affected_ids: dict[str, set[str]] = {}
+    dependency_contexts: dict[str, str] = {}
     for row in dependency_rows[1:]:
         if max(dependency_columns.values()) >= len(row):
             continue
@@ -4792,6 +4886,11 @@ def validate_practical_scope_brief(path: Path, root: Path) -> tuple[list[Finding
         for setup_key in setup_keys:
             setup_key_affected_ids.setdefault(setup_key, set()).update(ids)
         mapped_ids.update(ids)
+        dependency_context = " ".join(row)
+        for atom_id in ids:
+            dependency_contexts[atom_id] = " ".join(
+                [dependency_contexts.get(atom_id, ""), dependency_context]
+            ).strip()
         status = normalize_markdown_field_value(row[dependency_columns["status"]]).casefold()
         if status != "needs-test-data":
             mismatched_ids.update(ids)
@@ -4849,6 +4948,73 @@ def validate_practical_scope_brief(path: Path, root: Path) -> tuple[list[Finding
             "Data-dependency statuses are inconsistent."
             if missing_ids or invalid_ids or missing_dependency_setup_keys or missing_setup_key_ids or dependency_key_coverage_mismatches or shared_missing_setup_ids
             else "Data-dependency statuses are consistent.",
+            display_path,
+        )
+    )
+
+    universal_role_coverage_mismatches: list[str] = []
+    for inventory_display_path, source_row_id, mapped_atoms in universal_role_source_rows:
+        quantified_atoms = [
+            atom_id
+            for atom_id in sorted(mapped_atoms)
+            if re.search(
+                r"\b(?:все|всех|остальн\w*|кажд\w*)\s+(?:настроенн\w*\s+)?рол",
+                planned_text_by_atom.get(atom_id, ""),
+                flags=re.IGNORECASE,
+            )
+        ]
+        if not quantified_atoms:
+            universal_role_coverage_mismatches.append(
+                f"{inventory_display_path}:{source_row_id}:missing-quantified-role-atom"
+            )
+            continue
+        for atom_id in quantified_atoms:
+            context = " ".join(
+                [
+                    execution_contexts.get(atom_id, ""),
+                    dependency_contexts.get(atom_id, ""),
+                ]
+            )
+            if atom_id not in parameterized_actor_atoms:
+                universal_role_coverage_mismatches.append(
+                    f"{inventory_display_path}:{source_row_id}:{atom_id}:parameterization-proof-missing"
+                )
+            if not re.search(
+                r"(?:полный|актуальн\w*)\s+переч(?:ень|ня)\s+[^.|;]{0,48}?рол",
+                context,
+                flags=re.IGNORECASE,
+            ):
+                universal_role_coverage_mismatches.append(
+                    f"{inventory_display_path}:{source_row_id}:{atom_id}:role-inventory-setup-missing"
+                )
+    if universal_role_coverage_mismatches:
+        findings.append(
+            Finding(
+                id="practical-scope-brief-universal-role-coverage-incomplete",
+                severity="error",
+                category="practical-handoff",
+                title="Practical scope brief reduces a universal role requirement to one generic user",
+                details=(
+                    "A source statement about every or all remaining role needs one quantified, parameterized "
+                    "ATOM and a complete runtime role inventory as test data. A generic non-administrator user "
+                    "cannot prove the requirement for every applicable role."
+                ),
+                path=display_path,
+                evidence=universal_role_coverage_mismatches[:20],
+                recommended_action=(
+                    "State the complete role set in the dependency setup, write a quantified role ATOM, and add "
+                    "a complete `Обоснование параметризации ATOM`; use needs-test-data until the role inventory "
+                    "and accounts are prepared."
+                ),
+            )
+        )
+    checks.append(
+        Check(
+            "practical-scope-brief-universal-role-coverage",
+            "fail" if universal_role_coverage_mismatches else "pass",
+            "Universal role coverage is incomplete."
+            if universal_role_coverage_mismatches
+            else "Universal role requirements have quantified coverage.",
             display_path,
         )
     )
