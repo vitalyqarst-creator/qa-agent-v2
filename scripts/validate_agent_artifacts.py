@@ -25417,9 +25417,22 @@ def is_planned_active_review_preflight_link(
         or ""
     )
     prompt_rounds = practical_revision_numbers(active_prompt)
-    if len(prompt_rounds) != 1:
+    state_round = parse_nonnegative_int(str(state.get("current_round") or ""))
+    if state_round is None:
+        # Read-only compatibility for historical handoffs that encoded the
+        # round solely in the prompt filename.
+        if len(prompt_rounds) != 1:
+            return False
+        active_round = next(iter(prompt_rounds))
+    elif len(prompt_rounds) == 1 and next(iter(prompt_rounds)) != state_round:
         return False
-    active_round = next(iter(prompt_rounds))
+    else:
+        # Canonical prompt filenames such as ``prompt.matrix-to-reviewer.md``
+        # do not encode a revision. In that case workflow-state.current_round
+        # is the durable routing source; otherwise a planned receipt would
+        # turn into a warning as soon as it is materialized and invalidate its
+        # own hash.
+        active_round = state_round
     expected_name = f"review-launch-preflight-r{active_round}.json"
     return (
         latest_artifacts.get("review_launch_preflight") == value
