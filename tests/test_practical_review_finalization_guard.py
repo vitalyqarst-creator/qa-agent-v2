@@ -11,6 +11,7 @@ from pathlib import Path
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
 TASK_ID = "019fda6b-f604-7130-80a5-8e0d1d7f5c7f"
+CONTROLLER_ID = "019fda6b-f604-7130-80a5-8e0d7e3546a1"
 
 
 def sha256(path: Path) -> str:
@@ -60,6 +61,7 @@ class PracticalReviewFinalizationGuardTests(unittest.TestCase):
                     "next_skill: ft-test-case-reviewer",
                     "review_mode: tc_review",
                     "current_round: 1",
+                    f"controller_task_or_session: {CONTROLLER_ID}",
                     "required_inputs: []",
                     "latest_artifacts: {}",
                     "open_questions: []",
@@ -130,7 +132,7 @@ class PracticalReviewFinalizationGuardTests(unittest.TestCase):
         dispatch.write_text(
             json.dumps(
                 {
-                    "schema_version": 2,
+                    "schema_version": 3,
                     "status": "dispatched",
                     "allowed": True,
                     "launch_receipt": receipt.resolve().as_posix(),
@@ -138,6 +140,9 @@ class PracticalReviewFinalizationGuardTests(unittest.TestCase):
                     "reviewer_task_or_session": TASK_ID,
                     "reviewer_execution_surface": "codex-thread",
                     "reviewer_thread_url_or_id": TASK_ID,
+                    "controller_task_or_session": CONTROLLER_ID,
+                    "controller_execution_surface": "codex-thread",
+                    "controller_identity_verified": True,
                 },
                 ensure_ascii=False,
             ),
@@ -316,6 +321,29 @@ class PracticalReviewFinalizationGuardTests(unittest.TestCase):
 
         self.assertFalse(result["allowed"])
         self.assertIn("separate Codex session", "\n".join(result["blocking_reasons"]))
+
+    def test_blocks_dispatch_when_controller_identity_is_not_bound_to_workflow(self) -> None:
+        helper = self.load_helper()
+        repo_root, ft_root, summary, receipt, dispatch, review, independence = self.make_fixture()
+        payload = json.loads(dispatch.read_text(encoding="utf-8"))
+        payload["controller_task_or_session"] = TASK_ID
+        dispatch.write_text(json.dumps(payload), encoding="utf-8")
+
+        result = helper.build_finalization_packet(
+            repo_root=repo_root,
+            ft_package_root=ft_root,
+            summary_path=summary,
+            scope_ids=["01"],
+            review_mode="tc_review",
+            launch_receipt=receipt,
+            dispatch_receipt=dispatch,
+            review_artifact=review,
+            independence_artifact=independence,
+        )
+
+        self.assertFalse(result["allowed"])
+        self.assertIn("controller task/session id must differ", "\n".join(result["blocking_reasons"]))
+        self.assertIn("workflow controller_task_or_session differs", "\n".join(result["blocking_reasons"]))
 
     def test_blocks_review_round_that_differs_from_workflow(self) -> None:
         helper = self.load_helper()

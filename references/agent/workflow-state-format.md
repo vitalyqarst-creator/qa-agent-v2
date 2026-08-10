@@ -53,6 +53,11 @@ fts/<ft-slug>/work/stage-handoffs/NN-<scope-slug>/workflow-state.yaml
 - `latest_artifacts` — map с относительными путями к последним актуальным
   артефактам handoff и session-based review-cycle. Для одного логического alias
   указывай один текущий файл; историю не дублируй под разными aliases.
+- Для `route_profile: practical_v0_8` controller до запуска отдельного review
+  записывает верхнеуровневый `controller_task_or_session` из `CODEX_THREAD_ID`.
+  После accepted independent review и до `writer allowed` `latest_artifacts.controller_post_finalization_gate` обязан ссылаться на разрешенный packet из
+  `practical_controller_post_finalization_gate.py`; reviewer не меняет это поле
+  и не запускает follow-up reviewer.
 - Для `ft-source-locator`, `ft-scope-analyzer`, `ft-test-case-writer`, `ft-test-case-reviewer` и `ft-test-case-iteration` `latest_artifacts` должен ссылаться на актуальный `*session-log*.md` по `references/agent/session-log-format.md`, кроме `route_profile: practical_v0_8`: compact practical handoff не создаёт session logs.
 - Для стадий, где агент принимает source/scope/writer/reviewer/routing решения, `latest_artifacts.decision_log` должен ссылаться на `agent-decision-log.md` по `references/agent/agent-decision-log-format.md`, кроме `route_profile: practical_v0_8`: practical route фиксирует проверяемые решения в `scope-brief.md`, matrix/review artifacts и `practical-stage-summary.md`, без legacy decision log. `workflow-state.yaml` остается единственным источником process-status.
 - Session log должен соответствовать текущему stage. Ссылка на лог другого stage не считается корректным handoff даже если файл существует. Примеры: `ft-source-locator` должен ссылаться на `source-locator-session-log.md` или лог с `skill = ft-source-locator`; writer должен ссылаться на `writer-session-log.md` или лог с `skill = ft-test-case-writer`.

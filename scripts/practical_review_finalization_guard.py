@@ -310,12 +310,39 @@ def build_finalization_packet(
     reviewer_surface = str(dispatch.get("reviewer_execution_surface") or "").strip()
     reviewer_task = str(dispatch.get("reviewer_task_or_session") or "").strip()
     reviewer_thread = str(dispatch.get("reviewer_thread_url_or_id") or "").strip()
+    controller_task = str(dispatch.get("controller_task_or_session") or "").strip()
+    controller_surface = str(dispatch.get("controller_execution_surface") or "").strip()
+    if dispatch.get("schema_version") != 3:
+        blockers.append("review dispatch receipt must use controller-provenance schema v3")
+    if dispatch.get("controller_identity_verified") is not True:
+        blockers.append("review dispatch receipt does not verify controller session provenance")
+    if not TASK_ID_RE.fullmatch(controller_task):
+        blockers.append("review dispatch receipt lacks a durable controller task/session id")
+    if controller_surface not in EXECUTION_SURFACES:
+        blockers.append("review dispatch receipt lacks a controller Codex session execution surface")
     if reviewer_surface not in EXECUTION_SURFACES:
         blockers.append("review dispatch receipt lacks a separate Codex session execution surface")
     if not TASK_ID_RE.fullmatch(reviewer_task):
         blockers.append("review dispatch receipt lacks a durable reviewer task/session id")
+    if controller_task and reviewer_task and controller_task.casefold() == reviewer_task.casefold():
+        blockers.append("controller task/session id must differ from reviewer task/session id")
     if reviewer_task and reviewer_task not in reviewer_thread:
         blockers.append("review dispatch receipt thread id does not match reviewer task/session id")
+    for descriptor in descriptors:
+        try:
+            state = review_preflight.artifact_validator.parse_workflow_state(
+                descriptor.workflow_path
+            )
+        except (OSError, UnicodeDecodeError, ValueError):
+            blockers.append(
+                f"scope {descriptor.scope_id}: cannot verify controller task/session provenance"
+            )
+            continue
+        workflow_controller = str(state.get("controller_task_or_session") or "").strip()
+        if workflow_controller != controller_task:
+            blockers.append(
+                f"scope {descriptor.scope_id}: workflow controller_task_or_session differs from dispatch receipt"
+            )
     for field, actual in (
         ("reviewer_task_or_session", markdown_field(independence_content, "reviewer_task_or_session")),
         ("reviewer_execution_surface", markdown_field(independence_content, "reviewer_execution_surface")),
@@ -331,7 +358,10 @@ def build_finalization_packet(
         FinalizationCheck(
             "reviewer-independence",
             "pass" if not any("reviewer" in item for item in blockers) else "fail",
-            f"surface={reviewer_surface or '<missing>'}; task={reviewer_task or '<missing>'}",
+            (
+                f"controller={controller_task or '<missing>'}; "
+                f"reviewer={reviewer_task or '<missing>'}; surface={reviewer_surface or '<missing>'}"
+            ),
         )
     )
 
@@ -355,6 +385,8 @@ def build_finalization_packet(
         "verdict": verdict,
         "reviewer_task_or_session": reviewer_task,
         "reviewer_execution_surface": reviewer_surface,
+        "controller_task_or_session": controller_task,
+        "controller_execution_surface": controller_surface,
         "next_controller_transition": next_controller_transition(review_mode, verdict),
         "checks": [asdict(check) for check in checks],
         "blocking_reasons": blockers,

@@ -10,6 +10,7 @@ from pathlib import Path
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
 TASK_ID = "019fda6b-f604-7130-80a5-8e0d1d7f5c7f"
+CONTROLLER_ID = "019fda6b-f604-7130-80a5-8e0d7e3546a1"
 
 
 class PracticalReviewDispatchReceiptTests(unittest.TestCase):
@@ -38,11 +39,13 @@ class PracticalReviewDispatchReceiptTests(unittest.TestCase):
                 launch_receipt=launch,
                 reviewer_task_id=TASK_ID,
                 reviewer_execution_surface="codex-thread",
+                controller_task_id=CONTROLLER_ID,
             )
 
         self.assertTrue(result["allowed"], result["blocking_reasons"])
         self.assertEqual("dispatched", result["status"])
         self.assertEqual(TASK_ID, result["reviewer_task_or_session"])
+        self.assertEqual(CONTROLLER_ID, result["controller_task_or_session"])
 
     def test_rejects_invalid_task_id_or_blocked_launch(self) -> None:
         helper = self.load_helper()
@@ -52,6 +55,7 @@ class PracticalReviewDispatchReceiptTests(unittest.TestCase):
                 launch_receipt=launch,
                 reviewer_task_id="reviewer-round-1",
                 reviewer_execution_surface="codex-thread",
+                controller_task_id=CONTROLLER_ID,
             )
 
         self.assertFalse(result["allowed"])
@@ -66,6 +70,7 @@ class PracticalReviewDispatchReceiptTests(unittest.TestCase):
                 launch_receipt=launch,
                 reviewer_task_id=TASK_ID,
                 reviewer_execution_surface="codex-task",
+                controller_task_id=CONTROLLER_ID,
             )
 
         self.assertFalse(result["allowed"])
@@ -97,6 +102,7 @@ class PracticalReviewDispatchReceiptTests(unittest.TestCase):
                     launch_receipt=launch,
                     reviewer_task_id=TASK_ID,
                     reviewer_execution_surface="codex-thread",
+                    controller_task_id=CONTROLLER_ID,
                 )
             finally:
                 helper.review_preflight.verify_receipt = original_verify
@@ -104,6 +110,20 @@ class PracticalReviewDispatchReceiptTests(unittest.TestCase):
         self.assertFalse(result["allowed"])
         self.assertFalse(result["controller_state_verified"])
         self.assertIn("summary digest", "\n".join(result["blocking_reasons"]))
+
+    def test_rejects_reviewer_dispatch_that_claims_the_controller_id(self) -> None:
+        helper = self.load_helper()
+        with tempfile.TemporaryDirectory() as tmp:
+            launch = self.launch_receipt(Path(tmp))
+            result = helper.build_dispatch_receipt(
+                launch_receipt=launch,
+                reviewer_task_id=TASK_ID,
+                reviewer_execution_surface="codex-thread",
+                controller_task_id=TASK_ID,
+            )
+
+        self.assertFalse(result["allowed"])
+        self.assertIn("must differ", "\n".join(result["blocking_reasons"]))
 
 
 if __name__ == "__main__":

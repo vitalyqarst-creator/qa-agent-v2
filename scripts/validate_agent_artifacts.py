@@ -7070,6 +7070,116 @@ def validate_practical_workflow_version_gate(
     return [], [Check("workflow-state-practical-code-version-gate", "pass", "Recorded commit matches code root HEAD.", display_path)]
 
 
+def validate_practical_post_finalization_gate(
+    state: dict[str, Any],
+    path: Path,
+    root: Path,
+) -> tuple[list[Finding], list[Check]]:
+    """Require the controller gate before accepted practical matrix reaches writer.
+
+    This narrow transition is where an accepted matrix review becomes permission
+    to create canonical test cases.  It must be bound to a post-review,
+    current-scope validation and version check instead of merely relying on a
+    reviewer verdict that may have become stale during finalization.
+    """
+
+    is_matrix_to_writer = (
+        is_practical_v08_route(state)
+        and str(state.get("current_stage") or "") == "ft-test-case-reviewer"
+        and str(state.get("stage_status") or "") == "ready-for-next-stage"
+        and str(state.get("next_skill") or "") == "ft-test-case-writer"
+        and str(state.get("writer_mode") or "") == "practical_v0_8_tc_after_matrix_accepted"
+    )
+    if not is_matrix_to_writer:
+        return [], []
+
+    display_path = rel(path, root)
+    latest = state.get("latest_artifacts")
+    latest = latest if isinstance(latest, dict) else {}
+    gate_value = latest.get("controller_post_finalization_gate")
+    ft_root = find_ft_root(path, root, state)
+    gate_path = (
+        resolve_artifact_path(gate_value, path, root, ft_root)
+        if isinstance(gate_value, str) and gate_value.strip()
+        else None
+    )
+    if gate_path is None or not gate_path.is_file():
+        return [
+            Finding(
+                id="practical-workflow-post-finalization-gate-missing",
+                severity="error",
+                category="workflow-state",
+                title="Practical writer transition lacks controller post-finalization gate",
+                details=(
+                    "An accepted practical matrix must be followed by the controller-owned post-finalization "
+                    "gate before canonical writer routing."
+                ),
+                path=display_path,
+                evidence=[str(gate_value or "<missing>")],
+                recommended_action=(
+                    "Run practical_controller_post_finalization_gate.py after refreshing the controller summary, "
+                    "then link its allowed packet from latest_artifacts."
+                ),
+            )
+        ], [Check("practical-workflow-post-finalization-gate", "fail", "Gate packet is missing.", display_path)]
+    try:
+        packet = json.loads(gate_path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        return [
+            Finding(
+                id="practical-workflow-post-finalization-gate-invalid",
+                severity="error",
+                category="workflow-state",
+                title="Practical writer transition has unreadable post-finalization gate",
+                details=str(exc),
+                path=display_path,
+                evidence=[rel(gate_path, root)],
+                recommended_action="Recreate the controller post-finalization packet from current state.",
+            )
+        ], [Check("practical-workflow-post-finalization-gate", "fail", "Gate packet is unreadable.", display_path)]
+
+    scope_match = re.match(r"^(\d{2})-", path.parent.name)
+    scope_id = scope_match.group(1) if scope_match else ""
+    code_root = ""
+    root_consistency = state.get("root_consistency")
+    if isinstance(root_consistency, dict):
+        code_root = str(root_consistency.get("code_root") or "")
+    current_commit = current_git_commit_for_code_root(code_root) if code_root else None
+    packet_scopes = packet.get("scope_ids") if isinstance(packet.get("scope_ids"), list) else []
+    valid = (
+        packet.get("allowed") is True
+        and packet.get("status") == "ready-for-next-stage"
+        and scope_id in {str(value) for value in packet_scopes}
+        and (not current_commit or str(packet.get("code_commit") or "").casefold() == current_commit)
+    )
+    if not valid:
+        return [
+            Finding(
+                id="practical-workflow-post-finalization-gate-invalid",
+                severity="error",
+                category="workflow-state",
+                title="Practical writer transition has stale or blocked post-finalization gate",
+                details=(
+                    "The packet must allow the next stage, include this scope and match the current version-gated "
+                    "code commit."
+                ),
+                path=display_path,
+                evidence=[
+                    f"packet={rel(gate_path, root)}",
+                    f"allowed={packet.get('allowed')}",
+                    f"packet_scopes={packet_scopes}",
+                    f"packet_commit={packet.get('code_commit')}",
+                    f"current_commit={current_commit}",
+                ],
+                recommended_action=(
+                    "Resolve the stated blocker or rematerialize/re-review from the current code version, then rerun "
+                    "the controller post-finalization gate."
+                ),
+            )
+        ], [Check("practical-workflow-post-finalization-gate", "fail", "Gate packet is blocked or stale.", display_path)]
+    return [], [Check("practical-workflow-post-finalization-gate", "pass", "Allowed gate packet matches this writer transition.", display_path)]
+
+
 PRACTICAL_HANDOFF_INTERMEDIATE_ENTRY_NAMES = {"chunks", "tmp", "temp", ".tmp", "_artifact-write"}
 PRACTICAL_HANDOFF_INTERMEDIATE_FILE_RE = re.compile(
     r"^(?:tmp|temp|_artifact-write).+|.+\.(?:partial|tmp)$",
@@ -25019,6 +25129,11 @@ def validate_workflow_state(
     version_findings, version_checks = validate_practical_workflow_version_gate(state, path, root)
     findings.extend(version_findings)
     checks.extend(version_checks)
+    post_finalization_findings, post_finalization_checks = validate_practical_post_finalization_gate(
+        state, path, root
+    )
+    findings.extend(post_finalization_findings)
+    checks.extend(post_finalization_checks)
     intermediate_findings, intermediate_checks = validate_practical_handoff_intermediate_artifacts(state, path, root)
     findings.extend(intermediate_findings)
     checks.extend(intermediate_checks)

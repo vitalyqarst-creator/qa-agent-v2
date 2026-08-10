@@ -237,6 +237,19 @@ class PracticalRouteV08ContractTests(unittest.TestCase):
         self.assertIn("validator_path_resolution", content)
         self.assertIn("unrelated_repo", content)
 
+    def test_practical_review_requires_controller_provenance_and_post_finalization_gate(self) -> None:
+        route = self.read("references/agent/practical-test-case-route-v0.8.md")
+        finalization = self.read("references/agent/practical-review-finalization-format.md")
+        workflow = self.read("references/agent/workflow-state-format.md")
+        dispatch = self.read("scripts/practical_review_dispatch_receipt.py")
+        validator = self.read("scripts/validate_agent_artifacts.py")
+
+        for content in (route, finalization, workflow, dispatch):
+            self.assertIn("controller_task_or_session", content)
+        self.assertIn("practical_controller_post_finalization_gate.py", finalization)
+        self.assertIn("pinned-code-commit-changed", self.read("scripts/practical_controller_post_finalization_gate.py"))
+        self.assertIn("practical-workflow-post-finalization-gate-missing", validator)
+
     def test_practical_stage_summary_template_pins_enum_fields(self) -> None:
         template = self.read("references/agent/practical-stage-summary-template.md")
 

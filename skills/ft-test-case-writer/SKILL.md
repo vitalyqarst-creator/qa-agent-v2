@@ -123,6 +123,9 @@ Minimum runtime rules:
    with only raw reviewer findings. Ensure `practical-stage-summary.md` exists
    and names accepted scopes, `round-cap-reached`/blocked scopes, concrete
    reasons, whether status-marked TC writing is allowed, and the next safe step.
+   After controller finalization, route to canonical TC writing only when its
+   `controller-post-finalization.json` is `allowed: true`; the reviewer may not
+   create or dispatch a re-review itself.
 7b. For `practical_v0_8_tc_after_matrix_accepted`, hand off to reviewer only
    after creating `prompt.tc-to-reviewer.md` suitable for a separate Codex
    session. First run `scripts/practical_review_preflight.py` for `tc_review`

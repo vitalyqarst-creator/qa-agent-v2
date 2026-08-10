@@ -131,6 +131,9 @@ The task must run in `code_root`. If its current Codex worktree differs, the
 controller must hand off or recreate the task in `code_root` before stage
 preflight. Switching into an external repository during a stage is not an
 approved root arrangement, even when the external checkout has the same branch.
+Before it dispatches a separate reviewer, the controller records its actual
+`CODEX_THREAD_ID` as `controller_task_or_session` in every active workflow;
+missing runtime identity is `blocked-controller-session-provenance`.
 
 ## Reviewer launch preflight
 
@@ -164,6 +167,9 @@ The launch receipt hash-binds controller-owned workflow state. Before a
 controller updates aliases, workflow or summary after review, run
 `practical_review_finalization_guard.py`; its full contract is in
 [practical-review-finalization-format.md](./practical-review-finalization-format.md).
+Before routing that accepted scope to writer, the controller must pass the
+post-finalization gate from the same reference; an old verdict never advances a
+changed commit, stale current-scope validation, or unreconciled closed `GAP-*`.
 
 Create the separate reviewer task with a parking prompt: until it receives the
 controller dispatch message, it must not read review inputs or create artifacts.

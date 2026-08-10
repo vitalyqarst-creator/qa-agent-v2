@@ -11,6 +11,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import re
 import sys
 from pathlib import Path
@@ -32,6 +33,69 @@ TASK_ID_RE = re.compile(
 # receipts remain readable as historical evidence, but this dispatcher creates
 # only the current separate-session protocol.
 EXECUTION_SURFACES = {"codex-thread"}
+
+
+def controller_identity_issues(
+    launch: dict[str, Any],
+    *,
+    controller_task_id: str,
+    reviewer_task_id: str,
+) -> list[str]:
+    """Prove that the controller, rather than a prior reviewer, dispatched review.
+
+    The controller session persists its durable Codex thread id in every active
+    workflow before it launches a reviewer.  The dispatch command reads the
+    actual running task id from ``CODEX_THREAD_ID``; it does not accept a
+    caller-supplied override.  This closes the reviewer -> reviewer chain that
+    could otherwise look like independent review in an artifact alone.
+    """
+
+    issues: list[str] = []
+    controller_task_id = controller_task_id.strip()
+    if not TASK_ID_RE.fullmatch(controller_task_id):
+        return ["controller CODEX_THREAD_ID is missing or is not a durable Codex thread id"]
+    if controller_task_id.casefold() == reviewer_task_id.strip().casefold():
+        issues.append("controller task id must differ from reviewer task id")
+
+    required = ("ft_package_root", "scope_ids")
+    if not all(launch.get(field) for field in required):
+        # Minimal historical/test receipts remain readable.  Current practical
+        # receipts always provide these fields and therefore use the strict path.
+        return issues
+
+    try:
+        descriptors, descriptor_issues = review_preflight.scope_descriptors(
+            Path(str(launch["ft_package_root"])),
+            [str(value) for value in launch["scope_ids"]],
+        )
+    except (TypeError, ValueError, OSError) as exc:
+        return [f"cannot verify controller session provenance: {exc}"]
+    issues.extend(descriptor_issues)
+    workflow_ids: set[str] = set()
+    for descriptor in descriptors:
+        try:
+            state = review_preflight.artifact_validator.parse_workflow_state(
+                descriptor.workflow_path
+            )
+        except (OSError, UnicodeDecodeError, ValueError) as exc:
+            issues.append(
+                f"scope {descriptor.scope_id}: cannot read controller session provenance: {exc}"
+            )
+            continue
+        workflow_id = str(state.get("controller_task_or_session") or "").strip()
+        if not TASK_ID_RE.fullmatch(workflow_id):
+            issues.append(
+                f"scope {descriptor.scope_id}: controller_task_or_session is missing or invalid"
+            )
+            continue
+        workflow_ids.add(workflow_id.casefold())
+        if workflow_id.casefold() != controller_task_id.casefold():
+            issues.append(
+                f"scope {descriptor.scope_id}: controller_task_or_session differs from CODEX_THREAD_ID"
+            )
+    if len(workflow_ids) > 1:
+        issues.append("active scopes do not share one controller_task_or_session")
+    return issues
 
 
 def current_controller_state_issues(
@@ -73,6 +137,7 @@ def build_dispatch_receipt(
     launch_receipt: Path,
     reviewer_task_id: str,
     reviewer_execution_surface: str,
+    controller_task_id: str = "",
 ) -> dict[str, Any]:
     launch_receipt = launch_receipt.resolve()
     errors: list[str] = []
@@ -92,9 +157,17 @@ def build_dispatch_receipt(
         errors.append("reviewer execution surface must be codex-thread (a separate Codex session)")
     if not errors:
         errors.extend(current_controller_state_issues(launch_receipt, launch))
+    if not errors:
+        errors.extend(
+            controller_identity_issues(
+                launch,
+                controller_task_id=controller_task_id,
+                reviewer_task_id=task_id,
+            )
+        )
 
     return {
-        "schema_version": 2,
+        "schema_version": 3,
         "status": "dispatched" if not errors else "blocked",
         "allowed": not errors,
         "launch_receipt": launch_receipt.as_posix(),
@@ -102,6 +175,9 @@ def build_dispatch_receipt(
         "reviewer_task_or_session": task_id,
         "reviewer_execution_surface": surface,
         "reviewer_thread_url_or_id": task_id,
+        "controller_task_or_session": controller_task_id.strip(),
+        "controller_execution_surface": "codex-thread",
+        "controller_identity_verified": not errors,
         "controller_state_verified": not errors,
         "blocking_reasons": errors,
     }
@@ -133,6 +209,7 @@ def main() -> int:
         launch_receipt=args.launch_receipt,
         reviewer_task_id=args.reviewer_session_id,
         reviewer_execution_surface=args.reviewer_execution_surface,
+        controller_task_id=os.environ.get("CODEX_THREAD_ID", ""),
     )
     output = args.output.resolve()
     output.parent.mkdir(parents=True, exist_ok=True)

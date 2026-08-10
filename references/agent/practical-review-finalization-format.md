@@ -24,6 +24,10 @@ The guard requires all of the following:
 - controller-owned dispatch receipt binds the allowed launch receipt to the
   actual separate Codex session/thread ID and `reviewer_execution_surface`
   equal to `codex-thread`;
+- dispatch receipt schema v3 records the running controller's
+  `CODEX_THREAD_ID`, which must equal `controller_task_or_session` in every
+  active workflow and must differ from the reviewer ID. A reviewer must never
+  dispatch a follow-up reviewer; it returns its verdict only to that controller;
 - reviewer-owned evidence confirms only its read-only/separate-session facts
   and references the dispatch receipt. It must not invent or manually copy a
   task ID.
@@ -60,13 +64,31 @@ writes:
 python scripts/practical_review_dispatch_receipt.py --launch-receipt <review-launch-preflight.json> --reviewer-session-id <returned separate Codex session id> --reviewer-execution-surface codex-thread --output <review-dispatch.json>
 ```
 
-The dispatch command rechecks that the launch receipt still matches controller
-state. Only a successful dispatch receipt authorizes the controller to send the
+The dispatch command reads the controller identity from `CODEX_THREAD_ID` and
+rechecks that it matches every selected workflow. Only a successful dispatch
+receipt authorizes the controller to send the
 operational reviewer prompt. The reviewer receives its path, verifies that it
 is bound to the same allowed launch receipt, and records only
 `reviewer_dispatch_receipt` in its independence artifact. This keeps task
 identity controller-owned and makes an accidental controller/reviewer ID swap
 a deterministic finalization failure.
+
+## Post-finalization next-stage gate
+
+After the one controller-owned state/summary update, refresh the summary's
+validator evidence and run this gate **before** a matrix-accepted scope is
+routed to canonical TC writing (or a TC-accepted scope is routed onward):
+
+```text
+python scripts/practical_controller_post_finalization_gate.py --repo-root . --ft-package-root <FT package root> --summary <practical-stage-summary.md> --scope-id <two-digit scope id> --launch-receipt <review-launch-preflight.json> --review-finalization <review-finalization.json> --output <controller-post-finalization.json>
+```
+
+Only `allowed: true` may set `writer allowed`. The packet blocks when a selected
+scope/package validator error remains, the version-gated commit changed during
+review, or a `GAP-*` marked closed by repair still appears as active debt in
+`source-parity-check.md`. In the latter two cases rematerialize from the current
+state; do not silently carry the old review verdict forward. Link the packet as
+`latest_artifacts.controller_post_finalization_gate`.
 
 ## Portable accepted baseline
 
