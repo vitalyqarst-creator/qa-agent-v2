@@ -51,15 +51,19 @@ as `blocked-contract` and asks the controller for a corrected task prompt.
 ## Controller-owned reviewer dispatch receipt
 
 `review-launch-preflight.json` is created before `create_thread` and cannot
-know the new task ID. Immediately after `create_thread` returns its ID, and
-before the reviewer begins assessment, the controller writes:
+know the new task ID. Create the reviewer task with a parking prompt: it does
+not read sources or write artifacts until a controller follow-up authorizes
+assessment. Immediately after `create_thread` returns its ID, the controller
+writes:
 
 ```text
 python scripts/practical_review_dispatch_receipt.py --launch-receipt <review-launch-preflight.json> --reviewer-session-id <returned separate Codex session id> --reviewer-execution-surface codex-thread --output <review-dispatch.json>
 ```
 
-The reviewer receives the dispatch receipt path, verifies that it is bound to
-the same allowed launch receipt, and records only
+The dispatch command rechecks that the launch receipt still matches controller
+state. Only a successful dispatch receipt authorizes the controller to send the
+operational reviewer prompt. The reviewer receives its path, verifies that it
+is bound to the same allowed launch receipt, and records only
 `reviewer_dispatch_receipt` in its independence artifact. This keeps task
 identity controller-owned and makes an accidental controller/reviewer ID swap
 a deterministic finalization failure.

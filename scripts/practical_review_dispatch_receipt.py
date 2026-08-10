@@ -17,6 +17,13 @@ from pathlib import Path
 from typing import Any
 
 
+SCRIPT_DIR = Path(__file__).resolve().parent
+if str(SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(SCRIPT_DIR))
+
+import practical_review_preflight as review_preflight  # noqa: E402
+
+
 TASK_ID_RE = re.compile(
     r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
     re.IGNORECASE,
@@ -25,6 +32,36 @@ TASK_ID_RE = re.compile(
 # receipts remain readable as historical evidence, but this dispatcher creates
 # only the current separate-session protocol.
 EXECUTION_SURFACES = {"codex-thread"}
+
+
+def current_controller_state_issues(
+    launch_receipt: Path,
+    launch: dict[str, Any],
+) -> list[str]:
+    """Reject dispatch when controller state changed after launch preflight.
+
+    A reviewer task is created before its durable task id is known.  Checking
+    the frozen controller state while writing its dispatch receipt moves a
+    stale-summary failure to the controller, before it sends the reviewer the
+    operational prompt.  Minimal legacy receipts remain readable in tests and
+    historical evidence, but current receipts always contain this contract.
+    """
+
+    required = ("repo_root", "ft_package_root", "summary_path", "scope_ids", "review_mode")
+    if not all(launch.get(field) for field in required):
+        return []
+    try:
+        scope_ids = [str(value) for value in launch["scope_ids"]]
+        current = review_preflight.build_preflight(
+            repo_root=Path(str(launch["repo_root"])),
+            ft_package_root=Path(str(launch["ft_package_root"])),
+            summary_path=Path(str(launch["summary_path"])),
+            scope_ids=scope_ids,
+            review_mode=str(launch["review_mode"]),
+        )
+    except (KeyError, TypeError, ValueError, OSError) as exc:
+        return [f"cannot verify controller state before reviewer dispatch: {exc}"]
+    return review_preflight.verify_receipt(launch_receipt, current)
 
 
 def sha256_file(path: Path) -> str:
@@ -53,6 +90,8 @@ def build_dispatch_receipt(
         errors.append("reviewer session id is not a durable Codex thread id")
     if surface not in EXECUTION_SURFACES:
         errors.append("reviewer execution surface must be codex-thread (a separate Codex session)")
+    if not errors:
+        errors.extend(current_controller_state_issues(launch_receipt, launch))
 
     return {
         "schema_version": 2,
@@ -63,6 +102,7 @@ def build_dispatch_receipt(
         "reviewer_task_or_session": task_id,
         "reviewer_execution_surface": surface,
         "reviewer_thread_url_or_id": task_id,
+        "controller_state_verified": not errors,
         "blocking_reasons": errors,
     }
 

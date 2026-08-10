@@ -112,8 +112,10 @@ Minimum runtime rules:
    `allowed` `review-launch-preflight.json`; if it is blocked, do not create a
    reviewer task. If it passes and thread tools are not loaded, discover them with `tool_search`, then
    use `list_projects` / `create_thread` to launch the reviewer prompt in a
-   separate Codex task and immediately create controller-owned
-   `review-dispatch.json` with the returned thread id. If the runtime cannot
+   separate Codex task with a parking prompt, then immediately create
+   controller-owned `review-dispatch.json` with the returned thread id. Send
+   the operational reviewer prompt only if that dispatch receipt is allowed.
+   If the runtime cannot
    expose thread tools, set `blocked-reviewer-session-tool-unavailable`; do not
    run same-session review as the route verdict. Do not create or update
    canonical TC in this pass.

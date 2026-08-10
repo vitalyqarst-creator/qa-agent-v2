@@ -165,12 +165,17 @@ controller updates aliases, workflow or summary after review, run
 `practical_review_finalization_guard.py`; its full contract is in
 [practical-review-finalization-format.md](./practical-review-finalization-format.md).
 
-Immediately after `create_thread` returns the new separate reviewer session ID, the
-controller creates `review-dispatch.json` with
+Create the separate reviewer task with a parking prompt: until it receives the
+controller dispatch message, it must not read review inputs or create artifacts.
+Immediately after `create_thread` returns the new session ID, the controller
+creates `review-dispatch.json` with
 `scripts/practical_review_dispatch_receipt.py`. Pass the dispatch receipt path
-to the reviewer. The reviewer records that path in `review-independence.md`; it
-does not manually provide a task ID. This controller-owned receipt is required
-by `practical_review_finalization_guard.py`.
+to the reviewer only after the dispatch command succeeds. The command rechecks
+the frozen launch receipt against current controller state. If it is blocked,
+do not send the operational reviewer prompt: repair state, create a new receipt
+and reserve a new reviewer task. The reviewer records the dispatch receipt in
+`review-independence.md`; it does not manually provide a task ID. This
+controller-owned receipt is required by `practical_review_finalization_guard.py`.
 
 For the first matrix review, create/update the practical summary before launch
 and use `next_stage_transition = matrix-review allowed` or

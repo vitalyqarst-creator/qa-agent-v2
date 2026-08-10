@@ -71,6 +71,40 @@ class PracticalReviewDispatchReceiptTests(unittest.TestCase):
         self.assertFalse(result["allowed"])
         self.assertIn("codex-thread", "\n".join(result["blocking_reasons"]))
 
+    def test_rejects_dispatch_when_current_controller_state_no_longer_matches_launch(self) -> None:
+        helper = self.load_helper()
+        with tempfile.TemporaryDirectory() as tmp:
+            launch = self.launch_receipt(Path(tmp))
+            launch.write_text(
+                json.dumps(
+                    {
+                        "allowed": True,
+                        "repo_root": "C:/repo",
+                        "ft_package_root": "C:/repo/fts/Sample",
+                        "summary_path": "C:/repo/fts/Sample/work/practical-stage-summary.md",
+                        "scope_ids": ["01"],
+                        "review_mode": "matrix_review",
+                    }
+                ),
+                encoding="utf-8",
+            )
+            original_verify = helper.review_preflight.verify_receipt
+            helper.review_preflight.verify_receipt = lambda *_: [
+                "receipt summary digest differs from current state"
+            ]
+            try:
+                result = helper.build_dispatch_receipt(
+                    launch_receipt=launch,
+                    reviewer_task_id=TASK_ID,
+                    reviewer_execution_surface="codex-thread",
+                )
+            finally:
+                helper.review_preflight.verify_receipt = original_verify
+
+        self.assertFalse(result["allowed"])
+        self.assertFalse(result["controller_state_verified"])
+        self.assertIn("summary digest", "\n".join(result["blocking_reasons"]))
+
 
 if __name__ == "__main__":
     unittest.main()

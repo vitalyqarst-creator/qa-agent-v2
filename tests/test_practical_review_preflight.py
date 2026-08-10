@@ -617,6 +617,34 @@ class PracticalReviewPreflightTests(unittest.TestCase):
             result["validator_error_partition"]["external"],
         )
 
+    def test_blocks_stale_current_stage_summary_error(self) -> None:
+        helper = self.load_helper()
+        _, root, ft_root, summary = self.make_repository()
+        original_validate = helper.artifact_validator.validate
+        helper.artifact_validator.validate = lambda _: {
+            "findings": [
+                {
+                    "id": "practical-stage-summary-validator-error-count-stale",
+                    "severity": "error",
+                    "category": "practical-stage-summary",
+                    "path": "work/practical-stage-summary.md",
+                }
+            ]
+        }
+        try:
+            result = self.run_preflight(helper, root, ft_root, summary)
+        finally:
+            helper.artifact_validator.validate = original_validate
+
+        self.assertFalse(result["allowed"])
+        self.assertEqual(
+            [
+                "practical-stage-summary-validator-error-count-stale @ "
+                "work/practical-stage-summary.md"
+            ],
+            result["validator_error_partition"]["scope_relevant"],
+        )
+
     def test_ignores_orphaned_practical_summary_error(self) -> None:
         helper = self.load_helper()
         _, root, ft_root, summary = self.make_repository()

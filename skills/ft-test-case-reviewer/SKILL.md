@@ -40,7 +40,10 @@ description: Делает review существующих тест-кейсов 
   sub-agent inside the writer/controller turn is not a separate Codex
   task/session and cannot produce independent sign-off. Before the controller
   creates that task, it must pass `scripts/practical_review_preflight.py`; the
-  reviewer repeats it with `--verify-receipt` before it reads review inputs. If
+  reviewer repeats it with `--verify-receipt` before it reads review inputs. A
+  newly created reviewer task may receive a parking prompt first; it must not
+  inspect inputs or write artifacts until the controller supplies an allowed
+  dispatch receipt and the operational review prompt. If
   either preflight is blocked, create no review artifact. If thread tools are
   genuinely unavailable, stop as `blocked-reviewer-session-tool-unavailable`
   instead of issuing a same-session route verdict. It must not require source assertion receipts, semantic
