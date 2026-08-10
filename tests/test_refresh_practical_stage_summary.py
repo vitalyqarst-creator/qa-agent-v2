@@ -269,6 +269,112 @@ class RefreshPracticalStageSummaryTests(unittest.TestCase):
         self.assertIn("| validator_scope_errors_count | `1` |", output)
         self.assertIn("| validator_external_errors_count | `2` |", output)
 
+    def test_replace_refreshed_fields_updates_only_generated_rows(self) -> None:
+        helper = self.load_helper()
+        refresh = helper.SummaryRefresh(
+            validator_primary_command="command",
+            validator_primary_root="C:/repo/fts/Sample",
+            validator_supplementary_command="not-run",
+            validator_findings_breakdown="tc_quality=0; process_artifact=0; validator_path_resolution=0; unrelated_repo=0",
+            validator_errors_count=0,
+            validator_errors_evidence="not-applicable",
+            validator_warnings_count=0,
+            validator_warnings_evidence="not-applicable",
+            validator_info_count=0,
+            validator_info_evidence="not-applicable",
+            git_persistence="tracked",
+            git_persistence_evidence="git ls-files",
+        )
+        original = "\n".join(
+            [
+                "# Practical Stage Summary",
+                "| field | value |",
+                "| --- | --- |",
+                helper.format_field_rows(refresh).replace("| validator_errors_count | `0` |", "| validator_errors_count | `99` |"),
+                "",
+                "## Current stage actions",
+                "- Не менять этот текст.",
+            ]
+        )
+
+        updated = helper.replace_refreshed_fields(original, refresh)
+
+        self.assertIn("| validator_errors_count | `0` |", updated)
+        self.assertNotIn("| validator_errors_count | `99` |", updated)
+        self.assertIn("- Не менять этот текст.", updated)
+
+    def test_replace_refreshed_fields_fails_when_summary_is_incomplete(self) -> None:
+        helper = self.load_helper()
+        refresh = helper.SummaryRefresh(
+            validator_primary_command="command",
+            validator_primary_root="C:/repo/fts/Sample",
+            validator_supplementary_command="not-run",
+            validator_findings_breakdown="tc_quality=0; process_artifact=0; validator_path_resolution=0; unrelated_repo=0",
+            validator_errors_count=0,
+            validator_errors_evidence="not-applicable",
+            validator_warnings_count=0,
+            validator_warnings_evidence="not-applicable",
+            validator_info_count=0,
+            validator_info_evidence="not-applicable",
+            git_persistence="tracked",
+            git_persistence_evidence="git ls-files",
+        )
+
+        with self.assertRaisesRegex(ValueError, "misses generated fields"):
+            helper.replace_refreshed_fields("# Practical Stage Summary\n", refresh)
+
+    def test_refresh_summary_file_repeats_until_self_check_is_stable(self) -> None:
+        helper = self.load_helper()
+
+        def refresh_with_self_check(count: int):
+            return helper.SummaryRefresh(
+                validator_primary_command="command",
+                validator_primary_root="C:/repo/fts/Sample",
+                validator_supplementary_command="not-run",
+                validator_findings_breakdown="tc_quality=0; process_artifact=0; validator_path_resolution=0; unrelated_repo=0",
+                validator_errors_count=0,
+                validator_errors_evidence="not-applicable",
+                validator_warnings_count=0,
+                validator_warnings_evidence="not-applicable",
+                validator_info_count=0,
+                validator_info_evidence="not-applicable",
+                git_persistence="tracked",
+                git_persistence_evidence="git ls-files",
+                validator_raw_errors_count=count,
+                validator_summary_self_check_errors_count=count,
+                validator_summary_self_check_errors_evidence="self-check" if count else "not-applicable",
+            )
+
+        stale = refresh_with_self_check(2)
+        first = refresh_with_self_check(1)
+        stable = refresh_with_self_check(0)
+        responses = iter([first, stable, stable])
+        original_build_refresh = helper.build_refresh
+        helper.build_refresh = lambda *args, **kwargs: next(responses)
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                summary = Path(tmp) / "practical-stage-summary.md"
+                summary.write_text(
+                    "\n".join(
+                        [
+                            "# Practical Stage Summary",
+                            "| field | value |",
+                            "| --- | --- |",
+                            helper.format_field_rows(stale),
+                        ]
+                    ),
+                    encoding="utf-8",
+                )
+
+                changed = helper.refresh_summary_file(Path(tmp), summary)
+                actual = summary.read_text(encoding="utf-8")
+        finally:
+            helper.build_refresh = original_build_refresh
+
+        self.assertTrue(changed)
+        self.assertIn("| validator_raw_errors_count | `0` |", actual)
+        self.assertIn("| validator_summary_self_check_errors_count | `0` |", actual)
+
 
 if __name__ == "__main__":
     unittest.main()

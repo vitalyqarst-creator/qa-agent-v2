@@ -8533,8 +8533,8 @@ def validate_practical_stage_summary(path: Path, root: Path) -> tuple[list[Findi
                     path=display_path,
                     evidence=partition_issues,
                     recommended_action=(
-                        "Run refresh_practical_stage_summary.py with the active scope id, copy its scope/external "
-                        "error counts and evidence, and keep the counts equal to validator_errors_count."
+                        "Run refresh_practical_stage_summary.py with the active scope id and --write; keep its "
+                        "scope/external error counts and evidence equal to validator_errors_count."
                     ),
                 )
             )
@@ -8884,8 +8884,7 @@ def validate_practical_stage_summary_report_consistency(
                 path=display_path,
                 evidence=[f"missing={','.join(missing_error_layer_fields)}"],
                 recommended_action=(
-                    "Run refresh_practical_stage_summary.py and copy all generated validator error-layer "
-                    "fields into the summary before the next stage."
+                        "Run refresh_practical_stage_summary.py with --write before the next stage."
                 ),
             )
         )
@@ -8936,7 +8935,7 @@ def validate_practical_stage_summary_report_consistency(
                         f"actual={actual_raw_errors_count}",
                     ],
                     recommended_action=(
-                        "Rerun refresh_practical_stage_summary.py after every repair and update the raw count."
+                        "Rerun refresh_practical_stage_summary.py with --write after every repair."
                     ),
                 )
             )

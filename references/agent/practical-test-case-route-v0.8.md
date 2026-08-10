@@ -208,7 +208,7 @@ When split-root is approved, the summary and final report must state it plainly
 and must name both roots. The stage must not claim that version gate covers data
 artifacts that live outside the version-gated root.
 
-After every matrix review stage, the acting agent must stop the internal chain
+  After every matrix review stage, the acting agent must stop the internal chain
 long enough to produce a user-facing `practical-stage-summary.md` and include
 the same facts in the final/user-visible report before sending the next prompt.
 This is not a permission gate when no external decision is needed; it is a
@@ -381,7 +381,17 @@ decision gate. The package-wide validator remains mandatory audit evidence, but
 only its preflight partition for the declared scope (`scope_relevant` and
 `package_global`) can block that scope; errors owned by another scope must be
 recorded as external rather than retriggering the current route.
-After a preflight is written, record its status and receipt before reporting a
+  After any controller-owned `workflow-state.yaml` or summary update, refresh the
+  summary's generated validator rows as the final write before handoff:
+
+  ```text
+  python scripts/refresh_practical_stage_summary.py --root . --summary <path> --scope-id <two-digit scope id> --write
+  ```
+
+  The command reaches a bounded fixed point for validator self-checks. Do not
+  report preflight or stage completion with stale counts/evidence.
+
+  After a preflight is written, record its status and receipt before reporting a
 verdict. For an allowed TC review, `workflow-state.yaml` must link the receipt
 from `latest_artifacts.review_launch_preflight`, mark the active round as
 `allowed`, and route to reviewer dispatch; the package summary must expose the

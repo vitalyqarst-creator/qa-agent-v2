@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import subprocess
 import sys
 from dataclasses import asdict, dataclass
@@ -377,6 +378,88 @@ def format_field_rows(refresh: SummaryRefresh) -> str:
     return "\n".join(f"| {name} | `{_cell(value)}` |" for name, value in rows)
 
 
+SUMMARY_FIELD_ROW_RE = re.compile(
+    r"^\|\s*(?P<field>[a-z0-9_]+)\s*\|\s*`[^`]*`\s*\|\s*$",
+    flags=re.MULTILINE,
+)
+
+
+def refreshed_field_rows(refresh: SummaryRefresh) -> dict[str, str]:
+    """Return canonical Markdown rows keyed by practical-summary field name."""
+
+    rows: dict[str, str] = {}
+    for row in format_field_rows(refresh).splitlines():
+        match = SUMMARY_FIELD_ROW_RE.fullmatch(row)
+        if match is None:  # Defensive: format_field_rows is a local contract.
+            raise ValueError(f"cannot parse generated summary row: {row}")
+        rows[match.group("field")] = row
+    return rows
+
+
+def replace_refreshed_fields(summary_text: str, refresh: SummaryRefresh) -> str:
+    """Replace every generated validator row without touching narrative fields.
+
+    A stage summary contains controller decisions as well as derived validator
+    evidence.  Only the latter is safe to update mechanically.  Fail closed if
+    an expected field is absent instead of silently producing a partly stale
+    handoff.
+    """
+
+    expected_rows = refreshed_field_rows(refresh)
+    found_fields = {
+        match.group("field") for match in SUMMARY_FIELD_ROW_RE.finditer(summary_text)
+    }
+    missing = sorted(set(expected_rows) - found_fields)
+    if missing:
+        raise ValueError(
+            "practical stage summary misses generated fields: " + ", ".join(missing)
+        )
+
+    return SUMMARY_FIELD_ROW_RE.sub(
+        lambda match: expected_rows.get(match.group("field"), match.group(0)),
+        summary_text,
+    )
+
+
+def refresh_summary_file(
+    root: Path,
+    summary_path: Path,
+    scope_ids: list[str] | None = None,
+    *,
+    max_passes: int = 3,
+) -> bool:
+    """Write validator-derived rows until their self-check reaches a fixed point.
+
+    The validator checks the summary itself.  Therefore a first write can remove
+    stale-summary findings and change the raw count once more.  A bounded fixed
+    point prevents the controller from reporting the pre-write count as final.
+    """
+
+    if max_passes < 1:
+        raise ValueError("max_passes must be positive")
+    summary_abs = summary_path if summary_path.is_absolute() else root / summary_path
+    summary_abs = summary_abs.resolve()
+    changed = False
+    for _ in range(max_passes):
+        before = summary_abs.read_text(encoding="utf-8")
+        after = replace_refreshed_fields(
+            before, build_refresh(root, summary_abs, scope_ids)
+        )
+        if after == before:
+            return changed
+        summary_abs.write_text(after, encoding="utf-8")
+        changed = True
+    final = summary_abs.read_text(encoding="utf-8")
+    expected = replace_refreshed_fields(
+        final, build_refresh(root, summary_abs, scope_ids)
+    )
+    if expected != final:
+        raise RuntimeError(
+            "practical stage summary did not reach a stable validator refresh"
+        )
+    return changed
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Print fresh fields for practical-stage-summary.md."
@@ -386,11 +469,18 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--scope-id", action="append")
     parser.add_argument("--json", action="store_true", dest="as_json")
     parser.add_argument("--print-fields", action="store_true")
+    parser.add_argument(
+        "--write",
+        action="store_true",
+        help="Update only generated validator fields and verify a stable result.",
+    )
     return parser.parse_args()
 
 
 def main() -> int:
     args = parse_args()
+    if args.write:
+        refresh_summary_file(args.root, args.summary, args.scope_id)
     refresh = build_refresh(args.root, args.summary, args.scope_id)
 
     if args.as_json:

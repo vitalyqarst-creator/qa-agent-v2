@@ -123,10 +123,11 @@ v0.8.3. The file is a user-facing handoff and a machine-checkable gate.
 - For every named `summary_stage`, both sections are mandatory. In a
   `contract-only-status-repair`, `Current stage actions` may describe only the
   repair; the preceding writer revision belongs in `Prior state context`.
-- After every repair, run:
-  `python scripts/refresh_practical_stage_summary.py --root . --summary <path> --scope-id <two-digit scope id> --print-fields`
-  and update validator counts/evidence, including info fields, plus `git_persistence`
-  from the output.
+- After every controller-state repair or update, run:
+  `python scripts/refresh_practical_stage_summary.py --root . --summary <path> --scope-id <two-digit scope id> --write`.
+  This rewrites only generated validator fields until their self-check is stable.
+  Do it as the final write before handoff; do not manually copy stale counts or
+  evidence from an earlier validator run.
 - Before controller aliases, `workflow-state.yaml` or this summary are updated
   after an independent review, run
   `python scripts/practical_review_finalization_guard.py` with the original
