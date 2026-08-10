@@ -428,6 +428,28 @@ class PracticalRouteV08ContractTests(unittest.TestCase):
         self.assertIn("parameterized-tc-crosses-ui-levels", rule_cards)
         self.assertIn("non-atomic-parameterization", reviewer)
 
+    def test_scope_analysis_reuses_source_selection_and_splits_atoms_early(self) -> None:
+        route = self.read("references/agent/practical-test-case-route-v0.8.md")
+        analyzer = self.read("skills/ft-scope-analyzer/SKILL.md")
+
+        for expected in (
+            "latest_artifacts.source_selection",
+            "00-source-selection/source-selection.md",
+            "source selection is missing",
+            "Обоснование параметризации ATOM",
+            "scope-analysis stage",
+            "temporary inspection scripts",
+        ):
+            self.assertIn(expected, route)
+
+        for expected in (
+            "latest_artifacts.source_selection",
+            "Обоснование параметризации ATOM",
+            "Не оставляй решение об этой декомпозиции writer-у",
+            "pre-existing user artifacts",
+        ):
+            self.assertIn(expected, analyzer)
+
     def test_practical_writer_and_reviewer_load_coverage_class_catalog(self) -> None:
         manifest = self.read("references/agent/instruction-loading-manifest.md")
         writer = self.read("skills/ft-test-case-writer/SKILL.md")

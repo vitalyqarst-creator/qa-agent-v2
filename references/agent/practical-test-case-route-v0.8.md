@@ -451,6 +451,14 @@ planned TC), use the fast path inside this same route:
      next step.
 
 2. `ft-scope-analyzer`
+   - Before narrowing a scope, resolve the canonical source-selection artifact.
+     First read `work/stage-handoffs/00-source-selection/workflow-state.yaml`
+     and its `latest_artifacts.source_selection`; then use
+     `work/stage-handoffs/00-source-selection/source-selection.md` as the
+     fallback canonical path. If a usable selection resolves, reuse it: do not
+     claim that source selection is missing, run `ft-source-locator`, or create
+     a replacement selection. If neither path resolves, stop this stage as
+     `blocked-input` and create only the transition to `ft-source-locator`.
    - Confirm one or more external scopes by FT section/subsection.
    - For each selected scope, create one compact `scope-brief.md` under
      `fts/<ft-slug>/work/practical/<section-id>-<scope-slug>/`.
@@ -505,6 +513,22 @@ planned TC), use the fast path inside this same route:
      setup. A navigation action with two named destinations becomes separate
      `ATOM-*` checks unless the brief records that the same start state,
      user action and observable result make one parameterized check valid.
+   - Enforce atomization before handing the brief to the matrix writer. Split
+     different object types or UI levels (for example, a parent partner and a
+     requisite inside its card), and split role/state combinations with a
+     different action or expected result. Values may remain in one `ATOM-*`
+     only when the brief contains a compact Russian section
+     `Обоснование параметризации ATOM` proving the same start screen, UI
+     level, navigation path, user action, trigger and observable result for
+     every value. Do not leave an aggregated `ATOM-*` with an instruction for
+     the matrix writer to decide whether it should be split: make that decision
+     in the scope-analysis stage.
+   - Keep temporary inspection scripts, renders, duplicate manifests and
+     partial writes outside the final handoff. On a successful scope-analysis
+     run, delete only temporary artifacts created by the current run. Files in
+     `work/debug/` may remain only when a final artifact explicitly links them
+     and states their purpose; never delete pre-existing user artifacts merely
+     because they are unlinked.
 
 3. `ft-test-case-writer` — design-matrix-only pass
    - Create or update exactly these required artifacts:
