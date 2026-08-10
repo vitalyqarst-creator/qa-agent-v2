@@ -388,28 +388,76 @@ def scope_id_for_finding_path(path_text: str, descriptors: Iterable[ScopeDescrip
     return handoff_match.group(1) if handoff_match else None
 
 
+def validator_error_partition_key(
+    finding: dict[str, Any],
+    descriptors: list[ScopeDescriptor],
+    ft_package_root: Path,
+    summary_path: Path | None,
+) -> str:
+    """Classify a validator error without letting another scope block review.
+
+    The exact summary passed to preflight is controller-owned current state.  A
+    stale summary or handoff under another scope is external package debt, even
+    when its validator category is ``practical-stage-summary``.  Orphaned
+    practical artifacts are external as well: they need repair, but cannot make
+    a clean selected scope endlessly wait for unrelated history.
+    """
+
+    requested_ids = {item.scope_id for item in descriptors}
+    ownership_descriptors = all_scope_descriptors(ft_package_root)
+    path_text = str(finding.get("path", ""))
+    normalized = normalized_path(path_text).lstrip("./")
+    if summary_path is not None:
+        try:
+            summary_relative = summary_path.resolve().relative_to(ft_package_root.resolve()).as_posix()
+        except ValueError:
+            summary_relative = ""
+        if summary_relative and normalized == normalized_path(summary_relative):
+            return "scope_relevant"
+
+    owner_scope_id = scope_id_for_finding_path(
+        path_text, ownership_descriptors, ft_package_root
+    )
+    if owner_scope_id in requested_ids:
+        return "scope_relevant"
+    if owner_scope_id is not None:
+        return "external"
+    if re.match(r"^work/(?:practical/[^/]+/|stage-handoffs/(?!00-)[^/]+/)", normalized):
+        return "external"
+    return "package_global"
+
+
 def relevant_validator_errors(
     findings: Iterable[dict[str, Any]],
     descriptors: list[ScopeDescriptor],
     ft_package_root: Path,
+    summary_path: Path | None,
 ) -> list[str]:
-    requested_ids = {item.scope_id for item in descriptors}
-    ownership_descriptors = all_scope_descriptors(ft_package_root)
     issues: list[str] = []
     for finding in findings:
         if str(finding.get("severity", "")).casefold() != "error":
             continue
         finding_id = str(finding.get("id", "<missing-id>"))
-        category = str(finding.get("category", ""))
         path_text = str(finding.get("path", ""))
-        if category == "practical-stage-summary":
-            issues.append(f"{finding_id}: practical-stage-summary gate failed")
-            continue
-        owner_scope_id = scope_id_for_finding_path(path_text, ownership_descriptors, ft_package_root)
-        if owner_scope_id is None:
-            issues.append(f"{finding_id}: package-global or unclassified error at {path_text or '<missing-path>'}")
-        elif owner_scope_id in requested_ids:
-            issues.append(f"{finding_id}: current scope {owner_scope_id} error at {path_text}")
+        bucket = validator_error_partition_key(
+            finding, descriptors, ft_package_root, summary_path
+        )
+        if bucket == "scope_relevant":
+            owner_scope_id = scope_id_for_finding_path(
+                path_text, all_scope_descriptors(ft_package_root), ft_package_root
+            )
+            owner_label = (
+                f"current scope {owner_scope_id}"
+                if owner_scope_id in {item.scope_id for item in descriptors}
+                else "current stage summary"
+            )
+            issues.append(
+                f"{finding_id}: {owner_label} error at {path_text or '<missing-path>'}"
+            )
+        elif bucket == "package_global":
+            issues.append(
+                f"{finding_id}: package-global or unclassified error at {path_text or '<missing-path>'}"
+            )
     return issues
 
 
@@ -417,6 +465,7 @@ def partition_validator_errors(
     findings: Iterable[dict[str, Any]],
     descriptors: list[ScopeDescriptor],
     ft_package_root: Path,
+    summary_path: Path | None = None,
 ) -> dict[str, list[str]]:
     """Separate current-scope errors from external package debt.
 
@@ -426,28 +475,17 @@ def partition_validator_errors(
     selected scope.
     """
 
-    requested_ids = {item.scope_id for item in descriptors}
-    ownership_descriptors = all_scope_descriptors(ft_package_root)
     result = {"scope_relevant": [], "external": [], "package_global": []}
     for finding in findings:
         if str(finding.get("severity", "")).casefold() != "error":
             continue
         finding_id = str(finding.get("id", "<missing-id>"))
-        category = str(finding.get("category", ""))
         path_text = str(finding.get("path", ""))
         evidence = f"{finding_id} @ {path_text or '<missing-path>'}"
-        if category == "practical-stage-summary":
-            result["scope_relevant"].append(evidence)
-            continue
-        owner_scope_id = scope_id_for_finding_path(
-            path_text, ownership_descriptors, ft_package_root
+        bucket = validator_error_partition_key(
+            finding, descriptors, ft_package_root, summary_path
         )
-        if owner_scope_id in requested_ids:
-            result["scope_relevant"].append(evidence)
-        elif owner_scope_id is not None:
-            result["external"].append(evidence)
-        else:
-            result["package_global"].append(evidence)
+        result[bucket].append(evidence)
     return result
 
 
@@ -640,10 +678,10 @@ def build_preflight(
 
     report = artifact_validator.validate(ft_package_root)
     validator_partition = partition_validator_errors(
-        report.get("findings", []), descriptors, ft_package_root
+        report.get("findings", []), descriptors, ft_package_root, summary_path
     )
     validator_issues = relevant_validator_errors(
-        report.get("findings", []), descriptors, ft_package_root
+        report.get("findings", []), descriptors, ft_package_root, summary_path
     )
     blockers.extend(validator_issues)
     checks.append(

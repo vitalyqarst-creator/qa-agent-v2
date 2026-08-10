@@ -583,6 +583,62 @@ class PracticalReviewPreflightTests(unittest.TestCase):
 
         self.assertTrue(result["allowed"])
 
+    def test_ignores_other_scope_stage_summary_error(self) -> None:
+        helper = self.load_helper()
+        _, root, ft_root, summary = self.make_repository()
+        other_handoff = ft_root / "work" / "stage-handoffs" / "02-other-scope"
+        other_handoff.mkdir()
+        (other_handoff / "workflow-state.yaml").write_text(
+            "scope_slug: other-scope\n",
+            encoding="utf-8",
+        )
+        original_validate = helper.artifact_validator.validate
+        helper.artifact_validator.validate = lambda _: {
+            "findings": [
+                {
+                    "id": "practical-stage-summary-validator-error-count-stale",
+                    "severity": "error",
+                    "category": "practical-stage-summary",
+                    "path": "work/practical/other-scope/practical-stage-summary.md",
+                }
+            ]
+        }
+        try:
+            result = self.run_preflight(helper, root, ft_root, summary)
+        finally:
+            helper.artifact_validator.validate = original_validate
+
+        self.assertTrue(result["allowed"])
+        self.assertEqual(
+            [
+                "practical-stage-summary-validator-error-count-stale @ "
+                "work/practical/other-scope/practical-stage-summary.md"
+            ],
+            result["validator_error_partition"]["external"],
+        )
+
+    def test_ignores_orphaned_practical_summary_error(self) -> None:
+        helper = self.load_helper()
+        _, root, ft_root, summary = self.make_repository()
+        original_validate = helper.artifact_validator.validate
+        helper.artifact_validator.validate = lambda _: {
+            "findings": [
+                {
+                    "id": "practical-stage-summary-validator-error-count-stale",
+                    "severity": "error",
+                    "category": "practical-stage-summary",
+                    "path": "work/practical/legacy-orphan/practical-stage-summary.md",
+                }
+            ]
+        }
+        try:
+            result = self.run_preflight(helper, root, ft_root, summary)
+        finally:
+            helper.artifact_validator.validate = original_validate
+
+        self.assertTrue(result["allowed"])
+        self.assertEqual(1, len(result["validator_error_partition"]["external"]))
+
     def test_reviewer_receipt_verification_blocks_changed_commit(self) -> None:
         helper = self.load_helper()
         _, root, ft_root, summary = self.make_repository()

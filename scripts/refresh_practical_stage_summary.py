@@ -291,7 +291,7 @@ def build_refresh(
             external_error_count = 0
         else:
             partition = review_preflight.partition_validator_errors(
-                routing_findings, descriptors, primary_root
+                routing_findings, descriptors, primary_root, summary_abs
             )
             scope_error_count = len(partition["scope_relevant"]) + len(
                 partition["package_global"]

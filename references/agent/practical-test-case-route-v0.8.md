@@ -145,7 +145,10 @@ python scripts/practical_review_preflight.py --repo-root . --ft-package-root <FT
 Only a JSON result with `allowed: true` permits `create_thread`. The preflight
 checks the real working directory, Git branch/commit and tracked state against
 the summary's Code Version Gate, keeps code/data/artifact roots consistent,
-checks requested scope routing, and reruns the package validator. A stale code
+checks requested scope routing, and reruns the package validator. Errors of the
+selected scope, its current stage summary, or shared package inputs block the
+launch. Findings owned by another scope or its stale practical summary are
+recorded as external debt and do not block the selected review. A stale code
 version, a changed checkout, a current-scope validator error, or a malformed
 summary is `blocked-input`; do not create a reviewer task and do not work around
 the failure by switching directories inside the task.
@@ -171,8 +174,9 @@ by `practical_review_finalization_guard.py`.
 
 For the first matrix review, create/update the practical summary before launch
 and use `next_stage_transition = matrix-review allowed` or
-`matrix-review conditional`. This makes the preflight equally strict for the
-matrix gate and the later TC gate.
+`matrix-review conditional`. Its active scope-transition row must state
+`matrix-created-pending-review`; this makes the preflight equally strict for
+the matrix gate and the later TC gate.
 
 `ft_package_root` and `artifact_write_root` should normally be inside
 `code_root`. If the FT package is outside the version-gated worktree, this is a

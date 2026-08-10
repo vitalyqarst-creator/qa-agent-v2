@@ -6688,6 +6688,7 @@ PRACTICAL_STAGE_SUMMARY_SOURCE_ROW_COUNTS_RE = re.compile(
 )
 PRACTICAL_SCOPE_TRANSITION_VERDICTS = {
     "matrix-not-created",
+    "matrix-created-pending-review",
     "matrix-accepted",
     "matrix-changes-required",
     "round-cap-reached",
@@ -6697,6 +6698,11 @@ PRACTICAL_SCOPE_TRANSITION_MATRIX_WRITER_TRANSITIONS = {
     "writer allowed",
     "writer conditional",
     "writer blocked",
+}
+PRACTICAL_SCOPE_TRANSITION_MATRIX_REVIEW_TRANSITIONS = {
+    "matrix-review allowed",
+    "matrix-review conditional",
+    "matrix-review blocked",
 }
 PRACTICAL_STAGE_SUMMARY_FINDING_ID_RE = re.compile(r"\b[a-z][a-z0-9]+(?:-[a-z0-9]+){2,}\b")
 PRACTICAL_STAGE_SUMMARY_PATH_EVIDENCE_RE = re.compile(
@@ -6834,6 +6840,17 @@ def practical_scope_transition_decision_issues(record: Mapping[str, str]) -> lis
         if decision != "not-applicable":
             issues.append(
                 f"scope={scope}:verdict=matrix-not-created requires tc_with_status_decision=not-applicable"
+            )
+        return issues
+
+    if verdict == "matrix-created-pending-review":
+        if next_stage_transition not in PRACTICAL_SCOPE_TRANSITION_MATRIX_REVIEW_TRANSITIONS:
+            issues.append(
+                f"scope={scope}:verdict=matrix-created-pending-review requires a matrix-review transition"
+            )
+        if decision != "not-applicable":
+            issues.append(
+                f"scope={scope}:verdict=matrix-created-pending-review requires tc_with_status_decision=not-applicable"
             )
         return issues
 
@@ -8002,6 +8019,7 @@ def validate_practical_stage_summary(path: Path, root: Path) -> tuple[list[Findi
 
     ft_root = ft_package_root_for_artifact(path)
     active_scope_aliases: dict[str, str] = {}
+    active_scope_states: dict[str, dict[str, Any]] = {}
     if ft_root is not None:
         for workflow_path in workflow_states_for_ft_package(ft_root):
             match = re.match(r"^(\d{2})-", workflow_path.parent.name)
@@ -8014,6 +8032,7 @@ def validate_practical_stage_summary(path: Path, root: Path) -> tuple[list[Findi
             active_scope_aliases[match.group(1)] = str(
                 workflow_state.get("scope_slug") or workflow_path.parent.name.split("-", 1)[1]
             )
+            active_scope_states[match.group(1)] = workflow_state
 
     transition_records, transition_table_issues = practical_scope_transition_records(content)
     if transition_table_issues:
@@ -8082,6 +8101,47 @@ def validate_practical_stage_summary(path: Path, root: Path) -> tuple[list[Findi
                         ),
                     )
                 )
+
+            workflow_state = active_scope_states.get(scope_id, {})
+            matrix_review_pending = (
+                workflow_state.get("current_stage") == "ft-test-case-writer"
+                and workflow_state.get("stage_status") == "ready-for-review"
+                and workflow_state.get("next_skill") == "ft-test-case-reviewer"
+                and workflow_state.get("review_mode") == "matrix_review"
+            )
+            if matrix_review_pending:
+                scope_slug = active_scope_aliases.get(scope_id, scope_id)
+                matrix_path = ft_root / "work" / "practical" / scope_slug / "test-design-matrix.md"
+                matrix_issues: list[str] = []
+                if record.get("verdict", "").casefold() != "matrix-created-pending-review":
+                    matrix_issues.append(
+                        f"scope={scope_id}:verdict={record.get('verdict', '<missing>')}; "
+                        "expected=matrix-created-pending-review"
+                    )
+                if not matrix_path.is_file():
+                    matrix_issues.append(
+                        f"scope={scope_id}:matrix_missing={rel(matrix_path, root)}"
+                    )
+                if matrix_issues:
+                    findings.append(
+                        Finding(
+                            id="practical-stage-summary-matrix-review-state-mismatch",
+                            severity="error",
+                            category="practical-stage-summary",
+                            title="Practical stage summary disagrees with matrix-review routing",
+                            details=(
+                                "A scope routed to independent matrix review must already have a matrix and must "
+                                "record the pending-review verdict. Otherwise the handoff can claim that no matrix "
+                                "exists while launching a reviewer."
+                            ),
+                            path=display_path,
+                            evidence=matrix_issues,
+                            recommended_action=(
+                                "Write or retain test-design-matrix.md, set verdict=matrix-created-pending-review, "
+                                "and keep the matrix-review transition until the independent verdict is returned."
+                            ),
+                        )
+                    )
 
     nonrussian_prose_issues = practical_stage_summary_nonrussian_prose_issues(content, fields)
     if nonrussian_prose_issues:

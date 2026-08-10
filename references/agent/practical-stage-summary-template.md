@@ -1,4 +1,4 @@
-# Practical Stage Summary Template
+# Шаблон сводки практического этапа
 
 Use this template verbatim for `practical-stage-summary.md` in practical route
 v0.8.3. The file is a user-facing handoff and a machine-checkable gate.
@@ -59,7 +59,7 @@ v0.8.3. The file is a user-facing handoff and a machine-checkable gate.
 
 | scope | verdict | next_stage_transition | source_contradiction | tc_with_status_decision | reason |
 | --- | --- | --- | --- | --- | --- |
-| `<scope-slug>` | `matrix-not-created / matrix-accepted / matrix-changes-required / round-cap-reached / blocked` | `<enum from Summary>` | `yes / no / not-applicable` | `write-with-statuses / block-source-contradiction / not-applicable` | `<Russian reason>` |
+| `<scope-slug>` | `matrix-not-created / matrix-created-pending-review / matrix-accepted / matrix-changes-required / round-cap-reached / blocked` | `<enum from Summary>` | `yes / no / not-applicable` | `write-with-statuses / block-source-contradiction / not-applicable` | `<Russian reason>` |
 
 ## Current stage actions
 
@@ -75,6 +75,10 @@ v0.8.3. The file is a user-facing handoff and a machine-checkable gate.
 - Before a matrix exists, use `matrix-not-created`; it is not a reviewer verdict.
   It routes only to matrix writing through `writer allowed`, `writer conditional`
   or `writer blocked`, and `tc_with_status_decision = not-applicable`.
+- После создания или исправления матрицы до запуска независимого reviewer используй
+  `matrix-created-pending-review` и `matrix-review allowed`,
+  `matrix-review conditional` или `matrix-review blocked`. Не записывай
+  `matrix-not-created`, если `test-design-matrix.md` уже существует.
 - For `matrix-changes-required`, `matrix-accepted` and `matrix-not-created`,
   `tc_with_status_decision = not-applicable`: the status-based decision is made
   only after the review cap. For `round-cap-reached`,

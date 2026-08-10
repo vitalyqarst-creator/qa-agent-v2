@@ -200,6 +200,55 @@ class PracticalStageSummaryValidatorTests(unittest.TestCase):
         self.assertNotIn("practical-stage-summary-validator-error-layers-missing", ids)
         self.assertNotIn("practical-stage-summary-current-prior-sections-missing", ids)
 
+    def test_matrix_review_ready_state_requires_pending_matrix_transition(self) -> None:
+        root = self.make_package(
+            next_stage_transition="matrix-review allowed",
+            per_scope_next_stage_transitions="yes",
+            summary_stage="matrix-authoring",
+        )
+        summary = root / "work" / "practical-stage-summary.md"
+        text = summary.read_text(encoding="utf-8").replace(
+            "| sample | matrix-accepted | writer allowed | not-applicable | not-applicable | Матрица принята. |",
+            "| sample | matrix-created-pending-review | matrix-review allowed | no | not-applicable | Матрица подготовлена. |",
+        )
+        summary.write_text(text, encoding="utf-8")
+        workflow = root / "work" / "stage-handoffs" / "01-sample" / "workflow-state.yaml"
+        workflow.write_text(
+            "\n".join(
+                [
+                    "scope_slug: sample",
+                    "current_stage: ft-test-case-writer",
+                    "stage_status: ready-for-review",
+                    "next_skill: ft-test-case-reviewer",
+                    "review_mode: matrix_review",
+                    "latest_artifacts:",
+                    "  practical_stage_summary: work/practical-stage-summary.md",
+                    "",
+                ]
+            ),
+            encoding="utf-8",
+        )
+        matrix = root / "work" / "practical" / "sample" / "test-design-matrix.md"
+        matrix.parent.mkdir(parents=True)
+        matrix.write_text("# Матрица тест-дизайна\n", encoding="utf-8")
+
+        self.assertNotIn(
+            "practical-stage-summary-matrix-review-state-mismatch",
+            self.finding_ids(root),
+        )
+
+        summary.write_text(
+            summary.read_text(encoding="utf-8").replace(
+                "matrix-created-pending-review", "matrix-not-created"
+            ),
+            encoding="utf-8",
+        )
+
+        self.assertIn(
+            "practical-stage-summary-matrix-review-state-mismatch",
+            self.finding_ids(root),
+        )
+
     def test_ignores_immutable_controller_snapshot_summary(self) -> None:
         root = self.make_package()
         snapshot = (
