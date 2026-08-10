@@ -150,7 +150,7 @@ def summarize_validator_findings(findings: list[dict[str, Any]]) -> dict[str, An
 
 def summarize_validator_error_layers(
     findings: list[dict[str, Any]],
-    summary_relative_path: str,
+    summary_relative_path: str | None = None,
 ) -> dict[str, Any]:
     """Expose raw error output separately from routing-safe summary self-checks."""
 
@@ -175,6 +175,11 @@ def summarize_validator_error_layers(
         "practical-stage-summary-validator-warning-count-stale",
     }
     def is_visible_to_target_summary(finding: dict[str, Any]) -> bool:
+        if summary_relative_path is None:
+            # Keep the public helper's historical all-findings behavior for
+            # callers that only need an audit breakdown.  ``build_refresh``
+            # passes the target path and opts into the fixed-point projection.
+            return True
         finding_id = str(finding.get("id", ""))
         if finding_id not in refresh_self_checks:
             return True

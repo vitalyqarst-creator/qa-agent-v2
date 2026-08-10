@@ -809,19 +809,26 @@ def main() -> int:
             result["allowed"] = False
             result["status"] = "blocked"
             result["blocking_reasons"].extend(receipt_issues)
-    if args.output:
+    if args.output and result["allowed"]:
         output_path = args.output if args.output.is_absolute() else Path.cwd() / args.output
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-        try:
-            result = materialize_controller_snapshot(result, output_path)
-        except (OSError, ValueError) as exc:
+        if output_path.exists():
             result["allowed"] = False
             result["status"] = "blocked"
             result["blocking_reasons"].append(
-                f"cannot materialize controller recovery snapshot: {exc}"
+                "review launch receipt already exists; do not replace a prior review attempt"
             )
+        else:
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            try:
+                result = materialize_controller_snapshot(result, output_path)
+            except (OSError, ValueError) as exc:
+                result["allowed"] = False
+                result["status"] = "blocked"
+                result["blocking_reasons"].append(
+                    f"cannot materialize controller recovery snapshot: {exc}"
+                )
     rendered = json.dumps(result, ensure_ascii=False, indent=2)
-    if args.output:
+    if args.output and result["allowed"]:
         output_path = args.output if args.output.is_absolute() else Path.cwd() / args.output
         output_path.write_text(rendered + "\n", encoding="utf-8")
     print(rendered)

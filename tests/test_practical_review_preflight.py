@@ -496,6 +496,48 @@ class PracticalReviewPreflightTests(unittest.TestCase):
         self.assertFalse(list(ft_root.rglob("review-launch-preflight*.json")))
         self.assertFalse(list(ft_root.rglob("*.controller-state")))
 
+    def test_blocked_output_does_not_persist_receipt_or_snapshot(self) -> None:
+        helper = self.load_helper()
+        _, root, ft_root, summary = self.make_repository()
+        original_validate = helper.artifact_validator.validate
+        helper.artifact_validator.validate = lambda _: {
+            "findings": [
+                {
+                    "id": "workflow-state-stale",
+                    "severity": "error",
+                    "category": "workflow-state",
+                    "path": "work/stage-handoffs/01-sample-scope/workflow-state.yaml",
+                }
+            ]
+        }
+        receipt = ft_root / "work" / "practical" / "sample-scope" / "review-launch-preflight.json"
+        try:
+            with patch.object(
+                sys,
+                "argv",
+                [
+                    "practical_review_preflight.py",
+                    "--repo-root",
+                    str(root),
+                    "--ft-package-root",
+                    str(ft_root),
+                    "--summary",
+                    str(summary),
+                    "--scope-id",
+                    "01",
+                    "--review-mode",
+                    "matrix_review",
+                    "--output",
+                    str(receipt),
+                ],
+            ), working_directory(root):
+                self.assertEqual(2, helper.main())
+        finally:
+            helper.artifact_validator.validate = original_validate
+
+        self.assertFalse(receipt.exists())
+        self.assertFalse(receipt.with_name("review-launch-preflight.controller-state").exists())
+
     def test_check_only_cannot_be_combined_with_receipt_modes(self) -> None:
         helper = self.load_helper()
         with patch.object(

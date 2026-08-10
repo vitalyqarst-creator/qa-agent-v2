@@ -6,6 +6,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
@@ -124,6 +125,58 @@ class PracticalReviewDispatchReceiptTests(unittest.TestCase):
 
         self.assertFalse(result["allowed"])
         self.assertIn("must differ", "\n".join(result["blocking_reasons"]))
+
+    def test_blocked_dispatch_does_not_persist_provisional_receipt(self) -> None:
+        helper = self.load_helper()
+        with tempfile.TemporaryDirectory() as tmp:
+            directory = Path(tmp)
+            launch = self.launch_receipt(directory)
+            output = directory / "review-dispatch.json"
+            previous_argv = sys.argv
+            try:
+                sys.argv = [
+                    "practical_review_dispatch_receipt.py",
+                    "--launch-receipt",
+                    str(launch),
+                    "--reviewer-session-id",
+                    "not-a-durable-thread-id",
+                    "--reviewer-execution-surface",
+                    "codex-thread",
+                    "--output",
+                    str(output),
+                ]
+                self.assertEqual(2, helper.main())
+            finally:
+                sys.argv = previous_argv
+
+            self.assertFalse(output.exists())
+
+    def test_dispatch_does_not_replace_prior_receipt(self) -> None:
+        helper = self.load_helper()
+        with tempfile.TemporaryDirectory() as tmp:
+            directory = Path(tmp)
+            launch = self.launch_receipt(directory)
+            output = directory / "review-dispatch.json"
+            output.write_text("previous receipt\n", encoding="utf-8")
+            previous_argv = sys.argv
+            try:
+                sys.argv = [
+                    "practical_review_dispatch_receipt.py",
+                    "--launch-receipt",
+                    str(launch),
+                    "--reviewer-session-id",
+                    TASK_ID,
+                    "--reviewer-execution-surface",
+                    "codex-thread",
+                    "--output",
+                    str(output),
+                ]
+                with patch.dict("os.environ", {"CODEX_THREAD_ID": CONTROLLER_ID}):
+                    self.assertEqual(2, helper.main())
+            finally:
+                sys.argv = previous_argv
+
+            self.assertEqual("previous receipt\n", output.read_text(encoding="utf-8"))
 
 
 if __name__ == "__main__":

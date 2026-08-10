@@ -14,7 +14,7 @@ In this route, scope analysis prepares only the next writer input:
 
 - confirm external scope boundaries by FT section/subsection;
 - create one compact `scope-brief.md` under
-  `fts/<ft-slug>/work/practical/<section-id>-<scope-slug>/`;
+  `fts/<ft-slug>/work/practical/<scope-slug>/`;
 - create `source-parity-check.md` before writer handoff when the main FT has
   both DOCX and PDF;
 - create a compact `source-row-inventory.md` before writer handoff when the
@@ -28,6 +28,10 @@ In this route, scope analysis prepares only the next writer input:
 Do not create `scope-contract.md`, a separate `scope-coverage-gaps.md`, oracle
 inventories, session/decision logs or heavy/source-first artifacts in
 `practical_v0_8`; those belong to legacy, diagnostic or explicitly selected routes.
+
+Все актуальные practical artifacts scope — brief, matrix, prompts, summary и
+review receipts — хранятся в этой единственной директории. Не создавай второй
+параллельный каталог с повторным section id.
 
 ### Mandatory route gate
 

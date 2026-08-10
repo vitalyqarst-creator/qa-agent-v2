@@ -108,13 +108,19 @@ Minimum runtime rules:
    have explicit coverage classes or class-specific deferrals. Exact invariant:
    requiredness checks must be split by input mechanism. Current-scope blockers must be
    visible as allowed planned statuses. Use Codex thread tools as the default
-   handoff path: first run `scripts/practical_review_preflight.py` and write an
-   `allowed` `review-launch-preflight.json`; if it is blocked, do not create a
-   reviewer task. If it passes and thread tools are not loaded, discover them with `tool_search`, then
+   handoff path: first run `scripts/practical_review_preflight.py --check-only`.
+   Only after `allowed: true` materialize one `review-launch-preflight.json`;
+   if either check is blocked, do not create a reviewer task or persist a
+   blocked receipt. If it passes and thread tools are not loaded, discover them with `tool_search`, then
    use `list_projects` / `create_thread` to launch the reviewer prompt in a
    separate Codex task with a parking prompt, then immediately create
    controller-owned `review-dispatch.json` with the returned thread id. Send
    the operational reviewer prompt only if that dispatch receipt is allowed.
+   A blocked dispatch ends this scope-stage as `blocked-input`; do not repair
+   controller state, create another receipt or reserve another reviewer in the
+   same stage. Any defect of `AGENTS.md`, skills, references, scripts or tests
+   is an `agent-layer` blocker for a separate explicitly authorized task, not a
+   writer repair.
    If the runtime cannot
    expose thread tools, set `blocked-reviewer-session-tool-unavailable`; do not
    run same-session review as the route verdict. Do not create or update

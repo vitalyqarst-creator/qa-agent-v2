@@ -250,6 +250,23 @@ class PracticalRouteV08ContractTests(unittest.TestCase):
         self.assertIn("pinned-code-commit-changed", self.read("scripts/practical_controller_post_finalization_gate.py"))
         self.assertIn("practical-workflow-post-finalization-gate-missing", validator)
 
+    def test_practical_stage_cannot_self_repair_agent_layer_or_split_scope_artifacts(self) -> None:
+        route = self.read("references/agent/practical-test-case-route-v0.8.md")
+        scope = self.read("skills/ft-scope-analyzer/SKILL.md")
+        writer = self.read("skills/ft-test-case-writer/SKILL.md")
+        preflight = self.read("scripts/practical_review_preflight.py")
+        dispatch = self.read("scripts/practical_review_dispatch_receipt.py")
+
+        self.assertIn("Неизменность practical-stage", route)
+        self.assertIn("явно разрешённой архитектурной задачи", route)
+        self.assertIn("не создавай параллельный каталог", route)
+        self.assertIn("work/practical/<scope-slug>/", scope)
+        self.assertNotIn("work/practical/<section-id>-<scope-slug>/", scope)
+        self.assertIn("--check-only", writer)
+        self.assertIn("do not retry dispatch", route)
+        self.assertIn('if args.output and result["allowed"]', preflight)
+        self.assertIn('if result["allowed"]:', dispatch)
+
     def test_practical_stage_summary_template_pins_enum_fields(self) -> None:
         template = self.read("references/agent/practical-stage-summary-template.md")
 

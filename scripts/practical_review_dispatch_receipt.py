@@ -211,9 +211,19 @@ def main() -> int:
         reviewer_execution_surface=args.reviewer_execution_surface,
         controller_task_id=os.environ.get("CODEX_THREAD_ID", ""),
     )
-    output = args.output.resolve()
-    output.parent.mkdir(parents=True, exist_ok=True)
-    output.write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    if result["allowed"]:
+        output = args.output.resolve()
+        if output.exists():
+            result["allowed"] = False
+            result["status"] = "blocked"
+            result["controller_identity_verified"] = False
+            result["controller_state_verified"] = False
+            result["blocking_reasons"].append(
+                "review dispatch receipt already exists; do not replace a prior review attempt"
+            )
+        else:
+            output.parent.mkdir(parents=True, exist_ok=True)
+            output.write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     print(json.dumps(result, ensure_ascii=False, indent=2))
     return 0 if result["allowed"] else 2
 

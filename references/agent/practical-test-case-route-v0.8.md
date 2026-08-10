@@ -99,6 +99,22 @@ another review round. A reviewer finding is not by itself permission to loop
 indefinitely: if the final independent review after the bounded revision still
 finds defects, report them rather than applying another automatic repair.
 
+## Неизменность practical-stage
+
+Обычный scope-stage владеет только артефактами выбранного FT package и scope.
+Он не меняет `AGENTS.md`, `skills/`, `references/`, `scripts/` или `tests/` и
+не выполняет commit/push agent-layer, чтобы снять собственный validator или
+dispatch blocker. Даже технически правдоподобный дефект agent-layer не является
+разрешением исправлять код «по пути».
+
+Если validator, preflight или dispatch выявил такой дефект, зафиксируй короткую
+диагностику в текущем `practical-stage-summary.md`, переведи workflow в
+`blocked-input` с причиной `agent-layer`, и останови scope-stage до отдельной,
+явно разрешённой архитектурной задачи. Отдельная задача исправляет и проверяет
+только agent-layer, публикует его отдельно, а затем новый scope-stage начинается
+с чистого worktree и заново фиксирует version gate. Нельзя менять version gate
+текущего handoff на commit, созданный этим же scope-stage.
+
 ## Root consistency gate
 
 At the start of every practical stage and in every `practical-stage-summary.md`,
@@ -145,7 +161,10 @@ the exact version-gated `code_root`:
 python scripts/practical_review_preflight.py --repo-root . --ft-package-root <FT package root> --summary <practical-stage-summary.md> --scope-id <two-digit scope id> --review-mode <matrix_review|tc_review> --output <FT package root>/work/practical/<scope-slug>/review-launch-preflight.json
 ```
 
-Only a JSON result with `allowed: true` permits `create_thread`. The preflight
+Сначала выполни тот же preflight с `--check-only`. Только если он вернул
+`allowed: true`, один раз материализуй launch receipt через `--output`; между
+этими двумя командами не меняй controller-owned state. Only a JSON result with
+`allowed: true` permits `create_thread`. The preflight
 checks the real working directory, Git branch/commit and tracked state against
 the summary's Code Version Gate, keeps code/data/artifact roots consistent,
 checks requested scope routing, and reruns the package validator. Errors of the
@@ -178,10 +197,18 @@ creates `review-dispatch.json` with
 `scripts/practical_review_dispatch_receipt.py`. Pass the dispatch receipt path
 to the reviewer only after the dispatch command succeeds. The command rechecks
 the frozen launch receipt against current controller state. If it is blocked,
-do not send the operational reviewer prompt: repair state, create a new receipt
-and reserve a new reviewer task. The reviewer records the dispatch receipt in
+do not send the operational reviewer prompt and do not retry dispatch, replace
+the receipt or create another reviewer task in the same scope-stage. Record one
+`blocked-input` reason and hand the diagnosis to the next explicitly started
+controller stage. The reviewer records the dispatch receipt in
 `review-independence.md`; it does not manually provide a task ID. This
 controller-owned receipt is required by `practical_review_finalization_guard.py`.
+
+Blocked check-only, launch or dispatch attempts are diagnostics, not durable
+handoff artifacts: do not persist a blocked `review-launch-preflight*.json`,
+`review-dispatch*.json` or controller snapshot. A successful review attempt has
+exactly one active launch receipt and one active dispatch receipt for its
+review mode and round; historical accepted receipts remain read-only evidence.
 
 For the first matrix review, create/update the practical summary before launch
 and use `next_stage_transition = matrix-review allowed` or
@@ -451,10 +478,11 @@ decision required" is not a valid default unless the summary also names the
 source contradiction or the exact status-based TC route.
 
 After each internal handoff, run the relevant validator gate. If the gate fails
-because practical-route infrastructure is inconsistent with this contract, fix
-the smallest agent-layer rule that unlocks the documented route; do not create
-fake canonical TC files, fake review evidence, heavy-route artifacts or
-placeholder outputs just to satisfy a stale validator.
+because practical-route infrastructure is inconsistent with this contract, stop
+the current scope-stage with a concise `agent-layer` diagnostic. Repair the
+smallest rule only in a separate, explicitly authorized agent-layer task; do
+not create fake canonical TC files, fake review evidence, heavy-route artifacts
+or placeholder outputs just to satisfy a stale validator.
 
 For small scopes (rough guide: no more than 15 source rows and no more than 20
 planned TC), use the fast path inside this same route:
@@ -489,7 +517,10 @@ planned TC), use the fast path inside this same route:
      `blocked-input` and create only the transition to `ft-source-locator`.
    - Confirm one or more external scopes by FT section/subsection.
    - For each selected scope, create one compact `scope-brief.md` under
-     `fts/<ft-slug>/work/practical/<section-id>-<scope-slug>/`.
+     `fts/<ft-slug>/work/practical/<scope-slug>/`. Все актуальные practical
+     artifacts этого scope — brief, matrix, prompts, summary и review receipts —
+     остаются в этой одной директории; не создавай параллельный каталог с
+     повторным section id.
    - If the main FT has both DOCX and PDF, create `source-parity-check.md`
      before writer handoff and list it in the brief. Missing parity evidence is
      `blocked-input`; do not let writer or reviewer discover it late.
