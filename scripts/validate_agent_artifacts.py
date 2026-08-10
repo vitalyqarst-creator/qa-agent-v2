@@ -3496,6 +3496,19 @@ def practical_source_row_inventory_language_evidence(content: str) -> list[str]:
     return evidence
 
 
+def practical_source_row_inventory_hidden_markup_evidence(content: str) -> list[str]:
+    """Return hidden markup that would make a practical handoff ambiguous."""
+
+    evidence: list[str] = []
+    for line_number, raw_line in enumerate(content.splitlines(), start=1):
+        stripped = raw_line.strip()
+        if "<!--" in stripped or "-->" in stripped:
+            evidence.append(f"line={line_number}:html-comment")
+        if stripped.startswith("```"):
+            evidence.append(f"line={line_number}:code-fence")
+    return evidence
+
+
 def _practical_table_column_indexes(rows: list[list[str]], required: dict[str, set[str]]) -> dict[str, int] | None:
     if not rows:
         return None
@@ -4571,6 +4584,7 @@ def validate_practical_scope_brief(path: Path, root: Path) -> tuple[list[Finding
     operation_setup_inheritance_mismatches: list[str] = []
     operation_actor_inheritance_mismatches: list[str] = []
     source_row_inventory_language_mismatches: list[str] = []
+    source_row_inventory_hidden_markup_mismatches: list[str] = []
     linked_gap_id_mismatches: list[str] = []
     for inventory_path in source_inventory_paths:
         try:
@@ -4585,6 +4599,10 @@ def validate_practical_scope_brief(path: Path, root: Path) -> tuple[list[Finding
         source_row_inventory_language_mismatches.extend(
             f"{rel(inventory_path, root)}:{item}"
             for item in practical_source_row_inventory_language_evidence(inventory_content)
+        )
+        source_row_inventory_hidden_markup_mismatches.extend(
+            f"{rel(inventory_path, root)}:{item}"
+            for item in practical_source_row_inventory_hidden_markup_evidence(inventory_content)
         )
         for index, inventory_row in enumerate(parsed_source_row_inventory_rows(inventory_content), start=2):
             source_row_id = inventory_row.get("source_row_id", "").strip() or f"row {index}"
@@ -4802,6 +4820,25 @@ def validate_practical_scope_brief(path: Path, root: Path) -> tuple[list[Finding
                 ),
             )
         )
+    if source_row_inventory_hidden_markup_mismatches:
+        findings.append(
+            Finding(
+                id="practical-scope-brief-source-row-inventory-hidden-markup",
+                severity="error",
+                category="practical-handoff",
+                title="Practical source inventory contains hidden compatibility markup",
+                details=(
+                    "A practical handoff must be a directly readable source inventory. HTML comments and fenced "
+                    "code cannot be used as parser compatibility markers."
+                ),
+                path=display_path,
+                evidence=source_row_inventory_hidden_markup_mismatches[:20],
+                recommended_action=(
+                    "Remove hidden markup and use the visible Russian canonical heading; fix parser support in "
+                    "agent-layer rather than adding document workarounds."
+                ),
+            )
+        )
     checks.append(
         Check(
             "practical-scope-brief-source-row-atom-bindings",
@@ -4839,6 +4876,16 @@ def validate_practical_scope_brief(path: Path, root: Path) -> tuple[list[Finding
             "English visible prose found in the source inventory."
             if source_row_inventory_language_mismatches
             else "Source inventory visible prose is Russian.",
+            display_path,
+        )
+    )
+    checks.append(
+        Check(
+            "practical-scope-brief-source-row-inventory-hidden-markup",
+            "fail" if source_row_inventory_hidden_markup_mismatches else "pass",
+            "Hidden compatibility markup found in the source inventory."
+            if source_row_inventory_hidden_markup_mismatches
+            else "Source inventory has no hidden compatibility markup.",
             display_path,
         )
     )
@@ -15193,15 +15240,33 @@ def source_row_inventory_required(content: str) -> bool:
     )
 
 
-def parsed_source_row_inventory_rows(content: str) -> list[dict[str, str]]:
-    normalized_content = re.sub(
+def normalized_source_row_inventory_content(content: str) -> str:
+    """Normalize visible canonical headings before parsing an inventory table.
+
+    Practical handoffs use the Russian heading, while older writer artifacts may
+    retain the technical English one. Hidden comments and fenced code cannot
+    declare a section heading: they are not part of the inventory document.
+    """
+
+    visible_content = re.sub(r"<!--.*?-->", "", content, flags=re.DOTALL)
+    visible_content = re.sub(
+        r"^```[^\n]*\n.*?^```[^\n]*\n?",
+        "",
+        visible_content,
+        flags=re.MULTILINE | re.DOTALL,
+    )
+    visible_content = re.sub(
         r"^#{1,6}\s+Реестр строк источника\s*$",
         "## Source Row Inventory",
-        content,
+        visible_content,
         count=1,
         flags=re.MULTILINE,
     )
-    normalized_content = collapse_redundant_section_heading(normalized_content, "Source Row Inventory")
+    return collapse_redundant_section_heading(visible_content, "Source Row Inventory")
+
+
+def parsed_source_row_inventory_rows(content: str) -> list[dict[str, str]]:
+    normalized_content = normalized_source_row_inventory_content(content)
     if re.search(r"^#\s+Source Row Inventory\s*$", normalized_content, flags=re.MULTILINE):
         normalized_content = re.sub(
             r"^#\s+Source Row Inventory\s*$",
@@ -15257,7 +15322,9 @@ def validate_source_row_inventory(
     checks: list[Check] = []
     display_path = rel(path, root)
     required = source_row_inventory_required(content)
-    section = extract_markdown_section(content, "Source Row Inventory")
+    section = extract_markdown_section(
+        normalized_source_row_inventory_content(content), "Source Row Inventory"
+    )
 
     if section is None:
         if required:

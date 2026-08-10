@@ -569,11 +569,11 @@ planned TC), use the fast path inside this same route:
      rejected unless `Обоснование параметризации ATOM` proves, for that ATOM,
      the same start screen, UI level, navigation path, action, trigger and
      expected result for every actor.
-   - For bounded rematerialization, first run the current scope-local
-     validator and collect all findings. Apply one coherent repair patch; a
-     second patch is justified only by a newly revealed validator finding.
-     Do not update only the version gate and discover the remaining handoff
-     gaps one by one.
+   - For bounded rematerialization, validate `scope-brief.md` directly and
+     collect package findings owned by its practical and handoff directories.
+     Green means no errors; do not filter only the handoff path or hide parser
+     markers in Markdown. Apply one coherent repair patch; a second is only
+     for a newly revealed validator finding.
    - Keep temporary inspection scripts, renders, duplicate manifests and
      partial writes outside the final handoff. On a successful scope-analysis
      run, delete only temporary artifacts created by the current run. Files in

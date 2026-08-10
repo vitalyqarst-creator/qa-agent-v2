@@ -990,6 +990,70 @@ class PracticalHandoffQualityTests(unittest.TestCase):
         finding_ids = {finding.id for finding in findings}
         self.assertIn("practical-scope-brief-source-row-inventory-non-russian-visible-text", finding_ids)
 
+    def test_scope_brief_accepts_russian_source_inventory_heading(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self.write_multi_action_brief(root, mapped_atoms="`ATOM-001`; `ATOM-002`")
+            inventory = root / "work" / "stage-handoffs" / "scope" / "source-row-inventory.md"
+            rows = self.validator.parsed_source_row_inventory_rows(
+                inventory.read_text(encoding="utf-8")
+            )
+
+        self.assertEqual("SRC-001", rows[0]["source_row_id"])
+        self.assertIn("ATOM-001", rows[0]["mapped_atom_or_gap"])
+
+    def test_scope_brief_rejects_hidden_source_inventory_markup(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            brief = self.write_multi_action_brief(root, mapped_atoms="`ATOM-001`; `ATOM-002`")
+            inventory = root / "work" / "stage-handoffs" / "scope" / "source-row-inventory.md"
+            inventory.write_text(
+                inventory.read_text(encoding="utf-8").replace(
+                    "## Реестр строк источника",
+                    "## Реестр строк источника\n\n<!-- compatibility marker -->\n```\n## Source Row Inventory\n```",
+                ),
+                encoding="utf-8",
+            )
+
+            findings, _ = self.validator.validate_practical_scope_brief(brief, root)
+
+        finding_ids = {finding.id for finding in findings}
+        self.assertIn("practical-scope-brief-source-row-inventory-hidden-markup", finding_ids)
+        binding_findings = [
+            finding
+            for finding in findings
+            if finding.id == "practical-scope-brief-source-row-atom-bindings-inconsistent"
+        ]
+        self.assertFalse(
+            any(
+                "unknown-source-row" in item
+                for finding in binding_findings
+                for item in finding.evidence
+            )
+        )
+
+    def test_source_inventory_parser_accepts_russian_heading(self) -> None:
+        content = "\n".join(
+            [
+                "## Реестр строк источника",
+                "",
+                "| source_row_id | package_id | field_or_action | source_ref | requirement_codes | in_scope | mapped_atom_or_gap |",
+                "| --- | --- | --- | --- | --- | --- | --- |",
+                "| `SRC-001` | `PKG-01` | Поле | Таблица 1 | `AS.1` | `yes` | `ATOM-001` |",
+                "",
+                "## Source Table Normalization",
+            ]
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            findings, _ = self.validator.validate_source_row_inventory(
+                content, root / "source-row-inventory.md", root
+            )
+
+        finding_ids = {finding.id for finding in findings}
+        self.assertNotIn("source-row-inventory-missing", finding_ids)
+        self.assertNotIn("source-row-inventory-no-table", finding_ids)
+
     def test_scope_brief_propagates_missing_setup_to_every_dependent_atom(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
