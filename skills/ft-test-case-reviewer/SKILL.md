@@ -70,6 +70,8 @@ Use
 [../../references/agent/practical-test-case-route-v0.8.md](../../references/agent/practical-test-case-route-v0.8.md)
 as the controlling route.
 
+Для source review читай DOCX через `python-docx`, используй XHTML и PDF; не запускай LibreOffice или skill `documents` без явного запроса на создание, редактирование или рендер DOCX.
+
 Для `practical_v0_8` не создавай `.xlsx`-дубль по умолчанию: XLSX companion
 нужен только если пользователь явно запросил XLSX export.
 

@@ -53,6 +53,18 @@ class PracticalRouteV08ContractTests(unittest.TestCase):
         self.assertIn("separate-session", skills)
         self.assertIn("Explicit production shadow", skills)
 
+    def test_practical_ft_reading_does_not_launch_libreoffice(self) -> None:
+        source_selection = self.read("references/agent/source-selection-format.md")
+        source_locator = self.read("skills/ft-source-locator/SKILL.md")
+        reviewer = self.read("skills/ft-test-case-reviewer/SKILL.md")
+
+        for content in (source_selection, source_locator, reviewer):
+            self.assertIn("LibreOffice", content)
+            self.assertIn("python-docx", content)
+            self.assertIn("XHTML", content)
+            self.assertIn("PDF", content)
+            self.assertIn("не запускай libreoffice", content.lower())
+
     def test_writer_and_reviewer_do_not_require_heavy_process_for_practical_route(self) -> None:
         writer = self.read("skills/ft-test-case-writer/SKILL.md")
         reviewer = self.read("skills/ft-test-case-reviewer/SKILL.md")

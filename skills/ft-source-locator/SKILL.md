@@ -40,6 +40,7 @@ description: Находит нужный FT-пакет, основное ФТ, s
 2. Определи `ft-slug` и отдельно выбранный input root, если материалы лежат в version/variant-подкаталоге `fts/<ft-slug>/...`.
 3. Зафиксируй, какие документы являются основным ФТ из `source/`, а какие относятся к support или mockups. Не считай Office lock-файлы `~$*` source-кандидатами или blocker-ами. Основной DOCX ФТ остается authoritative source of truth.
 4. Найди matching XHTML-версию основного ФТ в `source/`. XHTML обязателен как основной машиночитаемый источник извлечения таблиц, строк, списков, вложенных списков, перечней значений и структуры разделов.
+   Для practical route читай DOCX через `python-docx`, извлекай XHTML и визуально сверяй PDF; не запускай LibreOffice или skill `documents` без явного запроса на создание, редактирование или рендер DOCX.
    Если пользователь просит проверить JSON вместо XHTML, используй `docx-json-projection` только как diagnostic/evaluation route по `source-json-projection.md`: JSON не заменяет обязательный XHTML в production workflow, пока multi-scope parity evaluation не докажет критерии переключения.
 5. Отдельно найди PDF-версию основного ФТ для сверки структуры разделов. Ищи ее сначала в `source/`, затем в связанных материалах того же FT-пакета.
 6. Если PDF-версия найдена, передай ее следующему skill-у как вход для structural/visual cross-check; PDF не заменяет DOCX или XHTML.
