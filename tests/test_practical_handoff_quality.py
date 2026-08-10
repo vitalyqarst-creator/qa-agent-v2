@@ -469,7 +469,7 @@ class PracticalHandoffQualityTests(unittest.TestCase):
         inventory.write_text(
             "\n".join(
                 [
-                    "## Source Row Inventory",
+                    "## Реестр строк источника",
                     "",
                     "| source_row_id | package_id | field_or_action | source_ref | requirement_codes | in_scope | mapped_atom_or_gap |",
                     "| --- | --- | --- | --- | --- | --- | --- |",
@@ -532,7 +532,7 @@ class PracticalHandoffQualityTests(unittest.TestCase):
             inventory.write_text(
                 "\n".join(
                     [
-                        "## Source Row Inventory",
+                        "## Реестр строк источника",
                         "",
                         "| source_row_id | package_id | field_or_action | source_ref | requirement_codes | in_scope | mapped_atom_or_gap |",
                         "| --- | --- | --- | --- | --- | --- | --- |",
@@ -588,7 +588,7 @@ class PracticalHandoffQualityTests(unittest.TestCase):
         inventory.write_text(
             "\n".join(
                 [
-                    "## Source Row Inventory",
+                    "## Реестр строк источника",
                     "",
                     "| source_row_id | package_id | field_or_action | source_ref | requirement_codes | in_scope | mapped_atom_or_gap |",
                     "| --- | --- | --- | --- | --- | --- | --- |",
@@ -835,7 +835,7 @@ class PracticalHandoffQualityTests(unittest.TestCase):
             inventory.write_text(
                 "\n".join(
                     [
-                        "## Source Row Inventory",
+                        "## Реестр строк источника",
                         "",
                         "| source_row_id | package_id | field_or_action | source_ref | requirement_codes | in_scope | mapped_atom_or_gap |",
                         "| --- | --- | --- | --- | --- | --- | --- |",
@@ -874,7 +874,7 @@ class PracticalHandoffQualityTests(unittest.TestCase):
             inventory.write_text(
                 "\n".join(
                     [
-                        "## Source Row Inventory",
+                        "## Реестр строк источника",
                         "",
                         "| source_row_id | package_id | field_or_action | source_ref | requirement_codes | in_scope | mapped_atom_or_gap |",
                         "| --- | --- | --- | --- | --- | --- | --- |",
@@ -964,6 +964,24 @@ class PracticalHandoffQualityTests(unittest.TestCase):
                     "Архивирование партнера",
                     "Partner widget",
                 ) + "\n\n- This compact registry source is ready.\n",
+                encoding="utf-8",
+            )
+
+            findings, _ = self.validator.validate_practical_scope_brief(brief, root)
+
+        finding_ids = {finding.id for finding in findings}
+        self.assertIn("practical-scope-brief-source-row-inventory-non-russian-visible-text", finding_ids)
+
+    def test_scope_brief_rejects_english_source_inventory_heading(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            brief = self.write_multi_action_brief(root, mapped_atoms="`ATOM-001`; `ATOM-002`")
+            inventory = root / "work" / "stage-handoffs" / "scope" / "source-row-inventory.md"
+            inventory.write_text(
+                inventory.read_text(encoding="utf-8").replace(
+                    "## Реестр строк источника",
+                    "## Source Row Inventory",
+                ),
                 encoding="utf-8",
             )
 
@@ -1383,7 +1401,7 @@ class PracticalHandoffQualityTests(unittest.TestCase):
             inventory.write_text(
                 "\n".join(
                     [
-                        "## Source Row Inventory",
+                        "## Реестр строк источника",
                         "",
                         "| source_row_id | package_id | field_or_action | source_ref | requirement_codes | in_scope | mapped_atom_or_gap |",
                         "| --- | --- | --- | --- | --- | --- | --- |",

@@ -3468,8 +3468,8 @@ def validate_practical_handoff_language(path: Path, root: Path) -> tuple[list[Fi
 def practical_source_row_inventory_language_evidence(content: str) -> list[str]:
     """Return English prose from agent-authored practical inventory fields.
 
-    Inventory schema headers intentionally remain canonical English.  This check
-    therefore inspects only the human-facing ``field_or_action`` values and
+    Technical table column identifiers may remain canonical English. This check
+    therefore inspects human-facing headings, ``field_or_action`` values and
     non-table explanatory prose; source quotations and inline identifiers stay
     outside its scope.
     """
@@ -3489,7 +3489,7 @@ def practical_source_row_inventory_language_evidence(content: str) -> list[str]:
     prose_lines: list[str] = []
     for raw_line in content.splitlines():
         stripped = raw_line.strip()
-        if stripped.startswith("|") or re.fullmatch(r"#{1,6}\s+Source Row Inventory\s*", stripped, flags=re.IGNORECASE):
+        if stripped.startswith("|"):
             continue
         prose_lines.append(raw_line)
     evidence.extend(practical_handoff_english_evidence("\n".join(prose_lines)))
@@ -15194,7 +15194,14 @@ def source_row_inventory_required(content: str) -> bool:
 
 
 def parsed_source_row_inventory_rows(content: str) -> list[dict[str, str]]:
-    normalized_content = collapse_redundant_section_heading(content, "Source Row Inventory")
+    normalized_content = re.sub(
+        r"^#{1,6}\s+Реестр строк источника\s*$",
+        "## Source Row Inventory",
+        content,
+        count=1,
+        flags=re.MULTILINE,
+    )
+    normalized_content = collapse_redundant_section_heading(normalized_content, "Source Row Inventory")
     if re.search(r"^#\s+Source Row Inventory\s*$", normalized_content, flags=re.MULTILINE):
         normalized_content = re.sub(
             r"^#\s+Source Row Inventory\s*$",
