@@ -11,7 +11,7 @@ description: Находит нужный FT-пакет, основное ФТ, s
 
 - запрос пользователя;
 - текущая структура `fts/`;
-- доступные `source/`, `support/`, `mockups/`, `test-cases/`.
+- доступные `source/`, `support/`, `mockups/`, `test-cases/` и предоставленные Figma links.
 
 ## Выходы
 
@@ -21,7 +21,7 @@ description: Находит нужный FT-пакет, основное ФТ, s
 - matching XHTML-версия основного ФТ в `source/` как обязательный machine-readable extraction source;
 - `main_ft_xhtml` и `xhtml_available: yes | no`;
 - список PDF-версий основного ФТ для сверки структуры, если они есть в FT-пакете;
-- список support-файлов и макетов;
+- список support-файлов, макетов и зарегистрированных Figma-ссылок;
 - package-specific `AGENT-NOTES.md` из выбранного input root и package root `fts/<ft-slug>/`, если он есть;
 - `source-selection.md` в фактической stage-handoff папке; для новых handoff-папок это `fts/<ft-slug>/work/stage-handoffs/NN-<scope-slug>/`;
 - структура `source-selection.md` определяется `source-selection-format.md`;
@@ -45,16 +45,17 @@ description: Находит нужный FT-пакет, основное ФТ, s
 5. Отдельно найди PDF-версию основного ФТ для сверки структуры разделов. Ищи ее сначала в `source/`, затем в связанных материалах того же FT-пакета.
 6. Если PDF-версия найдена, передай ее следующему skill-у как вход для structural/visual cross-check; PDF не заменяет DOCX или XHTML.
 7. Проверь `AGENT-NOTES.md` в выбранном input root и в package root `fts/<ft-slug>/`; найденные notes передай как обязательный package-specific context.
-8. Если PDF-версия не найдена, явно зафиксируй отсутствие PDF для сверки структуры, а не игнорируй это молча.
-9. Если XHTML отсутствует, создай `source-selection.md` с секцией `Machine-Readable XHTML Source`, укажи `selection_status: blocked-input`, `xhtml_available: no`, `blocking_reason: missing main-ft-xhtml`, попроси добавить XHTML-версию основного ФТ в `source/` и не передавай задачу в `ft-scope-analyzer`.
-10. Если выбор неоднозначен, сформулируй короткий список вариантов и чего именно не хватает для уверенного выбора.
-11. Для новых handoff-папок используй numbered naming из `references/agent/stage-handoff-model.md`: `00-<container-slug>/` для предварительного контейнера выбора scope-ов и `NN-<scope-slug>/` для подтвержденного scope-level handoff. Логический `scope_slug` оставляй без числового префикса.
-12. Сохрани `source-selection.md` и обнови `workflow-state.yaml` как handoff к `ft-scope-analyzer` только если `xhtml_available: yes`.
+8. Найди предоставленные Figma links и `support/figma/figma-design-index.md`, если он есть. Зарегистрируй их как необязательные визуальные источники в `source-selection.md`; не открывай scope и не выводи требования из Figma на этой стадии.
+9. Если PDF-версия не найдена, явно зафиксируй отсутствие PDF для сверки структуры, а не игнорируй это молча.
+10. Если XHTML отсутствует, создай `source-selection.md` с секцией `Machine-Readable XHTML Source`, укажи `selection_status: blocked-input`, `xhtml_available: no`, `blocking_reason: missing main-ft-xhtml`, попроси добавить XHTML-версию основного ФТ в `source/` и не передавай задачу в `ft-scope-analyzer`.
+11. Если выбор неоднозначен, сформулируй короткий список вариантов и чего именно не хватает для уверенного выбора.
+12. Для новых handoff-папок используй numbered naming из `references/agent/stage-handoff-model.md`: `00-<container-slug>/` для предварительного контейнера выбора scope-ов и `NN-<scope-slug>/` для подтвержденного scope-level handoff. Логический `scope_slug` оставляй без числового префикса.
+13. Сохрани `source-selection.md` и обнови `workflow-state.yaml` как handoff к `ft-scope-analyzer` только если `xhtml_available: yes`.
     - Если выбор источника неоднозначен, не запускай `ft-scope-analyzer`; зафиксируй `selection_status: ambiguous` или `blocked-input`.
     - Если XHTML отсутствует, не запускай `ft-scope-analyzer`, не создавай `scope-contract.md`, writer/reviewer/iteration prompt или downstream handoff.
     - Не создавай `scope-contract.md`, `prompt.scope-to-writer.md` или `prompt.scope-to-iteration.md`: это ответственность `ft-scope-analyzer`.
-13. При добавлении alias-копий source/support файлов или local-only evidence обнови `fts/artifact-manifest.json` по `references/agent/artifact-manifest-format.md`; binary alias не должен оставаться долгосрочной стратегией без manifest.
-14. Не переходи к анализу секций или написанию тест-кейсов; передай управление следующему skill-у.
+14. При добавлении alias-копий source/support файлов или local-only evidence обнови `fts/artifact-manifest.json` по `references/agent/artifact-manifest-format.md`; binary alias не должен оставаться долгосрочной стратегией без manifest.
+15. Не переходи к анализу секций или написанию тест-кейсов; передай управление следующему skill-у.
 
 ## Clean Diagnostic Isolation
 

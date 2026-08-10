@@ -6,7 +6,7 @@
 
 - сделать выбор источников воспроизводимым без истории чата;
 - не смешивать выбор FT-пакета с определением scope;
-- явно отделить main FT от support/mockups;
+- явно отделить main FT от support/mockups/Figma;
 - зафиксировать `main-ft-docx` как authoritative source of truth;
 - зафиксировать `main-ft-xhtml` как mandatory primary machine-readable extraction source;
 - зафиксировать source quality limitations до downstream writer/reviewer loop;
@@ -18,7 +18,7 @@
 2. Main FT XHTML - mandatory primary machine-readable extraction source.
 3. Main FT PDF - structural/visual cross-check only.
 4. Support files - clarification within confirmed scope only.
-5. Mockups - UI/visual hints only, not source of business rules.
+5. Local mockups and Figma design nodes - UI/visual hints only, not source of business rules.
 6. AGENT-NOTES - package context only.
 7. Existing test cases / previous work artifacts - historical context only when explicitly allowed, not requirement source.
 
@@ -152,6 +152,17 @@ PDF не является machine-readable substitute for XHTML.
 
 Support/mockups не должны расширять FT scope без явного подтверждения. Mockups не задают business rules, requiredness, validation, allowed values или expected results.
 
+#### Figma Design References
+
+Если пользователь предоставил Figma link или в FT-пакете есть
+`support/figma/figma-design-index.md`, зарегистрируй его как дополнительный
+визуальный источник. В index нужны `FIGMA-*`, `design_url`, `node_id`, scope,
+`visual_usage: optional_visual_reference`, access status, snapshot и дата
+проверки. Открытый узел уточняет только видимые labels и interaction hints в
+`mockup-visual-inventory.md`; ФТ остаётся источником поведения. Недоступный
+optional Figma не блокирует маршрут. Не сохраняй Figma token, cookie,
+одноразовый URL или персональный доступ.
+
 ### Source Quality
 
 Фиксируй результаты первичной проверки источников:
@@ -195,6 +206,7 @@ next_skill: ft-scope-analyzer
 - active main FT document;
 - `main_ft_xhtml`;
 - structural cross-check PDF, если есть;
+- Figma design index, если есть;
 - package notes, если есть;
 - artifact manifest, если aliases или local-only evidence значимы.
 
@@ -257,6 +269,12 @@ Validator-enforced XHTML findings:
 
 | path | role | why_relevant | must_use_downstream | limitations |
 | --- | --- | --- | --- | --- |
+
+### Ссылки на Figma-дизайн (необязательно)
+
+| figma_id | design_url | node_id | relevant_scopes | visual_usage | access_status | snapshot_path | last_checked_at | limitations |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `FIGMA-001` | `<https://www.figma.com/design/...>` | `<node-id or ->` | `<scope slug or package-wide>` | `optional_visual_reference` | `not_checked` | `->` | `<ISO date or ->` | `not a requirement source` |
 
 ## Source Quality
 
