@@ -14,8 +14,12 @@ Before substantive work, state:
 
 - selected skill or skill chain;
 - why this route matches the task;
-- instruction-loading scenario or scenarios;
-- verification gates that will prove the work.
+
+Keep instruction-loading scenarios and verification gates in the internal routing
+decision, handoff and validation artifacts. Do not put internal route/profile
+names or versions (for example, `practical v0.8`), instruction scenario IDs,
+schema names or individual gate names into the user-facing preflight line unless
+the user explicitly asks for them.
 
 Keep the disclosure brief. It is not a consent step unless the task itself is ambiguous or unsafe.
 

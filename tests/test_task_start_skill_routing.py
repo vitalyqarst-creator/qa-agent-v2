@@ -44,6 +44,11 @@ class TaskStartSkillRoutingTests(unittest.TestCase):
         ):
             self.assertIn(field, self.routing["preflight_required_fields"])
 
+    def test_user_facing_preflight_hides_internal_route_versions(self) -> None:
+        content = ROUTING_PATH.read_text(encoding="utf-8")
+        self.assertIn("Do not put internal route/profile", content)
+        self.assertIn("`practical v0.8`", content)
+
     def test_route_ids_are_unique(self) -> None:
         route_ids = [route["id"] for route in self.routes]
         self.assertEqual(len(route_ids), len(set(route_ids)))

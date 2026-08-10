@@ -50,10 +50,10 @@ class PracticalHandoffQualityTests(unittest.TestCase):
                     "",
                     "## Планируемые проверки",
                     "",
-                    "| Идентификатор | Проверяемое утверждение | Статус исполнения |",
-                    "| --- | --- | --- |",
-                    "| `ATOM-001` | Действие выполняется для подготовленного объекта. | `ready` |",
-                    "| `ATOM-002` | Действие доступно пользователю с заданными правами. | `needs-test-data` |",
+                    "| Идентификатор | Проверяемое утверждение | Основной ожидаемый результат | Статус исполнения |",
+                    "| --- | --- | --- | --- |",
+                    "| `ATOM-001` | Действие выполняется для подготовленного объекта. | Действие выполнено. | `ready` |",
+                    "| `ATOM-002` | Действие доступно пользователю с заданными правами. | Действие доступно. | `needs-test-data` |",
                     "",
                     "## Предпосылки исполнения",
                     "",
@@ -135,7 +135,7 @@ class PracticalHandoffQualityTests(unittest.TestCase):
             self.write_scope_brief(brief)
             brief.write_text(
                 brief.read_text(encoding="utf-8")
-                .replace("| `ATOM-002` | Действие доступно пользователю с заданными правами. | `needs-test-data` |", "| `ATOM-002` | Действие доступно пользователю с заданными правами. | `candidate-ui-calibration` |")
+                .replace("| `ATOM-002` | Действие доступно пользователю с заданными правами. | Действие доступно. | `needs-test-data` |", "| `ATOM-002` | Действие доступно пользователю с заданными правами. | Действие доступно. | `candidate-ui-calibration` |")
                 .replace("| `ATOM-002` | Пользователь с заданными правами. | Подготовленный объект. | `SETUP-ACCESS-001` | Отсутствует: учетная запись с заданными правами. | `needs-test-data` |", "| `ATOM-002` | Пользователь с заданными правами. | Подготовленный объект. | `SETUP-ACCESS-001` | Отсутствует: учетная запись с заданными правами. | `candidate-ui-calibration` |"),
                 encoding="utf-8",
             )
@@ -377,10 +377,10 @@ class PracticalHandoffQualityTests(unittest.TestCase):
                     "",
                     "## Планируемые проверки",
                     "",
-                    "| Идентификатор | Проверяемое утверждение | Статус исполнения |",
-                    "| --- | --- | --- |",
-                    "| `ATOM-001` | Архивирование доступно. | `needs-test-data` |",
-                    "| `ATOM-002` | Архивирование разрешено администратору. | `needs-test-data` |",
+                    "| Идентификатор | Проверяемое утверждение | Основной ожидаемый результат | Статус исполнения |",
+                    "| --- | --- | --- | --- |",
+                    "| `ATOM-001` | Архивирование доступно. | Карточка архивирована. | `needs-test-data` |",
+                    "| `ATOM-002` | Архивирование разрешено администратору. | Действие доступно. | `needs-test-data` |",
                     "",
                     "## Предпосылки исполнения",
                     "",
@@ -435,8 +435,8 @@ class PracticalHandoffQualityTests(unittest.TestCase):
             self.write_scope_brief(brief)
             brief.write_text(
                 brief.read_text(encoding="utf-8").replace(
-                    "| `ATOM-002` | Действие доступно пользователю с заданными правами. | `needs-test-data` |",
-                    "| `ATOM-002` | `SO-NEG-001`; `SO-NEG-002` требуют разной проверки. | `needs-test-data` |",
+                    "| `ATOM-002` | Действие доступно пользователю с заданными правами. | Действие доступно. | `needs-test-data` |",
+                    "| `ATOM-002` | `SO-NEG-001`; `SO-NEG-002` требуют разной проверки. | Действие доступно. | `needs-test-data` |",
                 ),
                 encoding="utf-8",
             )
@@ -445,6 +445,63 @@ class PracticalHandoffQualityTests(unittest.TestCase):
 
         finding_ids = {finding.id for finding in findings}
         self.assertIn("practical-scope-brief-aggregated-oracle-obligations", finding_ids)
+
+    def test_scope_brief_rejects_multiple_actors_without_parameterization_proof(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            brief = root / "scope-brief.md"
+            self.write_scope_brief(brief)
+            brief.write_text(
+                brief.read_text(encoding="utf-8").replace(
+                    "| `ATOM-002` | Пользователь с заданными правами. | Подготовленный объект. | `SETUP-ACCESS-001` | Отсутствует: учетная запись с заданными правами. | `needs-test-data` |",
+                    "| `ATOM-002` | Пользователь с ролью «Администратор» и пользователь без роли администратора. | Подготовленный объект. | `SETUP-ACCESS-001` | Отсутствуют: учетные записи для обеих ролей. | `needs-test-data` |",
+                ),
+                encoding="utf-8",
+            )
+
+            findings, _ = self.validator.validate_practical_scope_brief(brief, root)
+
+        finding_ids = {finding.id for finding in findings}
+        self.assertIn("practical-scope-brief-execution-prerequisites-incomplete", finding_ids)
+
+    def test_scope_brief_allows_multiple_actors_only_with_complete_parameterization_proof(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            brief = root / "scope-brief.md"
+            self.write_scope_brief(brief)
+            brief.write_text(
+                brief.read_text(encoding="utf-8").replace(
+                    "| `ATOM-002` | Пользователь с заданными правами. | Подготовленный объект. | `SETUP-ACCESS-001` | Отсутствует: учетная запись с заданными правами. | `needs-test-data` |",
+                    "| `ATOM-002` | Пользователь с ролью «Администратор» и пользователь без роли администратора. | Подготовленный объект. | `SETUP-ACCESS-001` | Отсутствуют: учетные записи для обеих ролей. | `needs-test-data` |",
+                ) + "\n## Обоснование параметризации ATOM\n\n"
+                + "| Атом | Стартовый экран | UI-уровень | Навигация | Действие | Триггер | Ожидаемый результат |\n"
+                + "| --- | --- | --- | --- | --- | --- | --- |\n"
+                + "| `ATOM-002` | Экран A | Уровень A | Путь A | Действие A | Триггер A | Действие доступно. |\n",
+                encoding="utf-8",
+            )
+
+            findings, _ = self.validator.validate_practical_scope_brief(brief, root)
+
+        finding_ids = {finding.id for finding in findings}
+        self.assertNotIn("practical-scope-brief-execution-prerequisites-incomplete", finding_ids)
+
+    def test_scope_brief_rejects_missing_main_expected_result(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            brief = root / "scope-brief.md"
+            self.write_scope_brief(brief)
+            brief.write_text(
+                brief.read_text(encoding="utf-8").replace(
+                    "| `ATOM-002` | Действие доступно пользователю с заданными правами. | Действие доступно. | `needs-test-data` |",
+                    "| `ATOM-002` | Действие доступно пользователю с заданными правами. |  | `needs-test-data` |",
+                ),
+                encoding="utf-8",
+            )
+
+            findings, _ = self.validator.validate_practical_scope_brief(brief, root)
+
+        finding_ids = {finding.id for finding in findings}
+        self.assertIn("practical-scope-brief-planned-expected-result-missing", finding_ids)
 
     def test_scope_brief_rejects_negative_obligation_for_multiple_atoms(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

@@ -523,6 +523,11 @@ planned TC), use the fast path inside this same route:
      every value. Do not leave an aggregated `ATOM-*` with an instruction for
      the matrix writer to decide whether it should be split: make that decision
      in the scope-analysis stage.
+     The pre-writer validator requires one `ATOM-*` and one `Основной ожидаемый
+     результат` per planned row. An execution row with several named actors is
+     rejected unless `Обоснование параметризации ATOM` proves, for that ATOM,
+     the same start screen, UI level, navigation path, action, trigger and
+     expected result for every actor.
    - Keep temporary inspection scripts, renders, duplicate manifests and
      partial writes outside the final handoff. On a successful scope-analysis
      run, delete only temporary artifacts created by the current run. Files in

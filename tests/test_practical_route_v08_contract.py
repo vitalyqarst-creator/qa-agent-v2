@@ -439,6 +439,7 @@ class PracticalRouteV08ContractTests(unittest.TestCase):
             "Обоснование параметризации ATOM",
             "scope-analysis stage",
             "temporary inspection scripts",
+            "one `ATOM-*` and one `Основной ожидаемый",
         ):
             self.assertIn(expected, route)
 
@@ -446,6 +447,7 @@ class PracticalRouteV08ContractTests(unittest.TestCase):
             "latest_artifacts.source_selection",
             "Обоснование параметризации ATOM",
             "Не оставляй решение об этой декомпозиции writer-у",
+            "Каждая строка `Планируемые проверки` содержит ровно один `ATOM-*`",
             "pre-existing user artifacts",
         ):
             self.assertIn(expected, analyzer)

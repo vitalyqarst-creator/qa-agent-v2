@@ -3766,6 +3766,7 @@ def validate_practical_scope_brief(path: Path, root: Path) -> tuple[list[Finding
         planned_rows,
         {
             "id": {"идентификатор"},
+            "expected": {"основной ожидаемый результат"},
             "status": {"статус исполнения"},
         },
     )
@@ -3778,7 +3779,8 @@ def validate_practical_scope_brief(path: Path, root: Path) -> tuple[list[Finding
                 title="Practical scope brief lacks the planned-checks table",
                 details=(
                     "A practical scope brief must expose `## Планируемые проверки` with Russian "
-                    "`Идентификатор` and `Статус исполнения` columns before writer launch."
+                    "`Идентификатор`, `Основной ожидаемый результат` and `Статус исполнения` columns before "
+                    "writer launch."
                 ),
                 path=display_path,
                 evidence=[],
@@ -3789,6 +3791,8 @@ def validate_practical_scope_brief(path: Path, root: Path) -> tuple[list[Finding
         return findings, checks
 
     planned_statuses: dict[str, str] = {}
+    aggregated_planned_atom_rows: list[str] = []
+    missing_planned_expected_results: list[str] = []
     aggregated_oracle_obligations: list[str] = []
     unspecified_autofill_targets: list[str] = []
     aggregated_autofill_targets: list[str] = []
@@ -3804,8 +3808,17 @@ def validate_practical_scope_brief(path: Path, root: Path) -> tuple[list[Finding
             atom_id.upper()
             for atom_id in re.findall(r"\bATOM-[A-Z0-9-]+\b", row[planned_columns["id"]], flags=re.IGNORECASE)
         }
+        expected_result = normalize_markdown_field_value(
+            row[planned_columns["expected"]]
+        ).casefold()
         for atom_id in atom_ids:
             planned_statuses[atom_id.upper()] = status
+            if not expected_result:
+                missing_planned_expected_results.append(atom_id.upper())
+        if len(atom_ids) != 1:
+            aggregated_planned_atom_rows.append(
+                ",".join(sorted(atom_ids)) or "<missing-atom>"
+            )
         oracle_obligations = {
             obligation.upper()
             for obligation in re.findall(
@@ -4093,6 +4106,43 @@ def validate_practical_scope_brief(path: Path, root: Path) -> tuple[list[Finding
             )
         )
 
+    if aggregated_planned_atom_rows:
+        findings.append(
+            Finding(
+                id="practical-scope-brief-planned-atom-row-aggregated",
+                severity="error",
+                category="practical-handoff",
+                title="Practical scope brief groups several ATOMs in one planned-check row",
+                details=(
+                    "A planned-check row must identify one ATOM and one main expected result. Aggregating "
+                    "ATOMs before matrix writing hides distinct execution contexts and downstream tests."
+                ),
+                path=display_path,
+                evidence=aggregated_planned_atom_rows[:20],
+                recommended_action=(
+                    "Split the planned-check row into one ATOM per row, or record a complete parameterization "
+                    "proof only where the same scenario genuinely applies."
+                ),
+            )
+        )
+
+    if missing_planned_expected_results:
+        findings.append(
+            Finding(
+                id="practical-scope-brief-planned-expected-result-missing",
+                severity="error",
+                category="practical-handoff",
+                title="Practical scope brief has a planned ATOM without a main expected result",
+                details=(
+                    "Every planned ATOM must declare one primary expected result before matrix writing. "
+                    "A generic source statement without that result is not an executable test-design input."
+                ),
+                path=display_path,
+                evidence=sorted(set(missing_planned_expected_results))[:20],
+                recommended_action="State one observable or explicitly status-marked primary result for each ATOM.",
+            )
+        )
+
     if unspecified_autofill_targets:
         findings.append(
             Finding(
@@ -4209,6 +4259,41 @@ def validate_practical_scope_brief(path: Path, root: Path) -> tuple[list[Finding
     execution_actors: dict[str, str] = {}
     execution_setup_keys: dict[str, set[str]] = {}
 
+    parameterization_section = extract_markdown_section_prefix(content, "Обоснование параметризации ATOM")
+    parameterization_rows = markdown_table_rows_from_text(parameterization_section or "")
+    parameterization_columns = _practical_table_column_indexes(
+        parameterization_rows,
+        {
+            "atom": {"атом", "идентификатор"},
+            "start_screen": {"стартовый экран"},
+            "ui_level": {"ui-уровень"},
+            "navigation": {"навигация"},
+            "action": {"действие"},
+            "trigger": {"триггер"},
+            "expected": {"ожидаемый результат", "основной ожидаемый результат"},
+        },
+    )
+    parameterized_actor_atoms: set[str] = set()
+    if parameterization_columns is not None:
+        for row in parameterization_rows[1:]:
+            if max(parameterization_columns.values()) >= len(row):
+                continue
+            atom_ids = {
+                atom_id.upper()
+                for atom_id in re.findall(
+                    r"\bATOM-[A-Z0-9-]+\b",
+                    row[parameterization_columns["atom"]],
+                    flags=re.IGNORECASE,
+                )
+            }
+            proof_complete = all(
+                normalize_markdown_field_value(row[index]).strip().strip("`")
+                for key, index in parameterization_columns.items()
+                if key != "atom"
+            )
+            if len(atom_ids) == 1 and proof_complete:
+                parameterized_actor_atoms.update(atom_ids)
+
     execution_section = extract_markdown_section(content, "Предпосылки исполнения")
     execution_rows = markdown_table_rows_from_text(execution_section or "")
     execution_columns = _practical_table_column_indexes(
@@ -4259,6 +4344,7 @@ def validate_practical_scope_brief(path: Path, root: Path) -> tuple[list[Finding
         role_or_state_without_fixture_ids: set[str] = set()
         generic_ready_actor_ids: set[str] = set()
         missing_setup_hidden_by_status_ids: set[str] = set()
+        multi_actor_without_proof_ids: set[str] = set()
         for row in execution_rows[1:]:
             if max(execution_columns.values()) >= len(row):
                 continue
@@ -4304,6 +4390,15 @@ def validate_practical_scope_brief(path: Path, root: Path) -> tuple[list[Finding
             missing_setup_evidence = bool(
                 re.match(r"^отсутств\w*\s*:\s*.+", preparation_evidence, flags=re.IGNORECASE)
             )
+            actor_has_multiple_principals = bool(
+                re.search(
+                    r"\b(?:пользовател\w*|администратор\w*|тестировщик\w*|оператор\w*)\b"
+                    r"[^.;|]{0,96}?(?:\s+(?:и|или)\s+|[;,/])[^.;|]{0,64}?"
+                    r"\b(?:пользовател\w*|администратор\w*|тестировщик\w*|оператор\w*)\b",
+                    actor,
+                    flags=re.IGNORECASE,
+                )
+            )
             for atom_id in re.findall(r"\bATOM-[A-Z0-9-]+\b", row[execution_columns["affected"]], flags=re.IGNORECASE):
                 atom_id = atom_id.upper()
                 if atom_id in execution_statuses:
@@ -4311,6 +4406,8 @@ def validate_practical_scope_brief(path: Path, root: Path) -> tuple[list[Finding
                 execution_statuses[atom_id] = status
                 execution_actors[atom_id] = actor
                 execution_setup_keys[atom_id] = setup_keys
+                if actor_has_multiple_principals and atom_id not in parameterized_actor_atoms:
+                    multi_actor_without_proof_ids.add(atom_id)
                 if status == "needs-test-data" and (not actor or not object_state or actor == "не требуется" or object_state == "не требуется"):
                     incomplete_needs_data_ids.add(atom_id)
                 if not preparation_evidence or preparation_evidence == "не требуется":
@@ -4354,7 +4451,7 @@ def validate_practical_scope_brief(path: Path, root: Path) -> tuple[list[Finding
             for atom_id, status in execution_statuses.items()
             if planned_statuses.get(atom_id) != status
         }
-        if missing_ids or unknown_ids or duplicated_ids or mismatched_ids or incomplete_needs_data_ids or incomplete_preparation_evidence_ids or unverified_ready_preparation_ids or unsupported_preparation_evidence_ids or invalid_setup_key_ids or role_or_state_without_fixture_ids or generic_ready_actor_ids or missing_setup_hidden_by_status_ids:
+        if missing_ids or unknown_ids or duplicated_ids or mismatched_ids or incomplete_needs_data_ids or incomplete_preparation_evidence_ids or unverified_ready_preparation_ids or unsupported_preparation_evidence_ids or invalid_setup_key_ids or role_or_state_without_fixture_ids or generic_ready_actor_ids or missing_setup_hidden_by_status_ids or multi_actor_without_proof_ids:
             findings.append(
                 Finding(
                     id="practical-scope-brief-execution-prerequisites-incomplete",
@@ -4380,19 +4477,21 @@ def validate_practical_scope_brief(path: Path, root: Path) -> tuple[list[Finding
                         *(f"role-or-status-without-fixture={item}" for item in sorted(role_or_state_without_fixture_ids)),
                         *(f"generic-ready-actor={item}" for item in sorted(generic_ready_actor_ids)),
                         *(f"missing-setup-hidden-by-status={item}" for item in sorted(missing_setup_hidden_by_status_ids)),
+                        *(f"multiple-actors-without-proof={item}" for item in sorted(multi_actor_without_proof_ids)),
                     ][:20],
                     recommended_action=(
                         "Map every planned ATOM to one actor/object-state prerequisite with setup key and valid "
-                        "fixture or preparation evidence, then synchronize its status."
+                        "fixture or preparation evidence, then synchronize its status. Split a multi-actor row, "
+                        "unless the brief contains a complete `Обоснование параметризации ATOM`."
                     ),
                 )
             )
         checks.append(
             Check(
                 "practical-scope-brief-execution-prerequisites",
-                "fail" if missing_ids or unknown_ids or duplicated_ids or mismatched_ids or incomplete_needs_data_ids or incomplete_preparation_evidence_ids or unverified_ready_preparation_ids or unsupported_preparation_evidence_ids or invalid_setup_key_ids or role_or_state_without_fixture_ids or generic_ready_actor_ids or missing_setup_hidden_by_status_ids else "pass",
+                "fail" if missing_ids or unknown_ids or duplicated_ids or mismatched_ids or incomplete_needs_data_ids or incomplete_preparation_evidence_ids or unverified_ready_preparation_ids or unsupported_preparation_evidence_ids or invalid_setup_key_ids or role_or_state_without_fixture_ids or generic_ready_actor_ids or missing_setup_hidden_by_status_ids or multi_actor_without_proof_ids else "pass",
                 "Execution prerequisites are inconsistent."
-                if missing_ids or unknown_ids or duplicated_ids or mismatched_ids or incomplete_needs_data_ids or incomplete_preparation_evidence_ids or unverified_ready_preparation_ids or unsupported_preparation_evidence_ids or invalid_setup_key_ids or role_or_state_without_fixture_ids or generic_ready_actor_ids or missing_setup_hidden_by_status_ids
+                if missing_ids or unknown_ids or duplicated_ids or mismatched_ids or incomplete_needs_data_ids or incomplete_preparation_evidence_ids or unverified_ready_preparation_ids or unsupported_preparation_evidence_ids or invalid_setup_key_ids or role_or_state_without_fixture_ids or generic_ready_actor_ids or missing_setup_hidden_by_status_ids or multi_actor_without_proof_ids
                 else "Execution prerequisites cover all planned checks.",
                 display_path,
             )
