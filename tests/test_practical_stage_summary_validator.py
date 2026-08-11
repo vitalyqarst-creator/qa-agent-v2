@@ -266,6 +266,51 @@ class PracticalStageSummaryValidatorTests(unittest.TestCase):
             self.finding_ids(root),
         )
 
+    def test_tc_review_ready_state_requires_tc_review_transition(self) -> None:
+        root = self.make_package(
+            next_stage_transition="not-applicable",
+            per_scope_next_stage_transitions="yes",
+            production_tc_clean="yes",
+            summary_stage="writer-repair",
+        )
+        workflow = root / "work" / "stage-handoffs" / "01-sample" / "workflow-state.yaml"
+        workflow.write_text(
+            "\n".join(
+                [
+                    "scope_slug: sample",
+                    "current_stage: ft-test-case-writer",
+                    "stage_status: ready-for-review",
+                    "next_skill: ft-test-case-reviewer",
+                    "review_mode: tc_review",
+                    "latest_artifacts:",
+                    "  practical_stage_summary: work/practical-stage-summary.md",
+                    "",
+                ]
+            ),
+            encoding="utf-8",
+        )
+
+        self.assertIn(
+            "practical-stage-summary-tc-review-state-mismatch",
+            self.finding_ids(root),
+        )
+
+        summary = root / "work" / "practical-stage-summary.md"
+        summary.write_text(
+            summary.read_text(encoding="utf-8")
+            .replace("| next_stage_transition | `not-applicable` |", "| next_stage_transition | `tc-review allowed` |")
+            .replace(
+                "| sample | matrix-accepted | writer allowed | not-applicable | not-applicable | Матрица принята. |",
+                "| sample | matrix-accepted | tc-review allowed | not-applicable | not-applicable | Матрица принята. |",
+            ),
+            encoding="utf-8",
+        )
+
+        self.assertNotIn(
+            "practical-stage-summary-tc-review-state-mismatch",
+            self.finding_ids(root),
+        )
+
     def test_ignores_immutable_controller_snapshot_summary(self) -> None:
         root = self.make_package()
         snapshot = (

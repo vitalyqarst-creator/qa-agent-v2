@@ -9820,6 +9820,63 @@ def validate_practical_stage_summary(path: Path, root: Path) -> tuple[list[Findi
                         )
                     )
 
+    tc_review_state_issues: list[str] = []
+    if PRACTICAL_STAGE_SUMMARY_SCOPE_IDS_RE.fullmatch(normalized_scope_ids):
+        summary_transition = fields.get("next_stage_transition", "").strip().casefold()
+        expected_summary_transitions = {"tc-review allowed"}
+        if len(normalized_scope_ids.split(",")) > 1:
+            expected_summary_transitions.add("tc-review conditional")
+        for scope_id in normalized_scope_ids.split(","):
+            workflow_state = active_scope_states.get(scope_id, {})
+            tc_review_pending = (
+                workflow_state.get("current_stage") == "ft-test-case-writer"
+                and workflow_state.get("stage_status") == "ready-for-review"
+                and workflow_state.get("next_skill") == "ft-test-case-reviewer"
+                and workflow_state.get("review_mode") == "tc_review"
+            )
+            if not tc_review_pending:
+                continue
+            scope_slug = active_scope_aliases.get(scope_id, scope_id)
+            record, record_issues = practical_scope_transition_record_for_scope(
+                content,
+                scope_id=scope_id,
+                scope_slug=scope_slug,
+            )
+            if record_issues:
+                tc_review_state_issues.extend(record_issues)
+                continue
+            scope_transition = record.get("next_stage_transition", "").casefold()
+            if scope_transition != "tc-review allowed":
+                tc_review_state_issues.append(
+                    f"scope={scope_id}:scope_transition={scope_transition or '<missing>'}; "
+                    "expected=tc-review allowed"
+                )
+            if summary_transition not in expected_summary_transitions:
+                tc_review_state_issues.append(
+                    f"scope={scope_id}:summary_transition={summary_transition or '<missing>'}; "
+                    f"expected={' or '.join(sorted(expected_summary_transitions))}"
+                )
+    if tc_review_state_issues:
+        findings.append(
+            Finding(
+                id="practical-stage-summary-tc-review-state-mismatch",
+                severity="error",
+                category="practical-stage-summary",
+                title="Practical stage summary disagrees with TC-review routing",
+                details=(
+                    "A scope routed to independent TC review must declare tc-review allowed in its scope row "
+                    "and in the package summary. A writer transition or not-applicable would make the next "
+                    "safe step ambiguous."
+                ),
+                path=display_path,
+                evidence=tc_review_state_issues,
+                recommended_action=(
+                    "Set the active scope row to tc-review allowed and set the package transition to "
+                    "tc-review allowed (or tc-review conditional only for a multi-scope package)."
+                ),
+            )
+        )
+
     nonrussian_prose_issues = practical_stage_summary_nonrussian_prose_issues(content, fields)
     if nonrussian_prose_issues:
         findings.append(
@@ -13648,22 +13705,9 @@ def validate_scoped_validator_profile(
         return [f"{display_source_path}:profile-not-object:{profile_path.name}"], evidence
 
     if profile_path.name == "validator.json" and {"passed", "validator", "findings"}.issubset(payload):
-        findings = payload.get("findings")
-        if payload.get("passed") is not True:
-            issues.append(f"{display_source_path}:runner-validator-not-passed:{profile_path.name}")
-        if not isinstance(findings, list):
-            issues.append(f"{display_source_path}:runner-validator-findings-not-list:{profile_path.name}")
-        elif any(
-            isinstance(item, dict)
-            and str(item.get("severity") or "").lower() in {"warning", "error"}
-            for item in findings
-        ):
-            issues.append(f"{display_source_path}:runner-validator-has-findings:{profile_path.name}")
-        evidence.append(
-            f"{profile_path.as_posix()}:runner-validator={payload.get('validator') or '-'}"
-        )
-        evidence.append(f"{profile_path.as_posix()}:passed={payload.get('passed')!r}")
-        return issues, evidence
+        return [
+            f"{display_source_path}:generic-validator-json-not-accepted:{profile_path.name}"
+        ], evidence
 
     missing_keys = sorted(SCOPED_VALIDATOR_PROFILE_REQUIRED_KEYS - set(payload))
     if missing_keys:

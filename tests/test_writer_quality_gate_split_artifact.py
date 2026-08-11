@@ -74,12 +74,17 @@ class WriterQualityGateSplitArtifactTests(unittest.TestCase):
         return root, tc_path, design_dir
 
     def write_valid_gate(self, design_dir: Path) -> None:
-        (design_dir / "validator.json").write_text(
+        profile_path = design_dir / "scoped-validator-profile.writer-r1.json"
+        profile_path.write_text(
             json.dumps(
                 {
-                    "passed": True,
-                    "validator": "validate_agent_artifacts.py",
-                    "findings": [],
+                    "command": "python scripts/validate_agent_artifacts.py --root fts/Sample --json",
+                    "generated_by": "codex_review_cycle_runner",
+                    "scope_slug": "9.1-sample",
+                    "canonical_test_cases": "test-cases/9.1-sample.md",
+                    "test_design_dir": "work/test-design/9.1-sample",
+                    "current_scope_findings": [],
+                    "unresolved_warning_error_count": 0,
                 }
             ),
             encoding="utf-8",
@@ -90,7 +95,7 @@ class WriterQualityGateSplitArtifactTests(unittest.TestCase):
         ]
         for item in sorted(self.validator.WRITER_QUALITY_GATE_REQUIRED_ITEMS):
             evidence = {
-                "scoped-validator-findings": "`validator.json`",
+                "scoped-validator-findings": "`scoped-validator-profile.writer-r1.json`",
                 "source-obligation-completeness": "`source-row-inventory.md` и `test-design-matrix.md` сопоставлены.",
                 "matrix-atomarity": "`test-design-matrix.md`: `TC-SAMPLE-001`; one independent check and one primary observable result.",
                 "expected-result-singularity": "`test-cases/9.1-sample.md`: `TC-SAMPLE-001`.",
@@ -103,6 +108,39 @@ class WriterQualityGateSplitArtifactTests(unittest.TestCase):
             + "\n".join(rows)
             + "\n",
             encoding="utf-8",
+        )
+
+    def test_rejects_declarative_generic_validator_json_as_gate_evidence(self) -> None:
+        root, _, design_dir = self.make_package()
+        self.write_valid_gate(design_dir)
+        (design_dir / "validator.json").write_text(
+            json.dumps(
+                {
+                    "passed": True,
+                    "validator": "validate_agent_artifacts.py",
+                    "findings": [],
+                }
+            ),
+            encoding="utf-8",
+        )
+        gate_path = design_dir / "writer-quality-gate.md"
+        gate_path.write_text(
+            gate_path.read_text(encoding="utf-8").replace(
+                "scoped-validator-profile.writer-r1.json",
+                "validator.json",
+            ),
+            encoding="utf-8",
+        )
+
+        findings, _ = self.validator.validate_writer_quality_gate(
+            gate_path.read_text(encoding="utf-8"),
+            gate_path,
+            root,
+        )
+
+        self.assertIn(
+            "writer-quality-gate-scoped-validator-profile-invalid",
+            {finding.id for finding in findings},
         )
 
     def finding_ids_for_test_case(self, root: Path, tc_path: Path) -> set[str]:
