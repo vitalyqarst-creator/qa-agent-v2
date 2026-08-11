@@ -97,6 +97,12 @@ matrix-invalidation recovery in `practical-test-case-route-v0.8.md`: one fresh
 independent matrix review, then independent TC review. A normal writer route is
 not a valid recovery for this condition.
 
+For this recovery, an accepted matrix finalization packet has
+`recovery_context: matrix-revalidation-after-canonical-tcs` and
+`next_controller_transition: tc-review required`. The controller waits for the
+separate reviewer to finish, then finalizes controller-owned state and summary
+before reporting the stage as complete.
+
 ## Portable accepted baseline
 
 When accepted package artifacts are ignored by Git, ordinary `git commit` does

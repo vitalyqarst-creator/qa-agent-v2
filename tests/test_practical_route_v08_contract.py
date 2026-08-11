@@ -33,6 +33,8 @@ class PracticalRouteV08ContractTests(unittest.TestCase):
         self.assertIn("Recovery after matrix invalidation", content)
         self.assertIn("matrix_revalidation_reason: reviewed-matrix-hash-mismatch", content)
         self.assertIn("current_round: 2", content)
+        self.assertIn("next_controller_transition: tc-review required", content)
+        self.assertIn("bounded `wait_threads` calls", content)
         self.assertIn("fast path", content)
         self.assertIn("TC draft after matrix gate", content)
         self.assertIn("tc_with_status_decision: write-with-statuses", content)

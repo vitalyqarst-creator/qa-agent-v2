@@ -8333,12 +8333,11 @@ def validate_practical_tc_review_handoff(
         canonical_path = resolving_artifact_by_name(
             f"{str(state.get('scope_slug') or '').strip()}.md", latest_values, path, root, ft_root
         )
-    is_post_matrix_writer = (
+    has_canonical_writer_context = (
         str(state.get("current_stage") or "") == "ft-test-case-writer"
-        and str(state.get("writer_mode") or "") == "practical_v0_8_tc_after_matrix_accepted"
         and canonical_path is not None
     )
-    if not is_post_matrix_writer:
+    if not has_canonical_writer_context:
         return [], []
 
     display_path = rel(path, root)

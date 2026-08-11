@@ -43,7 +43,12 @@ class PracticalReviewFinalizationGuardTests(unittest.TestCase):
         spec.loader.exec_module(module)
         return module
 
-    def make_fixture(self) -> tuple[Path, Path, Path, Path, Path, Path, Path]:
+    def make_fixture(
+        self,
+        *,
+        review_mode: str = "tc_review",
+        matrix_revalidation: bool = False,
+    ) -> tuple[Path, Path, Path, Path, Path, Path, Path]:
         tmp = tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)
         repo_root = Path(tmp.name)
@@ -56,14 +61,30 @@ class PracticalReviewFinalizationGuardTests(unittest.TestCase):
                 [
                     "ft_slug: Sample-v1",
                     "scope_slug: sample",
-                    "current_stage: ft-test-case-reviewer",
-                    "stage_status: ready-for-next-stage",
+                    "current_stage: ft-test-case-writer"
+                    if matrix_revalidation
+                    else "current_stage: ft-test-case-reviewer",
+                    "stage_status: ready-for-review"
+                    if matrix_revalidation
+                    else "stage_status: ready-for-next-stage",
                     "next_skill: ft-test-case-reviewer",
-                    "review_mode: tc_review",
-                    "current_round: 1",
+                    f"review_mode: {review_mode}",
+                    f"current_round: {2 if matrix_revalidation else 1}",
+                    "matrix_review_status: invalidated" if matrix_revalidation else "",
+                    (
+                        "matrix_revalidation_reason: reviewed-matrix-hash-mismatch"
+                        if matrix_revalidation
+                        else ""
+                    ),
                     f"controller_task_or_session: {CONTROLLER_ID}",
                     "required_inputs: []",
-                    "latest_artifacts: {}",
+                    "latest_artifacts:",
+                    "  canonical_test_cases: test-cases/sample.md",
+                    (
+                        "  test_design_matrix: work/practical/sample/test-design-matrix.md"
+                        if matrix_revalidation
+                        else ""
+                    ),
                     "open_questions: []",
                     "blocking_reasons: []",
                     "",
@@ -77,8 +98,16 @@ class PracticalReviewFinalizationGuardTests(unittest.TestCase):
         canonical = ft_root / "test-cases" / "sample.md"
         canonical.parent.mkdir(parents=True)
         canonical.write_text("# Test cases\n", encoding="utf-8")
+        matrix = ft_root / "work" / "practical" / "sample" / "test-design-matrix.md"
+        if matrix_revalidation:
+            matrix.parent.mkdir(parents=True, exist_ok=True)
+            matrix.write_text("# Matrix\n", encoding="utf-8")
+        review_subject = matrix if review_mode == "matrix_review" else canonical
+        review_subject_role = "test-design-matrix" if review_mode == "matrix_review" else "canonical-test-cases"
+        verdict = "matrix-accepted" if review_mode == "matrix_review" else "tc-accepted"
+        review_round = 2 if matrix_revalidation else 1
         receipt = ft_root / "work" / "practical" / "sample" / "review-launch-preflight.json"
-        receipt.parent.mkdir(parents=True)
+        receipt.parent.mkdir(parents=True, exist_ok=True)
         snapshot_dir = receipt.parent / "review-launch-preflight.controller-state"
         snapshot_dir.mkdir()
         summary_snapshot = snapshot_dir / "practical-stage-summary.md"
@@ -115,7 +144,7 @@ class PracticalReviewFinalizationGuardTests(unittest.TestCase):
             json.dumps(
                 {
                     "allowed": True,
-                    "review_mode": "tc_review",
+                    "review_mode": review_mode,
                     "scope_ids": ["01"],
                     "controller_artifact_hashes": {
                         "summary_sha256": sha256(summary),
@@ -123,9 +152,9 @@ class PracticalReviewFinalizationGuardTests(unittest.TestCase):
                     },
                     "review_subject_artifacts_by_scope": {
                         "01": {
-                            "role": "canonical-test-cases",
-                            "source_path": canonical.resolve().as_posix(),
-                            "sha256": sha256(canonical),
+                            "role": review_subject_role,
+                            "source_path": review_subject.resolve().as_posix(),
+                            "sha256": sha256(review_subject),
                         }
                     },
                     "controller_artifact_snapshot": {
@@ -158,19 +187,21 @@ class PracticalReviewFinalizationGuardTests(unittest.TestCase):
             ),
             encoding="utf-8",
         )
-        review = receipt.parent / "review-findings.final.md"
+        review = receipt.parent / (
+            "test-design-matrix-review.final.md" if review_mode == "matrix_review" else "review-findings.final.md"
+        )
         review.write_text(
             "\n".join(
                 [
                     "## Verdict",
                     "",
-                    "`tc-accepted`",
+                    f"`{verdict}`",
                     "",
                     "| Field | Value |",
                     "| --- | --- |",
                     "| scope_slug | `sample` |",
-                    "| review_mode | `tc_review` |",
-                    "| review_round | `1` |",
+                    f"| review_mode | `{review_mode}` |",
+                    f"| review_round | `{review_round}` |",
                     "",
                 ]
             ),
@@ -188,8 +219,8 @@ class PracticalReviewFinalizationGuardTests(unittest.TestCase):
                     "| reviewer_input_excluded_writer_private_reasoning | `yes` |",
                     "| reviewer_modified_test_cases | `no` |",
                     "| independent_signoff_claim_allowed | `yes` |",
-                    "| review_mode | `tc_review` |",
-                    "| review_round | `1` |",
+                    f"| review_mode | `{review_mode}` |",
+                    f"| review_round | `{review_round}` |",
                     "",
                 ]
             ),
@@ -217,6 +248,29 @@ class PracticalReviewFinalizationGuardTests(unittest.TestCase):
         self.assertEqual("ready-for-controller-finalization", result["status"])
         self.assertEqual("tc-accepted", result["verdict"])
         self.assertEqual("accepted-local-publication-pending", result["next_controller_transition"])
+
+    def test_matrix_revalidation_after_canonical_tcs_routes_to_tc_review(self) -> None:
+        helper = self.load_helper()
+        repo_root, ft_root, summary, receipt, dispatch, review, independence = self.make_fixture(
+            review_mode="matrix_review",
+            matrix_revalidation=True,
+        )
+
+        result = helper.build_finalization_packet(
+            repo_root=repo_root,
+            ft_package_root=ft_root,
+            summary_path=summary,
+            scope_ids=["01"],
+            review_mode="matrix_review",
+            launch_receipt=receipt,
+            dispatch_receipt=dispatch,
+            review_artifact=review,
+            independence_artifact=independence,
+        )
+
+        self.assertTrue(result["allowed"], result["blocking_reasons"])
+        self.assertEqual("matrix-revalidation-after-canonical-tcs", result["recovery_context"])
+        self.assertEqual("tc-review required", result["next_controller_transition"])
 
     def test_blocks_when_reviewer_changed_controller_workflow(self) -> None:
         helper = self.load_helper()

@@ -220,8 +220,9 @@ The validator permits this recovery only while the controller gate proves the
 matrix mismatch. Do not rewrite, delete or relabel canonical TCs in this stage.
 After the new matrix verdict is accepted and finalized, set
 `matrix_review_status: matrix-accepted` and route the preserved canonical suite
-to independent `tc_review`; do not start another writer pass merely to traverse
-the route.
+to independent `tc_review`; the finalization packet must state
+`next_controller_transition: tc-review required`. Do not start another writer
+pass merely to traverse the route.
 
 Create the separate reviewer task with a parking prompt: until it receives the
 controller dispatch message, it must not read review inputs or create artifacts.
@@ -236,6 +237,13 @@ the receipt or create another reviewer task in the same scope-stage. Record one
 controller stage. The reviewer records the dispatch receipt in
 `review-independence.md`; it does not manually provide a task ID. This
 controller-owned receipt is required by `practical_review_finalization_guard.py`.
+
+After dispatch, the controller keeps the macro-stage open and waits for the
+separate reviewer through bounded `wait_threads` calls (at most 60 seconds per
+call). When the reviewer completes, the controller runs the finalization guard,
+performs its one deterministic state/summary update, and only then reports the
+stage result or starts the next permitted transition. It must not return a
+terminal stage response while a dispatched reviewer is still active.
 
 Blocked check-only, launch or dispatch attempts are diagnostics, not durable
 handoff artifacts: do not persist a blocked `review-launch-preflight*.json`,

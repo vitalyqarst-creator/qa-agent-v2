@@ -120,6 +120,7 @@ class PracticalPostFinalizationGateValidatorTests(unittest.TestCase):
                     "stage_status": "ready-for-review",
                     "next_skill": "ft-test-case-reviewer",
                     "review_mode": "matrix_review",
+                    "writer_mode": "practical_v0_8_matrix",
                     "matrix_review_status": "invalidated",
                     "matrix_revalidation_reason": "reviewed-matrix-hash-mismatch",
                     "current_round": 2,

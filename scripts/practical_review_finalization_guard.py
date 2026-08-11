@@ -165,7 +165,62 @@ def review_submission_issues(
     return issues
 
 
-def next_controller_transition(review_mode: str, verdict: str) -> str:
+def is_hash_proven_matrix_revalidation(
+    descriptors: list[review_preflight.ScopeDescriptor],
+    *,
+    ft_package_root: Path,
+    review_mode: str,
+) -> bool:
+    """Return whether this matrix review revalidates a preserved TC suite."""
+
+    if review_mode != "matrix_review" or not descriptors:
+        return False
+    for descriptor in descriptors:
+        try:
+            state = review_preflight.artifact_validator.parse_workflow_state(descriptor.workflow_path)
+        except (OSError, UnicodeDecodeError, ValueError):
+            return False
+        try:
+            current_round = int(state.get("current_round") or 0)
+        except (TypeError, ValueError):
+            return False
+        canonical_exists = False
+        for candidate in descriptor.canonical_test_case_paths:
+            candidate_path = Path(candidate)
+            resolved_candidate = (
+                candidate_path.resolve()
+                if candidate_path.is_absolute()
+                else (ft_package_root / candidate_path).resolve()
+            )
+            if resolved_candidate.is_file() and is_within(resolved_candidate, ft_package_root):
+                canonical_exists = True
+                break
+        if not (
+            canonical_exists
+            and str(state.get("matrix_review_status") or "") == "invalidated"
+            and str(state.get("matrix_revalidation_reason") or "")
+            == "reviewed-matrix-hash-mismatch"
+            and str(state.get("stage_status") or "") == "ready-for-review"
+            and str(state.get("next_skill") or "") == "ft-test-case-reviewer"
+            and str(state.get("review_mode") or "") == "matrix_review"
+            and current_round == 2
+        ):
+            return False
+    return True
+
+
+def next_controller_transition(
+    review_mode: str,
+    verdict: str,
+    *,
+    matrix_revalidation_after_canonical_tcs: bool = False,
+) -> str:
+    if (
+        matrix_revalidation_after_canonical_tcs
+        and review_mode == "matrix_review"
+        and verdict == "matrix-accepted"
+    ):
+        return "tc-review required"
     transitions = {
         ("matrix_review", "matrix-accepted"): "writer allowed",
         ("matrix_review", "matrix-changes-required"): "writer matrix-repair required",
@@ -244,6 +299,11 @@ def build_finalization_packet(
 
     descriptors, descriptor_issues = review_preflight.scope_descriptors(ft_package_root, scope_ids)
     blockers.extend(descriptor_issues)
+    matrix_revalidation_after_canonical_tcs = is_hash_proven_matrix_revalidation(
+        descriptors,
+        ft_package_root=ft_package_root,
+        review_mode=review_mode,
+    )
     review_subjects: dict[str, dict[str, str]] = {}
     if not descriptor_issues:
         review_subjects, review_subject_issues = review_preflight.verify_review_subject_artifacts(
@@ -406,7 +466,16 @@ def build_finalization_packet(
         "reviewer_execution_surface": reviewer_surface,
         "controller_task_or_session": controller_task,
         "controller_execution_surface": controller_surface,
-        "next_controller_transition": next_controller_transition(review_mode, verdict),
+        "recovery_context": (
+            "matrix-revalidation-after-canonical-tcs"
+            if matrix_revalidation_after_canonical_tcs
+            else "not-applicable"
+        ),
+        "next_controller_transition": next_controller_transition(
+            review_mode,
+            verdict,
+            matrix_revalidation_after_canonical_tcs=matrix_revalidation_after_canonical_tcs,
+        ),
         "checks": [asdict(check) for check in checks],
         "blocking_reasons": blockers,
     }
