@@ -38,6 +38,8 @@ class PracticalControllerPostFinalizationGateTests(unittest.TestCase):
         practical = ft_root / "work" / "practical" / "sample"
         handoff.mkdir(parents=True)
         practical.mkdir(parents=True)
+        matrix = practical / "test-design-matrix.md"
+        matrix.write_text("# Matrix\n", encoding="utf-8")
         parity = handoff / "source-parity-check.md"
         parity.write_text("# Source parity\n\nOpen gaps/questions: `GAP-001`\n", encoding="utf-8")
         repair = handoff / "matrix-repair-summary.md"
@@ -55,6 +57,7 @@ class PracticalControllerPostFinalizationGateTests(unittest.TestCase):
                     "latest_artifacts:",
                     "  matrix_repair_summary: work/stage-handoffs/01-sample/matrix-repair-summary.md",
                     "  source_parity_check: work/stage-handoffs/01-sample/source-parity-check.md",
+                    "  test_design_matrix: work/practical/sample/test-design-matrix.md",
                     "open_questions: []",
                     "blocking_reasons: []",
                     "",
@@ -68,7 +71,23 @@ class PracticalControllerPostFinalizationGateTests(unittest.TestCase):
         commit = subprocess.check_output(
             ["git", "-C", str(ROOT_DIR), "rev-parse", "HEAD"], text=True, encoding="utf-8"
         ).strip()
-        launch.write_text(json.dumps({"code_commit": commit}), encoding="utf-8")
+        review_subjects = {
+            "01": {
+                "role": "test-design-matrix",
+                "source_path": matrix.resolve().as_posix(),
+                "sha256": sha256(matrix),
+            }
+        }
+        launch.write_text(
+            json.dumps(
+                {
+                    "code_commit": commit,
+                    "review_mode": "matrix_review",
+                    "review_subject_artifacts_by_scope": review_subjects,
+                }
+            ),
+            encoding="utf-8",
+        )
         finalization = practical / "review-finalization.json"
         finalization.write_text(
             json.dumps(
@@ -76,6 +95,8 @@ class PracticalControllerPostFinalizationGateTests(unittest.TestCase):
                     "allowed": True,
                     "scope_ids": ["01"],
                     "launch_receipt": launch.resolve().as_posix(),
+                    "review_mode": "matrix_review",
+                    "review_subject_artifacts_by_scope": review_subjects,
                 }
             ),
             encoding="utf-8",

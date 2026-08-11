@@ -55,6 +55,15 @@ class PracticalReviewPreflightTests(unittest.TestCase):
         ft_root = root / "fts" / "Sample" / "Sample-v1"
         handoff = ft_root / "work" / "stage-handoffs" / "01-sample-scope"
         handoff.mkdir(parents=True)
+        practical = ft_root / "work" / "practical" / "sample-scope"
+        practical.mkdir(parents=True)
+        (practical / "test-design-matrix.md").write_text(
+            "# Матрица тест-дизайна\n\n| Проверка |\n| --- |\n| Переход в раздел |\n",
+            encoding="utf-8",
+        )
+        canonical = ft_root / "test-cases" / "sample-scope.md"
+        canonical.parent.mkdir(parents=True)
+        canonical.write_text("# Тест-кейсы\n", encoding="utf-8")
         (handoff / "workflow-state.yaml").write_text(
             "\n".join(
                 [
@@ -717,7 +726,7 @@ class PracticalReviewPreflightTests(unittest.TestCase):
         try:
             result = self.run_preflight(helper, root, ft_root, summary)
             receipt = ft_root / "work" / "practical" / "sample-scope" / "review-launch-preflight.json"
-            receipt.parent.mkdir(parents=True)
+            receipt.parent.mkdir(parents=True, exist_ok=True)
             receipt.write_text(__import__("json").dumps(result), encoding="utf-8")
             changed = dict(result)
             changed["code_commit"] = "0" * 40
@@ -727,6 +736,25 @@ class PracticalReviewPreflightTests(unittest.TestCase):
 
         self.assertTrue(issues)
         self.assertIn("code_commit", "\n".join(issues))
+
+    def test_reviewer_receipt_verification_blocks_changed_review_subject(self) -> None:
+        helper = self.load_helper()
+        _, root, ft_root, summary = self.make_repository()
+        original_validate = helper.artifact_validator.validate
+        helper.artifact_validator.validate = lambda _: {"findings": []}
+        try:
+            result = self.run_preflight(helper, root, ft_root, summary)
+            receipt = ft_root / "work" / "practical" / "sample-scope" / "review-launch-preflight.json"
+            receipt.parent.mkdir(parents=True, exist_ok=True)
+            receipt.write_text(__import__("json").dumps(result), encoding="utf-8")
+            matrix = receipt.parent / "test-design-matrix.md"
+            matrix.write_text("# Changed matrix\n", encoding="utf-8")
+            current = self.run_preflight(helper, root, ft_root, summary)
+            issues = helper.verify_receipt(receipt, current)
+        finally:
+            helper.artifact_validator.validate = original_validate
+
+        self.assertIn("review_subject_artifacts_by_scope", "\n".join(issues))
 
 
 if __name__ == "__main__":

@@ -244,6 +244,24 @@ def build_finalization_packet(
 
     descriptors, descriptor_issues = review_preflight.scope_descriptors(ft_package_root, scope_ids)
     blockers.extend(descriptor_issues)
+    review_subjects: dict[str, dict[str, str]] = {}
+    if not descriptor_issues:
+        review_subjects, review_subject_issues = review_preflight.verify_review_subject_artifacts(
+            receipt,
+            descriptors=descriptors,
+            ft_package_root=ft_package_root,
+            review_mode=review_mode,
+        )
+        blockers.extend(review_subject_issues)
+    else:
+        review_subject_issues = ["scope descriptors are unavailable"]
+    checks.append(
+        FinalizationCheck(
+            "review-subject-hash",
+            "pass" if not review_subject_issues else "fail",
+            f"subjects={len(review_subjects)}; issues={len(review_subject_issues)}",
+        )
+    )
     snapshot_targets: dict[str, dict[str, Any]] = {}
     if not descriptor_issues:
         snapshot_targets, snapshot_issues = review_preflight.verify_controller_snapshot(
@@ -378,6 +396,7 @@ def build_finalization_packet(
         "dispatch_receipt": resolved_dispatch.as_posix() if resolved_dispatch else "",
         "dispatch_receipt_sha256": sha256_file(resolved_dispatch) if resolved_dispatch else "",
         "controller_artifact_snapshot": receipt.get("controller_artifact_snapshot", {}),
+        "review_subject_artifacts_by_scope": review_subjects,
         "review_artifact": resolved_review.as_posix() if resolved_review else "",
         "review_artifact_sha256": sha256_file(resolved_review) if resolved_review else "",
         "independence_artifact": resolved_independence.as_posix() if resolved_independence else "",

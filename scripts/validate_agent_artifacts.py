@@ -8243,7 +8243,181 @@ def validate_practical_post_finalization_gate(
                 ),
             )
         ], [Check("practical-workflow-post-finalization-gate", "fail", "Gate packet is blocked or stale.", display_path)]
+
+    matrix_issue, matrix_evidence = practical_reviewed_matrix_hash_issue(
+        state, path, root, ft_root, packet
+    )
+    if matrix_issue:
+        return [
+            Finding(
+                id="practical-workflow-reviewed-matrix-hash-mismatch",
+                severity="error",
+                category="workflow-state",
+                title="Practical writer transition no longer matches the accepted matrix",
+                details=(
+                    "The controller gate must bind the exact test-design-matrix.md accepted by the independent "
+                    "matrix reviewer. A changed or unbound matrix requires a fresh independent matrix review."
+                ),
+                path=display_path,
+                evidence=matrix_evidence,
+                recommended_action="Restore the accepted matrix or repeat matrix review and controller finalization.",
+            )
+        ], [Check("practical-workflow-post-finalization-gate", "fail", matrix_issue, display_path)]
     return [], [Check("practical-workflow-post-finalization-gate", "pass", "Allowed gate packet matches this writer transition.", display_path)]
+
+
+def practical_reviewed_matrix_hash_issue(
+    state: dict[str, Any],
+    workflow_path: Path,
+    root: Path,
+    ft_root: Path,
+    gate_packet: dict[str, Any],
+) -> tuple[str | None, list[str]]:
+    """Check that a writer still uses the exact matrix accepted by review."""
+
+    latest = state.get("latest_artifacts")
+    latest_values = flatten_string_values(latest)
+    matrix_path = resolving_artifact_by_name(
+        "test-design-matrix.md", latest_values, workflow_path, root, ft_root
+    )
+    if matrix_path is None:
+        return "accepted matrix is not linked from workflow-state", ["test-design-matrix.md=<missing>"]
+    scope_match = re.match(r"^(\d{2})-", workflow_path.parent.name)
+    scope_id = scope_match.group(1) if scope_match else ""
+    subject_map = gate_packet.get("review_subject_artifacts_by_scope")
+    subject = subject_map.get(scope_id) if isinstance(subject_map, dict) else None
+    if not isinstance(subject, dict):
+        return "controller gate does not bind the reviewed matrix", [
+            f"scope_id={scope_id or '<missing>'}",
+            "review_subject_artifacts_by_scope=<missing>",
+        ]
+    expected_path = str(subject.get("source_path") or "")
+    expected_hash = str(subject.get("sha256") or "").casefold()
+    actual_hash = sha256_file(matrix_path).casefold()
+    try:
+        paths_match = Path(expected_path).samefile(matrix_path)
+    except OSError:
+        paths_match = str(Path(expected_path)).replace("\\", "/").casefold() == str(matrix_path).replace("\\", "/").casefold()
+    if (
+        subject.get("role") != "test-design-matrix"
+        or not expected_path
+        or not expected_hash
+        or not paths_match
+        or expected_hash != actual_hash
+    ):
+        return "reviewed matrix path or SHA-256 differs from the controller gate", [
+            f"expected_path={expected_path or '<missing>'}",
+            f"actual_path={rel(matrix_path, root)}",
+            f"expected_sha256={expected_hash or '<missing>'}",
+            f"actual_sha256={actual_hash}",
+        ]
+    return None, []
+
+
+def validate_practical_tc_review_handoff(
+    state: dict[str, Any],
+    path: Path,
+    root: Path,
+) -> tuple[list[Finding], list[Check]]:
+    """Require independent TC review after canonical practical test cases appear."""
+
+    if not is_practical_v08_route(state):
+        return [], []
+    latest = state.get("latest_artifacts")
+    latest_values = flatten_string_values(latest)
+    ft_root = find_ft_root(path, root, state)
+    canonical_path = resolving_artifact_by_name(
+        "canonical_test_cases", latest_values, path, root, ft_root
+    )
+    if canonical_path is None:
+        canonical_path = resolving_artifact_by_name(
+            f"{str(state.get('scope_slug') or '').strip()}.md", latest_values, path, root, ft_root
+        )
+    is_post_matrix_writer = (
+        str(state.get("current_stage") or "") == "ft-test-case-writer"
+        and str(state.get("writer_mode") or "") == "practical_v0_8_tc_after_matrix_accepted"
+        and canonical_path is not None
+    )
+    if not is_post_matrix_writer:
+        return [], []
+
+    display_path = rel(path, root)
+    findings: list[Finding] = []
+    checks: list[Check] = []
+    routing_issues: list[str] = []
+    if state.get("stage_status") != "ready-for-review":
+        routing_issues.append(f"stage_status={state.get('stage_status')!r}")
+    if state.get("next_skill") != "ft-test-case-reviewer":
+        routing_issues.append(f"next_skill={state.get('next_skill')!r}")
+    if state.get("review_mode") != "tc_review":
+        routing_issues.append(f"review_mode={state.get('review_mode')!r}")
+    if routing_issues:
+        findings.append(
+            Finding(
+                id="practical-workflow-canonical-tc-must-route-to-review",
+                severity="error",
+                category="stage-transition",
+                title="Canonical practical test cases must route to independent TC review",
+                details=(
+                    "After writing canonical test cases from an accepted matrix, the next stage is exactly one "
+                    "independent TC review; a writer-to-writer route can silently skip that gate."
+                ),
+                path=display_path,
+                evidence=routing_issues,
+                recommended_action=(
+                    "Set stage_status=ready-for-review, next_skill=ft-test-case-reviewer and review_mode=tc_review; "
+                    "materialize the reviewer prompt before launch."
+                ),
+            )
+        )
+
+    gate_value = latest.get("controller_post_finalization_gate") if isinstance(latest, dict) else None
+    gate_path = (
+        resolve_artifact_path(gate_value, path, root, ft_root)
+        if isinstance(gate_value, str) and gate_value.strip()
+        else None
+    )
+    if gate_path is None or not gate_path.is_file():
+        matrix_issue = "controller post-finalization gate is missing"
+        matrix_evidence = [str(gate_value or "<missing>")]
+    else:
+        try:
+            packet = json.loads(gate_path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+            packet = {}
+            matrix_issue = f"controller post-finalization gate is unreadable: {exc}"
+            matrix_evidence = [rel(gate_path, root)]
+        else:
+            matrix_issue, matrix_evidence = practical_reviewed_matrix_hash_issue(
+                state, path, root, ft_root, packet
+            )
+    if matrix_issue:
+        findings.append(
+            Finding(
+                id="practical-workflow-reviewed-matrix-hash-mismatch",
+                severity="error",
+                category="workflow-state",
+                title="Canonical test cases are not bound to the accepted matrix",
+                details=(
+                    "The matrix changed after independent acceptance or the controller gate lacks its hash binding. "
+                    "TC review cannot make this earlier acceptance current."
+                ),
+                path=display_path,
+                evidence=matrix_evidence,
+                recommended_action="Restore the accepted matrix or perform a fresh independent matrix review before TC review.",
+            )
+        )
+    checks.append(
+        Check(
+            "practical-workflow-canonical-tc-review-handoff",
+            "fail" if findings else "pass",
+            "Canonical test cases route through TC review and retain the accepted matrix hash."
+            if not findings
+            else "Canonical test-case routing or accepted-matrix binding is invalid.",
+            display_path,
+        )
+    )
+    return findings, checks
 
 
 PRACTICAL_HANDOFF_INTERMEDIATE_ENTRY_NAMES = {"chunks", "tmp", "temp", ".tmp", "_artifact-write"}
@@ -26658,6 +26832,11 @@ def validate_workflow_state(
     )
     findings.extend(post_finalization_findings)
     checks.extend(post_finalization_checks)
+    tc_review_handoff_findings, tc_review_handoff_checks = validate_practical_tc_review_handoff(
+        state, path, root
+    )
+    findings.extend(tc_review_handoff_findings)
+    checks.extend(tc_review_handoff_checks)
     intermediate_findings, intermediate_checks = validate_practical_handoff_intermediate_artifacts(state, path, root)
     findings.extend(intermediate_findings)
     checks.extend(intermediate_checks)

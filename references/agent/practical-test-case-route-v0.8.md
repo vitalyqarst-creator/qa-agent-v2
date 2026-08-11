@@ -195,6 +195,14 @@ Before routing that accepted scope to writer, the controller must pass the
 post-finalization gate from the same reference; an old verdict never advances a
 changed commit, stale current-scope validation, or unreconciled closed `GAP-*`.
 
+The receipt also hash-binds the review subject: `test-design-matrix.md` for
+`matrix_review` and canonical test cases for `tc_review`. Do not edit an
+accepted matrix before TC writing. Any edit, including identifier repair,
+requires a fresh independent matrix review and controller finalization. Once
+canonical TCs are created, the only next practical transition is
+`ready-for-review` to `ft-test-case-reviewer` in `tc_review` mode; the validator
+blocks a writer-to-writer route or a stale practical summary.
+
 Create the separate reviewer task with a parking prompt: until it receives the
 controller dispatch message, it must not read review inputs or create artifacts.
 Immediately after `create_thread` returns the new session ID, the controller

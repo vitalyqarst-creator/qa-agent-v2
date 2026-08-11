@@ -74,6 +74,9 @@ class PracticalReviewFinalizationGuardTests(unittest.TestCase):
         summary = ft_root / "work" / "practical-stage-summary.md"
         summary.parent.mkdir(parents=True, exist_ok=True)
         summary.write_text("# Сводка\n", encoding="utf-8")
+        canonical = ft_root / "test-cases" / "sample.md"
+        canonical.parent.mkdir(parents=True)
+        canonical.write_text("# Test cases\n", encoding="utf-8")
         receipt = ft_root / "work" / "practical" / "sample" / "review-launch-preflight.json"
         receipt.parent.mkdir(parents=True)
         snapshot_dir = receipt.parent / "review-launch-preflight.controller-state"
@@ -117,6 +120,13 @@ class PracticalReviewFinalizationGuardTests(unittest.TestCase):
                     "controller_artifact_hashes": {
                         "summary_sha256": sha256(summary),
                         "workflow_state_sha256_by_scope": {"01": sha256(workflow)},
+                    },
+                    "review_subject_artifacts_by_scope": {
+                        "01": {
+                            "role": "canonical-test-cases",
+                            "source_path": canonical.resolve().as_posix(),
+                            "sha256": sha256(canonical),
+                        }
                     },
                     "controller_artifact_snapshot": {
                         "schema_version": 1,
@@ -228,6 +238,27 @@ class PracticalReviewFinalizationGuardTests(unittest.TestCase):
 
         self.assertFalse(result["allowed"])
         self.assertIn("controller workflow-state changed", "\n".join(result["blocking_reasons"]))
+
+    def test_blocks_when_review_subject_changed_after_launch(self) -> None:
+        helper = self.load_helper()
+        repo_root, ft_root, summary, receipt, dispatch, review, independence = self.make_fixture()
+        canonical = ft_root / "test-cases" / "sample.md"
+        canonical.write_text("# Changed test cases\n", encoding="utf-8")
+
+        result = helper.build_finalization_packet(
+            repo_root=repo_root,
+            ft_package_root=ft_root,
+            summary_path=summary,
+            scope_ids=["01"],
+            review_mode="tc_review",
+            launch_receipt=receipt,
+            dispatch_receipt=dispatch,
+            review_artifact=review,
+            independence_artifact=independence,
+        )
+
+        self.assertFalse(result["allowed"])
+        self.assertIn("review subject changed", "\n".join(result["blocking_reasons"]))
 
     def test_accepts_heading_style_verdict(self) -> None:
         helper = self.load_helper()

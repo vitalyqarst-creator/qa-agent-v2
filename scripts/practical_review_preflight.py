@@ -356,6 +356,101 @@ def scope_descriptors(ft_package_root: Path, scope_ids: Iterable[str]) -> tuple[
     return descriptors, issues
 
 
+def review_subject_artifacts(
+    descriptors: Iterable[ScopeDescriptor],
+    *,
+    ft_package_root: Path,
+    review_mode: str,
+) -> tuple[dict[str, dict[str, str]], list[str]]:
+    """Resolve and hash the artifact which the reviewer is asked to assess.
+
+    Controller state and review input have different ownership.  The former is
+    snapshotted for recovery; the latter must remain byte-identical until the
+    verdict is finalized.  Hashing the reviewed matrix or TC baseline prevents
+    a later state update from treating a verdict for older content as current.
+    """
+
+    artifact_key = "test_design_matrix" if review_mode == "matrix_review" else "canonical_test_cases"
+    artifact_role = "test-design-matrix" if review_mode == "matrix_review" else "canonical-test-cases"
+    subjects: dict[str, dict[str, str]] = {}
+    issues: list[str] = []
+    for descriptor in descriptors:
+        try:
+            state = artifact_validator.parse_workflow_state(descriptor.workflow_path)
+        except (OSError, UnicodeDecodeError, ValueError) as exc:
+            issues.append(f"scope {descriptor.scope_id}: cannot resolve review subject: {exc}")
+            continue
+        latest = state.get("latest_artifacts")
+        configured_values: list[str] = []
+        if isinstance(latest, dict):
+            value = latest.get(artifact_key)
+            if isinstance(value, str):
+                configured_values.append(value)
+            elif isinstance(value, list):
+                configured_values.extend(item for item in value if isinstance(item, str))
+        conventional = (
+            ft_package_root / "work" / "practical" / descriptor.scope_slug / "test-design-matrix.md"
+            if review_mode == "matrix_review"
+            else ft_package_root / "test-cases" / f"{descriptor.scope_slug}.md"
+        )
+        candidates: list[Path] = []
+        for value in configured_values:
+            resolved = artifact_validator.resolve_artifact_path(
+                value, descriptor.workflow_path, ft_package_root, ft_package_root
+            )
+            if resolved is not None:
+                candidates.append(resolved)
+        candidates.append(conventional.resolve())
+        subject = next(
+            (candidate for candidate in candidates if candidate.is_file() and is_within(candidate, ft_package_root)),
+            None,
+        )
+        if subject is None:
+            issues.append(
+                f"scope {descriptor.scope_id}: {artifact_role} is missing or outside FT package root"
+            )
+            continue
+        subjects[descriptor.scope_id] = {
+            "role": artifact_role,
+            "source_path": subject.resolve().as_posix(),
+            "sha256": sha256_file(subject),
+        }
+    return subjects, issues
+
+
+def verify_review_subject_artifacts(
+    receipt: dict[str, Any],
+    *,
+    descriptors: Iterable[ScopeDescriptor],
+    ft_package_root: Path,
+    review_mode: str,
+) -> tuple[dict[str, dict[str, str]], list[str]]:
+    """Prove that review input still matches the launch receipt."""
+
+    current, issues = review_subject_artifacts(
+        descriptors, ft_package_root=ft_package_root, review_mode=review_mode
+    )
+    expected = receipt.get("review_subject_artifacts_by_scope")
+    if not isinstance(expected, dict):
+        return current, [*issues, "review launch receipt lacks hash-bound review subject artifacts"]
+    for descriptor in descriptors:
+        expected_item = expected.get(descriptor.scope_id)
+        actual_item = current.get(descriptor.scope_id)
+        if not isinstance(expected_item, dict) or actual_item is None:
+            issues.append(f"scope {descriptor.scope_id}: review subject hash binding is missing")
+            continue
+        expected_path = str(expected_item.get("source_path") or "")
+        expected_hash = str(expected_item.get("sha256") or "").casefold()
+        if (
+            expected_item.get("role") != actual_item["role"]
+            or not expected_path
+            or not paths_equal(expected_path, actual_item["source_path"])
+            or expected_hash != actual_item["sha256"].casefold()
+        ):
+            issues.append(f"scope {descriptor.scope_id}: review subject changed after launch preflight")
+    return current, issues
+
+
 def all_scope_descriptors(ft_package_root: Path) -> list[ScopeDescriptor]:
     """Resolve every numbered scope so unrelated practical findings stay local."""
 
@@ -602,6 +697,19 @@ def build_preflight(
 
     descriptors, descriptor_issues = scope_descriptors(ft_package_root, scope_ids)
     blockers.extend(descriptor_issues)
+    review_subjects, review_subject_issues = review_subject_artifacts(
+        descriptors,
+        ft_package_root=ft_package_root,
+        review_mode=review_mode,
+    )
+    blockers.extend(review_subject_issues)
+    checks.append(
+        PreflightCheck(
+            "review-subject-hash",
+            "pass" if not review_subject_issues else "fail",
+            f"subjects={len(review_subjects)}; issues={len(review_subject_issues)}",
+        )
+    )
     quality_gate_blocked_scope_ids: list[str] = []
     for descriptor in descriptors:
         state = artifact_validator.parse_workflow_state(descriptor.workflow_path)
@@ -715,6 +823,7 @@ def build_preflight(
                 for descriptor in descriptors
             },
         },
+        "review_subject_artifacts_by_scope": review_subjects,
         "code_branch": current_branch,
         "code_commit": current_commit,
         "checks": [asdict(check) for check in checks],
@@ -737,6 +846,7 @@ def verify_receipt(receipt_path: Path, current: dict[str, Any]) -> list[str]:
         "summary_path",
         "summary_sha256",
         "controller_artifact_hashes",
+        "review_subject_artifacts_by_scope",
         "code_branch",
         "code_commit",
     )

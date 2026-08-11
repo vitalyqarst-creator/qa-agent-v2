@@ -117,6 +117,32 @@ def build_post_finalization_gate(
 
     descriptors, descriptor_issues = review_preflight.scope_descriptors(ft_package_root, scope_ids)
     blockers.extend(descriptor_issues)
+    review_mode = str(finalization.get("review_mode") or launch.get("review_mode") or "").strip()
+    review_subjects: dict[str, dict[str, str]] = {}
+    review_subject_issues: list[str] = []
+    if review_mode not in review_preflight.REVIEW_MODES:
+        review_subject_issues.append("review finalization packet has an unsupported review mode")
+    elif not descriptor_issues:
+        review_subjects, review_subject_issues = review_preflight.verify_review_subject_artifacts(
+            launch,
+            descriptors=descriptors,
+            ft_package_root=ft_package_root,
+            review_mode=review_mode,
+        )
+        if finalization.get("review_subject_artifacts_by_scope") != launch.get(
+            "review_subject_artifacts_by_scope"
+        ):
+            review_subject_issues.append(
+                "review finalization packet does not preserve launch review-subject hashes"
+            )
+    blockers.extend(review_subject_issues)
+    checks.append(
+        {
+            "id": "review-subject-hash",
+            "status": "pass" if not review_subject_issues else "fail",
+            "details": f"subjects={len(review_subjects)}; issues={len(review_subject_issues)}",
+        }
+    )
     report = review_preflight.artifact_validator.validate(ft_package_root)
     partition = review_preflight.partition_validator_errors(
         report.get("findings", []), descriptors, ft_package_root, summary_path
@@ -188,6 +214,7 @@ def build_post_finalization_gate(
         "launch_receipt_sha256": sha256_file(launch_receipt) if launch_receipt.is_file() else "",
         "review_finalization": finalization_packet.resolve().as_posix(),
         "review_finalization_sha256": sha256_file(finalization_packet) if finalization_packet.is_file() else "",
+        "review_subject_artifacts_by_scope": review_subjects,
         "validator_error_partition": partition,
         "checks": checks,
         "blocking_reasons": blockers,
