@@ -99,15 +99,29 @@ REQUIRED_WORKFLOW_FIELDS = {
     "open_questions",
     "blocking_reasons",
 }
-REQUIRED_SOURCE_SELECTION_SECTIONS = {
-    "Context",
-    "Main FT Documents",
-    "Machine-Readable XHTML Source",
-    "Structural Cross-Check PDF",
-    "Support Files And Mockups",
-    "Source Quality",
-    "Ambiguity And Decision Log",
-    "Handoff",
+SOURCE_SELECTION_SECTION_ALIASES = {
+    "context": ("Контекст", "Context"),
+    "main_ft_documents": ("Основные документы ФТ", "Main FT Documents"),
+    "xhtml_source": ("Машиночитаемый источник XHTML", "Machine-Readable XHTML Source"),
+    "pdf_cross_check": ("PDF для структурной и визуальной сверки", "Structural Cross-Check PDF"),
+    "support_and_mockups": ("Вспомогательные файлы и макеты", "Support Files And Mockups"),
+    "source_quality": ("Качество источников", "Source Quality"),
+    "ambiguity_and_decision_log": ("Неоднозначности и журнал решений", "Ambiguity And Decision Log"),
+    "handoff": ("Передача следующему этапу", "Handoff"),
+}
+SOURCE_SELECTION_FIELD_ALIASES = {
+    "краткое описание запроса": "request_summary",
+    "выбранный ft slug": "selected_ft_slug",
+    "статус выбора": "selection_status",
+    "ветка кода": "code_branch",
+    "коммит кода": "code_commit",
+    "выбранный xhtml фт": "main_ft_xhtml",
+    "xhtml доступен": "xhtml_available",
+    "путь к xhtml": "xhtml_path",
+    "соответствует основному фт": "xhtml_matches_main_ft",
+    "роль xhtml": "xhtml_role",
+    "xhtml обязателен для следующих этапов": "xhtml_required_for_downstream",
+    "причина блокировки": "blocking_reason",
 }
 REQUIRED_SOURCE_SELECTION_CONTEXT_FIELDS = {
     "selected_ft_slug",
@@ -6150,6 +6164,33 @@ def parse_bullet_context_fields(section: str) -> dict[str, str]:
     return fields
 
 
+def extract_source_selection_section(content: str, key: str) -> str | None:
+    """Read a source-selection section with Russian current labels and legacy aliases."""
+
+    for heading in SOURCE_SELECTION_SECTION_ALIASES[key]:
+        section = extract_markdown_section(content, heading)
+        if section is not None:
+            return section
+    return None
+
+
+def parse_source_selection_fields(section: str) -> dict[str, str]:
+    """Keep stable machine keys while requiring Russian visible source-selection labels."""
+
+    fields: dict[str, str] = {}
+    for line in section.splitlines():
+        match = re.match(r"^\s*(?:[-*]\s*)?([^:|\n]+):\s*(.*?)\s*$", line)
+        if not match:
+            continue
+        visible_name = re.sub(r"\s+", " ", match.group(1).strip().casefold())
+        key = SOURCE_SELECTION_FIELD_ALIASES.get(
+            visible_name,
+            normalize_markdown_field_name(match.group(1)),
+        )
+        fields[key] = normalize_markdown_field_value(match.group(2))
+    return fields
+
+
 def source_selection_routes_downstream(state: dict[str, Any]) -> bool:
     return (
         state.get("stage_status") in {"ready-for-next-stage", "ready-for-review", "ready-for-writer-revision"}
@@ -6176,7 +6217,7 @@ def source_selection_handoff_artifact_references(content: str) -> list[str]:
     commands are not treated as artifacts.
     """
 
-    handoff = extract_markdown_section(content, "Handoff") or ""
+    handoff = extract_source_selection_section(content, "handoff") or ""
     references: list[str] = []
     for raw_value in re.findall(r"`([^`]+)`", handoff):
         value = strip_quotes(raw_value.strip())
@@ -6215,7 +6256,7 @@ def linked_source_selection_xhtml_paths(
             content = source_selection_path.read_text(encoding="utf-8")
         except UnicodeDecodeError:
             continue
-        xhtml_section = extract_markdown_section(content, "Machine-Readable XHTML Source") or ""
+        xhtml_section = extract_source_selection_section(content, "xhtml_source") or ""
         for raw_value in re.findall(r"`([^`]+\.xhtml)`", xhtml_section, flags=re.IGNORECASE):
             resolved = resolve_artifact_path(raw_value, workflow_path, root, ft_root)
             if resolved is not None:
@@ -6331,6 +6372,49 @@ def validate_scope_options_source_allocation(
             )
         )
 
+    candidate_scope_slugs = {
+        match.group(1).strip()
+        for match in re.finditer(
+            r"(?im)^\*\*Scope Slug:\*\*\s*`([^`]+)`\s*$",
+            content,
+        )
+    }
+    missing_cross_scope_targets: list[str] = []
+    for row in markdown_table_rows_from_text(allocation):
+        row_text = " | ".join(row)
+        if "cross-scope" not in row_text.casefold():
+            continue
+        listed_scopes = [
+            scope_slug
+            for scope_slug in candidate_scope_slugs
+            if re.search(rf"(?<![A-Za-z0-9_.-]){re.escape(scope_slug)}(?![A-Za-z0-9_.-])", row_text)
+        ]
+        if len(listed_scopes) < 2:
+            codes = [
+                normalize_formal_source_requirement_code(match)
+                for match in FORMAL_SOURCE_REQUIREMENT_CODE_RE.finditer(row_text)
+            ]
+            missing_cross_scope_targets.extend(codes or [row_text[:120]])
+    if missing_cross_scope_targets:
+        findings.append(
+            Finding(
+                id="scope-options-cross-scope-targets-missing",
+                severity="error",
+                category="scope-boundary",
+                title="Cross-scope правило не перечисляет все затронутые области",
+                details=(
+                    "Одного владельца test design недостаточно: следующий scope analyzer должен видеть, "
+                    "какие ещё области обязаны применить общее правило."
+                ),
+                path=display_path,
+                evidence=list(dict.fromkeys(missing_cross_scope_targets))[:20],
+                recommended_action=(
+                    "В каждой строке с `cross-scope` явно укажите владельца и не менее одной другой "
+                    "затронутой `scope_slug`."
+                ),
+            )
+        )
+
     has_errors = bool(findings)
     checks.append(
         Check(
@@ -6371,10 +6455,41 @@ def validate_source_selection_artifact(
         checks.append(Check("source-selection-readable", "fail", "File is not UTF-8.", display_path))
         return findings, checks
 
+    if is_practical_v08_route(state):
+        language_evidence = practical_handoff_english_evidence(content)
+        if language_evidence:
+            findings.append(
+                Finding(
+                    id="source-selection-non-russian-visible-text",
+                    severity="error",
+                    category="source-selection",
+                    title="Выбор источников содержит английские пользовательские подписи",
+                    details=(
+                        "Source-selection handoff — пользовательский артефакт practical route. Его заголовки, "
+                        "подписи таблиц и пояснения должны быть на русском; идентификаторы и значения "
+                        "технических перечислений допускаются без перевода."
+                    ),
+                    path=display_path,
+                    evidence=language_evidence[:20],
+                    recommended_action=(
+                        "Перепишите видимые заголовки, подписи и пояснения по "
+                        "references/agent/source-selection-format.md."
+                    ),
+                )
+            )
+        checks.append(
+            Check(
+                "source-selection-russian-visible-text",
+                "fail" if language_evidence else "pass",
+                "English visible prose found." if language_evidence else "Visible prose is Russian.",
+                display_path,
+            )
+        )
+
     missing_sections = [
-        section
-        for section in sorted(REQUIRED_SOURCE_SELECTION_SECTIONS)
-        if extract_markdown_section(content, section) is None
+        SOURCE_SELECTION_SECTION_ALIASES[key][0]
+        for key in SOURCE_SELECTION_SECTION_ALIASES
+        if extract_source_selection_section(content, key) is None
     ]
     if missing_sections:
         findings.append(
@@ -6396,10 +6511,10 @@ def validate_source_selection_artifact(
     else:
         checks.append(Check("source-selection-required-sections", "pass", "Required sections are present.", display_path))
 
-    context_section = extract_markdown_section(content, "Context") or ""
-    context_fields = parse_bullet_context_fields(context_section)
-    xhtml_section = extract_markdown_section(content, "Machine-Readable XHTML Source")
-    xhtml_fields = parse_bullet_context_fields(xhtml_section or "")
+    context_section = extract_source_selection_section(content, "context") or ""
+    context_fields = parse_source_selection_fields(context_section)
+    xhtml_section = extract_source_selection_section(content, "xhtml_source")
+    xhtml_fields = parse_source_selection_fields(xhtml_section or "")
     xhtml_available = normalize_markdown_field_value(xhtml_fields.get("xhtml_available", "")).lower()
     xhtml_missing_or_unconfirmed = xhtml_available != "yes"
 
@@ -6412,8 +6527,11 @@ def validate_source_selection_artifact(
                 title="source-selection.md misses mandatory XHTML source section",
                 details="Main FT XHTML availability must be recorded before scope, writer, reviewer or iteration routing.",
                 path=display_path,
-                evidence=["Machine-Readable XHTML Source"],
-                recommended_action="Add `Machine-Readable XHTML Source` with `xhtml_available: yes | no`.",
+                evidence=[SOURCE_SELECTION_SECTION_ALIASES["xhtml_source"][0]],
+                recommended_action=(
+                    "Добавьте раздел `Машиночитаемый источник XHTML` с полем "
+                    "`XHTML доступен: yes | no`."
+                ),
             )
         )
         checks.append(Check("source-selection-xhtml-section", "fail", "Mandatory XHTML source section is missing.", display_path))

@@ -1,4 +1,4 @@
-# Source Selection Format
+# Формат выбора источников
 
 Этот reference задает канонический формат `source-selection.md`: артефакта, который фиксирует выбранный FT-пакет, основной DOCX ФТ, обязательный XHTML для machine-readable extraction, PDF для structural/visual cross-check и связанные материалы перед `ft-scope-analyzer`.
 
@@ -11,26 +11,6 @@
 - зафиксировать `main-ft-xhtml` как mandatory primary machine-readable extraction source;
 - зафиксировать source quality limitations до downstream writer/reviewer loop;
 - предотвратить работу по неоднозначному, неподтвержденному или не имеющему XHTML источнику.
-
-## Source Hierarchy
-
-1. Main FT DOCX - authoritative source of truth.
-2. Main FT XHTML - mandatory primary machine-readable extraction source.
-3. Main FT PDF - structural/visual cross-check only.
-4. Support files - clarification within confirmed scope only.
-5. Local mockups and Figma design nodes - UI/visual hints only, not source of business rules.
-6. AGENT-NOTES - package context only.
-7. Existing test cases / previous work artifacts - historical context only when explicitly allowed, not requirement source.
-
-DOCX остается главным исходным документом ФТ / source of truth. XHTML обязателен как основной машиночитаемый источник извлечения требований: таблицы, строки таблиц, списки, вложенные списки, перечни значений и структура разделов извлекаются из XHTML первыми. PDF используется для structural/visual cross-check и не заменяет ни DOCX, ни XHTML.
-
-## Исполнение чтения источников
-
-В practical route DOCX читай через `python-docx`, извлечение выполняй из XHTML,
-а visual cross-check — по PDF. Не запускай LibreOffice / skill `documents`.
-Исключение: пользователь явно запросил создание, редактирование или рендер DOCX,
-либо это единственный документированный source blocker; причину фиксируй только
-в work/debug/session artifact.
 
 ## Расположение
 
@@ -58,19 +38,19 @@ fts/<ft-slug>/work/stage-handoffs/00-<container-slug>/source-selection.md
 - Если source-locator создал scope-stage artifacts, это считается нарушением границы skill-а, а не допустимым ускорением workflow.
 - Если FT-пакет содержит root-level handoff artifacts (`source-selection.md`, `scope-options.md`, `scope-selection-prompts.md`, `workflow-state.yaml`, session logs), validator должен вернуть `ft-package-root-level-handoff-artifacts`.
 
-Additional validator content checks:
+Дополнительные проверки validator:
 
-- `source-selection.md` must include all required sections: `Context`, `Main FT Documents`, `Machine-Readable XHTML Source`, `Structural Cross-Check PDF`, `Support Files And Mockups`, `Source Quality`, `Ambiguity And Decision Log`, `Handoff`.
-- `Context` must include `selected_ft_slug` and `selection_status`; display labels such as `Selected FT slug` and `Selection status` are allowed because they normalize to the same field names.
-- `selection_status` must be one of `selected`, `ambiguous`, `blocked-input`.
-- If `selection_status` is not `selected`, workflow must remain blocked and must not route to `ft-scope-analyzer`, writer, iteration, or reviewer.
-- `Machine-Readable XHTML Source` must include `xhtml_available: yes | no`.
-- If the matching main FT XHTML is missing, source selection must use `selection_status: blocked-input`, set `xhtml_available: no`, and must not route to `ft-scope-analyzer`, writer, iteration or reviewer.
-- XHTML availability and downstream routing are validator-enforced for linked `source-selection.md` / `workflow-state.yaml` artifacts.
+- `source-selection.md` содержит все обязательные разделы: `Контекст`, `Основные документы ФТ`, `Машиночитаемый источник XHTML`, `PDF для структурной и визуальной сверки`, `Вспомогательные файлы и макеты`, `Качество источников`, `Неоднозначности и журнал решений`, `Передача следующему этапу`.
+- `Контекст` содержит `Выбранный FT slug` и `Статус выбора`; validator нормализует их к машинным ключам `selected_ft_slug` и `selection_status`.
+- `selection_status` имеет одно из значений `selected`, `ambiguous`, `blocked-input`.
+- Если `selection_status` не `selected`, workflow остаётся заблокированным и не маршрутизируется к `ft-scope-analyzer`, writer, iteration или reviewer.
+- `Машиночитаемый источник XHTML` содержит `XHTML доступен: yes | no`.
+- При отсутствии matching main FT XHTML source selection устанавливает `Статус выбора: blocked-input`, `XHTML доступен: no` и не маршрутизируется к downstream skill.
+- Для practical route v0.8 видимые заголовки, столбцы и пояснения source-selection артефакта должны быть на русском; технические идентификаторы и значения перечислений могут оставаться без перевода.
 
 ## Required Sections
 
-### Context
+### Контекст
 
 Минимальные поля:
 
@@ -94,96 +74,19 @@ Additional validator content checks:
 
 `rg --files`, `git ls-files`, `git status` и `.gitignore` не доказывают отсутствие FT input: локальные материалы могут быть ignored by Git. Перед `blocked-input` проверь точный путь и родительский каталог через файловую систему; при расхождении сначала устрани его, не публикуя предварительный blocker.
 
-### Main FT Documents
+### Состав выбора
 
-Перечисли все документы, которые считаются основным ФТ.
+Заполни минимальный шаблон ниже. DOCX — источник требований, matching XHTML —
+обязательный источник извлечения, PDF — только сверка. Зарегистрируй support,
+макеты, Figma и package notes без вывода из них бизнес-правил. До подтверждения
+scope support и макеты — кандидаты; обязательны только package notes. Укажи
+читаемость и все строгие предупреждения. Если matching XHTML отсутствует,
+установи `Статус выбора: blocked-input` и не передавай работу дальше.
+В practical route читай DOCX через `python-docx`, извлекай XHTML, PDF используй
+только для сверки и не запускай LibreOffice. ФТ остаётся источником поведения.
+Не сохраняй Figma token, cookie, одноразовый URL или персональный доступ.
 
-Для каждого документа фиксируй:
-
-- `path`;
-- `role`: `main-ft-docx | main-ft-xhtml | main-ft-pdf | main-ft-other`;
-- `selection_reason`;
-- `version_or_date`, если доступны;
-- `source_quality_notes`, если есть parseability, section-id или oversized-block risks.
-
-Основной `.docx` должен быть отделен от XHTML и PDF-версии. `main-ft-docx` является source of truth. `main-ft-xhtml` обязателен для extraction. `main-ft-pdf` используется только как structural/visual cross-check.
-
-### Machine-Readable XHTML Source
-
-For every main FT document, a matching XHTML representation must exist in `source/`.
-
-Фиксируй:
-
-- `main_ft_xhtml`;
-- `xhtml_available`: `yes | no`;
-- `xhtml_path`;
-- `xhtml_matches_main_ft`: `yes | no | not-checked`;
-- `xhtml_role`: `mandatory_machine_readable_extraction_source`;
-- `xhtml_required_for_downstream`: `yes`;
-- `blocking_reason`, если XHTML отсутствует.
-
-XHTML требуется для downstream source extraction, потому что лучше сохраняет machine-readable tables, rows, lists and nested structures, чем DOCX/PDF parsing. Если XHTML отсутствует, укажи `selection_status: blocked-input`, `xhtml_available: no`, `blocking_reason: missing main-ft-xhtml`, попроси добавить XHTML-версию основного ФТ в `source/` и не создавай downstream handoff как будто источник выбран корректно.
-
-### Structural Cross-Check PDF
-
-Фиксируй:
-
-- `pdf_available`: `yes | no`;
-- `pdf_path`, если найден;
-- `pdf_matches_main_ft`: `yes | no | not-checked`;
-- `limitation`, если PDF отсутствует или не совпадает с main FT.
-
-Если PDF отсутствует, это не всегда blocker, но limitation должен быть передан в `scope-coverage-gaps.md` или downstream notes, когда structural boundaries ненадежны.
-
-PDF не является machine-readable substitute for XHTML.
-
-### Support Files And Mockups
-
-Раздели:
-
-- support files;
-- mockups;
-- package notes;
-- UI notes, если уже известны.
-
-Для каждого файла укажи:
-
-- `path`;
-- `role`;
-- `why_relevant`;
-- `must_use_downstream`: `yes | no`;
-- `limitations`.
-
-`must_use_downstream: yes` означает обязательную загрузку для уже подтвержденного scope или для всех scope-ов пакета. До выбора scope support/mockups по умолчанию получают `no`: они зарегистрированы как кандидаты, а релевантность определяет `ft-scope-analyzer`. Package notes остаются обязательными.
-
-Support/mockups не должны расширять FT scope без явного подтверждения. Mockups не задают business rules, requiredness, validation, allowed values или expected results.
-
-#### Figma Design References
-
-Если пользователь предоставил Figma link или в FT-пакете есть
-`support/figma/figma-design-index.md`, зарегистрируй его как дополнительный
-визуальный источник. В index нужны `FIGMA-*`, `design_url`, `node_id`, scope,
-`visual_usage: optional_visual_reference`, access status, snapshot и дата
-проверки. Открытый узел уточняет только видимые labels и interaction hints в
-`mockup-visual-inventory.md`; ФТ остаётся источником поведения. Недоступный
-optional Figma не блокирует маршрут. Не сохраняй Figma token, cookie,
-одноразовый URL или персональный доступ.
-
-### Source Quality
-
-Фиксируй результаты первичной проверки источников:
-
-- активные source documents для validator;
-- parseability status;
-- section-id confidence;
-- oversized blocks или chunking limitations;
-- strict source-quality warnings, если они уже известны.
-
-Office lock-файлы `~$*` не являются source-кандидатами, не проходят active-source validation и не блокируют handoff; удалять их из пользовательского input не требуется.
-
-Если есть strict warnings, не скрывай их. Либо документируй limitation, либо останавливай downstream работу через `blocked-input`, если section matching становится ненадежным.
-
-### Ambiguity And Decision Log
+### Неоднозначности и журнал решений
 
 Если выбор неоднозначен, перечисли candidate FT packages / files и причину:
 
@@ -196,7 +99,7 @@ Office lock-файлы `~$*` не являются source-кандидатами
 
 Не выбирай источник по догадке. Для `selection_status: ambiguous` `workflow-state.yaml` должен использовать `stage_status: blocked-input` или другой явно неготовый статус.
 
-### Handoff
+### Передача следующему этапу
 
 Handoff к `ft-scope-analyzer` разрешен только при `selection_status: selected` и `xhtml_available: yes`:
 
@@ -247,71 +150,71 @@ Validator-enforced XHTML findings:
 - `workflow-state-source-selection-missing-required-xhtml`: `selection_status = selected`, but `xhtml_available != yes`.
 - `workflow-state-source-selection-xhtml-missing-routes-downstream`: workflow routes to scope/writer/reviewer/iteration while XHTML is missing.
 
-## Minimal Template
+## Минимальный шаблон
 
 ```md
-# Source Selection
+# Выбор источников
 
-## Context
+## Контекст
 
-- Request summary:
-- Selected FT slug:
-- Selection status: `selected | ambiguous | blocked-input`
-- Code branch:
-- Code commit:
-- Created at:
-- Created by:
+- Краткое описание запроса:
+- Выбранный FT slug:
+- Статус выбора: `selected | ambiguous | blocked-input`
+- Ветка кода:
+- Коммит кода:
+- Создано:
+- Создано кем:
 
-## Main FT Documents
+## Основные документы ФТ
 
-| path | role | selection_reason | version_or_date | source_quality_notes |
+| Путь | Роль | Причина выбора | Версия или дата | Примечания о качестве источника |
 | --- | --- | --- | --- | --- |
 
-## Machine-Readable XHTML Source
+## Машиночитаемый источник XHTML
 
-- main_ft_xhtml:
-- xhtml_available: `yes | no`
-- xhtml_path:
-- xhtml_matches_main_ft: `yes | no | not-checked`
-- xhtml_role: `mandatory_machine_readable_extraction_source`
-- xhtml_required_for_downstream: `yes`
-- blocking_reason:
+- Выбранный XHTML ФТ:
+- XHTML доступен: `yes | no`
+- Путь к XHTML:
+- Соответствует основному ФТ: `yes | no | not-checked`
+- Роль XHTML: `mandatory_machine_readable_extraction_source`
+- XHTML обязателен для следующих этапов: `yes`
+- Причина блокировки:
 
-## Structural Cross-Check PDF
+## PDF для структурной и визуальной сверки
 
-- pdf_available: `yes | no`
-- pdf_path:
-- pdf_matches_main_ft: `yes | no | not-checked`
-- limitation:
+- PDF доступен: `yes | no`
+- Путь к PDF:
+- PDF соответствует основному ФТ: `yes | no | not-checked`
+- Ограничение:
 
-## Support Files And Mockups
+## Вспомогательные файлы и макеты
 
-| path | role | why_relevant | must_use_downstream | limitations |
+| Путь | Роль | Причина релевантности | Обязателен на следующих этапах | Ограничения |
 | --- | --- | --- | --- | --- |
 
 ### Ссылки на Figma-дизайн (необязательно)
 
-| figma_id | design_url | node_id | relevant_scopes | visual_usage | access_status | snapshot_path | last_checked_at | limitations |
+| Идентификатор Figma | Ссылка на дизайн | Идентификатор узла | Релевантные scope | Визуальное назначение | Статус доступа | Путь к снимку | Дата проверки | Ограничения |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `FIGMA-001` | `<https://www.figma.com/design/...>` | `<node-id or ->` | `<scope slug or package-wide>` | `optional_visual_reference` | `not_checked` | `->` | `<ISO date or ->` | `not a requirement source` |
+| `FIGMA-001` | `<https://www.figma.com/design/...>` | `<node-id or ->` | `<scope slug or package-wide>` | `optional_visual_reference` | `not_checked` | `->` | `<ISO date or ->` | не является источником требований |
 
-## Source Quality
+## Качество источников
 
-- active source documents:
-- parseability:
-- section-id confidence:
-- oversized blocks:
-- strict warnings:
+- Активные исходные документы:
+- Читаемость:
+- Уверенность в идентификаторах разделов:
+- Крупные блоки:
+- Строгие предупреждения:
 
-## Ambiguity And Decision Log
+## Неоднозначности и журнал решений
 
-| candidate | issue | required_decision |
+| Кандидат | Проблема | Требуемое решение |
 | --- | --- | --- |
 
-## Handoff
+## Передача следующему этапу
 
-- next_skill:
-- required_inputs:
-- latest_artifacts:
-- blocked_reasons:
+- Следующий навык:
+- Обязательные входы:
+- Последние артефакты:
+- Причины блокировки:
 ```

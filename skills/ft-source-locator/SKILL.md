@@ -47,7 +47,7 @@ description: Находит нужный FT-пакет, основное ФТ, s
 7. Проверь `AGENT-NOTES.md` в выбранном input root и в package root `fts/<ft-slug>/`; найденные notes передай как обязательный package-specific context.
 8. Найди предоставленные Figma links и `support/figma/figma-design-index.md`, если он есть. Зарегистрируй их как необязательные визуальные источники в `source-selection.md`; не открывай scope и не выводи требования из Figma на этой стадии.
 9. Если PDF-версия не найдена, явно зафиксируй отсутствие PDF для сверки структуры, а не игнорируй это молча.
-10. Если XHTML отсутствует, создай `source-selection.md` с секцией `Machine-Readable XHTML Source`, укажи `selection_status: blocked-input`, `xhtml_available: no`, `blocking_reason: missing main-ft-xhtml`, попроси добавить XHTML-версию основного ФТ в `source/` и не передавай задачу в `ft-scope-analyzer`.
+10. Если XHTML отсутствует, создай `source-selection.md` с секцией `Машиночитаемый источник XHTML`, укажи `Статус выбора: blocked-input`, `XHTML доступен: no`, `Причина блокировки: missing main-ft-xhtml`, попроси добавить XHTML-версию основного ФТ в `source/` и не передавай задачу в `ft-scope-analyzer`.
 11. Если выбор неоднозначен, сформулируй короткий список вариантов и чего именно не хватает для уверенного выбора.
 12. Для новых handoff-папок используй numbered naming из `references/agent/stage-handoff-model.md`: `00-<container-slug>/` для предварительного контейнера выбора scope-ов и `NN-<scope-slug>/` для подтвержденного scope-level handoff. Логический `scope_slug` оставляй без числового префикса.
 13. Сохрани `source-selection.md` и обнови `workflow-state.yaml` как handoff к `ft-scope-analyzer` только если `xhtml_available: yes`.

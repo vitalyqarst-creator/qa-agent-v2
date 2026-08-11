@@ -30,26 +30,26 @@ class PracticalHandoffQualityTests(unittest.TestCase):
     @staticmethod
     def source_selection_content(*, include_provenance: bool) -> str:
         provenance = (
-            "- Code branch: `codex/test`\n"
-            "- Code commit: `aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa`\n"
+            "- Ветка кода: `codex/test`\n"
+            "- Коммит кода: `aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa`\n"
             if include_provenance
             else ""
         )
         return (
-            "# Source Selection\n\n"
-            "## Context\n\n"
-            "- Selected FT slug: `Partners-v1`\n"
-            "- Selection status: `selected`\n"
+            "# Выбор источников\n\n"
+            "## Контекст\n\n"
+            "- Выбранный FT slug: `Partners-v1`\n"
+            "- Статус выбора: `selected`\n"
             f"{provenance}"
-            "## Main FT Documents\n\n"
-            "| path | role |\n| --- | --- |\n| `source/main.docx` | `main-ft-docx` |\n\n"
-            "## Machine-Readable XHTML Source\n\n"
-            "- xhtml_available: `yes`\n\n"
-            "## Structural Cross-Check PDF\n\n- pdf_available: `yes`\n\n"
-            "## Support Files And Mockups\n\n- none\n\n"
-            "## Source Quality\n\n- parseability: passed\n\n"
-            "## Ambiguity And Decision Log\n\n- none\n\n"
-            "## Handoff\n\n- next_skill: `ft-scope-analyzer`\n"
+            "## Основные документы ФТ\n\n"
+            "| Путь | Роль |\n| --- | --- |\n| `source/main.docx` | `main-ft-docx` |\n\n"
+            "## Машиночитаемый источник XHTML\n\n"
+            "- XHTML доступен: `yes`\n\n"
+            "## PDF для структурной и визуальной сверки\n\n- PDF доступен: `yes`\n\n"
+            "## Вспомогательные файлы и макеты\n\n- Нет.\n\n"
+            "## Качество источников\n\n- Читаемость: подтверждена.\n\n"
+            "## Неоднозначности и журнал решений\n\n- Нет.\n\n"
+            "## Передача следующему этапу\n\n- Следующий навык: `ft-scope-analyzer`\n"
         )
 
     def test_selected_source_handoff_requires_code_provenance(self) -> None:
@@ -87,8 +87,8 @@ class PracticalHandoffQualityTests(unittest.TestCase):
             source_selection = root / "source-selection.md"
             source_selection.write_text(
                 self.source_selection_content(include_provenance=True).replace(
-                    "- next_skill: `ft-scope-analyzer`\n",
-                    "- next_skill: `ft-scope-analyzer`\n"
+                    "- Следующий навык: `ft-scope-analyzer`\n",
+                    "- Следующий навык: `ft-scope-analyzer`\n"
                     "- latest_artifacts: `source-locator-session-log.md`\n",
                 ),
                 encoding="utf-8",
@@ -111,6 +111,33 @@ class PracticalHandoffQualityTests(unittest.TestCase):
         self.assertNotIn(
             "source-selection-handoff-dangling-artifact-link",
             {finding.id for finding in accepted_findings},
+        )
+
+    def test_practical_source_selection_requires_russian_visible_labels(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source_selection = root / "source-selection.md"
+            source_selection.write_text(
+                self.source_selection_content(include_provenance=True).replace(
+                    "# Выбор источников",
+                    "# Source Selection",
+                ),
+                encoding="utf-8",
+            )
+            workflow = root / "workflow-state.yaml"
+            state = {
+                "route_profile": "practical_v0_8",
+                "stage_status": "ready-for-next-stage",
+                "next_skill": "ft-scope-analyzer",
+            }
+
+            findings, _ = self.validator.validate_source_selection_artifact(
+                source_selection, root, state, workflow
+            )
+
+        self.assertIn(
+            "source-selection-non-russian-visible-text",
+            {finding.id for finding in findings},
         )
 
     def test_scope_options_rejects_unallocated_source_codes(self) -> None:
@@ -150,6 +177,56 @@ class PracticalHandoffQualityTests(unittest.TestCase):
             {finding.id for finding in missing_findings},
         )
         self.assertEqual([], accepted_findings)
+
+    def test_scope_options_rejects_cross_scope_rule_without_affected_scope(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            options = root / "scope-options.md"
+            options.write_text(
+                "\n".join(
+                    [
+                        "# Варианты области",
+                        "",
+                        "## Candidate Scope",
+                        "",
+                        "### SCOPE-OPTION-001",
+                        "**Scope Slug:** `partner-card`",
+                        "",
+                        "### SCOPE-OPTION-002",
+                        "**Scope Slug:** `requisites-card`",
+                        "",
+                        "## Распределение требований ФТ",
+                        "",
+                        "| Якорь ФТ | Владелец | Затрагиваемые области | Обоснование |",
+                        "| --- | --- | --- | --- |",
+                        "| `AS.1` | `partner-card` | — | `cross-scope`: общее правило. |",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            missing_findings, _ = self.validator.validate_scope_options_source_allocation(
+                options, root, {"AS.1"}
+            )
+            options.write_text(
+                options.read_text(encoding="utf-8").replace(
+                    "| `AS.1` | `partner-card` | — |",
+                    "| `AS.1` | `partner-card` | `partner-card`; `requisites-card` |",
+                ),
+                encoding="utf-8",
+            )
+            accepted_findings, _ = self.validator.validate_scope_options_source_allocation(
+                options, root, {"AS.1"}
+            )
+
+        self.assertIn(
+            "scope-options-cross-scope-targets-missing",
+            {finding.id for finding in missing_findings},
+        )
+        self.assertNotIn(
+            "scope-options-cross-scope-targets-missing",
+            {finding.id for finding in accepted_findings},
+        )
 
     def test_source_locator_session_log_requires_provenance_and_validator_receipt(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
