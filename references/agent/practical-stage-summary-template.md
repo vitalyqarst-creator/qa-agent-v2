@@ -27,6 +27,14 @@
 | production_tc_clean | `yes / no / mixed / not-applicable` |
 | git_persistence | `tracked / ignored-by-git / mixed / not-applicable` |
 | reporting_evidence | ``workflow-state.yaml`; `practical-stage-summary.md`; <review receipt / reviewer dispatch / not-created>`` |
+
+Если canonical TC готовы к independent TC review, но сам agent-layer временно
+неисправен, в строке области сохраняй `verdict = matrix-accepted`,
+`next_stage_transition = tc-review blocked`,
+`source_contradiction = not-applicable`,
+`tc_with_status_decision = not-applicable`. Поле `reason` обязано начинаться с
+`agent-layer-blocked:` и содержать конкретный validator finding или путь. Это
+не source blocker и не разрешение запускать reviewer.
 | validator_primary_command | `python scripts/validate_agent_artifacts.py --root <FT package root> --json / not-run` |
 | validator_primary_root | `<absolute FT package root or not-applicable>` |
 | validator_supplementary_command | `<repo-root validator command or not-run>` |

@@ -48,7 +48,7 @@ class WriteScopedValidatorProfileTests(unittest.TestCase):
                 encoding="utf-8",
             )
             payload = {"findings": []}
-            with patch.object(self.helper, "run_agent_artifact_validator", return_value=payload):
+            with patch.object(self.helper, "run_agent_artifact_validator", return_value=payload) as run_validator:
                 exit_code = self.helper.main(["--workflow-state", str(state_path), "--require-clean"])
 
             self.assertEqual(0, exit_code)
@@ -59,3 +59,86 @@ class WriteScopedValidatorProfileTests(unittest.TestCase):
             self.assertEqual("work/test-design/9.1-sample", profile["test_design_dir"])
             self.assertEqual([], profile["current_scope_findings"])
             self.assertEqual(0, profile["unresolved_warning_error_count"])
+            self.assertEqual(2, run_validator.call_count)
+
+    def test_ignores_only_the_current_profile_self_reference(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            ft_root = Path(tmp) / "fts" / "Sample"
+            state_path = ft_root / "work" / "stage-handoffs" / "01-sample" / "workflow-state.yaml"
+            state_path.parent.mkdir(parents=True)
+            state_path.write_text(
+                "\n".join(
+                    [
+                        "scope_slug: sample",
+                        "current_stage: ft-test-case-writer",
+                        "latest_artifacts:",
+                        "  canonical_test_cases: test-cases/9.1-sample.md",
+                        "  writer_quality_gate: work/test-design/9.1-sample/writer-quality-gate.md",
+                        "",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            self_reference = {
+                "id": "writer-quality-gate-scoped-validator-profile-invalid",
+                "severity": "warning",
+                "path": "work/test-design/9.1-sample/writer-quality-gate.md",
+                "evidence": [
+                    "writer-quality-gate.md:row-2:profile-has-unresolved-current-scope-findings:scoped-validator-profile.ft-test-case-writer.json"
+                ],
+            }
+            with patch.object(
+                self.helper,
+                "run_agent_artifact_validator",
+                side_effect=[{"findings": [self_reference]}, {"findings": [self_reference]}],
+            ):
+                exit_code = self.helper.main(["--workflow-state", str(state_path), "--require-clean"])
+
+            self.assertEqual(0, exit_code)
+            profile = json.loads(
+                (state_path.parent / "outputs" / "scoped-validator-profile.ft-test-case-writer.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            self.assertEqual([], profile["current_scope_findings"])
+
+    def test_does_not_suppress_an_unrelated_profile_failure(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            ft_root = Path(tmp) / "fts" / "Sample"
+            state_path = ft_root / "work" / "stage-handoffs" / "01-sample" / "workflow-state.yaml"
+            state_path.parent.mkdir(parents=True)
+            state_path.write_text(
+                "\n".join(
+                    [
+                        "scope_slug: sample",
+                        "current_stage: ft-test-case-writer",
+                        "latest_artifacts:",
+                        "  canonical_test_cases: test-cases/9.1-sample.md",
+                        "  writer_quality_gate: work/test-design/9.1-sample/writer-quality-gate.md",
+                        "",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            unrelated = {
+                "id": "writer-quality-gate-scoped-validator-profile-invalid",
+                "severity": "warning",
+                "path": "work/test-design/9.1-sample/writer-quality-gate.md",
+                "evidence": [
+                    "writer-quality-gate.md:row-2:generic-validator-json-not-accepted:validator.json"
+                ],
+            }
+            with patch.object(
+                self.helper,
+                "run_agent_artifact_validator",
+                side_effect=[{"findings": [unrelated]}, {"findings": [unrelated]}],
+            ):
+                exit_code = self.helper.main(["--workflow-state", str(state_path), "--require-clean"])
+
+            self.assertEqual(1, exit_code)
+            profile = json.loads(
+                (state_path.parent / "outputs" / "scoped-validator-profile.ft-test-case-writer.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            self.assertEqual(1, profile["unresolved_warning_error_count"])

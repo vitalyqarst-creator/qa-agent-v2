@@ -108,10 +108,25 @@ class PracticalPostFinalizationGateValidatorTests(unittest.TestCase):
             self.assertEqual([], findings)
             self.assertEqual("pass", checks[0].status)
 
+            state.update(
+                {
+                    "stage_status": "blocked-input",
+                    "next_skill": "ft-test-case-reviewer",
+                    "review_mode": "tc_review",
+                    "blocking_reason_class": "agent-layer",
+                    "blocking_reasons": [
+                        "agent-layer: writer-quality-gate-scoped-validator-profile-invalid"
+                    ],
+                }
+            )
+            findings, checks = validator.validate_practical_tc_review_handoff(state, workflow, root)
+            self.assertEqual([], findings)
+            self.assertEqual("pass", checks[0].status)
+
             matrix.write_text("# Changed matrix\n", encoding="utf-8")
             findings, _ = validator.validate_practical_tc_review_handoff(state, workflow, root)
             self.assertIn(
-                "practical-workflow-reviewed-matrix-hash-mismatch",
+                "practical-workflow-agent-layer-block-reviewed-matrix-invalid",
                 [item.id for item in findings],
             )
 

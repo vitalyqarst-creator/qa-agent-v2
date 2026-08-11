@@ -967,6 +967,30 @@ class PracticalStageSummaryValidatorTests(unittest.TestCase):
 
         self.assertIn("practical-stage-summary-invalid-round-cap-decision", ids)
 
+    def test_accepts_agent_layer_blocked_tc_review_transition(self) -> None:
+        record = {
+            "scope": "sample",
+            "verdict": "matrix-accepted",
+            "next_stage_transition": "tc-review blocked",
+            "source_contradiction": "not-applicable",
+            "tc_with_status_decision": "not-applicable",
+            "reason": "agent-layer-blocked: writer-quality-gate-scoped-validator-profile-invalid",
+        }
+
+        self.assertEqual([], self.validator.practical_scope_transition_decision_issues(record))
+
+    def test_rejects_tc_review_block_without_agent_layer_marker(self) -> None:
+        record = {
+            "scope": "sample",
+            "verdict": "matrix-accepted",
+            "next_stage_transition": "tc-review blocked",
+            "source_contradiction": "not-applicable",
+            "tc_with_status_decision": "not-applicable",
+            "reason": "Выполнить позже.",
+        }
+
+        self.assertTrue(self.validator.practical_scope_transition_decision_issues(record))
+
     def test_rejects_unconditional_writer_allowed_for_scope_blocking_warnings(self) -> None:
         ids = self.finding_ids(
             self.make_package(

@@ -208,6 +208,9 @@ Writer не должен ставить `stage_status: ready-for-review`, пок
 - `Dictionary Inventory` существует и связан с downstream `DICT-*`, если source/support содержит справочники или fixed lists;
 - scoped validator run выполнен после финальной записи canonical TC и split artifacts;
 - `scoped-validator-findings = pass` подтвержден runner-generated `outputs/scoped-validator-profile.<stage>.json` с `generated_by: codex_review_cycle_runner` либо runner validator gate output; generic `validator.json` не принимается;
+- helper `scripts/write_scoped_validator_profile.py` после записи профиля выполняет
+  второй обычный validator run. Он исключает только self-reference текущего
+  profile; любой иной warning/error остаётся unresolved current-scope finding;
 - profile stage is the current writer stage, not a future reviewer/preflight/regression stage;
 - отсутствие запуска scoped validator после финальной записи не является валидной причиной для `stage_status: blocked-input`; это procedural failure writer-а. Если validator технически не смог выполниться, writer должен зафиксировать attempted command, stderr/exception, affected path и concrete follow-up, а не писать `Validator not run`;
 - current-scope validator `warning`/`error` либо отсутствуют, либо каждая finding строка явно зафиксирована как валидный `false-positive`/waiver с id, path, evidence и rationale; process-only формулировки вроде `pre-existing`, `unchanged`, `not introduced` не являются достаточным waiver для writer-ready handoff;

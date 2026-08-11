@@ -137,6 +137,12 @@ Also record the version gate:
 | code_commit | `<exact commit SHA>` |
 | version_gate_status | `passed / blocked-input` |
 
+Для `ft-source-locator` также запиши `contract_version` в `code_version_gate`
+и `Версия контракта source locator` в `source-selection.md`:
+`source-locator-contract-v1`. Если менялась только другая фаза agent-layer,
+эта явная версия сохраняет source selection пригодным; для scope/writer/reviewer
+такое исключение не применяется.
+
 Detached HEAD is acceptable only when the exact expected commit matches and the
 named branch cannot be checked out because it is already occupied by another
 worktree. In that case, record the branch occupancy reason and continue only

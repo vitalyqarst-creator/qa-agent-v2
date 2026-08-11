@@ -70,13 +70,20 @@ fts/<ft-slug>/work/stage-handoffs/NN-<scope-slug>/workflow-state.yaml
 - Для matrix-revalidation после уже созданных canonical TC `latest_artifacts.matrix_revalidation_finalization` временно связывает текущую matrix R2 с переходом к `tc_review`. Этот alias создаёт только `practical_matrix_revalidation_transition.py` из разрешённого R2 finalization; до нового post-finalization gate он заменяет устаревший R1 binding, но не заменяет сам TC-review.
 - Для `current_stage: ft-scope-analyzer`, `stage_status: ready-for-gap-review` и `next_skill: ft-test-case-reviewer` handoff обязан ссылаться на `source-selection.md`, `scope-contract.md`, `scope-coverage-gaps.md`, `scope-clarification-requests.md` и `prompt.scope-gaps-to-reviewer.md`. Этот переход используется только в явно выбранном legacy/session route до writer и только для review найденных scope gaps.
 - Для `route_profile: practical_v0_8` запрещены `ready-for-gap-review`, `review_mode: scope_gap_review` и `prompt.scope-gaps-to-reviewer.md`. После завершенного scope analysis такой handoff использует `stage_status: ready-for-next-stage`, `next_skill: ft-test-case-writer`, `writer_mode: practical_v0_8_matrix` и linked `scope-brief.md`.
-- Если practical handoff возобновлялся после изменения `code_version_gate.code_commit`, добавь `instruction_context.loaded_skill` и `instruction_context.code_commit`; commit должен совпадать с version gate. Это подтверждает повторное чтение актуальной инструкции, а не только обновление SHA в state.
+- Если practical handoff возобновлялся после изменения `code_version_gate.code_commit`, добавь `instruction_context.loaded_skill` и `instruction_context.code_commit`; commit должен совпадать с version gate. Это подтверждает повторное чтение актуальной инструкции, а не только обновление SHA в state. Исключение только для `current_stage: ft-source-locator`: при неизменной `code_version_gate.contract_version = source-locator-contract-v1` validator допускает прежний commit, потому что source selection не зависит от writer/reviewer-only изменения agent-layer.
 - V3 pre-writer review: `current_stage: ft-scope-analyzer`, `stage_status: ready-for-next-stage`, `next_skill: ft-test-case-reviewer`, `prepared_compiler_contract_version: 3`, active prompt `prompt.scope-assertions-to-reviewer.md`, plus resolving source-selection/scope/gaps/source-row/source-assertions artifacts. Accepted review идёт к writer/iteration; rejected или ambiguous review возвращает workflow к scope analyzer или `blocked-input`.
 - Прямой `ft-scope-analyzer` → `ft-test-case-writer | ft-test-case-iteration` route допустим только для legacy/non-promotion workflow; он не считается production/promotion-capable без accepted source assertion review.
 - Если `scope-coverage-gaps.md` содержит хотя бы один `GAP-*`, handoff обязан ссылаться на `scope-clarification-requests.md`. Даже non-blocking gap должен быть передан downstream явно, а не только упомянут в summary.
 - Для session-based review-cycle итогов `latest_artifacts` должен содержать canonical aliases: `cycle_state`, `final_findings`, `final_traceability_matrix`, `final_writer_response` если была revision, and `signed_off_snapshot` или `round_cap_snapshot`. XLSX companion artifacts are optional only when the route or user explicitly requests XLSX.
 - `open_questions` — список еще не снятых неоднозначностей по scope или coverage.
 - `blocking_reasons` — список причин, почему этап нельзя продвигать дальше.
+- `blocking_reason_class: agent-layer` — необязательное поле только для технической
+  блокировки инструмента/инструкций агента. Его можно использовать после выпуска
+  canonical TC, когда уже известен следующий безопасный маршрут
+  `ft-test-case-reviewer` с `review_mode: tc_review`, но запуск reviewer запрещен
+  до исправления agent-layer. `next_skill` в этом случае сохраняй равным
+  `ft-test-case-reviewer`; не заменяй его на `none` и не маскируй блокировку как
+  source gap. В `blocking_reasons` укажи конкретный id/путь технической ошибки.
 - `awaiting-user-scope-selection` используют только после `agent-proposed-scope`, когда источники достаточны, но пользователь ещё не выбрал один внешний scope. Это не `blocked-input`: `current_stage` и `next_skill` остаются `ft-scope-analyzer`, `blocking_reasons` пуст, а `latest_artifacts` содержит `scope_options` и `scope_selection_prompts`.
 - `accepted_risks` — необязательный список явно принятых blocking `GAP-*`, если владелец продукта/аналитик разрешил передать набор дальше без закрытия gap.
 - Каждый ключ YAML может встречаться только один раз в одном mapping. Не создавай второй `blocking_reasons`, `latest_artifacts` или иной верхнеуровневый ключ для новой записи: обнови единственное каноническое значение. Повтор ключа имеет last-key-wins семантику и делает routing неоднозначным.
@@ -287,6 +294,10 @@ accepted_risks: []
 - После каждого handoff обновляй `current_stage`, `stage_status`, `next_skill`, `required_inputs` и `latest_artifacts`.
 - Если `scope-coverage-gaps.md` содержит хотя бы один `GAP-*`, добавляй `scope-clarification-requests.md` в `latest_artifacts`; добавляй его в `required_inputs`, когда следующий этап должен учитывать открытые или подтвержденные ответы по gaps.
 - При нехватке или противоречии внешних входов используй `stage_status = blocked-input`; при дефекте текущего черновика test cases — `blocked-quality-gate`. В обоих случаях явно заполняй `blocking_reasons`.
+- Для agent-layer blocker после canonical TC используй `stage_status = blocked-input`,
+  `blocking_reason_class = agent-layer`, `next_skill = ft-test-case-reviewer` и
+  `review_mode = tc_review`. Это разрешает только восстановление корректного
+  handoff; отдельный reviewer не запускается, пока validator не станет зелёным.
 - Статус `signed-off` используется только для завершенного review-cycle и handoff в `ft-ui-automation-prep`.
 - Не используй `stage_status: not-signed-off`: это итоговая оценка review, но не process-status. При blocker findings выбирай `ready-for-writer-revision` только если findings получены validator-accepted separate top-level Codex session (`codex-thread`) review. Если findings получены advisory review (`sub-agent`, `same-session`, `local-helper`), используй `blocked-input` до настоящего separate-session review или до явного поля `controller_authorized_advisory_revision: yes`. При лимите раундов используй `round-cap-reached`, при нехватке внешнего input `blocked-input`.
 

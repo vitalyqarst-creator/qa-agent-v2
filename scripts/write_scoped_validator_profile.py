@@ -20,6 +20,9 @@ from codex_review_cycle_runner import (
 from validate_agent_artifacts import parse_workflow_state
 
 
+SELF_PROFILE_FINDING_ID = "writer-quality-gate-scoped-validator-profile-invalid"
+
+
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Run the artifact validator and write runner-generated scoped evidence for one workflow state."
@@ -31,6 +34,61 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Return exit status 1 when the active scope has unresolved warning/error findings.",
     )
     return parser.parse_args(argv)
+
+
+def is_current_profile_self_finding(
+    finding: object,
+    *,
+    profile_path: Path,
+) -> bool:
+    """Return true only for the validator's report about this profile itself.
+
+    A scoped profile is intentionally read by the validator which produced it.
+    If the profile records a real unresolved current-scope finding, the
+    validator also reports that the profile is unresolved.  Feeding that
+    derived report back into the same profile creates an infinite self-reference
+    and hides the original finding.  Do not suppress any other finding: the
+    persisted second validator run remains the authoritative gate.
+    """
+
+    if not isinstance(finding, dict) or finding.get("id") != SELF_PROFILE_FINDING_ID:
+        return False
+    evidence = finding.get("evidence")
+    if not isinstance(evidence, list):
+        return False
+    profile_name = profile_path.name
+    return any(
+        profile_name in str(item)
+        and (
+            "profile-has-unresolved-current-scope-findings" in str(item)
+            or "unresolved_warning_error_count=" in str(item)
+        )
+        for item in evidence
+    )
+
+
+def scoped_findings_without_current_profile_self_reference(
+    validator_payload: dict[str, object],
+    state: dict[str, object],
+    state_path: Path,
+    profile_path: Path,
+) -> list[dict[str, object]]:
+    """Keep real scoped findings while removing only this profile's echo."""
+
+    scoped_findings = current_scope_validator_findings(validator_payload, state, state_path)
+    return [
+        finding
+        for finding in scoped_findings
+        if not is_current_profile_self_finding(finding, profile_path=profile_path)
+    ]
+
+
+def unresolved_warning_or_error_count(findings: list[dict[str, object]]) -> int:
+    return sum(
+        1
+        for finding in findings
+        if str(finding.get("severity") or "").strip().lower() in {"warning", "error"}
+    )
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -56,19 +114,36 @@ def main(argv: list[str] | None = None) -> int:
         )
 
     ft_root = infer_ft_root(state_path)
-    validator_payload = run_agent_artifact_validator(ft_root)
-    scoped_findings = current_scope_validator_findings(validator_payload, state, state_path)
+    profile_path = (
+        state_path.parent
+        / "outputs"
+        / f"scoped-validator-profile.{state['current_stage']}.json"
+    )
+
+    first_payload = run_agent_artifact_validator(ft_root)
+    first_scoped_findings = scoped_findings_without_current_profile_self_reference(
+        first_payload,
+        state,
+        state_path,
+        profile_path,
+    )
     profile_path = write_runner_scoped_validator_profile(
         state,
         state_path,
-        validator_payload,
-        scoped_findings=scoped_findings,
+        first_payload,
+        scoped_findings=first_scoped_findings,
     )
-    unresolved_count = sum(
-        1
-        for finding in scoped_findings
-        if str(finding.get("severity") or "").strip().lower() in {"warning", "error"}
+
+    # Validate the persisted profile once.  This catches an invalid runner
+    # output while avoiding the profile's own derived warning as input data.
+    second_payload = run_agent_artifact_validator(ft_root)
+    scoped_findings = scoped_findings_without_current_profile_self_reference(
+        second_payload,
+        state,
+        state_path,
+        profile_path,
     )
+    unresolved_count = unresolved_warning_or_error_count(scoped_findings)
     print(
         json.dumps(
             {

@@ -59,6 +59,8 @@ fts/<ft-slug>/work/stage-handoffs/00-<container-slug>/source-selection.md
 - `selection_status`;
 - `code_branch` — фактический вывод `git branch --show-current` в момент source selection;
 - `code_commit` — точный 40-символьный SHA из `git rev-parse HEAD` в момент source selection;
+- `source_locator_contract_version` — текущая версия контракта source locator:
+  `source-locator-contract-v1`;
 - `created_at`;
 - `created_by`.
 
@@ -77,6 +79,12 @@ fts/<ft-slug>/work/stage-handoffs/00-<container-slug>/source-selection.md
   исторический `source-locator-session-log.md`.
 - При изменении источников, их хэшей, ролей или границ используй ограниченную
   содержательную пересборку.
+
+Изменение `code_commit` само по себе не делает выбор источников устаревшим,
+если записанная `source_locator_contract_version` совпадает с текущей. Такая
+совместимость действует только для source locator: при изменении его правил
+maintainer повышает версию контракта. Для scope/writer/reviewer по-прежнему
+нужен их актуальный instruction context и version gate.
 
 Допустимые `selection_status`:
 
@@ -182,6 +190,7 @@ Validator-enforced XHTML findings:
 - Статус выбора: `selected | ambiguous | blocked-input`
 - Ветка кода:
 - Коммит кода:
+- Версия контракта source locator: `source-locator-contract-v1`
 - Создано:
 - Создано кем:
 - Обновлено: <!-- только при актуализации provenance -->

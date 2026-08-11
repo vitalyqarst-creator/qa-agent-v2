@@ -119,6 +119,7 @@ SOURCE_SELECTION_FIELD_ALIASES = {
     "создано кем": "created_by",
     "обновлено": "updated_at",
     "обновлено кем": "updated_by",
+    "версия контракта source locator": "source_locator_contract_version",
     "выбранный xhtml фт": "main_ft_xhtml",
     "xhtml доступен": "xhtml_available",
     "путь к xhtml": "xhtml_path",
@@ -139,6 +140,7 @@ REQUIRED_SOURCE_SELECTION_PROVENANCE_UPDATE_FIELDS = {
     "updated_at",
     "updated_by",
 }
+SOURCE_LOCATOR_CONTRACT_VERSION = "source-locator-contract-v1"
 ALLOWED_SOURCE_SELECTION_STATUSES = {"selected", "ambiguous", "blocked-input"}
 SCOPE_SELECTION_PROMPT_DIRECT_OUTPUT_RE = re.compile(
     r"(?im)^\s*(?:[-*]\s*)?(?:outputs|выходы)\s*:\s*.*prompt\.scope-to-(?:writer|iteration)\.md"
@@ -6643,6 +6645,9 @@ def validate_source_selection_artifact(
     )
     raw_code_commit = context_fields.get("code_commit", "")
     code_commit = strip_markdown_code(raw_code_commit).casefold()
+    source_locator_contract_version = strip_markdown_code(
+        context_fields.get("source_locator_contract_version", "")
+    )
     if missing_provenance_fields:
         routes_downstream = source_selection_routes_downstream(state)
         findings.append(
@@ -6695,29 +6700,47 @@ def validate_source_selection_artifact(
     else:
         current_commit = current_git_commit_for_code_root(str(root))
         if current_commit and code_commit != current_commit:
-            findings.append(
-                Finding(
-                    id="source-selection-code-commit-stale",
-                    severity="error",
-                    category="source-selection",
-                    title="source-selection.md records a stale code commit",
-                    details=(
-                        "The source-locator handoff was created by another checkout revision and must be refreshed "
-                        "before it routes to downstream instructions."
-                    ),
-                    path=display_path,
-                    evidence=[f"recorded={code_commit}", f"current={current_commit}"],
-                    recommended_action="Reread ft-source-locator and rematerialize only the source-locator handoff.",
+            if source_locator_contract_version == SOURCE_LOCATOR_CONTRACT_VERSION:
+                checks.append(
+                    Check(
+                        "source-selection-code-provenance",
+                        "pass",
+                        "Recorded commit is older, but the source-locator contract is unchanged.",
+                        display_path,
+                    )
                 )
-            )
-            checks.append(
-                Check(
-                    "source-selection-code-provenance",
-                    "fail",
-                    "Code commit is stale.",
-                    display_path,
+            else:
+                findings.append(
+                    Finding(
+                        id="source-selection-code-commit-stale",
+                        severity="error",
+                        category="source-selection",
+                        title="source-selection.md records a stale code commit",
+                        details=(
+                            "The source-locator handoff was created by another checkout revision and must be refreshed "
+                            "before it routes to downstream instructions."
+                        ),
+                        path=display_path,
+                        evidence=[
+                            f"recorded={code_commit}",
+                            f"current={current_commit}",
+                            "source_locator_contract_version="
+                            f"{source_locator_contract_version or '<missing>'}",
+                        ],
+                        recommended_action=(
+                            "Reread ft-source-locator and rematerialize only the source-locator handoff, or record "
+                            "the current source-locator contract version when the change is outside that contract."
+                        ),
+                    )
                 )
-            )
+                checks.append(
+                    Check(
+                        "source-selection-code-provenance",
+                        "fail",
+                        "Code commit is stale for the recorded source-locator contract.",
+                        display_path,
+                    )
+                )
         else:
             checks.append(
                 Check(
@@ -7534,6 +7557,11 @@ PRACTICAL_SCOPE_TRANSITION_MATRIX_REVIEW_TRANSITIONS = {
     "matrix-review conditional",
     "matrix-review blocked",
 }
+PRACTICAL_SCOPE_TRANSITION_AGENT_LAYER_BLOCK_RE = re.compile(
+    r"\bagent-layer-blocked\b",
+    flags=re.IGNORECASE,
+)
+PRACTICAL_AGENT_LAYER_BLOCKING_REASON_CLASS = "agent-layer"
 PRACTICAL_STAGE_SUMMARY_FINDING_ID_RE = re.compile(r"\b[a-z][a-z0-9]+(?:-[a-z0-9]+){2,}\b")
 PRACTICAL_STAGE_SUMMARY_PATH_EVIDENCE_RE = re.compile(
     r"(?:^|[\s`])(?:[A-Za-z]:)?[A-Za-z0-9_./\\-]+\.(?:md|yaml|yml|json|py)(?:\b|$)",
@@ -7685,6 +7713,13 @@ def practical_scope_transition_decision_issues(record: Mapping[str, str]) -> lis
         return issues
 
     if verdict in {"matrix-accepted", "matrix-changes-required"}:
+        if (
+            next_stage_transition == "tc-review blocked"
+            and source_contradiction == "not-applicable"
+            and decision == "not-applicable"
+            and PRACTICAL_SCOPE_TRANSITION_AGENT_LAYER_BLOCK_RE.search(record.get("reason", ""))
+        ):
+            return issues
         if next_stage_transition not in PRACTICAL_SCOPE_TRANSITION_MATRIX_WRITER_TRANSITIONS:
             issues.append(
                 f"scope={scope}:verdict={verdict} requires a writer transition"
@@ -7881,6 +7916,19 @@ def validate_practical_workflow_version_gate(
 
     current_commit = current_git_commit_for_code_root(code_root)
     if current_commit and recorded_commit != current_commit:
+        contract_version = str(version_gate.get("contract_version") or "").strip()
+        if (
+            state.get("current_stage") == "ft-source-locator"
+            and contract_version == SOURCE_LOCATOR_CONTRACT_VERSION
+        ):
+            return [], [
+                Check(
+                    "workflow-state-practical-code-version-gate",
+                    "pass",
+                    "Recorded commit is older, but the source-locator contract is unchanged.",
+                    display_path,
+                )
+            ]
         return [
             Finding(
                 id="workflow-state-practical-code-version-stale",
@@ -8459,6 +8507,47 @@ def validate_practical_tc_review_handoff(
                 "Canonical test cases are preserved while the invalidated matrix is independently revalidated."
                 if not findings
                 else "Matrix revalidation is not justified by the controller gate.",
+                display_path,
+            )
+        )
+        return findings, checks
+
+    is_agent_layer_blocked_tc_review = (
+        state.get("stage_status") == "blocked-input"
+        and state.get("next_skill") == "ft-test-case-reviewer"
+        and state.get("review_mode") == "tc_review"
+        and str(state.get("blocking_reason_class") or "").strip().casefold()
+        == PRACTICAL_AGENT_LAYER_BLOCKING_REASON_CLASS
+        and isinstance(state.get("blocking_reasons"), list)
+        and bool(state.get("blocking_reasons"))
+    )
+    if is_agent_layer_blocked_tc_review:
+        if matrix_issue:
+            findings.append(
+                Finding(
+                    id="practical-workflow-agent-layer-block-reviewed-matrix-invalid",
+                    severity="error",
+                    category="workflow-state",
+                    title="Agent-layer blocker does not preserve the accepted matrix binding",
+                    details=(
+                        "A technical blocker may postpone independent TC review, but it must not conceal that the "
+                        "canonical test cases no longer match the accepted matrix."
+                    ),
+                    path=display_path,
+                    evidence=matrix_evidence,
+                    recommended_action=(
+                        "Resolve the matrix binding before resuming the writer or TC-review handoff; do not dispatch "
+                        "a reviewer while this error remains."
+                    ),
+                )
+            )
+        checks.append(
+            Check(
+                "practical-workflow-canonical-tc-review-handoff",
+                "fail" if findings else "pass",
+                "Independent TC review is correctly deferred by an explicit agent-layer blocker."
+                if not findings
+                else "Agent-layer blocker masks an invalid accepted-matrix binding.",
                 display_path,
             )
         )

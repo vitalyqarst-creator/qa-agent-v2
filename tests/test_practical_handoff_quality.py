@@ -122,6 +122,35 @@ class PracticalHandoffQualityTests(unittest.TestCase):
             {finding.id for finding in accepted_findings},
         )
 
+    def test_source_selection_contract_allows_writer_only_commit_change(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source_selection = root / "source-selection.md"
+            source_selection.write_text(
+                self.source_selection_content(include_provenance=True).replace(
+                    "- Коммит кода: `aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa`\n",
+                    "- Коммит кода: `aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa`\n"
+                    "- Версия контракта source locator: `source-locator-contract-v1`\n",
+                ),
+                encoding="utf-8",
+            )
+            workflow = root / "workflow-state.yaml"
+            state = {"stage_status": "ready-for-next-stage", "next_skill": "ft-scope-analyzer"}
+            original = self.validator.current_git_commit_for_code_root
+            self.validator.current_git_commit_for_code_root = lambda _: "b" * 40
+            try:
+                findings, checks = self.validator.validate_source_selection_artifact(
+                    source_selection,
+                    root,
+                    state,
+                    workflow,
+                )
+            finally:
+                self.validator.current_git_commit_for_code_root = original
+
+        self.assertNotIn("source-selection-code-commit-stale", {finding.id for finding in findings})
+        self.assertIn("source-selection-code-provenance", {check.name for check in checks})
+
     def test_source_selection_rejects_dangling_handoff_artifact_link(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -1483,6 +1512,34 @@ class PracticalHandoffQualityTests(unittest.TestCase):
 
         finding_ids = {finding.id for finding in findings}
         self.assertIn("workflow-state-practical-code-version-stale", finding_ids)
+
+    def test_source_locator_contract_allows_writer_only_commit_change(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            workflow = root / "workflow-state.yaml"
+            workflow.write_text("route_profile: practical_v0_8\n", encoding="utf-8")
+            state = {
+                "route_profile": "practical_v0_8",
+                "current_stage": "ft-source-locator",
+                "root_consistency": {"code_root": str(root)},
+                "code_version_gate": {
+                    "code_commit": "0" * 40,
+                    "contract_version": self.validator.SOURCE_LOCATOR_CONTRACT_VERSION,
+                },
+            }
+            original = self.validator.current_git_commit_for_code_root
+            self.validator.current_git_commit_for_code_root = lambda _: "a" * 40
+            try:
+                findings, checks = self.validator.validate_practical_workflow_version_gate(
+                    state,
+                    workflow,
+                    root,
+                )
+            finally:
+                self.validator.current_git_commit_for_code_root = original
+
+        self.assertEqual([], findings)
+        self.assertEqual("pass", checks[0].status)
 
     def test_practical_workflow_requires_current_instruction_context(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
