@@ -241,6 +241,9 @@ source правами — `needs-test-data`, не вопрос к БА. В пр�
 содержательные brief, matrix, dictionary и self-check. Иначе используй
 `bounded-content`. Сначала собери все scope-local findings validator и внеси
 их одним patch.
+Provenance `source-selection.md` при `metadata-only` актуализируй только по
+`references/agent/source-selection-format.md`; исходный receipt locator не
+переписывай.
 Широкий gap по нескольким
 obligations/полям/validation classes разложи на отдельные `CLR-*` или
 нумерованный checklist. Не задавай БА umbrella-вопрос; при intake закрывай

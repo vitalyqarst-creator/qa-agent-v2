@@ -73,6 +73,29 @@ class PracticalRouteV08DefaultsTests(unittest.TestCase):
         self.assertNotIn("source_assertion_review", scope_options)
         self.assertIn("formal_source_requirement_codes()", scope_options)
 
+    def test_metadata_only_preserves_source_selection_creation_provenance(self) -> None:
+        route = (ROOT_DIR / "references" / "agent" / "practical-test-case-route-v0.8.md").read_text(
+            encoding="utf-8"
+        )
+        analyzer = (ROOT_DIR / "skills" / "ft-scope-analyzer" / "SKILL.md").read_text(
+            encoding="utf-8"
+        )
+        source_selection = (ROOT_DIR / "references" / "agent" / "source-selection-format.md").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn("source-selection.md` would otherwise retain stale code", route)
+        self.assertIn("original creation record", route)
+        self.assertIn("source-locator session receipt", route)
+        self.assertIn("source-selection-format.md", analyzer)
+        for expected in (
+            "Сохрани `Создано` и `Создано кем`; добавь `Обновлено` и `Обновлено кем`",
+            "agent-decision-log.md",
+            "source-locator-session-log.md",
+        ):
+            self.assertIn(expected, source_selection)
+        self.assertRegex(source_selection, r"ограниченное\s+обновление метаданных")
+
     def test_matrix_review_requires_stage_summary_before_next_prompt(self) -> None:
         route = (ROOT_DIR / "references" / "agent" / "practical-test-case-route-v0.8.md").read_text(
             encoding="utf-8"

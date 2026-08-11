@@ -613,9 +613,13 @@ planned TC), use the fast path inside this same route:
      `metadata-only` only when the selected source/support inputs, confirmed
      scope boundary, source-row mapping, dictionary values and `GAP-*` set are
      unchanged and the task is limited to code-version, routing, links, summary
-     or validator state. It may update only `workflow-state.yaml`, stage
-     summary, decision log, active prompt and broken artifact links. Otherwise
-     use `bounded-content`. The user does not choose this mode in the prompt.
+       or validator state. It may update only `workflow-state.yaml`, stage
+       summary, decision log, active prompt and broken artifact links. When a
+       current `source-selection.md` would otherwise retain stale code
+       provenance, it may also apply its provenance-only update according to
+       `references/agent/source-selection-format.md`; it must preserve the
+       original creation record and source-locator session receipt. Otherwise
+       use `bounded-content`. The user does not choose this mode in the prompt.
    - Keep temporary inspection scripts, renders, duplicate manifests and
      partial writes outside the final handoff. On a successful scope-analysis
      run, delete only temporary artifacts created by the current run. Files in
