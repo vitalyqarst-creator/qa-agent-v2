@@ -1095,6 +1095,12 @@ ROOT_LEVEL_HANDOFF_ARTIFACT_NAMES = {
     "scope-analyzer-session-log.md",
 }
 
+FORMAL_SOURCE_REQUIREMENT_CODE_RE = re.compile(
+    r"\b(?P<prefix>AS|BSR|GSR)[.\s]+(?P<number>\d+(?:[.-]\d+)*)\b",
+    flags=re.IGNORECASE,
+)
+SCOPE_OPTIONS_SOURCE_ALLOCATION_HEADING = "Распределение требований ФТ"
+
 
 FT_PACKAGE_DIRECT_MARKER_NAMES = {
     "source",
@@ -1270,7 +1276,7 @@ def validate_ft_package_handoff_layout(root: Path) -> tuple[list[Finding], list[
                     path=display_path,
                     evidence=[f"{display_path}/{artifact_name}" for artifact_name in root_level_artifacts],
                     recommended_action=(
-                        "Move or recreate these files in `work/stage-handoffs/00-source-selection/` for source/scope "
+                        "Move or recreate these files in `work/stage-handoffs/00-scope-selection/` for source/scope "
                         "selection, or in the numbered scope handoff folder for confirmed scope work. Remove root-level copies."
                     ),
                 )
@@ -6161,6 +6167,182 @@ def source_selection_has_downstream_next_skill(state: dict[str, Any]) -> bool:
     }
 
 
+def source_selection_handoff_artifact_references(content: str) -> list[str]:
+    """Return package-local artifact paths explicitly recorded by source selection.
+
+    The source-selection handoff is durable process evidence.  A file named in
+    its Handoff section is not a placeholder for a later stage to delete.
+    Restrict this to code-formatted file paths so prose identifiers, URLs and
+    commands are not treated as artifacts.
+    """
+
+    handoff = extract_markdown_section(content, "Handoff") or ""
+    references: list[str] = []
+    for raw_value in re.findall(r"`([^`]+)`", handoff):
+        value = strip_quotes(raw_value.strip())
+        if not value or value.startswith(("http://", "https://")):
+            continue
+        if Path(value).suffix.lower() not in {".md", ".yaml", ".yml", ".json"}:
+            continue
+        if value not in references:
+            references.append(value)
+    return references
+
+
+def normalize_formal_source_requirement_code(match: re.Match[str]) -> str:
+    number = re.sub(r"[-]", ".", match.group("number"))
+    return f"{match.group('prefix').upper()}.{number}"
+
+
+def formal_source_requirement_codes(content: str) -> set[str]:
+    return {
+        normalize_formal_source_requirement_code(match)
+        for match in FORMAL_SOURCE_REQUIREMENT_CODE_RE.finditer(content)
+    }
+
+
+def linked_source_selection_xhtml_paths(
+    source_selection_paths: list[Path],
+    workflow_path: Path,
+    root: Path,
+    ft_root: Path,
+) -> list[Path]:
+    """Resolve only the XHTML documents explicitly selected by source locator."""
+
+    resolved_paths: list[Path] = []
+    for source_selection_path in source_selection_paths:
+        try:
+            content = source_selection_path.read_text(encoding="utf-8")
+        except UnicodeDecodeError:
+            continue
+        xhtml_section = extract_markdown_section(content, "Machine-Readable XHTML Source") or ""
+        for raw_value in re.findall(r"`([^`]+\.xhtml)`", xhtml_section, flags=re.IGNORECASE):
+            resolved = resolve_artifact_path(raw_value, workflow_path, root, ft_root)
+            if resolved is not None:
+                resolved_paths.append(resolved)
+    return dedupe_paths(resolved_paths)
+
+
+def validate_scope_options_source_allocation(
+    path: Path,
+    root: Path,
+    source_requirement_codes: set[str],
+) -> tuple[list[Finding], list[Check]]:
+    """Require agent-proposed scope maps to assign every formal source code."""
+
+    findings: list[Finding] = []
+    checks: list[Check] = []
+    display_path = rel(path, root)
+    try:
+        content = path.read_text(encoding="utf-8")
+    except UnicodeDecodeError as exc:
+        findings.append(
+            Finding(
+                id="scope-options-unreadable",
+                severity="error",
+                category="scope-boundary",
+                title="scope-options.md is not readable as UTF-8",
+                details=str(exc),
+                path=display_path,
+                evidence=[],
+                recommended_action="Save scope-options.md as UTF-8 Markdown.",
+            )
+        )
+        checks.append(Check("scope-options-source-allocation", "fail", "Scope options is not UTF-8.", display_path))
+        return findings, checks
+
+    allocation = extract_markdown_section(content, SCOPE_OPTIONS_SOURCE_ALLOCATION_HEADING)
+    if allocation is None:
+        findings.append(
+            Finding(
+                id="scope-options-source-allocation-missing",
+                severity="error",
+                category="scope-boundary",
+                title="Candidate scope map has no source requirement allocation",
+                details=(
+                    "Before the user selects a scope, the map must state where each formal source requirement "
+                    "will be designed. Otherwise rules written before a subsection can be silently lost."
+                ),
+                path=display_path,
+                evidence=[SCOPE_OPTIONS_SOURCE_ALLOCATION_HEADING],
+                recommended_action=(
+                    "Add a compact `Распределение требований ФТ` table that maps every AS/BSR/GSR code to "
+                    "one candidate scope, cross-scope owner or justified out-of-scope boundary."
+                ),
+            )
+        )
+        checks.append(Check("scope-options-source-allocation", "fail", "Source requirement allocation is missing.", display_path))
+        return findings, checks
+
+    allocation_codes = [
+        normalize_formal_source_requirement_code(match)
+        for match in FORMAL_SOURCE_REQUIREMENT_CODE_RE.finditer(allocation)
+    ]
+    if source_requirement_codes and not allocation_codes:
+        findings.append(
+            Finding(
+                id="scope-options-source-allocation-empty",
+                severity="error",
+                category="scope-boundary",
+                title="Candidate scope allocation contains no formal source codes",
+                details=(
+                    "A scope map with coded requirements must name the source anchors it assigns; a prose-only "
+                    "allocation cannot prove that every requirement was considered."
+                ),
+                path=display_path,
+                evidence=[SCOPE_OPTIONS_SOURCE_ALLOCATION_HEADING],
+                recommended_action="List the AS/BSR/GSR codes from the selected FT in the allocation table.",
+            )
+        )
+    duplicate_codes = sorted(
+        code for code in set(allocation_codes) if allocation_codes.count(code) > 1
+    )
+    if duplicate_codes:
+        findings.append(
+            Finding(
+                id="scope-options-source-allocation-duplicate-code",
+                severity="error",
+                category="scope-boundary",
+                title="Candidate scope map assigns a formal source code more than once",
+                details=(
+                    "A coded source rule needs one explicit test-design owner. Cross-scope use is allowed only "
+                    "when the allocation gives one named owner rather than duplicating the code."
+                ),
+                path=display_path,
+                evidence=duplicate_codes[:20],
+                recommended_action="Keep one allocation row per code and name the owner for any cross-scope rule.",
+            )
+        )
+    missing_codes = sorted(source_requirement_codes - set(allocation_codes))
+    if missing_codes:
+        findings.append(
+            Finding(
+                id="scope-options-source-allocation-incomplete",
+                severity="error",
+                category="scope-boundary",
+                title="Candidate scope map leaves formal source requirements unassigned",
+                details=(
+                    "The selected FT contains formal requirement codes that are absent from the candidate scope "
+                    "allocation. A user must not choose the next scope from an incomplete map."
+                ),
+                path=display_path,
+                evidence=missing_codes[:40],
+                recommended_action="Assign every listed code to one candidate scope, a cross-scope owner or a justified out-of-scope boundary.",
+            )
+        )
+
+    has_errors = bool(findings)
+    checks.append(
+        Check(
+            "scope-options-source-allocation",
+            "fail" if has_errors else "pass",
+            "Source requirement allocation is complete." if not has_errors else "Source requirement allocation has gaps.",
+            display_path,
+        )
+    )
+    return findings, checks
+
+
 def validate_source_selection_artifact(
     path: Path,
     root: Path,
@@ -6418,6 +6600,32 @@ def validate_source_selection_artifact(
         checks.append(Check("workflow-state-source-selection-selected", "fail", "Source selection is not selected.", rel(workflow_path, root)))
     elif selection_status:
         checks.append(Check("workflow-state-source-selection-selected", "pass", "Source selection status does not block routing.", rel(workflow_path, root)))
+
+    ft_root = find_ft_root(workflow_path, root, state)
+    dangling_handoff_references = [
+        value
+        for value in source_selection_handoff_artifact_references(content)
+        if not Path(value).is_absolute() and not artifact_exists(value, workflow_path, root, ft_root)
+    ]
+    if dangling_handoff_references:
+        findings.append(
+            Finding(
+                id="source-selection-handoff-dangling-artifact-link",
+                severity="error",
+                category="artifact-links",
+                title="Source selection handoff links to missing package-local artifacts",
+                details=(
+                    "A completed source-locator receipt or decision log may not be deleted by a later stage while "
+                    "source-selection.md still identifies it as handoff evidence."
+                ),
+                path=display_path,
+                evidence=dangling_handoff_references[:20],
+                recommended_action="Restore the referenced artifact or remove the stale handoff link only when it was never part of the completed stage.",
+            )
+        )
+        checks.append(Check("source-selection-handoff-artifact-links", "fail", "Source selection has dangling handoff links.", display_path))
+    else:
+        checks.append(Check("source-selection-handoff-artifact-links", "pass", "Source selection handoff artifact links resolve.", display_path))
 
     return findings, checks
 
@@ -26627,10 +26835,19 @@ def validate_workflow_state(
             "prompt.scope-gaps-to-reviewer.md",
             "negative-oracle-inventory.md",
             "requiredness-oracle-inventory.md",
-            "scope-analyzer-session-log.md",
-            "source-locator-session-log.md",
-            "agent-decision-log.md",
         }
+        is_scope_selection_container = (
+            current_stage == "ft-scope-analyzer"
+            and stage_status == "awaiting-user-scope-selection"
+        )
+        if not is_scope_selection_container:
+            legacy_artifact_names.update(
+                {
+                    "scope-analyzer-session-log.md",
+                    "source-locator-session-log.md",
+                    "agent-decision-log.md",
+                }
+            )
         legacy_artifact_paths = [
             rel(candidate, root)
             for name in sorted(legacy_artifact_names)
@@ -26844,6 +27061,42 @@ def validate_workflow_state(
         )
         findings.extend(source_selection_findings)
         checks.extend(source_selection_checks)
+
+    linked_scope_options_paths = dedupe_paths(
+        [
+            resolved
+            for value in [*required_input_values, *latest_artifact_values]
+            if Path(strip_quotes(value)).name == "scope-options.md"
+            for resolved in [resolve_artifact_path(value, path, root, ft_root)]
+            if resolved is not None
+        ]
+    )
+    if (
+        current_stage == "ft-scope-analyzer"
+        and stage_status == "awaiting-user-scope-selection"
+        and linked_scope_options_paths
+    ):
+        source_requirement_codes: set[str] = set()
+        for xhtml_path in linked_source_selection_xhtml_paths(
+            linked_source_selection_paths,
+            path,
+            root,
+            ft_root,
+        ):
+            try:
+                source_requirement_codes.update(
+                    formal_source_requirement_codes(xhtml_path.read_text(encoding="utf-8"))
+                )
+            except UnicodeDecodeError:
+                continue
+        for scope_options_path in linked_scope_options_paths:
+            allocation_findings, allocation_checks = validate_scope_options_source_allocation(
+                scope_options_path,
+                root,
+                source_requirement_codes,
+            )
+            findings.extend(allocation_findings)
+            checks.extend(allocation_checks)
 
     linked_source_row_inventory_paths = dedupe_paths(
         [

@@ -512,9 +512,9 @@ planned TC), use the fast path inside this same route:
      route before editing artifacts; record the loaded skill and the verified
      commit in `workflow-state.yaml.instruction_context`.
    - Before narrowing a scope, resolve the canonical source-selection artifact.
-     First read `work/stage-handoffs/00-source-selection/workflow-state.yaml`
+     First read `work/stage-handoffs/00-scope-selection/workflow-state.yaml`
      and its `latest_artifacts.source_selection`; then use
-     `work/stage-handoffs/00-source-selection/source-selection.md` as the
+     `work/stage-handoffs/00-scope-selection/source-selection.md` as the
      fallback canonical path. If a usable selection resolves, reuse it: do not
      claim that source selection is missing, run `ft-source-locator`, or create
      a replacement selection. If neither path resolves, stop this stage as

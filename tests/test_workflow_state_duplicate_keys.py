@@ -28,7 +28,7 @@ class WorkflowStateDuplicateKeysTests(unittest.TestCase):
         validator = load_validator_module()
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            handoff = root / "work" / "stage-handoffs" / "00-source-selection"
+            handoff = root / "work" / "stage-handoffs" / "00-scope-selection"
             handoff.mkdir(parents=True)
             (handoff / "scope-options.md").write_text("# Scope options\n", encoding="utf-8")
             (handoff / "scope-selection-prompts.md").write_text("# Prompts\n", encoding="utf-8")
@@ -44,8 +44,8 @@ class WorkflowStateDuplicateKeysTests(unittest.TestCase):
                         "next_skill: ft-scope-analyzer",
                         "required_inputs: []",
                         "latest_artifacts:",
-                        "  scope_options: work/stage-handoffs/00-source-selection/scope-options.md",
-                        "  scope_selection_prompts: work/stage-handoffs/00-source-selection/scope-selection-prompts.md",
+                        "  scope_options: work/stage-handoffs/00-scope-selection/scope-options.md",
+                        "  scope_selection_prompts: work/stage-handoffs/00-scope-selection/scope-selection-prompts.md",
                         "open_questions:",
                         "  - Выбрать один scope.",
                         "blocking_reasons: []",

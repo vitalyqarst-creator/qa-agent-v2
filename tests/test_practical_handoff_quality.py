@@ -81,6 +81,76 @@ class PracticalHandoffQualityTests(unittest.TestCase):
             {finding.id for finding in accepted_findings},
         )
 
+    def test_source_selection_rejects_dangling_handoff_artifact_link(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source_selection = root / "source-selection.md"
+            source_selection.write_text(
+                self.source_selection_content(include_provenance=True).replace(
+                    "- next_skill: `ft-scope-analyzer`\n",
+                    "- next_skill: `ft-scope-analyzer`\n"
+                    "- latest_artifacts: `source-locator-session-log.md`\n",
+                ),
+                encoding="utf-8",
+            )
+            workflow = root / "workflow-state.yaml"
+            state = {"stage_status": "ready-for-next-stage", "next_skill": "ft-scope-analyzer"}
+
+            missing_findings, _ = self.validator.validate_source_selection_artifact(
+                source_selection, root, state, workflow
+            )
+            (root / "source-locator-session-log.md").write_text("# Receipt\n", encoding="utf-8")
+            accepted_findings, _ = self.validator.validate_source_selection_artifact(
+                source_selection, root, state, workflow
+            )
+
+        self.assertIn(
+            "source-selection-handoff-dangling-artifact-link",
+            {finding.id for finding in missing_findings},
+        )
+        self.assertNotIn(
+            "source-selection-handoff-dangling-artifact-link",
+            {finding.id for finding in accepted_findings},
+        )
+
+    def test_scope_options_rejects_unallocated_source_codes(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            options = root / "scope-options.md"
+            options.write_text(
+                "# Варианты области\n\n"
+                "## Candidate Scope\n\n"
+                "### SCOPE-OPTION-001\n\n"
+                "**Scope Slug:** `sample`\n\n"
+                "## Распределение требований ФТ\n\n"
+                "| Якорь ФТ | Назначение | Обоснование |\n"
+                "| --- | --- | --- |\n"
+                "| `AS.1` | `sample` | Проверяется в области. |\n",
+                encoding="utf-8",
+            )
+
+            missing_findings, _ = self.validator.validate_scope_options_source_allocation(
+                options,
+                root,
+                {"AS.1", "AS.2"},
+            )
+            options.write_text(
+                options.read_text(encoding="utf-8")
+                + "| `AS.2` | `sample` | Проверяется в области. |\n",
+                encoding="utf-8",
+            )
+            accepted_findings, _ = self.validator.validate_scope_options_source_allocation(
+                options,
+                root,
+                {"AS.1", "AS.2"},
+            )
+
+        self.assertIn(
+            "scope-options-source-allocation-incomplete",
+            {finding.id for finding in missing_findings},
+        )
+        self.assertEqual([], accepted_findings)
+
     def test_source_locator_session_log_requires_provenance_and_validator_receipt(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

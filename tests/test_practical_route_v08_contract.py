@@ -489,7 +489,7 @@ class PracticalRouteV08ContractTests(unittest.TestCase):
 
         for expected in (
             "latest_artifacts.source_selection",
-            "00-source-selection/source-selection.md",
+            "00-scope-selection/source-selection.md",
             "source selection is missing",
             "Обоснование параметризации ATOM",
             "scope-analysis stage",
@@ -500,6 +500,8 @@ class PracticalRouteV08ContractTests(unittest.TestCase):
 
         for expected in (
             "latest_artifacts.source_selection",
+            "Распределение требований ФТ",
+            "source-locator-session-log.md",
             "Обоснование параметризации ATOM",
             "Не оставляй решение об этой декомпозиции writer-у",
             "Каждая строка `Планируемые проверки` содержит ровно один `ATOM-*`",
