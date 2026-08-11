@@ -13,6 +13,7 @@ if str(REPO_ROOT) not in sys.path:
 
 from test_case_agent.practical_v09 import (
     ROUTE_VERSION,
+    ROUTE_TOOL_VERSION,
     SOURCE_MANIFEST_RELATIVE_PATH,
     SOURCE_CONTRACT_VERSION,
     PracticalV09Error,
@@ -27,7 +28,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--ft-package-root", type=Path, required=True)
     parser.add_argument("--docx", type=Path, required=True)
     parser.add_argument("--xhtml", type=Path, required=True)
-    parser.add_argument("--pdf", type=Path, required=True)
+    parser.add_argument("--pdf", type=Path)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--support", type=Path, action="append", default=[])
     return parser.parse_args(argv)
@@ -64,14 +65,16 @@ def main(argv: list[str] | None = None) -> int:
     payload: dict[str, object] = {
         "schema_version": 1,
         "route_version": ROUTE_VERSION,
+        "tool_version": ROUTE_TOOL_VERSION,
         "source_contract_version": SOURCE_CONTRACT_VERSION,
         "documents": [
             document(package_root, args.docx, "main-docx"),
             document(package_root, args.xhtml, "main-xhtml"),
-            document(package_root, args.pdf, "pdf-cross-check"),
         ],
         "support_inputs": [document(package_root, path, "support") for path in args.support],
     }
+    if args.pdf is not None:
+        payload["documents"].append(document(package_root, args.pdf, "pdf-cross-check"))
     notes = package_root / "AGENT-NOTES.md"
     if notes.is_file():
         payload["agent_notes"] = {"path": "AGENT-NOTES.md", "sha256": sha256_file(notes)}

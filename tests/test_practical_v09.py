@@ -12,6 +12,7 @@ from test_case_agent.practical_v09 import (
     PracticalV09Error,
     build_review_manifest,
     build_validator_report,
+    finding,
     matrix_review_required,
     sha256_file,
     validate_scope,
@@ -21,6 +22,16 @@ from test_case_agent.practical_v09 import (
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+
+
+def independently_derived_obligation(obligation_id: str = "OBL-001") -> list[dict[str, object]]:
+    return [
+        {
+            "source_anchor": "Раздел 9.1, строка «Партнеры»",
+            "statement": "Пункт меню «Партнеры» доступен пользователю.",
+            "obligation_ids": [obligation_id],
+        }
+    ]
 
 
 class PracticalV09Fixture:
@@ -93,6 +104,7 @@ class PracticalV09Fixture:
         write_json(
             self.state,
             {
+                "schema_version": 1,
                 "route_version": ROUTE_VERSION,
                 "scope_id": "01",
                 "scope_slug": "menu",
@@ -111,6 +123,8 @@ class PracticalV09Fixture:
                     "validator_report": "work/practical-v0.9/menu/validator-report.json",
                 },
                 "reviews": [],
+                "revision_count": 0,
+                "final_verdict": "not-finalized",
                 "decision_notes": [],
             },
         )
@@ -129,7 +143,7 @@ class PracticalV09Tests(unittest.TestCase):
                 str(REPO_ROOT / "scripts" / "validate_practical_scope.py"),
                 "--ft-package-root",
                 str(fixture.root),
-                "--scope-manifest",
+                "--workflow-state",
                 str(fixture.state),
                 "--output-profile",
                 str(output),
@@ -148,6 +162,7 @@ class PracticalV09Tests(unittest.TestCase):
             report = json.loads(output.read_text(encoding="utf-8"))
             self.assertTrue(report["summary"]["clean"])
             self.assertNotIn("validator_report", report["input_hashes"])
+            self.assertNotIn("workflow_state", report["content_input_hashes"])
             self.assertEqual("menu", report["scope_slug"])
             state = json.loads(fixture.state.read_text(encoding="utf-8"))
             self.assertEqual(
@@ -175,6 +190,58 @@ class PracticalV09Tests(unittest.TestCase):
             with self.assertRaises(PracticalV09Error):
                 validate_scope(package_root=fixture.root, workflow_state_path=fixture.state)
 
+    def test_pdf_is_optional_but_bound_when_available(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            fixture = PracticalV09Fixture(Path(raw))
+            manifest = json.loads(fixture.source_manifest.read_text(encoding="utf-8"))
+            manifest["documents"] = [
+                item for item in manifest["documents"] if item["role"] != "pdf-cross-check"
+            ]
+            write_json(fixture.source_manifest, manifest)
+            obligations = json.loads(fixture.obligations.read_text(encoding="utf-8"))
+            obligations["source_manifest_sha256"] = sha256_file(fixture.source_manifest)
+            write_json(fixture.obligations, obligations)
+
+            _, findings = validate_scope(
+                package_root=fixture.root,
+                workflow_state_path=fixture.state,
+            )
+            self.assertNotIn(
+                "source-manifest-required-roles",
+                [item.id for item in findings if item.blocking],
+            )
+
+    def test_source_manifest_cli_creates_a_valid_package_without_pdf(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            fixture = PracticalV09Fixture(Path(raw))
+            fixture.source_manifest.unlink()
+            command = [
+                sys.executable,
+                str(REPO_ROOT / "scripts" / "create_practical_source_manifest.py"),
+                "--ft-package-root",
+                str(fixture.root),
+                "--docx",
+                str(fixture.root / "source" / "main.docx"),
+                "--xhtml",
+                str(fixture.root / "source" / "main.xhtml"),
+                "--output",
+                str(fixture.source_manifest),
+            ]
+            completed = subprocess.run(
+                command,
+                text=True,
+                capture_output=True,
+                encoding="utf-8",
+                errors="replace",
+            )
+            self.assertEqual(0, completed.returncode, completed.stderr)
+            created = json.loads(fixture.source_manifest.read_text(encoding="utf-8"))
+            self.assertEqual(
+                {"main-docx", "main-xhtml"},
+                {item["role"] for item in created["documents"]},
+            )
+            self.assertIn("tool_version", created)
+
     def test_style_warning_is_visible_but_not_blocking(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             fixture = PracticalV09Fixture(Path(raw), obligation_statement="Проверить source-backed значение.")
@@ -183,7 +250,36 @@ class PracticalV09Tests(unittest.TestCase):
             matching = [item for item in report["findings"] if item["id"] == "scope-obligation-process-language"]
             self.assertEqual(1, len(matching))
             self.assertFalse(matching[0]["blocking"])
+            self.assertIsNone(matching[0]["blocking_reason"])
             self.assertTrue(report["summary"]["clean"])
+
+    def test_blocking_reason_is_independent_from_severity_and_category(self) -> None:
+        default_blocker = finding(
+            "source-missing",
+            "source-integrity",
+            "Источник недоступен",
+            "Не найден обязательный источник.",
+            "source-package-manifest.json",
+        )
+        self.assertTrue(default_blocker.blocking)
+        self.assertTrue(default_blocker.blocking_reason)
+
+        escalated_warning = finding(
+            "format-escalated",
+            "format",
+            "Нарушен обязательный формат",
+            "Локальный контракт требует точный формат.",
+            "test-cases.md",
+            severity="warning",
+            blocking=True,
+            blocking_reason="Локальный контракт делает формат блокирующим.",
+        )
+        self.assertTrue(escalated_warning.blocking)
+        self.assertEqual("warning", escalated_warning.severity)
+        self.assertEqual(
+            "Локальный контракт делает формат блокирующим.",
+            escalated_warning.blocking_reason,
+        )
 
     def test_missing_primary_expected_result_blocks(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
@@ -225,6 +321,26 @@ class PracticalV09Tests(unittest.TestCase):
         )
         self.assertTrue(required)
         self.assertIn("authorization", reasons[0])
+        required, reasons = matrix_review_required(
+            {"obligations": [{"id": "OBL-001", "risk_flags": ["temporal-rule"]}]}
+        )
+        self.assertTrue(required)
+        self.assertIn("temporal-rule", reasons[0])
+
+    def test_unknown_matrix_review_risk_is_blocking(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            fixture = PracticalV09Fixture(Path(raw))
+            obligations = json.loads(fixture.obligations.read_text(encoding="utf-8"))
+            obligations["obligations"][0]["risk_flags"] = ["unrecognized-risk"]
+            write_json(fixture.obligations, obligations)
+            _, findings = validate_scope(
+                package_root=fixture.root,
+                workflow_state_path=fixture.state,
+            )
+            self.assertIn(
+                "scope-obligation-risk-flags-unknown",
+                [item.id for item in findings if item.blocking],
+            )
 
     def test_required_matrix_review_blocks_test_case_phase_until_accepted(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
@@ -286,7 +402,7 @@ class PracticalV09Tests(unittest.TestCase):
                     "review_mode": "test-cases",
                     "execution_surface": "codex-thread",
                     "reviewer_thread_id": "019feebf-3cde-79d2-9f87-ba9c61ff7b14",
-                    "independent_obligations": ["OBL-001"],
+                    "independent_obligations": independently_derived_obligation(),
                     "verdict": "approved",
                     "findings": [],
                 },
@@ -329,7 +445,7 @@ class PracticalV09Tests(unittest.TestCase):
                     "review_mode": "test-cases",
                     "execution_surface": "codex-thread",
                     "reviewer_thread_id": "019feebf-3cde-79d2-9f87-ba9c61ff7b14",
-                    "independent_obligations": ["OBL-OTHER"],
+                    "independent_obligations": independently_derived_obligation("OBL-OTHER"),
                     "verdict": "approved",
                     "findings": [],
                 },
@@ -344,7 +460,7 @@ class PracticalV09Tests(unittest.TestCase):
                 [item.id for item in findings if item.blocking],
             )
 
-    def test_finalizer_records_review_and_allows_accepted_only_after_approval(self) -> None:
+    def test_reviewer_must_record_source_backed_independent_obligations(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             fixture = PracticalV09Fixture(Path(raw))
             manifest = build_review_manifest(
@@ -373,12 +489,91 @@ class PracticalV09Tests(unittest.TestCase):
                     "findings": [],
                 },
             )
+            _, findings = verify_review_result(
+                package_root=fixture.root,
+                manifest_path=manifest_path,
+                result_path=result_path,
+            )
+            self.assertIn(
+                "review-result-independent-obligation-format",
+                [item.id for item in findings if item.blocking],
+            )
+
+    def test_review_manifest_rejects_changed_tool_contract(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            fixture = PracticalV09Fixture(Path(raw))
+            manifest = build_review_manifest(
+                package_root=fixture.root,
+                workflow_state_path=fixture.state,
+                review_mode="test-cases",
+                controller_thread_id="019feebf-3cde-79d2-9f87-ba9c61ff7b13",
+                code_branch="codex/test",
+                code_commit="abc123",
+                contract_digest="contract",
+            )
+            manifest["tool_version"] = "practical-v0.9.0"
+            manifest_path = fixture.scope_dir / "test-cases-review-manifest.json"
+            write_json(manifest_path, manifest)
+            result_path = fixture.scope_dir / "test-cases-review-result.json"
+            write_json(
+                result_path,
+                {
+                    "review_manifest_sha256": sha256_file(manifest_path),
+                    "scope_id": "01",
+                    "scope_slug": "menu",
+                    "review_mode": "test-cases",
+                    "execution_surface": "codex-thread",
+                    "reviewer_thread_id": "019feebf-3cde-79d2-9f87-ba9c61ff7b14",
+                    "independent_obligations": independently_derived_obligation(),
+                    "verdict": "approved",
+                    "findings": [],
+                },
+            )
+            _, findings = verify_review_result(
+                package_root=fixture.root,
+                manifest_path=manifest_path,
+                result_path=result_path,
+            )
+            self.assertIn(
+                "review-manifest-tool-version",
+                [item.id for item in findings if item.blocking],
+            )
+
+    def test_finalizer_records_review_and_allows_accepted_only_after_approval(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            fixture = PracticalV09Fixture(Path(raw))
+            manifest = build_review_manifest(
+                package_root=fixture.root,
+                workflow_state_path=fixture.state,
+                review_mode="test-cases",
+                controller_thread_id="019feebf-3cde-79d2-9f87-ba9c61ff7b13",
+                code_branch="codex/test",
+                code_commit="abc123",
+                contract_digest="contract",
+            )
+            manifest_path = fixture.scope_dir / "test-cases-review-manifest.json"
+            write_json(manifest_path, manifest)
+            result_path = fixture.scope_dir / "test-cases-review-result.json"
+            write_json(
+                result_path,
+                {
+                    "review_manifest_sha256": sha256_file(manifest_path),
+                    "scope_id": "01",
+                    "scope_slug": "menu",
+                    "review_mode": "test-cases",
+                    "execution_surface": "codex-thread",
+                    "reviewer_thread_id": "019feebf-3cde-79d2-9f87-ba9c61ff7b14",
+                    "independent_obligations": independently_derived_obligation(),
+                    "verdict": "approved",
+                    "findings": [],
+                },
+            )
             command = [
                 sys.executable,
                 str(REPO_ROOT / "scripts" / "finalize_practical_review.py"),
                 "--ft-package-root",
                 str(fixture.root),
-                "--scope-manifest",
+                "--workflow-state",
                 str(fixture.state),
                 "--review-manifest",
                 str(manifest_path),
@@ -395,6 +590,8 @@ class PracticalV09Tests(unittest.TestCase):
             self.assertEqual(0, completed.returncode, completed.stderr)
             state = json.loads(fixture.state.read_text(encoding="utf-8"))
             self.assertEqual("accepted", state["phase"])
+            self.assertEqual("approved", state["final_verdict"])
+            self.assertEqual(0, state["revision_count"])
             self.assertEqual(
                 [{
                     "mode": "test-cases",
@@ -404,6 +601,60 @@ class PracticalV09Tests(unittest.TestCase):
                 }],
                 state["reviews"],
             )
+
+    def test_changes_required_consumes_the_single_content_revision(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            fixture = PracticalV09Fixture(Path(raw))
+            manifest = build_review_manifest(
+                package_root=fixture.root,
+                workflow_state_path=fixture.state,
+                review_mode="test-cases",
+                controller_thread_id="019feebf-3cde-79d2-9f87-ba9c61ff7b13",
+                code_branch="codex/test",
+                code_commit="abc123",
+                contract_digest="contract",
+            )
+            manifest_path = fixture.scope_dir / "test-cases-review-manifest.json"
+            write_json(manifest_path, manifest)
+            result_path = fixture.scope_dir / "test-cases-review-result.json"
+            write_json(
+                result_path,
+                {
+                    "review_manifest_sha256": sha256_file(manifest_path),
+                    "scope_id": "01",
+                    "scope_slug": "menu",
+                    "review_mode": "test-cases",
+                    "execution_surface": "codex-thread",
+                    "reviewer_thread_id": "019feebf-3cde-79d2-9f87-ba9c61ff7b14",
+                    "independent_obligations": independently_derived_obligation(),
+                    "verdict": "changes-required",
+                    "findings": [{"id": "RV-001"}],
+                },
+            )
+            command = [
+                sys.executable,
+                str(REPO_ROOT / "scripts" / "finalize_practical_review.py"),
+                "--ft-package-root",
+                str(fixture.root),
+                "--workflow-state",
+                str(fixture.state),
+                "--review-manifest",
+                str(manifest_path),
+                "--review-result",
+                str(result_path),
+            ]
+            first = subprocess.run(
+                command,
+                text=True,
+                capture_output=True,
+                encoding="utf-8",
+                errors="replace",
+            )
+            self.assertEqual(0, first.returncode, first.stderr)
+            state = json.loads(fixture.state.read_text(encoding="utf-8"))
+            self.assertEqual(1, state["revision_count"])
+            self.assertEqual("changes-required", state["final_verdict"])
+            self.assertEqual("test-cases", state["phase"])
 
     def test_review_contract_rejects_non_durable_thread_identifiers(self) -> None:
         with tempfile.TemporaryDirectory() as raw:

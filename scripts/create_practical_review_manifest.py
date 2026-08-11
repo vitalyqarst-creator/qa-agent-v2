@@ -31,7 +31,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Create one immutable practical v0.9 review manifest.")
     parser.add_argument("--repo-root", type=Path, default=REPO_ROOT)
     parser.add_argument("--ft-package-root", type=Path, required=True)
-    parser.add_argument("--scope-manifest", type=Path, required=True)
+    parser.add_argument("--workflow-state", type=Path, required=True)
     parser.add_argument("--review-mode", choices=("matrix", "test-cases"), required=True)
     parser.add_argument("--controller-thread-id", required=True)
     parser.add_argument("--contract-file", type=Path, action="append", required=True)
@@ -59,7 +59,7 @@ def main(argv: list[str] | None = None) -> int:
     ).hexdigest()
     payload = build_review_manifest(
         package_root=package_root,
-        workflow_state_path=args.scope_manifest.resolve(),
+        workflow_state_path=args.workflow_state.resolve(),
         review_mode=args.review_mode,
         controller_thread_id=args.controller_thread_id,
         code_branch=git_value(repo_root, "branch", "--show-current"),

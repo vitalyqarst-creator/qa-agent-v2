@@ -33,7 +33,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument("--ft-package-root", type=Path, required=True)
     parser.add_argument(
-        "--scope-manifest",
+        "--workflow-state",
         type=Path,
         required=True,
         help="workflow-state.json for the active scope",
@@ -55,7 +55,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     package_root = args.ft_package_root.resolve()
-    state_path = args.scope_manifest.resolve()
+    state_path = args.workflow_state.resolve()
     output_path = args.output_profile.resolve()
     if not package_root.is_dir():
         raise PracticalV09Error(f"FT package root does not exist: {package_root}")
@@ -66,11 +66,11 @@ def main(argv: list[str] | None = None) -> int:
     if args.exclude_output is not None and args.exclude_output.resolve() != output_path:
         raise PracticalV09Error("exclude-output must equal output-profile for the one-pass route")
     if not state_path.is_file():
-        raise PracticalV09Error(f"scope-manifest does not exist: {state_path}")
+        raise PracticalV09Error(f"workflow-state does not exist: {state_path}")
     try:
         state_path.relative_to(package_root)
     except ValueError as exc:
-        raise PracticalV09Error("scope-manifest must be inside FT package root") from exc
+        raise PracticalV09Error("workflow-state must be inside FT package root") from exc
     # The output location is recorded in the only mutable control-plane file
     # before validation. validate_scope deliberately excludes this generated
     # report from its dependency closure, so a rerun is not a self-reference.

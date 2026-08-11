@@ -1,4 +1,4 @@
 interface:
   display_name: "FT Practical Route"
   short_description: "Compact source-to-test-case route with independent review"
-  default_prompt: "Use $ft-practical-route for a confirmed FT scope: bind DOCX/XHTML/PDF, derive source obligations, create a compact Russian matrix, write canonical test cases, and complete the required independent review."
+  default_prompt: "Use $ft-practical-route for a confirmed FT scope: bind DOCX/XHTML and an available PDF, derive source obligations, create a compact Russian matrix, write canonical test cases, and complete the required independent review."

@@ -11,7 +11,7 @@ Read [../../references/agent/practical-test-case-route-v0.9.md](../../references
 
 ## Входы
 
-Подтверждённый scope ФТ и доступные DOCX, XHTML, PDF, support, `AGENT-NOTES.md` и visual references.
+Подтверждённый scope ФТ, DOCX, XHTML, support, `AGENT-NOTES.md`, visual references и PDF, если он доступен для structural/visual cross-check.
 
 ## Выходы
 
@@ -23,7 +23,7 @@ Read [../../references/agent/practical-test-case-route-v0.9.md](../../references
 
 ## Route
 
-1. Resolve DOCX, XHTML, PDF, support, existing `AGENT-NOTES.md` and visual references. Create `source-package-manifest.json`.
+1. Resolve DOCX, XHTML, support, existing `AGENT-NOTES.md`, visual references and an available PDF. Create `source-package-manifest.json`.
 2. Create `scope-obligations.json` with one source-backed `OBL-*` per independent assertion. Do not create TC yet.
 3. Create `workflow-state.json`, then write one Russian `test-design-matrix.md`.
 4. Run `validate_practical_scope.py` exactly once for the frozen stage.

@@ -13,6 +13,7 @@ if str(REPO_ROOT) not in sys.path:
 
 from test_case_agent.practical_v09 import (
     ROUTE_VERSION,
+    WORKFLOW_STATE_SCHEMA_VERSION,
     SOURCE_MANIFEST_RELATIVE_PATH,
     PracticalV09Error,
     package_relative_path,
@@ -53,6 +54,7 @@ def main(argv: list[str] | None = None) -> int:
             f"{SOURCE_MANIFEST_RELATIVE_PATH}"
         )
     payload = {
+        "schema_version": WORKFLOW_STATE_SCHEMA_VERSION,
         "route_version": ROUTE_VERSION,
         "scope_id": args.scope_id,
         "scope_slug": args.scope_slug,
@@ -71,6 +73,8 @@ def main(argv: list[str] | None = None) -> int:
             "validator_report": "not-created",
         },
         "reviews": [],
+        "revision_count": 0,
+        "final_verdict": "not-finalized",
         "decision_notes": [],
     }
     write_json(output, payload)

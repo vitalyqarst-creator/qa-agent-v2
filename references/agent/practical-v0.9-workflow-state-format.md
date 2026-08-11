@@ -2,6 +2,7 @@
 
 ```json
 {
+  "schema_version": 1,
   "route_version": "practical-v0.9",
   "scope_id": "01",
   "scope_slug": "9.1-menu-upravleniya-partnerami",
@@ -20,6 +21,8 @@
     "validator_report": "not-created"
   },
   "reviews": [],
+  "revision_count": 0,
+  "final_verdict": "not-finalized",
   "decision_notes": []
 }
 ```
@@ -29,6 +32,12 @@ findings reviewer-а в него не дублируются. Если прав�
 матрицы, scope не может перейти в `test-cases`, пока не появится запись `matrix`
 с вердиктом `approved`. Scope не может перейти в `accepted`, пока не появится
 запись `test-cases` с вердиктом `approved`.
+
+`revision_count` — число уже разрешённых содержательных доработок после review;
+для v0.9 допустимы только `0` и `1`. Второй `changes-required` не запускает
+новый repair-loop: scope получает честный `blocked` до решения пользователя.
+`final_verdict`: `not-finalized`, `approved`, `changes-required` или
+`blocked-input`.
 
 `workflow-state.json` — единственный mutable control-plane artifact v0.9. Не копируй его поля в отдельный summary. Человекочитаемый статус формируется из него и `validator-report.json` в ответе агенту.
 

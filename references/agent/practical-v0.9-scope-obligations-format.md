@@ -20,4 +20,4 @@
 
 `statement` — точное, проверяемое русскоязычное утверждение ФТ. Здесь не фиксируются шаги, конкретные fixtures, предполагаемый UI oracle, matrix ID и TC ID: это принадлежит последующим этапам.
 
-`risk_flags` используй только из: `status-transition`, `cross-field-rule`, `closed-dictionary`, `integration`, `authorization`, `high-risk`. Они запускают conditional matrix review.
+`risk_flags` используй только из: `status-transition`, `cross-field-rule`, `closed-dictionary`, `integration`, `authorization`, `exception-over-general-rule`, `mapping-table`, `temporal-rule`, `high-fan-out`, `high-risk`. Они запускают conditional matrix review.

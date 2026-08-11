@@ -18,12 +18,14 @@ from typing import Any, Iterable
 
 
 ROUTE_VERSION = "practical-v0.9"
+ROUTE_TOOL_VERSION = "practical-v0.9.2"
+WORKFLOW_STATE_SCHEMA_VERSION = 1
 SOURCE_CONTRACT_VERSION = "source-package-v1"
 REVIEW_MANIFEST_VERSION = "practical-review-manifest-v1"
 VALIDATOR_REPORT_VERSION = "practical-scope-validator-v1"
 SOURCE_MANIFEST_RELATIVE_PATH = "work/practical-v0.9/source-package-manifest.json"
 
-REQUIRED_SOURCE_ROLES = {"main-docx", "main-xhtml", "pdf-cross-check"}
+REQUIRED_SOURCE_ROLES = {"main-docx", "main-xhtml"}
 REQUIRED_TC_FIELDS = (
     "Название",
     "Тип",
@@ -45,13 +47,16 @@ BLOCKING_CATEGORIES = {
     "review-integrity",
     "artifact-tampering",
 }
-NONBLOCKING_CATEGORIES = {"format", "style", "transport", "advisory-risk"}
 MATRIX_REVIEW_RISK_FLAGS = {
     "status-transition",
     "cross-field-rule",
     "closed-dictionary",
     "integration",
     "authorization",
+    "exception-over-general-rule",
+    "mapping-table",
+    "temporal-rule",
+    "high-fan-out",
     "high-risk",
 }
 MATRIX_REVIEW_OBLIGATION_THRESHOLD = 8
@@ -62,6 +67,7 @@ ALLOWED_EXECUTION_STATUSES = {
     "blocked-observability",
     "needs-future-clarification",
 }
+ALLOWED_FINAL_VERDICTS = {"not-finalized", "approved", "changes-required", "blocked-input"}
 CODEX_THREAD_ID_RE = re.compile(
     r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
     flags=re.IGNORECASE,
@@ -74,6 +80,7 @@ class ScopeFinding:
     category: str
     severity: str
     blocking: bool
+    blocking_reason: str | None
     remediation_owner: str
     title: str
     details: str
@@ -148,16 +155,20 @@ def finding(
     severity: str = "error",
     remediation_owner: str = "writer",
     blocking: bool | None = None,
+    blocking_reason: str | None = None,
 ) -> ScopeFinding:
     if blocking is None:
         blocking = category in BLOCKING_CATEGORIES
-    if category in NONBLOCKING_CATEGORIES:
-        blocking = False
+    if blocking and not blocking_reason:
+        blocking_reason = f"Блокирующая категория: {category}."
+    if not blocking:
+        blocking_reason = None
     return ScopeFinding(
         id=finding_id,
         category=category,
         severity=severity,
         blocking=bool(blocking),
+        blocking_reason=blocking_reason,
         remediation_owner=remediation_owner,
         title=title,
         details=details,
@@ -184,6 +195,11 @@ def workflow_artifact_path(
 
 def load_workflow_state(path: Path, package_root: Path) -> dict[str, Any]:
     state = read_json(path)
+    if state.get("schema_version") != WORKFLOW_STATE_SCHEMA_VERSION:
+        raise PracticalV09Error(
+            "workflow-state.json: schema_version must be "
+            f"{WORKFLOW_STATE_SCHEMA_VERSION!r}"
+        )
     if state.get("route_version") != ROUTE_VERSION:
         raise PracticalV09Error(
             f"workflow-state.json: route_version must be {ROUTE_VERSION!r}"
@@ -208,6 +224,13 @@ def load_workflow_state(path: Path, package_root: Path) -> dict[str, Any]:
     reviews = state.get("reviews", [])
     if not isinstance(reviews, list):
         raise PracticalV09Error("workflow-state.json: reviews must be an array")
+    revision_count = state.get("revision_count")
+    if not isinstance(revision_count, int) or not 0 <= revision_count <= 1:
+        raise PracticalV09Error("workflow-state.json: revision_count must be 0 or 1")
+    if state.get("final_verdict") not in ALLOWED_FINAL_VERDICTS:
+        raise PracticalV09Error(
+            "workflow-state.json: final_verdict has unsupported value"
+        )
     source_manifest = workflow_artifact_path(
         state, package_root, "source_package_manifest", required=True
     )
@@ -233,11 +256,13 @@ def validate_source_package_manifest(
     findings: list[ScopeFinding] = []
     if manifest.get("route_version") != ROUTE_VERSION:
         findings.append(finding("source-manifest-route-version", "source-integrity", "У манифеста исходных материалов неверная версия маршрута", f"Ожидается {ROUTE_VERSION}.", artifact, remediation_owner="controller"))
+    if manifest.get("tool_version") not in {None, ROUTE_TOOL_VERSION}:
+        findings.append(finding("source-manifest-tool-version", "transport", "Манифест исходных материалов создан другой версией инструмента", f"Текущая версия: {ROUTE_TOOL_VERSION}; указанная: {manifest.get('tool_version')}.", artifact, remediation_owner="controller", severity="warning"))
     if manifest.get("source_contract_version") != SOURCE_CONTRACT_VERSION:
         findings.append(finding("source-manifest-contract-version", "source-integrity", "У манифеста исходных материалов неверная версия контракта", f"Ожидается {SOURCE_CONTRACT_VERSION}.", artifact, remediation_owner="controller"))
     documents = manifest.get("documents")
     if not isinstance(documents, list):
-        findings.append(finding("source-manifest-documents-missing", "source-integrity", "В манифесте не указан перечень исходных файлов", "Поле documents должно быть массивом DOCX, XHTML и PDF.", artifact, remediation_owner="controller"))
+        findings.append(finding("source-manifest-documents-missing", "source-integrity", "В манифесте не указан перечень исходных файлов", "Поле documents должно быть массивом DOCX и XHTML; PDF включается при наличии для structural/visual cross-check.", artifact, remediation_owner="controller"))
         return findings, manifest
 
     seen_roles: set[str] = set()
@@ -309,6 +334,13 @@ def validate_scope_obligations(
         seen.add(obligation_id)
         if not statement or not source_anchor:
             findings.append(finding("scope-obligation-incomplete", "unresolved-requirement", "Обязательство не содержит формулировку или привязку к ФТ", f"{obligation_id or f'строка {index}'} требует statement и source_anchor.", artifact, remediation_owner="scope-analyzer"))
+        risk_flags = obligation.get("risk_flags", [])
+        if not isinstance(risk_flags, list) or not all(isinstance(flag, str) for flag in risk_flags):
+            findings.append(finding("scope-obligation-risk-flags-format", "semantic-completeness", "У обязательства некорректный формат risk_flags", f"{obligation_id or f'строка {index}'} требует массив известных строковых risk_flags.", artifact, remediation_owner="scope-analyzer"))
+        else:
+            unknown_flags = sorted(set(risk_flags) - MATRIX_REVIEW_RISK_FLAGS)
+            if unknown_flags:
+                findings.append(finding("scope-obligation-risk-flags-unknown", "semantic-completeness", "У обязательства указан неизвестный риск matrix review", f"{obligation_id or f'строка {index}'}: " + ", ".join(unknown_flags) + ".", artifact, remediation_owner="scope-analyzer"))
         if re.search(r"\b(source-backed|residual|blocked-observability|fixture)\b", statement, flags=re.IGNORECASE):
             findings.append(finding("scope-obligation-process-language", "style", "В формулировке обязательства остался служебный английский текст", f"Проверьте statement для {obligation_id}.", artifact, remediation_owner="scope-analyzer", severity="warning"))
     return findings, payload
@@ -574,20 +606,24 @@ def validate_scope(
             remediation_owner="controller",
         ))
 
+    content_input_hashes = {
+        key: sha256_file(path)
+        for key in ("source_package_manifest", "scope_obligations", "test_design_matrix", "canonical_test_cases")
+        for path in [workflow_artifact_path(state, package_root, key)]
+        if path is not None and path.is_file()
+    }
     report_context = {
         "route_version": ROUTE_VERSION,
+        "tool_version": ROUTE_TOOL_VERSION,
         "scope_id": state["scope_id"],
         "scope_slug": state["scope_slug"],
         "phase": state["phase"],
         "matrix_review_required": matrix_required,
         "matrix_review_reasons": matrix_reasons,
+        "content_input_hashes": content_input_hashes,
         "input_hashes": {
-            key: sha256_file(path)
-            for key in ("workflow_state", "source_package_manifest", "scope_obligations", "test_design_matrix", "canonical_test_cases")
-            for path in [
-                workflow_state_path if key == "workflow_state" else workflow_artifact_path(state, package_root, key)
-            ]
-            if path is not None and path.is_file()
+            "workflow_state": sha256_file(workflow_state_path),
+            **content_input_hashes,
         },
     }
     return report_context, findings
@@ -648,6 +684,7 @@ def build_review_manifest(
         "schema_version": 1,
         "manifest_version": REVIEW_MANIFEST_VERSION,
         "route_version": ROUTE_VERSION,
+        "tool_version": ROUTE_TOOL_VERSION,
         "scope_id": state["scope_id"],
         "scope_slug": state["scope_slug"],
         "review_mode": review_mode,
@@ -682,6 +719,8 @@ def verify_review_result(
         findings.append(finding("review-manifest-version", "review-integrity", "У manifest review неверная версия контракта", f"Ожидается {REVIEW_MANIFEST_VERSION}.", artifact, remediation_owner="controller"))
     if manifest.get("route_version") != ROUTE_VERSION:
         findings.append(finding("review-manifest-route", "review-integrity", "Manifest review относится к другому маршруту", f"Ожидается {ROUTE_VERSION}.", artifact, remediation_owner="controller"))
+    if manifest.get("tool_version") != ROUTE_TOOL_VERSION:
+        findings.append(finding("review-manifest-tool-version", "review-integrity", "Manifest review создан несовместимой версией инструмента", f"Ожидается {ROUTE_TOOL_VERSION}.", artifact, remediation_owner="controller"))
     if result.get("review_manifest_sha256") != sha256_file(manifest_path):
         findings.append(finding("review-result-manifest-hash", "review-integrity", "Результат review не связан с переданным manifest", "review_manifest_sha256 не совпадает с контрольной суммой review-manifest.json.", artifact, remediation_owner="controller"))
     if result.get("execution_surface") != "codex-thread":
@@ -720,13 +759,44 @@ def verify_review_result(
                 for item in read_json(obligations_path).get("obligations", [])
                 if isinstance(item, dict)
             }
-            actual = {str(item) for item in independent if isinstance(item, str)}
+            actual: set[str] = set()
+            for index, entry in enumerate(independent, start=1):
+                if not isinstance(entry, dict):
+                    findings.append(finding(
+                        "review-result-independent-obligation-format",
+                        "review-integrity",
+                        "Самостоятельно восстановленное обязательство имеет неверный формат",
+                        f"independent_obligations[{index}] должен содержать source_anchor, statement и obligation_ids.",
+                        artifact,
+                        remediation_owner="reviewer",
+                    ))
+                    continue
+                source_anchor = str(entry.get("source_anchor") or "").strip()
+                statement = str(entry.get("statement") or "").strip()
+                obligation_ids = entry.get("obligation_ids")
+                if (
+                    not source_anchor
+                    or not statement
+                    or not isinstance(obligation_ids, list)
+                    or not obligation_ids
+                    or not all(isinstance(item, str) and item.startswith("OBL-") for item in obligation_ids)
+                ):
+                    findings.append(finding(
+                        "review-result-independent-obligation-format",
+                        "review-integrity",
+                        "Самостоятельно восстановленное обязательство неполно",
+                        f"independent_obligations[{index}] требует непустые source_anchor, statement и obligation_ids с OBL-*.",
+                        artifact,
+                        remediation_owner="reviewer",
+                    ))
+                    continue
+                actual.update(obligation_ids)
             if actual != expected:
                 findings.append(finding(
                     "review-result-independent-coverage",
                     "review-integrity",
                     "Reviewer восстановил неполный или иной набор обязательств",
-                    "independent_obligations должен содержать в точности все OBL-* из зафиксированного scope-obligations.json.",
+                    "obligation_ids в independently derived obligations должны в сумме содержать в точности все OBL-* из зафиксированного scope-obligations.json.",
                     artifact,
                     remediation_owner="reviewer",
                     evidence=["expected=" + ",".join(sorted(expected)), "actual=" + ",".join(sorted(actual))],

@@ -23,7 +23,7 @@ from test_case_agent.practical_v09 import (
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Finalize a separate-session practical v0.9 review.")
     parser.add_argument("--ft-package-root", type=Path, required=True)
-    parser.add_argument("--scope-manifest", type=Path, required=True)
+    parser.add_argument("--workflow-state", type=Path, required=True)
     parser.add_argument("--review-manifest", type=Path, required=True)
     parser.add_argument("--review-result", type=Path, required=True)
     return parser.parse_args(argv)
@@ -32,7 +32,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     package_root = args.ft_package_root.resolve()
-    state_path = args.scope_manifest.resolve()
+    state_path = args.workflow_state.resolve()
     state = load_workflow_state(state_path, package_root)
     result, findings = verify_review_result(
         package_root=package_root,
@@ -59,12 +59,21 @@ def main(argv: list[str] | None = None) -> int:
     if result["verdict"] == "approved":
         state["phase"] = "test-cases" if review_mode == "matrix" else "accepted"
         state["next_action"] = "Написать тест-кейсы" if review_mode == "matrix" else "Завершить scope"
+        if review_mode == "test-cases":
+            state["final_verdict"] = "approved"
     elif result["verdict"] == "changes-required":
-        state["phase"] = "matrix" if review_mode == "matrix" else "test-cases"
-        state["next_action"] = "Выполнить одну целевую доработку по findings reviewer"
+        state["final_verdict"] = "changes-required"
+        if state["revision_count"] >= 1:
+            state["phase"] = "blocked"
+            state["next_action"] = "Лимит одной содержательной доработки исчерпан; требуется решение по scope"
+        else:
+            state["revision_count"] += 1
+            state["phase"] = "matrix" if review_mode == "matrix" else "test-cases"
+            state["next_action"] = "Выполнить одну целевую доработку по findings reviewer"
     else:
         state["phase"] = "blocked"
         state["next_action"] = "Получить внешнее уточнение по blocker reviewer"
+        state["final_verdict"] = "blocked-input"
     write_json(state_path, state)
     print(state["next_action"])
     return 0

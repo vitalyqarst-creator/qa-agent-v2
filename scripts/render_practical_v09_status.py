@@ -17,20 +17,22 @@ from test_case_agent.practical_v09 import PracticalV09Error, load_workflow_state
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Render, but do not persist, practical v0.9 status.")
     parser.add_argument("--ft-package-root", type=Path, required=True)
-    parser.add_argument("--scope-manifest", type=Path, required=True)
+    parser.add_argument("--workflow-state", type=Path, required=True)
     return parser.parse_args(argv)
 
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     package_root = args.ft_package_root.resolve()
-    state = load_workflow_state(args.scope_manifest.resolve(), package_root)
+    state = load_workflow_state(args.workflow_state.resolve(), package_root)
     report_path = workflow_artifact_path(state, package_root, "validator_report")
     report = read_json(report_path) if report_path is not None and report_path.is_file() else None
     print(f"# Статус scope {state['scope_id']} — {state['scope_slug']}")
     print()
     print(f"- Этап: `{state['phase']}`")
     print(f"- Следующее действие: {state['next_action']}")
+    print(f"- Содержательных доработок: {state['revision_count']} из 1")
+    print(f"- Финальный вердикт: `{state['final_verdict']}`")
     print(f"- Matrix review обязателен: {'да' if state.get('matrix_review_required') else 'нет'}")
     if report is None:
         print("- Scoped validator: ещё не запускался.")
