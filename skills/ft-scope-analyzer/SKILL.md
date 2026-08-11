@@ -232,8 +232,13 @@ source правами — `needs-test-data`, не вопрос к БА. В пр�
 отображения / действий и «создать или выбрать» не доказывают подготовку.
 Если действие одного исполнителя только создаёт состояние для проверки другой
 роли, вынеси его в `SETUP-*`: формула «администратор, затем пользователь» не
-является одним исполнителем атомарной проверки. При bounded rematerialization
-сначала собери все scope-local findings validator и внеси их одним patch.
+является одним исполнителем атомарной проверки. Перед rematerialization сам
+сравни source/support inputs, границы scope, source rows, словарь и `GAP-*` с
+активным handoff. Если они не изменились, а задача затрагивает только
+версию/маршрутизацию/summary/validator, используй `metadata-only`: не меняй
+содержательные brief, matrix, dictionary и self-check. Иначе используй
+`bounded-content`. Сначала собери все scope-local findings validator и внеси
+их одним patch.
 Широкий gap по нескольким
 obligations/полям/validation classes разложи на отдельные `CLR-*` или
 нумерованный checklist. Не задавай БА umbrella-вопрос; при intake закрывай
@@ -245,7 +250,7 @@ obligations/полям/validation classes разложи на отдельные
 16a. Для `practical_v0_8` отсутствие `scope-contract.md` не отменяет обязательные source checks: если DOCX+PDF доступны, `scope-brief.md` обязан ссылаться на актуальный `source-parity-check.md`; если scope табличный/строковый, `scope-brief.md` обязан ссылаться на актуальный `source-row-inventory.md`. Если любой обязательный artifact отсутствует или не открывается, остановись с `blocked-input` и не создавай writer prompt.
 17. В legacy/session route `workflow-state.yaml` задает один active downstream по его canonical contract. `practical_v0_8` всегда идет к writer, не в `source_assertion_review`.
 18. Передай выбранный scope дальше в `ft-test-case-writer`, `ft-test-case-reviewer` или `ft-test-case-iteration` вместе с информацией о XHTML extraction notes, source parity, PDF cross-check, package-specific notes, scope complexity assessment и обязательными внутренними рабочими пакетами.
-19. Перед финальным сообщением перечитай созданный `workflow-state.yaml` и отрази только его фактические `current_stage`, `stage_status`, `next_skill`, blocker-ы и активный prompt. Не сообщай о legacy review или следующем этапе, которого нет в этом файле.
+19. Перед финальным сообщением перечитай созданный `workflow-state.yaml`, `practical-stage-summary.md`, `## Действия текущего этапа` и существующие receipt. Отрази только подтвержденные ими фактические `current_stage`, `stage_status`, `next_skill`, blocker-ы и active prompt. Не заявляй о commit/push/reviewer session/dispatch/review artifact, если он не существует в этих evidence текущего этапа; отсутствие обозначай `not-created`. Не сообщай о legacy review или следующем этапе, которого нет в этих артефактах.
 
 ## Канонические references
 

@@ -68,11 +68,20 @@ Resolver должен читать JSON-блок ниже как канонич�
       "paths": [
         "skills/ft-scope-analyzer/SKILL.md",
         "references/agent/practical-test-case-route-v0.8.md",
-        "references/agent/scope-options-format.md",
-        "references/agent/scope-clarification-requests-format.md",
         "references/agent/source-parity-check-format.md",
-        "references/agent/dictionary-inventory-format.md",
-        "references/agent/mockup-visual-inventory-format.md"
+        "references/agent/dictionary-inventory-format.md"
+      ]
+    },
+    "scope_practical_selection_details": {
+      "rationale": "Load the scope-option presentation format only when the current practical task offers or changes scope options.",
+      "paths": [
+        "references/agent/scope-options-format.md"
+      ]
+    },
+    "scope_practical_clarification_details": {
+      "rationale": "Load the clarification-request format only when the current scope has a real unresolved BA question.",
+      "paths": [
+        "references/agent/scope-clarification-requests-format.md"
       ]
     },
     "scope_practical_source_details": {
@@ -103,9 +112,19 @@ Resolver должен читать JSON-блок ниже как канонич�
         "skills/ft-test-case-writer/SKILL.md",
         "references/agent/writer-runtime-workflow.md",
         "references/agent/writer-runtime-contract.md",
-        "references/agent/negative-ui-calibration-policy.md",
         "references/qa/test-case-runtime-format.md",
-        "references/qa/coverage-runtime-checklist.md",
+        "references/qa/coverage-runtime-checklist.md"
+      ]
+    },
+    "writer_negative_ui_calibration": {
+      "rationale": "Load the negative UI calibration policy only when a source-backed restriction lacks a confirmed UI reaction.",
+      "paths": [
+        "references/agent/negative-ui-calibration-policy.md"
+      ]
+    },
+    "writer_traceability_details": {
+      "rationale": "Load detailed traceability rules while filling or validating traceability-bearing matrix and TC fields; core policy remains available before that point.",
+      "paths": [
         "references/qa/traceability-rules.md"
       ]
     },
@@ -533,7 +552,7 @@ Resolver должен читать JSON-блок ниже как канонич�
       "mode": "practical_v0_8",
       "scope_profile": "any",
       "required_groups": ["policy_core", "scope_practical_core"],
-      "conditional_groups": ["scope_table_artifacts", "scope_ui_artifacts", "scope_practical_source_details", "scope_practical_design_details"],
+      "conditional_groups": ["scope_table_artifacts", "scope_ui_artifacts", "scope_practical_source_details", "scope_practical_design_details", "scope_practical_selection_details", "scope_practical_clarification_details"],
       "audit_only_groups": ["audit_only_history", "governance_audit_only"],
       "budget_limit_kib": 164,
       "rationale": "Compact practical scope brief for ordinary test-case writing without source assertions, bridge or immutable runner routing. The 164 KiB limit retains the mandatory 15 KiB safety headroom after explicit round-cap and validator-error-layer handoff fields; it does not load additional references."
@@ -543,8 +562,8 @@ Resolver должен читать JSON-блок ниже как канонич�
       "phase": "writer",
       "mode": "practical_v0_8",
       "scope_profile": "any",
-      "required_groups": ["global_core", "practical_route_core", "writer_core", "quality_rule_cards"],
-      "conditional_groups": ["scope_practical_core", "writer_ui_artifacts", "writer_numeric_coverage", "writer_integration_coverage", "style_remediation_compact"],
+      "required_groups": ["policy_core", "practical_route_core", "writer_core", "quality_rule_cards"],
+      "conditional_groups": ["scope_practical_core", "writer_ui_artifacts", "writer_numeric_coverage", "writer_integration_coverage", "writer_negative_ui_calibration", "writer_traceability_details", "style_remediation_compact"],
       "audit_only_groups": ["audit_only_history", "governance_audit_only"],
       "budget_limit_kib": 201,
       "rationale": "Default practical writer context: first matrix-only from scope brief, then canonical test cases only after accepted separate-session matrix review. The 200 KiB limit preserves the 15 KiB safety headroom for the compact execution-quality rules; it does not authorize loading additional deep references by default."
@@ -554,8 +573,8 @@ Resolver должен читать JSON-блок ниже как канонич�
       "phase": "reviewer",
       "mode": "practical_v0_8",
       "scope_profile": "any",
-      "required_groups": ["policy_core", "reviewer_practical_core", "quality_rule_cards"],
-      "conditional_groups": ["scope_practical_core", "reviewer_practical_coverage_details", "writer_revision_artifacts", "style_remediation_compact"],
+      "required_groups": ["policy_core", "reviewer_practical_core"],
+      "conditional_groups": ["scope_practical_core", "reviewer_practical_coverage_details", "quality_rule_cards", "writer_revision_artifacts", "style_remediation_compact"],
       "audit_only_groups": ["audit_only_history", "governance_audit_only"],
       "budget_limit_kib": 160,
       "rationale": "Practical independent review context for separate-session matrix review before TC writing and TC review after matrix acceptance."

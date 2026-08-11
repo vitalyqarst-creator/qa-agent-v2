@@ -92,6 +92,7 @@ class WriterQualityGateSplitArtifactTests(unittest.TestCase):
             evidence = {
                 "scoped-validator-findings": "`validator.json`",
                 "source-obligation-completeness": "`source-row-inventory.md` и `test-design-matrix.md` сопоставлены.",
+                "matrix-atomarity": "`test-design-matrix.md`: `TC-SAMPLE-001`; one independent check and one primary observable result.",
                 "expected-result-singularity": "`test-cases/9.1-sample.md`: `TC-SAMPLE-001`.",
                 "creation-form-isolation-coverage": "`test-design-matrix.md`: `TC-SAMPLE-001`; создание независимого объекта не применимо: `not_applicable:SRC-001`.",
             }.get(item, "checked")

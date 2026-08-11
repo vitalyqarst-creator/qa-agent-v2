@@ -6762,6 +6762,11 @@ PRACTICAL_STAGE_SUMMARY_REQUIRED_OPERATIONAL_FIELDS = {
     "git_persistence",
     "per_scope_next_stage_transitions",
     "production_tc_clean",
+    "rematerialization_mode",
+    "rematerialization_basis",
+    "reporting_evidence",
+    "validator_primary_command",
+    "validator_primary_root",
     "validator_warnings_count",
     "validator_warnings_classification",
     "validator_warnings_evidence",
@@ -6914,9 +6919,16 @@ PRACTICAL_STAGE_SUMMARY_ALLOWED_ERROR_CLASSIFICATIONS = {
     "pre-existing-unrelated",
     "validator-false-positive",
     "mixed",
-    "not-applicable",
-    "not applicable",
 }
+PRACTICAL_STAGE_SUMMARY_ALLOWED_REMATERIALIZATION_MODES = {
+    "not-applicable",
+    "metadata-only",
+    "bounded-content",
+}
+PRACTICAL_STAGE_SUMMARY_PRIMARY_VALIDATOR_ROOT_RE = re.compile(
+    r"(?:^|\s)--root\s+(?P<root>`[^`]+`|\"[^\"]+\"|'[^']+'|\S+)",
+    flags=re.IGNORECASE,
+)
 PRACTICAL_CONTRACT_ONLY_REPAIR_STAGE = "contract_only_status_repair"
 PRACTICAL_CONTRACT_ONLY_REPAIR_REQUIRED_FIELDS = {
     "repair_type",
@@ -8508,6 +8520,99 @@ def practical_stage_summary_preflight_status_issues(fields: Mapping[str, str]) -
     return []
 
 
+def practical_stage_summary_rematerialization_issues(fields: Mapping[str, str]) -> list[str]:
+    """Require an explicit, auditable choice between content and metadata repair."""
+
+    mode = strip_markdown_code(fields.get("rematerialization_mode", "")).casefold()
+    basis = strip_markdown_code(fields.get("rematerialization_basis", ""))
+    if mode not in PRACTICAL_STAGE_SUMMARY_ALLOWED_REMATERIALIZATION_MODES:
+        return [f"rematerialization_mode={mode or '<missing>'}; invalid-mode"]
+    if mode == "not-applicable":
+        return []
+    if field_is_not_applicable(basis):
+        return [f"rematerialization_mode={mode}; missing-rematerialization_basis"]
+    if mode == "metadata-only":
+        normalized_basis = basis.casefold()
+        unchanged_markers = ("не измен", "unchanged", "no source", "без изменения")
+        if not any(marker in normalized_basis for marker in unchanged_markers):
+            return [
+                "metadata-only requires rematerialization_basis that explicitly states unchanged "
+                "source/support/scope inputs"
+            ]
+    return []
+
+
+def practical_stage_summary_reporting_evidence_issues(fields: Mapping[str, str]) -> list[str]:
+    """Keep final human reporting tied to persisted current-stage evidence."""
+
+    evidence = strip_markdown_code(fields.get("reporting_evidence", ""))
+    if field_is_not_applicable(evidence):
+        return ["reporting_evidence is required"]
+    normalized = evidence.casefold()
+    issues: list[str] = []
+    if "workflow-state.yaml" not in normalized:
+        issues.append("reporting_evidence must name workflow-state.yaml")
+    if "practical-stage-summary.md" not in normalized:
+        issues.append("reporting_evidence must name practical-stage-summary.md")
+    status = strip_markdown_code(fields.get("review_launch_preflight_status", "")).casefold()
+    if status == "check-only-allowed" and "not-created" not in normalized:
+        issues.append("check-only-allowed reporting_evidence must state review receipt/dispatch=not-created")
+    return issues
+
+
+def practical_stage_summary_primary_validator_issues(
+    fields: Mapping[str, str],
+    path: Path,
+    root: Path,
+) -> list[str]:
+    """Verify that a primary validator actually targets this FT package."""
+
+    command = strip_markdown_code(fields.get("validator_primary_command", ""))
+    declared_root = strip_markdown_code(fields.get("validator_primary_root", ""))
+    command_is_not_run = command.casefold() == "not-run" or field_is_not_applicable(command)
+    root_is_not_applicable = field_is_not_applicable(declared_root)
+    if command_is_not_run:
+        if not root_is_not_applicable:
+            return ["validator_primary_command=not-run requires validator_primary_root=not-applicable"]
+        return []
+    if root_is_not_applicable:
+        return ["validator_primary_command is present but validator_primary_root is missing"]
+
+    expected_root = ft_package_root_for_path(path) or ft_package_root_for_path(root)
+    if expected_root is None:
+        return []
+    issues: list[str] = []
+    try:
+        declared_path = Path(declared_root).expanduser().resolve()
+    except OSError:
+        issues.append(f"validator_primary_root={declared_root}; unreadable-path")
+        declared_path = None
+    if declared_path is not None and declared_path != expected_root.resolve():
+        issues.append(
+            f"validator_primary_root={declared_path}; expected_ft_package_root={expected_root.resolve()}"
+        )
+
+    match = PRACTICAL_STAGE_SUMMARY_PRIMARY_VALIDATOR_ROOT_RE.search(command)
+    if match is None:
+        issues.append("validator_primary_command must include --root <FT package root>")
+        return issues
+    raw_command_root = strip_markdown_code(match.group("root")).strip("\"'")
+    command_root = Path(raw_command_root).expanduser()
+    if not command_root.is_absolute():
+        code_root = strip_markdown_code(fields.get("code_root", ""))
+        command_root = (Path(code_root) if code_root else root) / command_root
+    try:
+        resolved_command_root = command_root.resolve()
+    except OSError:
+        issues.append(f"validator_primary_command_root={raw_command_root}; unreadable-path")
+        return issues
+    if resolved_command_root != expected_root.resolve():
+        issues.append(
+            f"validator_primary_command_root={resolved_command_root}; expected_ft_package_root={expected_root.resolve()}"
+        )
+    return issues
+
+
 def validate_practical_stage_summary(path: Path, root: Path) -> tuple[list[Finding], list[Check]]:
     findings: list[Finding] = []
     checks: list[Check] = []
@@ -8602,6 +8707,66 @@ def validate_practical_stage_summary(path: Path, root: Path) -> tuple[list[Findi
                 ),
             )
         )
+    rematerialization_issues = practical_stage_summary_rematerialization_issues(fields)
+    if rematerialization_issues:
+        findings.append(
+            Finding(
+                id="practical-stage-summary-rematerialization-invalid",
+                severity="error",
+                category="practical-stage-summary",
+                title="Practical stage summary does not justify its rematerialization mode",
+                details=(
+                    "A metadata-only repair is safe only when source, support, scope and coverage inputs are "
+                    "unchanged. Content changes require bounded-content rematerialization."
+                ),
+                path=display_path,
+                evidence=rematerialization_issues,
+                recommended_action=(
+                    "Set rematerialization_mode to not-applicable, metadata-only or bounded-content and record "
+                    "the source/support/scope basis for a repair."
+                ),
+            )
+        )
+    reporting_evidence_issues = practical_stage_summary_reporting_evidence_issues(fields)
+    if reporting_evidence_issues:
+        findings.append(
+            Finding(
+                id="practical-stage-summary-reporting-evidence-invalid",
+                severity="error",
+                category="practical-stage-summary",
+                title="Practical stage summary does not prove its final reporting basis",
+                details=(
+                    "The final stage report must be grounded in current workflow state, the current summary and "
+                    "a real review receipt/dispatch or an explicit not-created marker."
+                ),
+                path=display_path,
+                evidence=reporting_evidence_issues,
+                recommended_action=(
+                    "Record workflow-state.yaml, practical-stage-summary.md and the current review receipt, "
+                    "dispatch or not-created marker in reporting_evidence."
+                ),
+            )
+        )
+    primary_validator_issues = practical_stage_summary_primary_validator_issues(fields, path, root)
+    if primary_validator_issues:
+        findings.append(
+            Finding(
+                id="practical-stage-summary-primary-validator-root-invalid",
+                severity="error",
+                category="practical-stage-summary",
+                title="Practical stage summary points its primary validator outside the FT package",
+                details=(
+                    "The primary validator must execute against the active FT package root. A repository-wide "
+                    "validator may be supplementary evidence, but cannot be presented as the primary scope gate."
+                ),
+                path=display_path,
+                evidence=primary_validator_issues,
+                recommended_action=(
+                    "Set validator_primary_root and the --root argument in validator_primary_command to the "
+                    "declared ft_package_root."
+                ),
+            )
+        )
     contract_repair_issues = practical_contract_only_repair_issues(fields)
     if contract_repair_issues:
         findings.append(
@@ -8660,7 +8825,8 @@ def validate_practical_stage_summary(path: Path, root: Path) -> tuple[list[Findi
                 recommended_action=(
                     "Add per_scope_next_stage_transitions, validator_warnings_count, "
                     "validator_warnings_classification, validator_warnings_evidence, "
-                    "production_tc_clean, git_persistence, source_restore_provenance and source_restore_sha256."
+                    "production_tc_clean, rematerialization fields, reporting evidence, primary validator root, "
+                    "git_persistence, source_restore_provenance and source_restore_sha256."
                 ),
             )
         )
@@ -9162,7 +9328,11 @@ def validate_practical_stage_summary(path: Path, root: Path) -> tuple[list[Findi
     validator_errors_count = parse_nonnegative_int(fields.get("validator_errors_count", ""))
     classification = fields.get("validator_errors_classification", "").strip().lower()
     if validator_errors_count is not None and validator_errors_count > 0:
-        if classification not in PRACTICAL_STAGE_SUMMARY_ALLOWED_ERROR_CLASSIFICATIONS or classification == "none":
+        if classification not in PRACTICAL_STAGE_SUMMARY_ALLOWED_ERROR_CLASSIFICATIONS or classification in {
+            "none",
+            "not-applicable",
+            "not applicable",
+        }:
             findings.append(
                 Finding(
                     id="practical-stage-summary-validator-errors-unclassified",
@@ -9231,7 +9401,7 @@ def validate_practical_stage_summary(path: Path, root: Path) -> tuple[list[Findi
     if validator_warnings_count is not None and validator_warnings_count > 0:
         if (
             warning_classification not in PRACTICAL_STAGE_SUMMARY_ALLOWED_WARNING_CLASSIFICATIONS
-            or warning_classification == "none"
+            or warning_classification in {"none", "not-applicable", "not applicable"}
         ):
             findings.append(
                 Finding(
@@ -11940,7 +12110,7 @@ WRITER_QUALITY_GATE_REQUIRED_COLUMNS = {
     "blocks_ready_for_review",
 }
 
-WRITER_QUALITY_GATE_CONTRACT_VERSION = "writer-quality-gate-v3"
+WRITER_QUALITY_GATE_CONTRACT_VERSION = "writer-quality-gate-v4"
 WRITER_QUALITY_GATE_CONTRACT_VERSION_RE = re.compile(
     r"(?mi)^\s*\*\*Версия контракта:\*\*\s*`?([^`\r\n]+)"
 )
@@ -11950,6 +12120,7 @@ WRITER_QUALITY_GATE_REQUIRED_ITEMS = {
     "mockup-visual-inventory",
     "source-row-inventory",
     "source-normalization-atomic",
+    "matrix-atomarity",
     "test-design-decision-table",
     "test-design-review",
     "gap-admissibility",

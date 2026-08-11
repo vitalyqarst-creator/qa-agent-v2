@@ -116,6 +116,11 @@ Review in two practical gates:
    rule turned into a local save rejection, an optional field expected to have a
    required marker/save block, and `non-atomic-parameterization` across UI
    levels.
+   Для matrix review отклоняй строку, которая объединяет независимые атрибуты,
+   UI-уровни или pass/fail решения в одном planned TC. Параметризация допустима
+   только при явном доказательстве в матрице/self-check одинаковых стартового
+   экрана, UI-уровня, навигации, действия, триггера и одного наблюдаемого
+   результата для каждого значения.
    Выполни отдельный adversarial pass по исполнимости каждого TC: не допускай
    объединения создания и редактирования через «или»; не считай автозаполнение
    доказательством возможности вручную очистить поле; для create/edit/archive/
@@ -189,7 +194,10 @@ to compute those fields and keep summary enum fields enum-only.
 When changed FT/package artifacts are git-ignored, record that explicitly in
 `git_persistence` because ordinary commit/push will not persist them; the
 stage/final response must name `git add -f <paths>` or export/bundle as the
-persistence path.
+persistence path. В финальном сообщении controller может заявлять только
+действия и receipt из `## Действия текущего этапа`, `workflow-state.yaml`,
+`practical-stage-summary.md` и существующих receipt-файлов; отсутствие
+reviewer session/dispatch/receipt обозначай `not-created`.
 Link the summary from every affected `workflow-state.yaml` or
 package-level state/index inside the actual FT package root so the next stage
 cannot miss it. If the bounded matrix repair/re-review cap is

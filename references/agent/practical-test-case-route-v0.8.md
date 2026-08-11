@@ -609,6 +609,13 @@ planned TC), use the fast path inside this same route:
      Green means no errors; do not filter only the handoff path or hide parser
      markers in Markdown. Apply one coherent repair patch; a second is only
      for a newly revealed validator finding.
+   - Select the rematerialization mode automatically before writing. Use
+     `metadata-only` only when the selected source/support inputs, confirmed
+     scope boundary, source-row mapping, dictionary values and `GAP-*` set are
+     unchanged and the task is limited to code-version, routing, links, summary
+     or validator state. It may update only `workflow-state.yaml`, stage
+     summary, decision log, active prompt and broken artifact links. Otherwise
+     use `bounded-content`. The user does not choose this mode in the prompt.
    - Keep temporary inspection scripts, renders, duplicate manifests and
      partial writes outside the final handoff. On a successful scope-analysis
      run, delete only temporary artifacts created by the current run. Files in

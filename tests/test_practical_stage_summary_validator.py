@@ -52,6 +52,11 @@ class PracticalStageSummaryValidatorTests(unittest.TestCase):
         per_scope_next_stage_transitions: str = "not-applicable",
         production_tc_clean: str = "not-applicable",
         git_persistence: str = "not-applicable",
+        rematerialization_mode: str = "not-applicable",
+        rematerialization_basis: str = "not-applicable",
+        reporting_evidence: str = "`workflow-state.yaml`; `practical-stage-summary.md`; `not-created`",
+        validator_primary_command: str | None = None,
+        validator_primary_root: str | None = None,
         source_restore_provenance: str = "not-applicable",
         source_restore_sha256: str = "not-applicable",
         active_scope_ids: str = "01",
@@ -74,6 +79,10 @@ class PracticalStageSummaryValidatorTests(unittest.TestCase):
         (source_dir / "Sample.docx").write_text("fake-docx", encoding="utf-8")
         (source_dir / "Sample.xhtml").write_text("<html></html>", encoding="utf-8")
         (source_dir / "Sample.pdf").write_text("fake-pdf", encoding="utf-8")
+        validator_primary_command = validator_primary_command or (
+            f'python scripts/validate_agent_artifacts.py --root "{ft_root}" --json'
+        )
+        validator_primary_root = validator_primary_root or str(ft_root)
         summary = artifact_write_root / "practical-stage-summary.md"
         summary_rows = [
                     "# Practical Stage Summary",
@@ -99,6 +108,11 @@ class PracticalStageSummaryValidatorTests(unittest.TestCase):
                     f"| per_scope_next_stage_transitions | `{per_scope_next_stage_transitions}` |",
                     f"| production_tc_clean | `{production_tc_clean}` |",
                     f"| git_persistence | `{git_persistence}` |",
+                    f"| rematerialization_mode | `{rematerialization_mode}` |",
+                    f"| rematerialization_basis | `{rematerialization_basis}` |",
+                    f"| reporting_evidence | {reporting_evidence} |",
+                    f"| validator_primary_command | `{validator_primary_command}` |",
+                    f"| validator_primary_root | `{validator_primary_root}` |",
                     "| source_row_counts | `not-applicable` |",
                     f"| source_restore_provenance | `{source_restore_provenance}` |",
                     f"| source_restore_sha256 | `{source_restore_sha256}` |",
@@ -199,6 +213,9 @@ class PracticalStageSummaryValidatorTests(unittest.TestCase):
         self.assertNotIn("practical-stage-summary-validator-warning-count-stale", ids)
         self.assertNotIn("practical-stage-summary-validator-error-layers-missing", ids)
         self.assertNotIn("practical-stage-summary-current-prior-sections-missing", ids)
+        self.assertNotIn("practical-stage-summary-primary-validator-root-invalid", ids)
+        self.assertNotIn("practical-stage-summary-rematerialization-invalid", ids)
+        self.assertNotIn("practical-stage-summary-reporting-evidence-invalid", ids)
 
     def test_matrix_review_ready_state_requires_pending_matrix_transition(self) -> None:
         root = self.make_package(
@@ -481,6 +498,68 @@ class PracticalStageSummaryValidatorTests(unittest.TestCase):
         )
 
         self.assertIn("practical-stage-summary-validator-errors-unclassified", ids)
+
+    def test_rejects_not_applicable_error_classification_when_errors_exist(self) -> None:
+        ids = self.finding_ids(
+            self.make_package(
+                validator_errors_count=1,
+                validator_errors_classification="not-applicable",
+                next_stage_transition="writer blocked",
+            )
+        )
+
+        self.assertIn("practical-stage-summary-validator-errors-unclassified", ids)
+
+    def test_rejects_not_applicable_warning_classification_when_warnings_exist(self) -> None:
+        ids = self.finding_ids(
+            self.make_package(
+                validator_warnings_count=1,
+                validator_warnings_classification="not-applicable",
+                next_stage_transition="writer conditional",
+            )
+        )
+
+        self.assertIn("practical-stage-summary-validator-warnings-unclassified", ids)
+
+    def test_rejects_primary_validator_root_outside_ft_package(self) -> None:
+        ids = self.finding_ids(
+            self.make_package(
+                validator_primary_command="python scripts/validate_agent_artifacts.py --root . --json",
+                validator_primary_root=".",
+            )
+        )
+
+        self.assertIn("practical-stage-summary-primary-validator-root-invalid", ids)
+
+    def test_rejects_metadata_only_without_unchanged_input_basis(self) -> None:
+        ids = self.finding_ids(
+            self.make_package(
+                rematerialization_mode="metadata-only",
+                rematerialization_basis="Обновлена сводка без описания состояния входов.",
+            )
+        )
+
+        self.assertIn("practical-stage-summary-rematerialization-invalid", ids)
+
+    def test_rejects_check_only_reporting_without_not_created_marker(self) -> None:
+        root = self.make_package(
+            reporting_evidence="`workflow-state.yaml`; `practical-stage-summary.md`"
+        )
+        summary = root / "work" / "practical-stage-summary.md"
+        text = summary.read_text(encoding="utf-8")
+        text = text.replace(
+            "| reporting_evidence | `workflow-state.yaml`; `practical-stage-summary.md` |",
+            "| review_launch_preflight_status | `check-only-allowed` |\n"
+            "| review_launch_preflight_receipt | `not-applicable` |\n"
+            "| review_launch_preflight_evidence | `--check-only allowed` |\n"
+            "| reporting_evidence | `workflow-state.yaml`; `practical-stage-summary.md` |",
+        )
+        summary.write_text(text, encoding="utf-8")
+
+        self.assertIn(
+            "practical-stage-summary-reporting-evidence-invalid",
+            self.finding_ids(root),
+        )
 
     def test_rejects_unconditional_writer_allowed_when_validator_errors_exist(self) -> None:
         ids = self.finding_ids(

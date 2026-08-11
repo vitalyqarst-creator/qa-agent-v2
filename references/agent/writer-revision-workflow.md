@@ -38,3 +38,25 @@ Do not add new source documents or expand scope during revision unless a separat
 - Do not use revision as a reason to rewrite the entire set from scratch.
 
 If a finding cannot be fixed without new scope or source decisions, record it as unresolved and use the proper next-stage route instead of inventing behavior.
+
+## Bounded Revision And Contract-only Repair
+
+After a bounded TC revision, compare every affected canonical case with its
+runtime inputs. `Статус исполнения: ready` is forbidden when `Требуется подтверждение`
+remains, or the case still needs an unverified fixture, concrete test data, access
+path or observable oracle. Record each affected `TC-*` and its exact final status
+under `## Status Assertions` in `tc-revision-summary.md`.
+
+Before overwriting an existing canonical file, create and verify its immutable
+`pre_write_baseline` with `scripts/practical_snapshot_preflight.py`; a failed
+snapshot blocks the write and must not be repaired in place. Route only to the
+final independent reviewer; the writer cannot sign off, release or start UI
+preparation from a bounded revision.
+
+If the validator detects only a status, confirmation or summary inconsistency
+after that revision and before final review, perform at most one contract-only
+status repair. It must not change coverage, test design, runtime steps, expected
+results, traceability or source interpretation. Record `## Contract-only Repair`,
+refresh `## Status Assertions` and refresh the practical stage summary with the
+current Code Version Gate commit. This repair is not permission for another
+writer/reviewer loop.

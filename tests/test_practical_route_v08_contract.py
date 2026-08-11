@@ -117,6 +117,7 @@ class PracticalRouteV08ContractTests(unittest.TestCase):
         validator = self.read("scripts/validate_agent_artifacts.py")
 
         for item in (
+            "matrix-atomarity",
             "tc-metadata-integrity",
             "lifecycle-execution-ownership",
             "step-executability",

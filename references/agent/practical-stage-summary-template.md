@@ -16,6 +16,8 @@
 | artifact_write_root | `<absolute path>` |
 | root_split_allowed | `yes / no` |
 | root_split_authority | `<user/controller approval or not-applicable>` |
+| rematerialization_mode | `not-applicable / metadata-only / bounded-content` |
+| rematerialization_basis | `<почему выбран этот режим; для metadata-only — какие source/support/scope inputs не изменились>` |
 | next_stage_transition | `matrix-review allowed / matrix-review conditional / matrix-review blocked / writer allowed / writer conditional / writer blocked / tc-review allowed / tc-review conditional / tc-review blocked / not-applicable` |
 | next_safe_step | `<одно предложение на русском>` |
 | review_launch_preflight_status | `not-run / check-only-allowed / allowed / blocked / not-applicable` |
@@ -24,6 +26,7 @@
 | per_scope_next_stage_transitions | `yes / not-applicable` |
 | production_tc_clean | `yes / no / mixed / not-applicable` |
 | git_persistence | `tracked / ignored-by-git / mixed / not-applicable` |
+| reporting_evidence | ``workflow-state.yaml`; `practical-stage-summary.md`; <review receipt / reviewer dispatch / not-created>`` |
 | validator_primary_command | `python scripts/validate_agent_artifacts.py --root <FT package root> --json / not-run` |
 | validator_primary_root | `<absolute FT package root or not-applicable>` |
 | validator_supplementary_command | `<repo-root validator command or not-run>` |
@@ -88,4 +91,6 @@
 - Если `--check-only` или materialized preflight заблокирован, не сохраняй blocked `review-launch-preflight*.json`, не создавай reviewer artifacts и не запускай reviewer. Сохрани причину в этой сводке и `workflow-state.yaml`.
 - `execution_working_directory` совпадает с `code_root`. Все ссылки на активные артефакты текущего scope из `work/practical/` должны вести только в `work/practical/<scope_slug>/`; прошлые результаты храни в `history/` и не используй как активный вход.
 - После каждого controller-state repair обновляй generated validator fields командой `scripts/refresh_practical_stage_summary.py`; затем выполняй package-root validation. Ошибки текущего scope блокируют следующий этап, внешние ошибки классифицируй отдельно.
+- `metadata-only` выбирается самим агентом, а не пользователем: только когда source/support inputs, границы scope, source rows, словарь и `GAP-*` не изменились, а задача касается версии, маршрутизации, ссылок, summary или validator. В этом режиме не переписывай `scope-brief.md`, матрицу, словарь, self-check и содержательные решения. При любом изменении источника, ответа БА, границ scope или покрытия используй `bounded-content`.
+- Финальное сообщение этапа строится только по `## Действия текущего этапа`, актуальному `workflow-state.yaml`, этой сводке и существующим receipt. Не заявляй, что создан commit/push/reviewer session/dispatch или review artifact, если этого факта нет в указанных evidence текущего этапа. Для отсутствующего dispatch/receipt прямо пиши `not-created`.
 - `next_safe_step`, причина перехода и оба narrative-раздела пиши по-русски. Английскими остаются только технические идентификаторы, пути и согласованные enum-значения.

@@ -27,7 +27,7 @@ writer запускает gate для новой revision и только тог
 Перед таблицей укажи текущую строку:
 
 ```md
-**Версия контракта:** `writer-quality-gate-v3`
+**Версия контракта:** `writer-quality-gate-v4`
 ```
 
 Если validator требует новую версию или новый обязательный gate item, старый
@@ -47,7 +47,7 @@ matrix и canonical TC, собирает evidence и только после э�
 ```md
 ## Writer Quality Gate
 
-**Версия контракта:** `writer-quality-gate-v3`
+**Версия контракта:** `writer-quality-gate-v4`
 
 | gate_item | status | evidence | affected_package | required_action | blocks_ready_for_review |
 | --- | --- | --- | --- | --- | --- |
@@ -56,6 +56,7 @@ matrix и canonical TC, собирает evidence и только после э�
 | `mockup-visual-inventory` | `pass` | `mockup-visual-inventory.md` открыт и дал подсказки по взаимодействию. | `WP-01` | none_required:pass | `no` |
 | `source-row-inventory` | `pass` | Каждая in-scope строка handoff присутствует и сопоставлена с `ATOM-*` или `GAP-*`. | `WP-01` | none_required:pass | `no` |
 | `source-normalization-atomic` | `pass` | Source rows содержат по одному property/condition/behavior. | `WP-01` | none_required:pass | `no` |
+| `matrix-atomarity` | `pass` | `test-design-matrix.md`: все строки с несколькими атрибутами/значениями имеют `Обоснование параметризации` с едиными экраном, UI-уровнем, действием, триггером и наблюдаемым результатом; остальные строки разделены. | `WP-01` | none_required:pass | `no` |
 | `dictionary-inventory` | `pass` | `dictionary-source` rows используют `DICT-*` из `dictionary-inventory.md`. | `WP-01` | none_required:pass | `no` |
 | `test-design-decision-table` | `pass` | Каждый `source_property_id` имеет одно design decision до ledger/TC writing. | `WP-01` | none_required:pass | `no` |
 | `coverage-obligation-table` | `pass` | `numeric-format` и `amount-tags` разложены на обязательные coverage classes с `TC-*`/`GAP-*`. | `WP-01` | none_required:pass | `no` |
@@ -82,6 +83,7 @@ matrix и canonical TC, собирает evidence и только после э�
 - `mockup-visual-inventory`: UI scopes с макетами имеют `mockup-visual-inventory.md`; макет открыт, а подсказки по взаимодействию используются только для шагов без превращения mockup-only элементов в требования.
 - `source-row-inventory`: каждая in-scope/unclear source row из handoff `source-row-inventory.md` присутствует в writer-side inventory до normalization и сопоставлена с `ATOM-*`, `GAP-*` или явным out-of-scope решением.
 - `source-normalization-atomic`: normalized source rows содержат одно чистое property, condition или behavior; каждая строка имеет `source_property_id`; source rows с несколькими `GSR`/`REQ` имеют `Source Row Completeness Matrix`; normalization row не несет несколько independently checkable requirement codes и не смешивает semantic property classes, например dictionary source + min boundary + max boundary, visibility + requiredness или format + boundary.
+- `matrix-atomarity`: до reviewer проверены все строки `test-design-matrix.md`: одна строка — один объект/UI-уровень, одна проверка и один основной ожидаемый результат. Несколько независимых отображаемых атрибутов, разные объекты, роли с разными outcome, позитивная и негативная ветви или несколько самостоятельных действий разделяются. Параметризация значений допустима только при явном `Обоснование параметризации`, которое доказывает одинаковые стартовый экран, UI-уровень, навигацию, действие, триггер и наблюдаемый результат.
 - `test-design-decision-table`: каждый нормализованный `source_property_id` имеет ровно одно решение: `standalone_tc`, `covered_by_existing_tc`, `gap_unclear`, `metadata_only`, `scenario_only` или `out_of_scope`; metadata-only rows не создают executable `TC-*`; gap/metadata/scenario-only decisions согласованы с ledger, Package Test Design Plan, Risk / Priority Map и `TC-*`; standalone TC decisions имеют observable oracle.
 - `scoped-validator-findings`: writer после финальной записи canonical TC и split artifacts запускает scoped validator или runner validator gate; текущий scope не имеет unresolved `warning`/`error`, либо каждая finding оформлена как валидный `false-positive`/waiver с id, path, evidence и rationale.
   Для `status = pass` evidence должно ссылаться на runner-generated `outputs/scoped-validator-profile.<stage>.json` с `generated_by: codex_review_cycle_runner` либо на runner validator gate output; self-reported JSON без `generated_by` не является валидным scoped validator evidence.
