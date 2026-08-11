@@ -85,6 +85,10 @@ Review in two practical gates:
    already contains a newly written canonical TC file but no accepted matrix
    review, do not sign off the TC file; mark it as an old/unaccepted draft and
    complete `matrix_review` first.
+   If workflow records `matrix_review_status: invalidated` and
+   `matrix_revalidation_reason: reviewed-matrix-hash-mismatch`, treat it as the
+   one hash-proven revalidation path: review the matrix only, do not edit the
+   preserved canonical TCs, and after acceptance route them to `tc_review`.
 1. TC review gate: after `matrix-accepted`, every source-backed obligation in the scope maps to a TC or
    to an explicit allowed deferred status. `Review Focus` is a priority list,
    not a scope boundary: a normal or final TC review must inspect the full

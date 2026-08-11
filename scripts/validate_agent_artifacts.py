@@ -8344,6 +8344,66 @@ def validate_practical_tc_review_handoff(
     display_path = rel(path, root)
     findings: list[Finding] = []
     checks: list[Check] = []
+    is_matrix_revalidation = (
+        state.get("stage_status") == "ready-for-review"
+        and state.get("next_skill") == "ft-test-case-reviewer"
+        and state.get("review_mode") == "matrix_review"
+        and str(state.get("matrix_review_status") or "") == "invalidated"
+        and str(state.get("matrix_revalidation_reason") or "")
+        == "reviewed-matrix-hash-mismatch"
+        and get_int(state.get("current_round")) == 2
+    )
+
+    gate_value = latest.get("controller_post_finalization_gate") if isinstance(latest, dict) else None
+    gate_path = (
+        resolve_artifact_path(gate_value, path, root, ft_root)
+        if isinstance(gate_value, str) and gate_value.strip()
+        else None
+    )
+    if gate_path is None or not gate_path.is_file():
+        matrix_issue = "controller post-finalization gate is missing"
+        matrix_evidence = [str(gate_value or "<missing>")]
+    else:
+        try:
+            packet = json.loads(gate_path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+            packet = {}
+            matrix_issue = f"controller post-finalization gate is unreadable: {exc}"
+            matrix_evidence = [rel(gate_path, root)]
+        else:
+            matrix_issue, matrix_evidence = practical_reviewed_matrix_hash_issue(
+                state, path, root, ft_root, packet
+            )
+
+    if is_matrix_revalidation:
+        if matrix_issue is None:
+            findings.append(
+                Finding(
+                    id="practical-workflow-matrix-revalidation-not-justified",
+                    severity="error",
+                    category="stage-transition",
+                    title="Matrix revalidation is requested without an invalidated matrix verdict",
+                    details=(
+                        "This recovery transition is allowed only when the currently linked matrix no longer matches "
+                        "the hash bound by the previous matrix-review controller gate."
+                    ),
+                    path=display_path,
+                    evidence=["matrix hash still matches controller post-finalization gate"],
+                    recommended_action="Route the canonical suite to tc_review, or record the real invalidation before revalidating the matrix.",
+                )
+            )
+        checks.append(
+            Check(
+                "practical-workflow-canonical-tc-review-handoff",
+                "fail" if findings else "pass",
+                "Canonical test cases are preserved while the invalidated matrix is independently revalidated."
+                if not findings
+                else "Matrix revalidation is not justified by the controller gate.",
+                display_path,
+            )
+        )
+        return findings, checks
+
     routing_issues: list[str] = []
     if state.get("stage_status") != "ready-for-review":
         routing_issues.append(f"stage_status={state.get('stage_status')!r}")
@@ -8371,26 +8431,6 @@ def validate_practical_tc_review_handoff(
             )
         )
 
-    gate_value = latest.get("controller_post_finalization_gate") if isinstance(latest, dict) else None
-    gate_path = (
-        resolve_artifact_path(gate_value, path, root, ft_root)
-        if isinstance(gate_value, str) and gate_value.strip()
-        else None
-    )
-    if gate_path is None or not gate_path.is_file():
-        matrix_issue = "controller post-finalization gate is missing"
-        matrix_evidence = [str(gate_value or "<missing>")]
-    else:
-        try:
-            packet = json.loads(gate_path.read_text(encoding="utf-8"))
-        except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
-            packet = {}
-            matrix_issue = f"controller post-finalization gate is unreadable: {exc}"
-            matrix_evidence = [rel(gate_path, root)]
-        else:
-            matrix_issue, matrix_evidence = practical_reviewed_matrix_hash_issue(
-                state, path, root, ft_root, packet
-            )
     if matrix_issue:
         findings.append(
             Finding(

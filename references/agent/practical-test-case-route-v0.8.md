@@ -203,6 +203,26 @@ canonical TCs are created, the only next practical transition is
 `ready-for-review` to `ft-test-case-reviewer` in `tc_review` mode; the validator
 blocks a writer-to-writer route or a stale practical summary.
 
+### Recovery after matrix invalidation
+
+If the matrix hash no longer matches its accepted controller gate after
+canonical TCs have already been written, preserve those TCs and run one fresh
+independent `matrix_review` before TC review. This is the only exception to the
+normal post-writer TC-review route. The controller must set exactly:
+
+- `matrix_review_status: invalidated`;
+- `matrix_revalidation_reason: reviewed-matrix-hash-mismatch`;
+- `current_round: 2`;
+- `stage_status: ready-for-review`, `next_skill: ft-test-case-reviewer` and
+  `review_mode: matrix_review`.
+
+The validator permits this recovery only while the controller gate proves the
+matrix mismatch. Do not rewrite, delete or relabel canonical TCs in this stage.
+After the new matrix verdict is accepted and finalized, set
+`matrix_review_status: matrix-accepted` and route the preserved canonical suite
+to independent `tc_review`; do not start another writer pass merely to traverse
+the route.
+
 Create the separate reviewer task with a parking prompt: until it receives the
 controller dispatch message, it must not read review inputs or create artifacts.
 Immediately after `create_thread` returns the new session ID, the controller

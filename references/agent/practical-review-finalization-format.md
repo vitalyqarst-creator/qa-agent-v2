@@ -90,6 +90,13 @@ review, or a `GAP-*` marked closed by repair still appears as active debt in
 state; do not silently carry the old review verdict forward. Link the packet as
 `latest_artifacts.controller_post_finalization_gate`.
 
+The launch, finalization and post-finalization packets also bind the SHA-256 of
+the review subject. If a previously accepted matrix no longer matches that
+binding after canonical TCs exist, preserve the TC file and use the exact
+matrix-invalidation recovery in `practical-test-case-route-v0.8.md`: one fresh
+independent matrix review, then independent TC review. A normal writer route is
+not a valid recovery for this condition.
+
 ## Portable accepted baseline
 
 When accepted package artifacts are ignored by Git, ordinary `git commit` does

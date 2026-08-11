@@ -115,6 +115,27 @@ class PracticalPostFinalizationGateValidatorTests(unittest.TestCase):
                 [item.id for item in findings],
             )
 
+            state.update(
+                {
+                    "stage_status": "ready-for-review",
+                    "next_skill": "ft-test-case-reviewer",
+                    "review_mode": "matrix_review",
+                    "matrix_review_status": "invalidated",
+                    "matrix_revalidation_reason": "reviewed-matrix-hash-mismatch",
+                    "current_round": 2,
+                }
+            )
+            findings, checks = validator.validate_practical_tc_review_handoff(state, workflow, root)
+            self.assertEqual([], findings)
+            self.assertEqual("pass", checks[0].status)
+
+            matrix.write_text("# Matrix\n", encoding="utf-8")
+            findings, _ = validator.validate_practical_tc_review_handoff(state, workflow, root)
+            self.assertIn(
+                "practical-workflow-matrix-revalidation-not-justified",
+                [item.id for item in findings],
+            )
+
 
 if __name__ == "__main__":
     unittest.main()
