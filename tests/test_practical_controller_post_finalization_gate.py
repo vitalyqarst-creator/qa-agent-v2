@@ -184,6 +184,25 @@ class PracticalControllerPostFinalizationGateTests(unittest.TestCase):
         self.assertFalse(result["allowed"])
         self.assertIn("tc-review recovery checkpoint", "\n".join(result["blocking_reasons"]))
 
+    def test_can_link_allowed_output_from_each_selected_workflow(self) -> None:
+        helper = self.load_helper()
+        ft_root, _summary, _launch, _finalization, _parity = self.make_fixture()
+        output = ft_root / "work" / "practical" / "sample" / "controller-post-finalization.json"
+        output.write_text("{}\n", encoding="utf-8")
+
+        helper.link_allowed_gate_output(
+            ft_package_root=ft_root,
+            scope_ids=["01"],
+            output_path=output,
+        )
+
+        workflow = ft_root / "work" / "stage-handoffs" / "01-sample" / "workflow-state.yaml"
+        state = helper.review_preflight.artifact_validator.parse_workflow_state(workflow)
+        self.assertEqual(
+            "work/practical/sample/controller-post-finalization.json",
+            state["latest_artifacts"]["controller_post_finalization_gate"],
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -21,6 +21,8 @@ import sys
 from pathlib import Path
 from typing import Any
 
+import yaml
+
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 if str(SCRIPT_DIR) not in sys.path:
@@ -63,6 +65,51 @@ def gap_ids_on_marked_lines(path: Path, marker: re.Pattern[str]) -> set[str]:
         if marker.search(line)
         for gap_id in GAP_ID_RE.findall(line)
     }
+
+
+def link_allowed_gate_output(
+    *,
+    ft_package_root: Path,
+    scope_ids: list[str],
+    output_path: Path,
+) -> None:
+    """Link an allowed controller packet atomically enough for the next stage.
+
+    The packet is controller-owned.  Making the command perform this narrow
+    alias update avoids a human/controller forgetting the final step after a
+    successful gate and leaving a stale R1 packet active.
+    """
+
+    package_root = ft_package_root.resolve()
+    output_path = output_path.resolve()
+    try:
+        output_relative = output_path.relative_to(package_root).as_posix()
+    except ValueError as exc:
+        raise ValueError("controller post-finalization output must be inside FT package root") from exc
+    descriptors, issues = review_preflight.scope_descriptors(package_root, scope_ids)
+    if issues:
+        raise ValueError("cannot link controller gate: " + "; ".join(issues))
+    originals: dict[Path, str] = {}
+    try:
+        for descriptor in descriptors:
+            originals[descriptor.workflow_path] = descriptor.workflow_path.read_text(
+                encoding="utf-8"
+            )
+            state = review_preflight.artifact_validator.parse_workflow_state(
+                descriptor.workflow_path
+            )
+            latest = state.get("latest_artifacts")
+            latest = dict(latest) if isinstance(latest, dict) else {}
+            latest["controller_post_finalization_gate"] = output_relative
+            state["latest_artifacts"] = latest
+            descriptor.workflow_path.write_text(
+                yaml.safe_dump(state, allow_unicode=True, sort_keys=False),
+                encoding="utf-8",
+            )
+    except Exception:
+        for path, content in originals.items():
+            path.write_text(content, encoding="utf-8")
+        raise
 
 
 def build_post_finalization_gate(
@@ -292,6 +339,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--launch-receipt", type=Path, required=True)
     parser.add_argument("--review-finalization", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument(
+        "--link-output",
+        action="store_true",
+        help="Link an allowed gate packet from every selected workflow-state.yaml.",
+    )
     return parser.parse_args()
 
 
@@ -307,6 +359,24 @@ def main() -> int:
     )
     output = args.output if args.output.is_absolute() else Path.cwd() / args.output
     output.parent.mkdir(parents=True, exist_ok=True)
+    if args.link_output and result["allowed"]:
+        output.write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        try:
+            link_allowed_gate_output(
+                ft_package_root=args.ft_package_root,
+                scope_ids=list(dict.fromkeys(args.scope_id)),
+                output_path=output,
+            )
+        except (OSError, UnicodeDecodeError, ValueError) as exc:
+            result["allowed"] = False
+            result["status"] = "blocked"
+            result["blocking_reasons"].append(
+                f"allowed gate packet could not be linked from workflow state: {exc}"
+            )
+        else:
+            result["workflow_linked"] = True
+    else:
+        result["workflow_linked"] = False
     rendered = json.dumps(result, ensure_ascii=False, indent=2)
     output.write_text(rendered + "\n", encoding="utf-8")
     print(rendered)

@@ -137,6 +137,39 @@ class PracticalPostFinalizationGateValidatorTests(unittest.TestCase):
                 [item.id for item in findings],
             )
 
+            revalidation = practical / "controller-finalization-r2.json"
+            revalidation.write_text(
+                json.dumps(
+                    {
+                        "allowed": True,
+                        "review_mode": "matrix_review",
+                        "recovery_context": "matrix-revalidation-after-canonical-tcs",
+                        "next_controller_transition": "tc-review required",
+                        "review_subject_artifacts_by_scope": {
+                            "01": {
+                                "role": "test-design-matrix",
+                                "source_path": matrix.resolve().as_posix(),
+                                "sha256": hashlib.sha256(matrix.read_bytes()).hexdigest(),
+                            }
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+            state.update(
+                {
+                    "review_mode": "tc_review",
+                    "matrix_review_status": "matrix-accepted",
+                    "latest_artifacts": {
+                        **state["latest_artifacts"],
+                        "matrix_revalidation_finalization": revalidation.relative_to(root).as_posix(),
+                    },
+                }
+            )
+            findings, checks = validator.validate_practical_tc_review_handoff(state, workflow, root)
+            self.assertEqual([], findings)
+            self.assertEqual("pass", checks[0].status)
+
 
 if __name__ == "__main__":
     unittest.main()

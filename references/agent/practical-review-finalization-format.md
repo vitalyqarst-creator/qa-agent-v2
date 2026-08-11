@@ -83,7 +83,7 @@ validator evidence and run this gate **before** a matrix-accepted scope is
 routed to canonical TC writing (or a TC-accepted scope is routed onward):
 
 ```text
-python scripts/practical_controller_post_finalization_gate.py --repo-root . --ft-package-root <FT package root> --summary <practical-stage-summary.md> --scope-id <two-digit scope id> --launch-receipt <review-launch-preflight.json> --review-finalization <review-finalization.json> --output <controller-post-finalization.json>
+python scripts/practical_controller_post_finalization_gate.py --repo-root . --ft-package-root <FT package root> --summary <practical-stage-summary.md> --scope-id <two-digit scope id> --launch-receipt <review-launch-preflight.json> --review-finalization <review-finalization.json> --output <controller-post-finalization.json> --link-output
 ```
 
 Only `allowed: true` may set `writer allowed`. The packet blocks when a selected
@@ -91,7 +91,9 @@ scope/package validator error remains, the version-gated commit changed during
 review, or a `GAP-*` marked closed by repair still appears as active debt in
 `source-parity-check.md`. In the latter two cases rematerialize from the current
 state; do not silently carry the old review verdict forward. Link the packet as
-`latest_artifacts.controller_post_finalization_gate`.
+`latest_artifacts.controller_post_finalization_gate`. `--link-output` выполняет
+только это controller-owned обновление alias после разрешённого gate; не
+заменяй его ручным редактированием workflow-state.
 
 The launch, finalization and post-finalization packets also bind the SHA-256 of
 the review subject. If a previously accepted matrix no longer matches that
@@ -105,6 +107,37 @@ For this recovery, an accepted matrix finalization packet has
 `next_controller_transition: tc-review required`. The controller waits for the
 separate reviewer to finish, then finalizes controller-owned state and summary
 before reporting the stage as complete.
+
+## Recovery of a preserved canonical suite
+
+Перед запуском отдельного matrix reviewer для R2 контроллер выполняет
+read-only preflight сохранённого набора:
+
+```text
+python scripts/practical_matrix_revalidation_readiness.py --ft-package-root <FT package root> --scope-id <two-digit scope id>
+```
+
+Этот preflight проверяет только устойчивые prerequisites уже созданного
+canonical набора: перенос обязательных строк источника в handoff и проходящий
+split `writer-quality-gate.md`. Он намеренно не трактует временные ошибки
+matrix-revalidation как дефект набора. Если preflight заблокирован, matrix
+review не запускается: сначала требуется отдельная разрешённая writer-repair
+задача.
+
+После `matrix-accepted` R2 контроллер не редактирует routing вручную. Он
+материализует единственный переход к TC-review:
+
+```text
+python scripts/practical_matrix_revalidation_transition.py --repo-root . --ft-package-root <FT package root> --summary <practical-stage-summary.md> --scope-id <two-digit scope id> --review-finalization <controller-finalization-r2.json> --output <matrix-revalidation-transition.json> --apply
+```
+
+Команда проверяет exact R2 finalization, pinned code version, hash текущей
+матрицы и существование `prompt.tc-to-reviewer.md`; затем сохраняет canonical
+TC без изменений, переводит workflow в `tc_review`, обновляет summary и
+сбрасывает устаревший alias post-finalization gate. Пока новый gate ещё не
+создан, validator использует hash-bound `matrix_revalidation_finalization` как
+временное controller-owned доказательство принятой матрицы. Следующим действием
+обязательно идёт fresh TC-review preflight и отдельная Codex-сессия reviewer.
 
 `tc-review required` is an execution obligation, not a handoff result. The
 controller must first pass a fresh TC-review preflight, create and dispatch a

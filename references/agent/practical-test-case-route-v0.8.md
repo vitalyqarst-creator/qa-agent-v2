@@ -216,13 +216,21 @@ normal post-writer TC-review route. The controller must set exactly:
 - `stage_status: ready-for-review`, `next_skill: ft-test-case-reviewer` and
   `review_mode: matrix_review`.
 
+До dispatch matrix reviewer контроллер запускает
+`practical_matrix_revalidation_readiness.py`. Если устойчивые prerequisites
+сохранённого canonical набора (source-row handoff и split Writer Quality Gate)
+не проходят, R2 review не запускается; это отдельный writer-quality blocker, а
+не повод повторять review или ослаблять validator.
+
 The validator permits this recovery only while the controller gate proves the
 matrix mismatch. Do not rewrite, delete or relabel canonical TCs in this stage.
 After the new matrix verdict is accepted and finalized, set
 `matrix_review_status: matrix-accepted` and route the preserved canonical suite
-to independent `tc_review`; the finalization packet must state
-`next_controller_transition: tc-review required`. Do not start another writer
-pass merely to traverse the route.
+to independent `tc_review` through
+`practical_matrix_revalidation_transition.py`; the finalization packet must
+state `next_controller_transition: tc-review required`. Do not start another
+writer pass merely to traverse the route, and do not manually retain a stale
+matrix-review prompt or old R1 post-finalization alias.
 
 Create the separate reviewer task with a parking prompt: until it receives the
 controller dispatch message, it must not read review inputs or create artifacts.

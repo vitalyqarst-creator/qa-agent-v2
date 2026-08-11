@@ -8314,6 +8314,53 @@ def practical_reviewed_matrix_hash_issue(
     return None, []
 
 
+def practical_revalidated_matrix_finalization_issue(
+    state: dict[str, Any],
+    workflow_path: Path,
+    root: Path,
+    ft_root: Path,
+) -> tuple[str | None, list[str]]:
+    """Bind a preserved TC suite to its just-finalized matrix revalidation.
+
+    Between controller finalization of matrix round 2 and creation of the new
+    post-finalization packet there is deliberately no current gate yet.  During
+    that short controller-owned transition the accepted finalization packet is
+    the only honest binding for the refreshed matrix.  Treating the older R1
+    gate as authoritative here creates a circular validator failure and can
+    make a valid TC-review transition impossible.
+    """
+
+    latest = state.get("latest_artifacts")
+    latest = latest if isinstance(latest, dict) else {}
+    value = latest.get("matrix_revalidation_finalization")
+    packet_path = (
+        resolve_artifact_path(value, workflow_path, root, ft_root)
+        if isinstance(value, str) and value.strip()
+        else None
+    )
+    if packet_path is None or not packet_path.is_file():
+        return "matrix revalidation finalization packet is missing", [str(value or "<missing>")]
+    try:
+        packet = json.loads(packet_path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        return f"matrix revalidation finalization packet is unreadable: {exc}", [rel(packet_path, root)]
+    if (
+        packet.get("allowed") is not True
+        or packet.get("review_mode") != "matrix_review"
+        or packet.get("recovery_context") != "matrix-revalidation-after-canonical-tcs"
+        or packet.get("next_controller_transition") != "tc-review required"
+    ):
+        return "matrix revalidation finalization packet does not authorize TC review", [
+            rel(packet_path, root),
+            f"allowed={packet.get('allowed')!r}",
+            f"review_mode={packet.get('review_mode')!r}",
+            f"next_controller_transition={packet.get('next_controller_transition')!r}",
+        ]
+    return practical_reviewed_matrix_hash_issue(
+        state, workflow_path, root, ft_root, packet
+    )
+
+
 def validate_practical_tc_review_handoff(
     state: dict[str, Any],
     path: Path,
@@ -8353,26 +8400,40 @@ def validate_practical_tc_review_handoff(
         and get_int(state.get("current_round")) == 2
     )
 
-    gate_value = latest.get("controller_post_finalization_gate") if isinstance(latest, dict) else None
-    gate_path = (
-        resolve_artifact_path(gate_value, path, root, ft_root)
-        if isinstance(gate_value, str) and gate_value.strip()
-        else None
+    is_revalidated_tc_transition = (
+        state.get("stage_status") == "ready-for-review"
+        and state.get("next_skill") == "ft-test-case-reviewer"
+        and state.get("review_mode") == "tc_review"
+        and str(state.get("matrix_review_status") or "") == "matrix-accepted"
+        and str(state.get("matrix_revalidation_reason") or "")
+        == "reviewed-matrix-hash-mismatch"
+        and get_int(state.get("current_round")) == 2
     )
-    if gate_path is None or not gate_path.is_file():
-        matrix_issue = "controller post-finalization gate is missing"
-        matrix_evidence = [str(gate_value or "<missing>")]
+    if is_revalidated_tc_transition:
+        matrix_issue, matrix_evidence = practical_revalidated_matrix_finalization_issue(
+            state, path, root, ft_root
+        )
     else:
-        try:
-            packet = json.loads(gate_path.read_text(encoding="utf-8"))
-        except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
-            packet = {}
-            matrix_issue = f"controller post-finalization gate is unreadable: {exc}"
-            matrix_evidence = [rel(gate_path, root)]
+        gate_value = latest.get("controller_post_finalization_gate") if isinstance(latest, dict) else None
+        gate_path = (
+            resolve_artifact_path(gate_value, path, root, ft_root)
+            if isinstance(gate_value, str) and gate_value.strip()
+            else None
+        )
+        if gate_path is None or not gate_path.is_file():
+            matrix_issue = "controller post-finalization gate is missing"
+            matrix_evidence = [str(gate_value or "<missing>")]
         else:
-            matrix_issue, matrix_evidence = practical_reviewed_matrix_hash_issue(
-                state, path, root, ft_root, packet
-            )
+            try:
+                packet = json.loads(gate_path.read_text(encoding="utf-8"))
+            except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+                packet = {}
+                matrix_issue = f"controller post-finalization gate is unreadable: {exc}"
+                matrix_evidence = [rel(gate_path, root)]
+            else:
+                matrix_issue, matrix_evidence = practical_reviewed_matrix_hash_issue(
+                    state, path, root, ft_root, packet
+                )
 
     if is_matrix_revalidation:
         if matrix_issue is None:
