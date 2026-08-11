@@ -71,6 +71,7 @@ class PracticalRouteV08DefaultsTests(unittest.TestCase):
         self.assertIn("не перечисляет route restrictions", prompts)
         self.assertNotIn("source_assertion_review", prompts)
         self.assertNotIn("source_assertion_review", scope_options)
+        self.assertIn("formal_source_requirement_codes()", scope_options)
 
     def test_matrix_review_requires_stage_summary_before_next_prompt(self) -> None:
         route = (ROOT_DIR / "references" / "agent" / "practical-test-case-route-v0.8.md").read_text(
