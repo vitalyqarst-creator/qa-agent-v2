@@ -54,7 +54,7 @@ description: Находит нужный FT-пакет, основное ФТ, s
     - Если выбор источника неоднозначен, не запускай `ft-scope-analyzer`; зафиксируй `selection_status: ambiguous` или `blocked-input`.
     - Если XHTML отсутствует, не запускай `ft-scope-analyzer`, не создавай `scope-contract.md`, writer/reviewer/iteration prompt или downstream handoff.
     - Не создавай `scope-contract.md`, `prompt.scope-to-writer.md` или `prompt.scope-to-iteration.md`: это ответственность `ft-scope-analyzer`.
-    - Выполни final-validator receipt по `source-selection-format.md`.
+    - Выполни только strict final-validator receipt по `source-selection-format.md`; warnings зафиксируй, но не перезапускай compatible validation ради формально зелёного статуса.
 14. При добавлении alias-копий source/support файлов или local-only evidence обнови `fts/artifact-manifest.json` по `references/agent/artifact-manifest-format.md`; binary alias не должен оставаться долгосрочной стратегией без manifest.
 15. Не переходи к анализу секций или написанию тест-кейсов; передай управление следующему skill-у.
 

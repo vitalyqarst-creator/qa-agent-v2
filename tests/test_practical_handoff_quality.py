@@ -228,6 +228,53 @@ class PracticalHandoffQualityTests(unittest.TestCase):
             {finding.id for finding in accepted_findings},
         )
 
+    def test_practical_scope_options_require_russian_canonical_allocation(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            options = root / "scope-options.md"
+            accepted_content = "\n".join(
+                [
+                    "# Варианты областей",
+                    "",
+                    "## Кандидатные области",
+                    "",
+                    "### SCOPE-OPTION-001",
+                    "**Порядок области:** `01`",
+                    "**Идентификатор области:** `partner-card`",
+                    "**Папка передачи этапа:** `01-partner-card`",
+                    "**Название:** Карточка партнера",
+                    "**Путь в источнике:** `9.3.2`",
+                    "",
+                    "## Распределение требований ФТ",
+                    "",
+                    "| Якорь ФТ | Владелец проектирования тестов | Затронутые области | Обоснование |",
+                    "| --- | --- | --- | --- |",
+                    "| `AS.1` | `partner-card` | `partner-card` | Проверяется в карточке партнера. |",
+                ]
+            )
+            options.write_text(accepted_content, encoding="utf-8")
+            state = {"route_profile": "practical_v0_8"}
+
+            accepted_findings, _ = self.validator.validate_scope_options_source_allocation(
+                options, root, {"AS.1"}, state
+            )
+            options.write_text(
+                accepted_content.replace(
+                    "**Идентификатор области:**", "**Scope Slug:**"
+                ).replace(
+                    "Владелец проектирования тестов", "Назначенный candidate scope"
+                ),
+                encoding="utf-8",
+            )
+            rejected_findings, _ = self.validator.validate_scope_options_source_allocation(
+                options, root, {"AS.1"}, state
+            )
+
+        self.assertEqual([], accepted_findings)
+        rejected_ids = {finding.id for finding in rejected_findings}
+        self.assertIn("scope-options-allocation-noncanonical-columns", rejected_ids)
+        self.assertIn("scope-options-non-russian-visible-text", rejected_ids)
+
     def test_source_locator_session_log_requires_provenance_and_validator_receipt(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -257,13 +304,23 @@ class PracticalHandoffQualityTests(unittest.TestCase):
                     "| code_commit | `aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa` |\n",
                 ).format(
                     validation=(
-                        "- `python scripts/validate_agent_artifacts.py --root fts/Partners/Partners-v1` — "
+                        "- `python scripts/validate_agent_artifacts.py --root fts/Partners/Partners-v1 "
+                        "--source-quality-policy strict` — "
                         "errors: 0; warnings: 0; info: 0; downstream_allowed: yes."
                     )
                 ),
                 encoding="utf-8",
             )
             accepted_findings, _ = self.validator.validate_session_log(
+                log, root, session_log_policy="strict"
+            )
+            log.write_text(
+                log.read_text(encoding="utf-8").replace(
+                    "--source-quality-policy strict", "--source-quality-policy compatible"
+                ),
+                encoding="utf-8",
+            )
+            compatible_findings, _ = self.validator.validate_session_log(
                 log, root, session_log_policy="strict"
             )
 
@@ -273,6 +330,13 @@ class PracticalHandoffQualityTests(unittest.TestCase):
         self.assertIn("session-log-source-locator-final-validator-missing", missing_ids)
         self.assertNotIn("session-log-source-locator-code-provenance-missing", accepted_ids)
         self.assertNotIn("session-log-source-locator-final-validator-missing", accepted_ids)
+        self.assertNotIn(
+            "session-log-source-locator-final-validator-not-strict", accepted_ids
+        )
+        self.assertIn(
+            "session-log-source-locator-final-validator-not-strict",
+            {finding.id for finding in compatible_findings},
+        )
 
     def write_scope_brief(
         self,

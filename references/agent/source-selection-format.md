@@ -127,7 +127,7 @@ next_skill: ft-scope-analyzer
 python scripts/validate_agent_artifacts.py --root fts/<domain>/<ft-slug> --text --source-quality-policy strict --session-log-policy strict --decision-log-policy strict
 ```
 
-В `source-locator-session-log.md` зафиксируй команду, counts `errors/warnings/info` и `downstream_allowed: yes | no`. `errors > 0` запрещают downstream; warning требует явного решения, но не блокирует автоматически.
+В `source-locator-session-log.md` зафиксируй команду, counts `errors/warnings/info` и `downstream_allowed: yes | no`. `errors > 0` запрещают downstream; warning требует явного решения, но не блокирует автоматически. Не выполняй совместимый повторный прогон только ради формулировки «зелёный» результат: итоговый receipt всегда относится к strict-прогону.
 
 Validator findings:
 

@@ -1114,6 +1114,12 @@ FORMAL_SOURCE_REQUIREMENT_CODE_RE = re.compile(
     flags=re.IGNORECASE,
 )
 SCOPE_OPTIONS_SOURCE_ALLOCATION_HEADING = "Распределение требований ФТ"
+SCOPE_OPTIONS_ALLOCATION_REQUIRED_HEADERS = (
+    "якорь фт",
+    "владелец проектирования тестов",
+    "затронутые области",
+    "обоснование",
+)
 
 
 FT_PACKAGE_DIRECT_MARKER_NAMES = {
@@ -6268,6 +6274,7 @@ def validate_scope_options_source_allocation(
     path: Path,
     root: Path,
     source_requirement_codes: set[str],
+    state: dict[str, Any] | None = None,
 ) -> tuple[list[Finding], list[Check]]:
     """Require agent-proposed scope maps to assign every formal source code."""
 
@@ -6314,6 +6321,56 @@ def validate_scope_options_source_allocation(
         )
         checks.append(Check("scope-options-source-allocation", "fail", "Source requirement allocation is missing.", display_path))
         return findings, checks
+
+    if is_practical_v08_route(state or {}):
+        allocation_rows = markdown_table_rows_from_text(allocation)
+        actual_headers = (
+            tuple(cell.strip().casefold() for cell in allocation_rows[0])
+            if allocation_rows
+            else ()
+        )
+        if actual_headers != SCOPE_OPTIONS_ALLOCATION_REQUIRED_HEADERS:
+            findings.append(
+                Finding(
+                    id="scope-options-allocation-noncanonical-columns",
+                    severity="error",
+                    category="scope-boundary",
+                    title="Практическая карта областей использует неканонические колонки распределения",
+                    details=(
+                        "Пользователь должен отдельно видеть владельца проектирования тестов и все "
+                        "затронутые области; объединённая или старая таблица скрывает межобластные связи."
+                    ),
+                    path=display_path,
+                    evidence=[" | ".join(actual_headers) or "<no table header>"],
+                    recommended_action=(
+                        "Используйте колонки: `Якорь ФТ`, `Владелец проектирования тестов`, "
+                        "`Затронутые области`, `Обоснование`."
+                    ),
+                )
+            )
+
+        language_content = re.sub(
+            r"(?im)^#{1,6}\s+SCOPE-OPTION-\d+\s*$",
+            "",
+            content,
+        )
+        language_evidence = practical_handoff_english_evidence(language_content)
+        if language_evidence:
+            findings.append(
+                Finding(
+                    id="scope-options-non-russian-visible-text",
+                    severity="error",
+                    category="practical-handoff",
+                    title="Карта областей содержит англоязычный видимый текст",
+                    details=(
+                        "Карта выбора области — пользовательский артефакт. Идентификаторы и metadata enums "
+                        "допустимы, но заголовки, подписи полей, таблицы и пояснения должны быть на русском."
+                    ),
+                    path=display_path,
+                    evidence=language_evidence[:20],
+                    recommended_action="Перепишите видимые заголовки, подписи и пояснения карты областей на русском.",
+                )
+            )
 
     allocation_codes = [
         normalize_formal_source_requirement_code(match)
@@ -6375,7 +6432,7 @@ def validate_scope_options_source_allocation(
     candidate_scope_slugs = {
         match.group(1).strip()
         for match in re.finditer(
-            r"(?im)^\*\*Scope Slug:\*\*\s*`([^`]+)`\s*$",
+            r"(?im)^\*\*(?:Идентификатор области|Scope Slug):\*\*\s*`([^`]+)`\s*$",
             content,
         )
     }
@@ -24565,6 +24622,20 @@ def validate_source_locator_session_log_receipt(
 
     validation_section = extract_markdown_section(content, "Validation") or ""
     has_validator_command = "validate_agent_artifacts.py" in validation_section
+    has_strict_source_quality_policy = bool(
+        re.search(
+            r"validate_agent_artifacts\.py[^\n]*--source-quality-policy\s+strict\b",
+            validation_section,
+            flags=re.IGNORECASE,
+        )
+    )
+    has_compatible_source_quality_policy = bool(
+        re.search(
+            r"validate_agent_artifacts\.py[^\n]*--source-quality-policy\s+compatible\b",
+            validation_section,
+            flags=re.IGNORECASE,
+        )
+    )
     has_validation_counts = all(
         re.search(rf"\b{label}s?\s*[:=]\s*\d+", validation_section, flags=re.IGNORECASE)
         for label in ("error", "warning", "info")
@@ -24601,6 +24672,46 @@ def validate_source_locator_session_log_receipt(
         checks.append(Check("session-log-source-locator-final-validator", warn_status, "Source locator final validator evidence is incomplete.", display_path))
     else:
         checks.append(Check("session-log-source-locator-final-validator", "pass", "Source locator final validator evidence is present.", display_path))
+
+    if not has_strict_source_quality_policy:
+        findings.append(
+            Finding(
+                id="session-log-source-locator-final-validator-not-strict",
+                severity=severity,
+                category="session-log",
+                title="Source locator final validator receipt does not use strict source policy",
+                details=(
+                    "Source selection may route downstream only from a strict source-quality validation receipt. "
+                    "A compatible result can hide structural extraction risks."
+                ),
+                path=display_path,
+                evidence=["--source-quality-policy strict"],
+                recommended_action=(
+                    "Record one final validator command with `--source-quality-policy strict`; document "
+                    "non-blocking warnings instead of downgrading the policy."
+                ),
+            )
+        )
+        checks.append(Check("session-log-source-locator-final-validator-strict", warn_status, "Strict source policy is missing.", display_path))
+    elif has_compatible_source_quality_policy:
+        findings.append(
+            Finding(
+                id="session-log-source-locator-compatible-validator-receipt",
+                severity=severity,
+                category="session-log",
+                title="Source locator receipt includes a compatible source-quality validation",
+                details=(
+                    "A compatible re-run is not a substitute for documenting a strict result and creates a "
+                    "misleading second success criterion for source selection."
+                ),
+                path=display_path,
+                evidence=["--source-quality-policy compatible"],
+                recommended_action="Keep only the strict final validator receipt and document its warnings explicitly.",
+            )
+        )
+        checks.append(Check("session-log-source-locator-final-validator-strict", warn_status, "Compatible source policy recorded.", display_path))
+    else:
+        checks.append(Check("session-log-source-locator-final-validator-strict", "pass", "Strict source policy recorded.", display_path))
     return findings, checks
 
 
@@ -27212,6 +27323,7 @@ def validate_workflow_state(
                 scope_options_path,
                 root,
                 source_requirement_codes,
+                state,
             )
             findings.extend(allocation_findings)
             checks.extend(allocation_checks)
