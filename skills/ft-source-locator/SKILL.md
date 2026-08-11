@@ -36,9 +36,9 @@ description: Находит нужный FT-пакет, основное ФТ, s
 Параллельно веди `agent-decision-log.md` по `agent-decision-log-format.md`: фиксируй выбор FT package, источников, отклоненные соседние packages, ambiguity decisions и routing к scope analyzer; свяжи его через `latest_artifacts.decision_log`.
 Для русскоязычных источников перед PowerShell-командами выставляй UTF-8 preamble из `session-log-format.md`; если вывод консоли искажает кириллицу, перечитай источник через явный UTF-8 file/script path, не используй mojibake stdout как evidence и зафиксируй это в `Technical Fallbacks`.
 
-1. Просмотри `fts/` и карточки FT-пакетов.
+1. Просмотри `fts/` и карточки FT-пакетов. Зафиксируй code provenance по `source-selection-format.md`.
 2. Определи `ft-slug` и отдельно выбранный input root, если материалы лежат в version/variant-подкаталоге `fts/<ft-slug>/...`.
-3. Зафиксируй, какие документы являются основным ФТ из `source/`, а какие относятся к support или mockups. Не считай Office lock-файлы `~$*` source-кандидатами или blocker-ами. Основной DOCX ФТ остается authoritative source of truth.
+3. Зафиксируй, какие документы являются основным ФТ из `source/`, а какие относятся к support или mockups. Не считай Office lock-файлы `~$*` source-кандидатами или blocker-ами. Основной DOCX ФТ остается authoritative source of truth. Перед `blocked-input` примени physical-file rule из `source-selection-format.md`.
 4. Найди matching XHTML-версию основного ФТ в `source/`. XHTML обязателен как основной машиночитаемый источник извлечения таблиц, строк, списков, вложенных списков, перечней значений и структуры разделов.
    Для practical route читай DOCX через `python-docx`, извлекай XHTML и визуально сверяй PDF; не запускай LibreOffice или skill `documents` без явного запроса на создание, редактирование или рендер DOCX.
    Если пользователь просит проверить JSON вместо XHTML, используй `docx-json-projection` только как diagnostic/evaluation route по `source-json-projection.md`: JSON не заменяет обязательный XHTML в production workflow, пока multi-scope parity evaluation не докажет критерии переключения.
@@ -54,6 +54,7 @@ description: Находит нужный FT-пакет, основное ФТ, s
     - Если выбор источника неоднозначен, не запускай `ft-scope-analyzer`; зафиксируй `selection_status: ambiguous` или `blocked-input`.
     - Если XHTML отсутствует, не запускай `ft-scope-analyzer`, не создавай `scope-contract.md`, writer/reviewer/iteration prompt или downstream handoff.
     - Не создавай `scope-contract.md`, `prompt.scope-to-writer.md` или `prompt.scope-to-iteration.md`: это ответственность `ft-scope-analyzer`.
+    - Выполни final-validator receipt по `source-selection-format.md`.
 14. При добавлении alias-копий source/support файлов или local-only evidence обнови `fts/artifact-manifest.json` по `references/agent/artifact-manifest-format.md`; binary alias не должен оставаться долгосрочной стратегией без manifest.
 15. Не переходи к анализу секций или написанию тест-кейсов; передай управление следующему skill-у.
 

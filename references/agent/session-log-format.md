@@ -99,6 +99,8 @@ latest_artifacts:
 - `<what was excluded>` - result.
 ```
 
+Для `ft-source-locator` обязательны `code_branch`, `code_commit` и финальный receipt `validate_agent_artifacts.py`: counts `errors/warnings/info`, `downstream_allowed: yes | no`.
+
 ## Audit Sections
 
 Для новых clean eval runs, writer/reviewer diagnostics и любых запусков, где важен последующий анализ качества, добавляй также audit-секции. Они проверяются `--session-log-policy audit`:

@@ -65,6 +65,19 @@ class PracticalRouteV08ContractTests(unittest.TestCase):
             self.assertIn("PDF", content)
             self.assertIn("не запускай libreoffice", content.lower())
 
+    def test_source_locator_requires_physical_checks_and_provenance(self) -> None:
+        source_selection = self.read("references/agent/source-selection-format.md")
+        source_locator = self.read("skills/ft-source-locator/SKILL.md")
+        session_log = self.read("references/agent/session-log-format.md")
+
+        self.assertIn("git ls-files", source_selection)
+        self.assertIn("git rev-parse HEAD", source_selection)
+        self.assertIn("physical", source_selection.lower())
+        self.assertIn("physical-file rule", source_locator)
+        self.assertIn("code provenance", source_locator)
+        self.assertIn("downstream_allowed", source_selection)
+        self.assertIn("downstream_allowed", session_log)
+
     def test_writer_and_reviewer_do_not_require_heavy_process_for_practical_route(self) -> None:
         writer = self.read("skills/ft-test-case-writer/SKILL.md")
         reviewer = self.read("skills/ft-test-case-reviewer/SKILL.md")

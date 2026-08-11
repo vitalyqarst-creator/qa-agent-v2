@@ -113,6 +113,10 @@ REQUIRED_SOURCE_SELECTION_CONTEXT_FIELDS = {
     "selected_ft_slug",
     "selection_status",
 }
+REQUIRED_SOURCE_SELECTION_PROVENANCE_FIELDS = {
+    "code_branch",
+    "code_commit",
+}
 ALLOWED_SOURCE_SELECTION_STATUSES = {"selected", "ambiguous", "blocked-input"}
 SCOPE_SELECTION_PROMPT_DIRECT_OUTPUT_RE = re.compile(
     r"(?im)^\s*(?:[-*]\s*)?(?:outputs|выходы)\s*:\s*.*prompt\.scope-to-(?:writer|iteration)\.md"
@@ -6251,6 +6255,96 @@ def validate_source_selection_artifact(
         checks.append(Check("source-selection-context-fields", "fail", "Required context fields are missing.", display_path))
     else:
         checks.append(Check("source-selection-context-fields", "pass", "Required context fields are present.", display_path))
+
+    missing_provenance_fields = sorted(
+        REQUIRED_SOURCE_SELECTION_PROVENANCE_FIELDS - set(context_fields)
+    )
+    raw_code_commit = context_fields.get("code_commit", "")
+    code_commit = strip_markdown_code(raw_code_commit).casefold()
+    if missing_provenance_fields:
+        routes_downstream = source_selection_routes_downstream(state)
+        findings.append(
+            Finding(
+                id="source-selection-missing-code-provenance",
+                severity="error" if routes_downstream else "warning",
+                category="source-selection",
+                title="source-selection.md misses code provenance",
+                details=(
+                    "Source selection must record the actual branch and Git commit so that the downstream handoff "
+                    "can be reproduced with the same agent instructions."
+                ),
+                path=display_path,
+                evidence=missing_provenance_fields,
+                recommended_action=(
+                    "Add `Code branch` from `git branch --show-current` and `Code commit` from "
+                    "`git rev-parse HEAD` to the Context section, then refresh the source-locator handoff."
+                ),
+            )
+        )
+        checks.append(
+            Check(
+                "source-selection-code-provenance",
+                "fail",
+                "Code provenance is missing.",
+                display_path,
+            )
+        )
+    elif not re.fullmatch(r"[0-9a-f]{40}", code_commit):
+        findings.append(
+            Finding(
+                id="source-selection-invalid-code-commit",
+                severity="error",
+                category="source-selection",
+                title="source-selection.md has invalid code commit",
+                details="Code commit must be the exact 40-character SHA returned by Git.",
+                path=display_path,
+                evidence=[f"code_commit={raw_code_commit or '<missing>'}"],
+                recommended_action="Record the exact output of `git rev-parse HEAD` in `Code commit`.",
+            )
+        )
+        checks.append(
+            Check(
+                "source-selection-code-provenance",
+                "fail",
+                "Code commit is invalid.",
+                display_path,
+            )
+        )
+    else:
+        current_commit = current_git_commit_for_code_root(str(root))
+        if current_commit and code_commit != current_commit:
+            findings.append(
+                Finding(
+                    id="source-selection-code-commit-stale",
+                    severity="error",
+                    category="source-selection",
+                    title="source-selection.md records a stale code commit",
+                    details=(
+                        "The source-locator handoff was created by another checkout revision and must be refreshed "
+                        "before it routes to downstream instructions."
+                    ),
+                    path=display_path,
+                    evidence=[f"recorded={code_commit}", f"current={current_commit}"],
+                    recommended_action="Reread ft-source-locator and rematerialize only the source-locator handoff.",
+                )
+            )
+            checks.append(
+                Check(
+                    "source-selection-code-provenance",
+                    "fail",
+                    "Code commit is stale.",
+                    display_path,
+                )
+            )
+        else:
+            checks.append(
+                Check(
+                    "source-selection-code-provenance",
+                    "pass",
+                    "Code provenance is current.",
+                    display_path,
+                )
+            )
 
     raw_status = context_fields.get("selection_status", "")
     selection_status = normalize_markdown_field_value(raw_status).lower()
@@ -24087,6 +24181,103 @@ def validate_tc_revision_summary_status_assertions(
     ]
 
 
+def validate_source_locator_session_log_receipt(
+    path: Path,
+    root: Path,
+    content: str,
+    display_path: str,
+    severity: str,
+    warn_status: str,
+) -> tuple[list[Finding], list[Check]]:
+    """Validate lean source-locator provenance and its final read-only receipt."""
+
+    metadata_section = extract_markdown_section(content, "Session Metadata") or ""
+    skill_match = re.search(r"\|\s*skill\s*\|\s*`?([^`|\s]+)`?\s*\|", metadata_section)
+    log_skill = skill_match.group(1).strip() if skill_match else ""
+    is_source_locator_log = path.name.lower() == "source-locator-session-log.md" or log_skill == "ft-source-locator"
+    if not is_source_locator_log:
+        return [], []
+
+    findings: list[Finding] = []
+    checks: list[Check] = []
+    metadata_fields = parse_markdown_key_value_fields(metadata_section)
+    missing_provenance = sorted(REQUIRED_SOURCE_SELECTION_PROVENANCE_FIELDS - set(metadata_fields))
+    recorded_commit = strip_markdown_code(metadata_fields.get("code_commit", "")).casefold()
+    if missing_provenance:
+        findings.append(
+            Finding(
+                id="session-log-source-locator-code-provenance-missing",
+                severity=severity,
+                category="session-log",
+                title="Source locator session log misses code provenance",
+                details=(
+                    "Source-locator audit evidence must identify the branch and exact agent instruction commit "
+                    "that selected the FT inputs."
+                ),
+                path=display_path,
+                evidence=missing_provenance,
+                recommended_action="Add `code_branch` and `code_commit` from the active Git checkout to Session Metadata.",
+            )
+        )
+        checks.append(Check("session-log-source-locator-code-provenance", warn_status, "Source locator code provenance is missing.", display_path))
+    elif not re.fullmatch(r"[0-9a-f]{40}", recorded_commit):
+        findings.append(
+            Finding(
+                id="session-log-source-locator-code-commit-invalid",
+                severity=severity,
+                category="session-log",
+                title="Source locator session log has invalid code commit",
+                details="Session Metadata code_commit must contain an exact 40-character Git SHA.",
+                path=display_path,
+                evidence=[f"code_commit={metadata_fields.get('code_commit', '<missing>')}"],
+                recommended_action="Record the exact output of `git rev-parse HEAD` in code_commit.",
+            )
+        )
+        checks.append(Check("session-log-source-locator-code-provenance", warn_status, "Source locator code commit is invalid.", display_path))
+    else:
+        checks.append(Check("session-log-source-locator-code-provenance", "pass", "Source locator code provenance is present.", display_path))
+
+    validation_section = extract_markdown_section(content, "Validation") or ""
+    has_validator_command = "validate_agent_artifacts.py" in validation_section
+    has_validation_counts = all(
+        re.search(rf"\b{label}s?\s*[:=]\s*\d+", validation_section, flags=re.IGNORECASE)
+        for label in ("error", "warning", "info")
+    )
+    has_downstream_decision = bool(
+        re.search(r"\bdownstream_allowed\s*[:=]\s*(?:yes|no)\b", validation_section, flags=re.IGNORECASE)
+    )
+    if not (has_validator_command and has_validation_counts and has_downstream_decision):
+        missing_evidence = []
+        if not has_validator_command:
+            missing_evidence.append("validate_agent_artifacts.py")
+        if not has_validation_counts:
+            missing_evidence.append("errors/warnings/info counts")
+        if not has_downstream_decision:
+            missing_evidence.append("downstream_allowed: yes | no")
+        findings.append(
+            Finding(
+                id="session-log-source-locator-final-validator-missing",
+                severity=severity,
+                category="session-log",
+                title="Source locator session log lacks final validator evidence",
+                details=(
+                    "The source-locator handoff must show that a read-only validator ran after artifact creation "
+                    "and must state whether downstream routing is allowed."
+                ),
+                path=display_path,
+                evidence=missing_evidence,
+                recommended_action=(
+                    "Record the final validator command, errors/warnings/info counts and "
+                    "`downstream_allowed: yes | no` in Validation."
+                ),
+            )
+        )
+        checks.append(Check("session-log-source-locator-final-validator", warn_status, "Source locator final validator evidence is incomplete.", display_path))
+    else:
+        checks.append(Check("session-log-source-locator-final-validator", "pass", "Source locator final validator evidence is present.", display_path))
+    return findings, checks
+
+
 def validate_session_log(
     path: Path,
     root: Path,
@@ -24172,6 +24363,18 @@ def validate_session_log(
         checks.append(Check("session-log-format", warn_status, "Session log has empty required sections.", display_path))
     else:
         checks.append(Check("session-log-format", "pass", "Session log format passed.", display_path))
+
+    if session_log_policy != "audit":
+        source_locator_findings, source_locator_checks = validate_source_locator_session_log_receipt(
+            path,
+            root,
+            content,
+            display_path,
+            severity,
+            warn_status,
+        )
+        findings.extend(source_locator_findings)
+        checks.extend(source_locator_checks)
 
     if session_log_policy == "audit":
         strategy_hint_sources = "\n".join(
@@ -24592,6 +24795,17 @@ def validate_session_log(
         log_skill = skill_match.group(1).strip() if skill_match else ""
         is_source_locator_log = path.name.lower() == "source-locator-session-log.md" or log_skill == "ft-source-locator"
         if is_source_locator_log:
+            source_locator_findings, source_locator_checks = validate_source_locator_session_log_receipt(
+                path,
+                root,
+                content,
+                display_path,
+                severity,
+                warn_status,
+            )
+            findings.extend(source_locator_findings)
+            checks.extend(source_locator_checks)
+
             ft_slug_match = re.search(r"\|\s*ft_slug\s*\|\s*`?([^`|\s]+)`?\s*\|", metadata_section)
             ft_slug = ft_slug_match.group(1).strip() if ft_slug_match else ""
             clean_boundary_sections = "\n".join(

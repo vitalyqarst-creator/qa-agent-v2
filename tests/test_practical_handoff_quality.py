@@ -27,6 +27,106 @@ class PracticalHandoffQualityTests(unittest.TestCase):
     def setUp(self) -> None:
         self.validator = load_validator_module()
 
+    @staticmethod
+    def source_selection_content(*, include_provenance: bool) -> str:
+        provenance = (
+            "- Code branch: `codex/test`\n"
+            "- Code commit: `aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa`\n"
+            if include_provenance
+            else ""
+        )
+        return (
+            "# Source Selection\n\n"
+            "## Context\n\n"
+            "- Selected FT slug: `Partners-v1`\n"
+            "- Selection status: `selected`\n"
+            f"{provenance}"
+            "## Main FT Documents\n\n"
+            "| path | role |\n| --- | --- |\n| `source/main.docx` | `main-ft-docx` |\n\n"
+            "## Machine-Readable XHTML Source\n\n"
+            "- xhtml_available: `yes`\n\n"
+            "## Structural Cross-Check PDF\n\n- pdf_available: `yes`\n\n"
+            "## Support Files And Mockups\n\n- none\n\n"
+            "## Source Quality\n\n- parseability: passed\n\n"
+            "## Ambiguity And Decision Log\n\n- none\n\n"
+            "## Handoff\n\n- next_skill: `ft-scope-analyzer`\n"
+        )
+
+    def test_selected_source_handoff_requires_code_provenance(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source_selection = root / "source-selection.md"
+            source_selection.write_text(
+                self.source_selection_content(include_provenance=False), encoding="utf-8"
+            )
+            workflow = root / "workflow-state.yaml"
+            state = {"stage_status": "ready-for-next-stage", "next_skill": "ft-scope-analyzer"}
+
+            missing_findings, _ = self.validator.validate_source_selection_artifact(
+                source_selection, root, state, workflow
+            )
+            source_selection.write_text(
+                self.source_selection_content(include_provenance=True), encoding="utf-8"
+            )
+            accepted_findings, _ = self.validator.validate_source_selection_artifact(
+                source_selection, root, state, workflow
+            )
+
+        self.assertIn(
+            "source-selection-missing-code-provenance",
+            {finding.id for finding in missing_findings},
+        )
+        self.assertNotIn(
+            "source-selection-missing-code-provenance",
+            {finding.id for finding in accepted_findings},
+        )
+
+    def test_source_locator_session_log_requires_provenance_and_validator_receipt(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            log = root / "source-locator-session-log.md"
+            base = (
+                "# Source Locator Session Log\n\n"
+                "## Session Metadata\n\n"
+                "| field | value |\n| --- | --- |\n"
+                "| skill | `ft-source-locator` |\n"
+                "| ft_slug | `Partners-v1` |\n\n"
+                "## Inputs Read\n\n- `source/main.docx`\n\n"
+                "## Inputs Not Used\n\n- `fts/Partners/old` — not used.\n\n"
+                "## Key Decisions\n\n- Selected package.\n\n"
+                "## Risks And Fallbacks\n\n- none\n\n"
+                "## Validation\n\n{validation}\n\n"
+                "## Contamination Check\n\n- Neighbor baseline excluded and not used.\n"
+            )
+            log.write_text(base.format(validation="- source readability passed."), encoding="utf-8")
+            missing_findings, _ = self.validator.validate_session_log(
+                log, root, session_log_policy="strict"
+            )
+            log.write_text(
+                base.replace(
+                    "| ft_slug | `Partners-v1` |\n",
+                    "| ft_slug | `Partners-v1` |\n"
+                    "| code_branch | `codex/test` |\n"
+                    "| code_commit | `aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa` |\n",
+                ).format(
+                    validation=(
+                        "- `python scripts/validate_agent_artifacts.py --root fts/Partners/Partners-v1` — "
+                        "errors: 0; warnings: 0; info: 0; downstream_allowed: yes."
+                    )
+                ),
+                encoding="utf-8",
+            )
+            accepted_findings, _ = self.validator.validate_session_log(
+                log, root, session_log_policy="strict"
+            )
+
+        missing_ids = {finding.id for finding in missing_findings}
+        accepted_ids = {finding.id for finding in accepted_findings}
+        self.assertIn("session-log-source-locator-code-provenance-missing", missing_ids)
+        self.assertIn("session-log-source-locator-final-validator-missing", missing_ids)
+        self.assertNotIn("session-log-source-locator-code-provenance-missing", accepted_ids)
+        self.assertNotIn("session-log-source-locator-final-validator-missing", accepted_ids)
+
     def write_scope_brief(
         self,
         path: Path,

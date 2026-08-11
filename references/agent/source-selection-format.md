@@ -77,6 +77,8 @@ Additional validator content checks:
 - `request_summary`;
 - `selected_ft_slug`;
 - `selection_status`;
+- `code_branch` — фактический вывод `git branch --show-current` в момент source selection;
+- `code_commit` — точный 40-символьный SHA из `git rev-parse HEAD` в момент source selection;
 - `created_at`;
 - `created_by`.
 
@@ -87,6 +89,10 @@ Additional validator content checks:
 - `blocked-input`.
 
 Если статус не `selected`, downstream `ft-scope-analyzer` не должен стартовать без явного решения пользователя или обновленного `source-selection.md`.
+
+### Physical Availability Before Missing-Input Claim
+
+`rg --files`, `git ls-files`, `git status` и `.gitignore` не доказывают отсутствие FT input: локальные материалы могут быть ignored by Git. Перед `blocked-input` проверь точный путь и родительский каталог через файловую систему; при расхождении сначала устрани его, не публикуя предварительный blocker.
 
 ### Main FT Documents
 
@@ -212,6 +218,14 @@ next_skill: ft-scope-analyzer
 
 `source-selection.md` не должен создавать `scope-contract.md`, `prompt.scope-to-writer.md` или `prompt.scope-to-iteration.md`: это ответственность `ft-scope-analyzer`.
 
+После записи source-locator handoff выполни read-only validation:
+
+```text
+python scripts/validate_agent_artifacts.py --root fts/<domain>/<ft-slug> --text --source-quality-policy strict --session-log-policy strict --decision-log-policy strict
+```
+
+В `source-locator-session-log.md` зафиксируй команду, counts `errors/warnings/info` и `downstream_allowed: yes | no`. `errors > 0` запрещают downstream; warning требует явного решения, но не блокирует автоматически.
+
 Validator findings:
 
 - `workflow-state-source-locator-missing-source-selection`: source-locator workflow не ссылается на `source-selection.md`.
@@ -221,6 +235,9 @@ Additional validator findings:
 
 - `source-selection-missing-required-sections`: `source-selection.md` misses one or more required handoff sections.
 - `source-selection-missing-context-fields`: `Context` does not expose `selected_ft_slug` and/or `selection_status`.
+- `source-selection-missing-code-provenance`: отсутствуют `code_branch` и/или `code_commit`; selected handoff не должен идти downstream.
+- `source-selection-invalid-code-commit`: `code_commit` не является SHA-1 Git commit.
+- `source-selection-code-commit-stale`: зафиксированный commit не совпадает с `HEAD` checkout, где запускается validator.
 - `source-selection-invalid-selection-status`: `selection_status` is outside `selected | ambiguous | blocked-input`.
 - `workflow-state-source-selection-not-selected`: workflow routes downstream while `source-selection.md` is still `ambiguous` or `blocked-input`.
 
@@ -240,6 +257,8 @@ Validator-enforced XHTML findings:
 - Request summary:
 - Selected FT slug:
 - Selection status: `selected | ambiguous | blocked-input`
+- Code branch:
+- Code commit:
 - Created at:
 - Created by:
 
