@@ -270,6 +270,50 @@ def build_finalization_packet(
     if receipt.get("scope_ids") != scope_ids:
         blockers.append("review launch receipt scope ids differ from requested scope ids")
 
+    # The controller may not finalize a verdict that was launched from a
+    # different version-gated checkout.  The post-finalization gate also
+    # checks this, but doing it here prevents a stale verdict from causing the
+    # controller's otherwise permitted state/summary update in the first
+    # place.
+    receipt_branch = str(receipt.get("code_branch") or "").strip()
+    receipt_commit = str(receipt.get("code_commit") or "").casefold().strip()
+    branch_rc, current_branch, branch_error = review_preflight.run_git(
+        repo_root, "branch", "--show-current"
+    )
+    commit_rc, current_commit, commit_error = review_preflight.run_git(
+        repo_root, "rev-parse", "HEAD"
+    )
+    current_branch = current_branch.strip()
+    current_commit = current_commit.casefold().strip()
+    code_version_issues: list[str] = []
+    if not receipt_branch or not receipt_commit:
+        code_version_issues.append("review launch receipt lacks code branch or exact commit")
+    elif branch_rc != 0 or commit_rc != 0:
+        code_version_issues.append(
+            "cannot determine current code version during review finalization: "
+            f"branch={branch_error or '<missing>'}; commit={commit_error or '<missing>'}"
+        )
+    elif current_branch != receipt_branch or current_commit != receipt_commit:
+        code_version_issues.append(
+            "review launch receipt code version differs from current checkout: "
+            f"launch branch={receipt_branch}, commit={receipt_commit}; "
+            f"current branch={current_branch or '<missing>'}, "
+            f"commit={current_commit or '<missing>'}"
+        )
+    blockers.extend(code_version_issues)
+    checks.append(
+        FinalizationCheck(
+            "pinned-code-version",
+            "pass" if not code_version_issues else "fail",
+            (
+                f"launch_branch={receipt_branch or '<missing>'}; "
+                f"current_branch={current_branch or branch_error or '<missing>'}; "
+                f"launch_commit={receipt_commit or '<missing>'}; "
+                f"current_commit={current_commit or commit_error or '<missing>'}"
+            ),
+        )
+    )
+
     resolved_dispatch = resolve_inside_package(dispatch_receipt, ft_package_root)
     dispatch: dict[str, Any] = {}
     if resolved_dispatch is None:
@@ -451,6 +495,8 @@ def build_finalization_packet(
         "scope_ids": scope_ids,
         "repo_root": repo_root.as_posix(),
         "ft_package_root": ft_package_root.as_posix(),
+        "code_branch": current_branch if branch_rc == 0 else "",
+        "code_commit": current_commit if commit_rc == 0 else "",
         "launch_receipt": launch_receipt.resolve().as_posix(),
         "launch_receipt_sha256": sha256_file(launch_receipt) if launch_receipt.is_file() else "",
         "dispatch_receipt": resolved_dispatch.as_posix() if resolved_dispatch else "",

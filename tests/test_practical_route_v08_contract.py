@@ -35,6 +35,7 @@ class PracticalRouteV08ContractTests(unittest.TestCase):
         self.assertIn("current_round: 2", content)
         self.assertIn("next_controller_transition: tc-review required", content)
         self.assertIn("bounded `wait_threads` calls", content)
+        self.assertIn("prepared handoff is not a", content)
         self.assertIn("fast path", content)
         self.assertIn("TC draft after matrix gate", content)
         self.assertIn("tc_with_status_decision: write-with-statuses", content)
@@ -267,7 +268,9 @@ class PracticalRouteV08ContractTests(unittest.TestCase):
         for content in (route, finalization, workflow, dispatch):
             self.assertIn("controller_task_or_session", content)
         self.assertIn("practical_controller_post_finalization_gate.py", finalization)
-        self.assertIn("pinned-code-commit-changed", self.read("scripts/practical_controller_post_finalization_gate.py"))
+        self.assertIn("pinned-code-version-changed", self.read("scripts/practical_controller_post_finalization_gate.py"))
+        self.assertIn("current branch **and** exact `HEAD`", finalization)
+        self.assertIn("tc-review required` is an execution obligation", finalization)
         self.assertIn("practical-workflow-post-finalization-gate-missing", validator)
 
     def test_practical_stage_cannot_self_repair_agent_layer_or_split_scope_artifacts(self) -> None:

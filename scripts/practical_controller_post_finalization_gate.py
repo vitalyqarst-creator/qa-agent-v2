@@ -100,18 +100,44 @@ def build_post_finalization_gate(
     ):
         blockers.append("review finalization packet does not bind the selected launch receipt")
 
-    _, current_commit, git_error = review_preflight.run_git(repo_root, "rev-parse", "HEAD")
+    branch_rc, current_branch, branch_error = review_preflight.run_git(
+        repo_root, "branch", "--show-current"
+    )
+    commit_rc, current_commit, git_error = review_preflight.run_git(repo_root, "rev-parse", "HEAD")
+    current_branch = current_branch.strip()
     current_commit = current_commit.casefold()
-    launch_commit = str(launch.get("code_commit") or "").casefold()
-    if not current_commit or not launch_commit or current_commit != launch_commit:
+    launch_branch = str(launch.get("code_branch") or "").strip()
+    launch_commit = str(launch.get("code_commit") or "").casefold().strip()
+    if (
+        branch_rc != 0
+        or commit_rc != 0
+        or not current_branch
+        or not launch_branch
+        or not current_commit
+        or not launch_commit
+        or current_branch != launch_branch
+        or current_commit != launch_commit
+    ):
         blockers.append(
-            "pinned-code-commit-changed: rematerialize and launch a fresh independent review"
+            "pinned-code-version-changed: rematerialize and launch a fresh independent review"
         )
     checks.append(
         {
-            "id": "pinned-code-commit",
-            "status": "pass" if current_commit and current_commit == launch_commit else "fail",
-            "details": f"launch={launch_commit or '<missing>'}; current={current_commit or git_error or '<missing>'}",
+            "id": "pinned-code-version",
+            "status": "pass"
+            if current_branch
+            and launch_branch
+            and current_commit
+            and launch_commit
+            and current_branch == launch_branch
+            and current_commit == launch_commit
+            else "fail",
+            "details": (
+                f"launch_branch={launch_branch or '<missing>'}; "
+                f"current_branch={current_branch or branch_error or '<missing>'}; "
+                f"launch_commit={launch_commit or '<missing>'}; "
+                f"current_commit={current_commit or git_error or '<missing>'}"
+            ),
         }
     )
 
@@ -166,6 +192,7 @@ def build_post_finalization_gate(
 
     workflow_hashes: dict[str, str] = {}
     parity_issues: list[str] = []
+    recovery_transition_issues: list[str] = []
     for descriptor in descriptors:
         workflow_hashes[descriptor.scope_id] = sha256_file(descriptor.workflow_path)
         try:
@@ -190,12 +217,44 @@ def build_post_finalization_gate(
             parity_issues.append(
                 f"scope {descriptor.scope_id}: closed gap remains active in source-parity: {', '.join(stale_gaps)}"
             )
+        if finalization.get("next_controller_transition") == "tc-review required":
+            expected_recovery_state = {
+                "current_stage": "ft-test-case-writer",
+                "stage_status": "ready-for-review",
+                "next_skill": "ft-test-case-reviewer",
+                "review_mode": "tc_review",
+                "matrix_review_status": "matrix-accepted",
+            }
+            for key, expected in expected_recovery_state.items():
+                actual = str(state.get(key) or "").strip()
+                if actual != expected:
+                    recovery_transition_issues.append(
+                        f"scope {descriptor.scope_id}: tc-review recovery checkpoint {key}="
+                        f"{actual or '<missing>'}; expected {expected}"
+                    )
+            if str(state.get("current_round") or "").strip() != "2":
+                recovery_transition_issues.append(
+                    f"scope {descriptor.scope_id}: tc-review recovery checkpoint current_round="
+                    f"{state.get('current_round') or '<missing>'}; expected 2"
+                )
     blockers.extend(parity_issues)
     checks.append(
         {
             "id": "source-parity-gap-reconciliation",
             "status": "pass" if not parity_issues else "fail",
             "details": f"issues={len(parity_issues)}",
+        }
+    )
+    blockers.extend(recovery_transition_issues)
+    checks.append(
+        {
+            "id": "matrix-revalidation-to-tc-review-checkpoint",
+            "status": "pass" if not recovery_transition_issues else "fail",
+            "details": (
+                "not-applicable"
+                if finalization.get("next_controller_transition") != "tc-review required"
+                else f"issues={len(recovery_transition_issues)}"
+            ),
         }
     )
 
@@ -209,6 +268,7 @@ def build_post_finalization_gate(
         "summary_path": summary_path.as_posix(),
         "summary_sha256": sha256_file(summary_path) if summary_path.is_file() else "",
         "workflow_state_sha256_by_scope": workflow_hashes,
+        "code_branch": current_branch,
         "code_commit": current_commit,
         "launch_receipt": launch_receipt.resolve().as_posix(),
         "launch_receipt_sha256": sha256_file(launch_receipt) if launch_receipt.is_file() else "",

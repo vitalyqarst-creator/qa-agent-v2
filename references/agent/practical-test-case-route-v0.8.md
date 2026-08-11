@@ -245,6 +245,14 @@ performs its one deterministic state/summary update, and only then reports the
 stage result or starts the next permitted transition. It must not return a
 terminal stage response while a dispatched reviewer is still active.
 
+When the user requested independent `tc_review`, an active
+`prompt.tc-to-reviewer.md`, `tc-review allowed` or a prepared handoff is not a
+completed stage. The controller must execute the fresh TC-review preflight,
+dispatch a separate top-level reviewer session, wait for the verdict and run
+its finalization. If that fresh preflight is blocked, return the blocked result
+with its evidence; never replace it with a terminal message that merely offers
+the next prompt.
+
 Blocked check-only, launch or dispatch attempts are diagnostics, not durable
 handoff artifacts: do not persist a blocked `review-launch-preflight*.json`,
 `review-dispatch*.json` or controller snapshot. A successful review attempt has

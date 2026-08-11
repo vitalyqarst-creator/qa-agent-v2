@@ -18,6 +18,9 @@ python scripts/practical_review_finalization_guard.py --repo-root . --ft-package
 The guard requires all of the following:
 
 - original launch receipt has `allowed: true` and matches the selected scope/mode;
+- current branch **and** exact `HEAD` still equal `code_branch` and
+  `code_commit` recorded in that launch receipt; otherwise the verdict is
+  stale and the controller must rematerialize and launch a fresh review;
 - controller-owned summary and active workflow files have not changed during
   review;
 - review artifact has a canonical verdict for the selected mode;
@@ -102,6 +105,13 @@ For this recovery, an accepted matrix finalization packet has
 `next_controller_transition: tc-review required`. The controller waits for the
 separate reviewer to finish, then finalizes controller-owned state and summary
 before reporting the stage as complete.
+
+`tc-review required` is an execution obligation, not a handoff result. The
+controller must first pass a fresh TC-review preflight, create and dispatch a
+separate top-level reviewer session, wait for its verdict, and finalize it. A
+terminal report saying only that a TC-review prompt or handoff was prepared is
+invalid. If the fresh preflight is blocked, report that blocked result and its
+evidence instead of claiming the requested review was completed.
 
 ## Portable accepted baseline
 

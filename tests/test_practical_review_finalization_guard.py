@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import importlib.util
 import json
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -52,6 +53,29 @@ class PracticalReviewFinalizationGuardTests(unittest.TestCase):
         tmp = tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)
         repo_root = Path(tmp.name)
+        (repo_root / "versioned.txt").write_text("versioned\n", encoding="utf-8")
+        subprocess.run(["git", "init", "-q", str(repo_root)], check=True)
+        subprocess.run(
+            ["git", "-C", str(repo_root), "config", "user.email", "test@example.invalid"],
+            check=True,
+        )
+        subprocess.run(
+            ["git", "-C", str(repo_root), "config", "user.name", "Test"], check=True
+        )
+        subprocess.run(["git", "-C", str(repo_root), "add", "versioned.txt"], check=True)
+        subprocess.run(
+            ["git", "-C", str(repo_root), "commit", "-qm", "fixture"], check=True
+        )
+        branch = subprocess.check_output(
+            ["git", "-C", str(repo_root), "branch", "--show-current"],
+            text=True,
+            encoding="utf-8",
+        ).strip()
+        commit = subprocess.check_output(
+            ["git", "-C", str(repo_root), "rev-parse", "HEAD"],
+            text=True,
+            encoding="utf-8",
+        ).strip()
         ft_root = repo_root / "fts" / "Sample" / "Sample-v1"
         handoff = ft_root / "work" / "stage-handoffs" / "01-sample"
         handoff.mkdir(parents=True)
@@ -144,8 +168,12 @@ class PracticalReviewFinalizationGuardTests(unittest.TestCase):
             json.dumps(
                 {
                     "allowed": True,
+                    "repo_root": repo_root.resolve().as_posix(),
+                    "ft_package_root": ft_root.resolve().as_posix(),
                     "review_mode": review_mode,
                     "scope_ids": ["01"],
+                    "code_branch": branch,
+                    "code_commit": commit,
                     "controller_artifact_hashes": {
                         "summary_sha256": sha256(summary),
                         "workflow_state_sha256_by_scope": {"01": sha256(workflow)},
@@ -292,6 +320,36 @@ class PracticalReviewFinalizationGuardTests(unittest.TestCase):
 
         self.assertFalse(result["allowed"])
         self.assertIn("controller workflow-state changed", "\n".join(result["blocking_reasons"]))
+
+    def test_blocks_when_launch_receipt_code_version_is_stale(self) -> None:
+        helper = self.load_helper()
+        repo_root, ft_root, summary, receipt, dispatch, review, independence = self.make_fixture()
+        payload = json.loads(receipt.read_text(encoding="utf-8"))
+        payload["code_commit"] = "0" * 40
+        receipt.write_text(json.dumps(payload), encoding="utf-8")
+        dispatch_payload = json.loads(dispatch.read_text(encoding="utf-8"))
+        dispatch_payload["launch_receipt_sha256"] = sha256(receipt)
+        dispatch.write_text(json.dumps(dispatch_payload), encoding="utf-8")
+
+        result = helper.build_finalization_packet(
+            repo_root=repo_root,
+            ft_package_root=ft_root,
+            summary_path=summary,
+            scope_ids=["01"],
+            review_mode="tc_review",
+            launch_receipt=receipt,
+            dispatch_receipt=dispatch,
+            review_artifact=review,
+            independence_artifact=independence,
+        )
+
+        self.assertFalse(result["allowed"])
+        self.assertIn(
+            "review launch receipt code version differs from current checkout",
+            "\n".join(result["blocking_reasons"]),
+        )
+        version_check = next(check for check in result["checks"] if check["id"] == "pinned-code-version")
+        self.assertEqual("fail", version_check["status"])
 
     def test_blocks_when_review_subject_changed_after_launch(self) -> None:
         helper = self.load_helper()

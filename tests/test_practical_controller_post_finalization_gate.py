@@ -71,6 +71,9 @@ class PracticalControllerPostFinalizationGateTests(unittest.TestCase):
         commit = subprocess.check_output(
             ["git", "-C", str(ROOT_DIR), "rev-parse", "HEAD"], text=True, encoding="utf-8"
         ).strip()
+        branch = subprocess.check_output(
+            ["git", "-C", str(ROOT_DIR), "branch", "--show-current"], text=True, encoding="utf-8"
+        ).strip()
         review_subjects = {
             "01": {
                 "role": "test-design-matrix",
@@ -81,6 +84,7 @@ class PracticalControllerPostFinalizationGateTests(unittest.TestCase):
         launch.write_text(
             json.dumps(
                 {
+                    "code_branch": branch,
                     "code_commit": commit,
                     "review_mode": "matrix_review",
                     "review_subject_artifacts_by_scope": review_subjects,
@@ -138,7 +142,9 @@ class PracticalControllerPostFinalizationGateTests(unittest.TestCase):
                 launch_receipt=launch,
                 finalization_packet=finalization,
             )
-            launch.write_text(json.dumps({"code_commit": "0" * 40}), encoding="utf-8")
+            launch_payload = json.loads(launch.read_text(encoding="utf-8"))
+            launch_payload["code_commit"] = "0" * 40
+            launch.write_text(json.dumps(launch_payload), encoding="utf-8")
             blocked = helper.build_post_finalization_gate(
                 repo_root=ROOT_DIR,
                 ft_package_root=ft_root,
@@ -152,7 +158,31 @@ class PracticalControllerPostFinalizationGateTests(unittest.TestCase):
 
         self.assertTrue(allowed["allowed"], allowed["blocking_reasons"])
         self.assertFalse(blocked["allowed"])
-        self.assertIn("pinned-code-commit-changed", "\n".join(blocked["blocking_reasons"]))
+        self.assertIn("pinned-code-version-changed", "\n".join(blocked["blocking_reasons"]))
+
+    def test_requires_recovery_state_before_routing_revalidated_matrix_to_tc_review(self) -> None:
+        helper = self.load_helper()
+        ft_root, summary, launch, finalization, parity = self.make_fixture()
+        parity.write_text("# Source parity\n\nOpen gaps/questions: none\n", encoding="utf-8")
+        finalization_payload = json.loads(finalization.read_text(encoding="utf-8"))
+        finalization_payload["next_controller_transition"] = "tc-review required"
+        finalization.write_text(json.dumps(finalization_payload), encoding="utf-8")
+        original_validate = helper.review_preflight.artifact_validator.validate
+        helper.review_preflight.artifact_validator.validate = lambda _root: {"findings": []}
+        try:
+            result = helper.build_post_finalization_gate(
+                repo_root=ROOT_DIR,
+                ft_package_root=ft_root,
+                summary_path=summary,
+                scope_ids=["01"],
+                launch_receipt=launch,
+                finalization_packet=finalization,
+            )
+        finally:
+            helper.review_preflight.artifact_validator.validate = original_validate
+
+        self.assertFalse(result["allowed"])
+        self.assertIn("tc-review recovery checkpoint", "\n".join(result["blocking_reasons"]))
 
 
 if __name__ == "__main__":
