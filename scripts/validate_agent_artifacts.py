@@ -115,6 +115,10 @@ SOURCE_SELECTION_FIELD_ALIASES = {
     "статус выбора": "selection_status",
     "ветка кода": "code_branch",
     "коммит кода": "code_commit",
+    "создано": "created_at",
+    "создано кем": "created_by",
+    "обновлено": "updated_at",
+    "обновлено кем": "updated_by",
     "выбранный xhtml фт": "main_ft_xhtml",
     "xhtml доступен": "xhtml_available",
     "путь к xhtml": "xhtml_path",
@@ -130,6 +134,10 @@ REQUIRED_SOURCE_SELECTION_CONTEXT_FIELDS = {
 REQUIRED_SOURCE_SELECTION_PROVENANCE_FIELDS = {
     "code_branch",
     "code_commit",
+}
+REQUIRED_SOURCE_SELECTION_PROVENANCE_UPDATE_FIELDS = {
+    "updated_at",
+    "updated_by",
 }
 ALLOWED_SOURCE_SELECTION_STATUSES = {"selected", "ambiguous", "blocked-input"}
 SCOPE_SELECTION_PROMPT_DIRECT_OUTPUT_RE = re.compile(
@@ -6197,6 +6205,23 @@ def parse_source_selection_fields(section: str) -> dict[str, str]:
     return fields
 
 
+def source_locator_session_log_code_commit(source_selection_path: Path) -> str | None:
+    """Return the historical source-locator commit from the sibling receipt."""
+
+    receipt_path = source_selection_path.with_name("source-locator-session-log.md")
+    if not receipt_path.is_file():
+        return None
+    try:
+        receipt = receipt_path.read_text(encoding="utf-8")
+    except UnicodeDecodeError:
+        return None
+    match = re.search(
+        r"(?im)^\s*\|\s*code_commit\s*\|\s*`?([0-9a-f]{40})`?\s*\|",
+        receipt,
+    )
+    return match.group(1).casefold() if match else None
+
+
 def source_selection_routes_downstream(state: dict[str, Any]) -> bool:
     return (
         state.get("stage_status") in {"ready-for-next-stage", "ready-for-review", "ready-for-writer-revision"}
@@ -6699,6 +6724,54 @@ def validate_source_selection_artifact(
                     "source-selection-code-provenance",
                     "pass",
                     "Code provenance is current.",
+                    display_path,
+                )
+            )
+
+    receipt_commit = source_locator_session_log_code_commit(path)
+    if receipt_commit and re.fullmatch(r"[0-9a-f]{40}", code_commit) and code_commit != receipt_commit:
+        missing_update_fields = sorted(
+            field
+            for field in REQUIRED_SOURCE_SELECTION_PROVENANCE_UPDATE_FIELDS
+            if not context_fields.get(field, "").strip()
+        )
+        if missing_update_fields:
+            findings.append(
+                Finding(
+                    id="source-selection-provenance-update-missing-fields",
+                    severity="error",
+                    category="source-selection",
+                    title="Актуализация provenance выбора источников не задокументирована",
+                    details=(
+                        "Коммит в source-selection.md отличается от исторического source-locator receipt, "
+                        "но не указаны время и исполнитель актуализации."
+                    ),
+                    path=display_path,
+                    evidence=[
+                        f"source_selection_code_commit={code_commit}",
+                        f"source_locator_receipt_code_commit={receipt_commit}",
+                        *missing_update_fields,
+                    ],
+                    recommended_action=(
+                        "Сохрани поля `Создано` и `Создано кем`, добавь `Обновлено` и `Обновлено кем`, "
+                        "а затем зафиксируй решение в agent-decision-log.md."
+                    ),
+                )
+            )
+            checks.append(
+                Check(
+                    "source-selection-provenance-update",
+                    "fail",
+                    "Source-selection provenance update is missing audit fields.",
+                    display_path,
+                )
+            )
+        else:
+            checks.append(
+                Check(
+                    "source-selection-provenance-update",
+                    "pass",
+                    "Source-selection provenance update is documented.",
                     display_path,
                 )
             )

@@ -157,6 +157,10 @@ Additional validator findings:
 - `source-selection-missing-code-provenance`: отсутствуют `code_branch` и/или `code_commit`; selected handoff не должен идти downstream.
 - `source-selection-invalid-code-commit`: `code_commit` не является SHA-1 Git commit.
 - `source-selection-code-commit-stale`: зафиксированный commit не совпадает с `HEAD` checkout, где запускается validator.
+- Если `code_commit` отличается от commit в соседнем историческом
+  `source-locator-session-log.md`, обязательны поля `Обновлено` и `Обновлено кем`;
+  иначе validator возвращает
+  `source-selection-provenance-update-missing-fields`.
 - `source-selection-invalid-selection-status`: `selection_status` is outside `selected | ambiguous | blocked-input`.
 - `workflow-state-source-selection-not-selected`: workflow routes downstream while `source-selection.md` is still `ambiguous` or `blocked-input`.
 
@@ -180,6 +184,8 @@ Validator-enforced XHTML findings:
 - Коммит кода:
 - Создано:
 - Создано кем:
+- Обновлено: <!-- только при актуализации provenance -->
+- Обновлено кем: <!-- только при актуализации provenance -->
 
 ## Основные документы ФТ
 

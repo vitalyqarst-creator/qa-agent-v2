@@ -28,11 +28,17 @@ class PracticalHandoffQualityTests(unittest.TestCase):
         self.validator = load_validator_module()
 
     @staticmethod
-    def source_selection_content(*, include_provenance: bool) -> str:
+    def source_selection_content(*, include_provenance: bool, include_update: bool = False) -> str:
         provenance = (
             "- Ветка кода: `codex/test`\n"
             "- Коммит кода: `aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa`\n"
             if include_provenance
+            else ""
+        )
+        update = (
+            "- Обновлено: `2026-08-11T18:00:00+07:00`\n"
+            "- Обновлено кем: `Codex / ft-scope-analyzer`\n"
+            if include_update
             else ""
         )
         return (
@@ -41,6 +47,7 @@ class PracticalHandoffQualityTests(unittest.TestCase):
             "- Выбранный FT slug: `Partners-v1`\n"
             "- Статус выбора: `selected`\n"
             f"{provenance}"
+            f"{update}"
             "## Основные документы ФТ\n\n"
             "| Путь | Роль |\n| --- | --- |\n| `source/main.docx` | `main-ft-docx` |\n\n"
             "## Машиночитаемый источник XHTML\n\n"
@@ -78,6 +85,40 @@ class PracticalHandoffQualityTests(unittest.TestCase):
         )
         self.assertNotIn(
             "source-selection-missing-code-provenance",
+            {finding.id for finding in accepted_findings},
+        )
+
+    def test_source_selection_commit_update_requires_update_provenance(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source_selection = root / "source-selection.md"
+            source_selection.write_text(
+                self.source_selection_content(include_provenance=True), encoding="utf-8"
+            )
+            (root / "source-locator-session-log.md").write_text(
+                "| code_commit | `bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb` |\n",
+                encoding="utf-8",
+            )
+            workflow = root / "workflow-state.yaml"
+            state = {"stage_status": "ready-for-next-stage", "next_skill": "ft-scope-analyzer"}
+
+            missing_findings, _ = self.validator.validate_source_selection_artifact(
+                source_selection, root, state, workflow
+            )
+            source_selection.write_text(
+                self.source_selection_content(include_provenance=True, include_update=True),
+                encoding="utf-8",
+            )
+            accepted_findings, _ = self.validator.validate_source_selection_artifact(
+                source_selection, root, state, workflow
+            )
+
+        self.assertIn(
+            "source-selection-provenance-update-missing-fields",
+            {finding.id for finding in missing_findings},
+        )
+        self.assertNotIn(
+            "source-selection-provenance-update-missing-fields",
             {finding.id for finding in accepted_findings},
         )
 
