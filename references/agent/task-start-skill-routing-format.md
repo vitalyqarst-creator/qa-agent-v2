@@ -76,8 +76,17 @@ The JSON block is canonical. Tests and architecture audit parse it directly.
       "verification_gates": ["scope-contract.md exists", "coverage gaps are linked to source evidence"]
     },
     {
+      "id": "test_cases.practical_v0_9",
+      "task_type": "Default compact macro-stage route for ordinary FT test-case writing: source package manifest, normalized source obligations, Russian matrix, conditional separate-session matrix review, canonical test cases and final separate-session TC review. It reaches an accepted baseline or an honest external blocker without legacy self-check and receipt artefacts.",
+      "skill_chain": ["ft-practical-route"],
+      "instruction_scenarios": [
+        {"skill": "ft-practical-route", "scenario": "practical.v0_9"}
+      ],
+      "verification_gates": ["source-package-manifest.json binds DOCX/XHTML/PDF and existing AGENT-NOTES.md", "scope-obligations.json contains one source-backed OBL per independent assertion", "test-design-matrix.md has Russian compact headers and one OBL per row", "one-pass validator-report.json is clean for its declared dependency closure", "matrix review is dispatched only when deterministic complexity requires it", "final TC review has an immutable manifest and result from a distinct top-level Codex session", "one targeted writer revision at most; controller/validator findings do not consume it", "no benchmark/sharding/bridge/legacy self-check artefacts are created"]
+    },
+    {
       "id": "test_cases.practical_v0_8",
-      "task_type": "Default macro-stage route for ordinary FT test-case writing: compact scope brief, Russian user-facing test-design matrix with explicit coverage classes from the coverage class catalog, one separate-session matrix review, canonical test cases only after matrix-accepted, one separate-session TC review, one bounded revision only if needed, and one final independent TC review in a separate full-scope session before accepted baseline or an honest external blocker.",
+      "task_type": "Legacy continuation route for an existing practical v0.8 run: compact scope brief, Russian user-facing test-design matrix with explicit coverage classes from the coverage class catalog, one separate-session matrix review, canonical test cases only after matrix-accepted, one separate-session TC review, one bounded revision only if needed, and one final independent TC review in a separate full-scope session before accepted baseline or an honest external blocker.",
       "skill_chain": ["ft-source-locator", "ft-scope-analyzer", "ft-test-case-writer", "ft-test-case-reviewer", "ft-test-case-writer", "ft-test-case-reviewer", "ft-test-case-writer", "ft-test-case-reviewer"],
       "instruction_scenarios": [
         {"skill": "ft-source-locator", "scenario": "source_locator.discovery"},
@@ -346,9 +355,9 @@ The JSON block is canonical. Tests and architecture audit parse it directly.
     },
     {
       "prompt": "Напиши тест-кейсы по выбранному scope ФТ и доведи scope до accepted baseline или честного blocker-а.",
-      "expected_route_id": "test_cases.practical_v0_8",
-      "expected_skill_chain": ["ft-source-locator", "ft-scope-analyzer", "ft-test-case-writer", "ft-test-case-reviewer", "ft-test-case-writer", "ft-test-case-reviewer", "ft-test-case-writer", "ft-test-case-reviewer"],
-      "expected_instruction_scenarios": ["source_locator.discovery", "scope.practical_v0_8", "writer.practical_v0_8", "reviewer.practical_v0_8", "writer.practical_v0_8", "reviewer.practical_v0_8", "writer.practical_v0_8", "reviewer.practical_v0_8"]
+      "expected_route_id": "test_cases.practical_v0_9",
+      "expected_skill_chain": ["ft-practical-route"],
+      "expected_instruction_scenarios": ["practical.v0_9"]
     },
     {
       "prompt": "Пройди весь процесс по одному небольшому scope и измерь полное время пользователя.",

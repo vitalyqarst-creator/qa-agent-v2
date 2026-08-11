@@ -3,6 +3,7 @@
 Canonical list of active skills:
 
 - `ft-source-locator` - locate the target FT package and related materials.
+- `ft-practical-route` - compact default v0.9 route for one confirmed FT scope.
 - `ft-scope-analyzer` - propose external scopes by FT sections/subsections, confirm selected-scope boundaries, and record `coverage gaps`.
 - `ft-test-case-iteration` - explicit-only source-qualified / observation / incremental route through `ft-agent run`.
 - `ft-test-case-writer` - write new test cases for an already selected scope.
@@ -14,7 +15,7 @@ Canonical list of active skills:
 
 - If the first task is to identify which FT to use: `ft-source-locator`.
 - If the FT package is selected but the exact requirement fragment is not selected yet, or a large FT must be split into scopes: `ft-scope-analyzer`.
-- If the user asks to write test cases for a normal FT scope, use practical route v0.8 as one macro-stage. Chain: locator -> analyzer -> matrix writer -> one separate-session matrix review -> summary -> TC writer -> one separate-session TC review -> one bounded revision if needed -> one final independent TC review in a separate session. Matrix repair allows one matrix re-review. Continue until accepted baseline or an honest external blocker; no third TC review or automatic extra repair. Round-cap blocks only source contradiction / unrepresentable obligations; missing data/UI/observability becomes `candidate-ui-calibration`, `needs-test-data`, `blocked-observability` or `needs-future-clarification`. Separate-session means a real top-level Codex thread (`codex-thread`); sub-agents do not count. Full gates live in `references/agent/practical-test-case-route-v0.8.md`.
+- If the user asks to write test cases for a normal FT scope, use `ft-practical-route` v0.9 as one compact macro-stage through an accepted baseline or honest blocker. Chain: source manifest -> source obligations -> matrix -> conditional separate-session matrix review -> TC -> final separate-session TC review -> at most one targeted revision and fresh final review. The only mutable process state is `workflow-state.json`; the scoped validator is one-pass and checks only its declared dependency closure. Separate-session means a real top-level Codex thread (`codex-thread`); sub-agents do not count. Source contradiction blocks without inventing TC; missing data/UI/observability receives `needs-test-data`, `candidate-ui-calibration` or `blocked-observability`. Full contract: `references/agent/practical-test-case-route-v0.9.md`. v0.8 is legacy-only.
 - If the scope is fixed and new cases must be written in one writer pass without independent review: `ft-test-case-writer`, but still follow practical-route quality gates.
 - Developer/legacy routes below are explicit-only. Do not propose them for ordinary "write test cases" work:
   - if the scope is independently qualified and the user explicitly asks for a production shadow: `ft-test-case-iteration` through `ft-agent run`;
@@ -28,8 +29,11 @@ Canonical list of active skills:
 
 ## Typical Chains
 
-- New test-case suite, macro-stage default: `ft-source-locator` -> `ft-scope-analyzer` -> `ft-test-case-writer` matrix-only -> one separate-session `ft-test-case-reviewer` matrix review -> linked matrix-stage summary with root/validator transition fields -> `ft-test-case-writer` TC draft -> one separate-session `ft-test-case-reviewer` TC review -> if needed one bounded `ft-test-case-writer` revision -> one final independent TC review in a separate `ft-test-case-reviewer` session. Continue without user prompts until accepted baseline or an external blocker.
-- Practical summaries use `references/agent/practical-stage-summary-template.md`; refresh validator counts/evidence, active-scope/external error partition and git persistence with `scripts/refresh_practical_stage_summary.py --scope-id <two-digit scope id>`.
+- New test-case suite, macro-stage default: `ft-practical-route` v0.9. Isolated phase skills remain available only for a user-requested isolated stage or for legacy v0.8 continuation. Do not materialize stage summaries or refresh legacy validator profiles in v0.9.
+
+## Legacy practical route v0.8 continuation
+
+An existing v0.8 scope keeps its previous capped route: one matrix re-review after a matrix repair and one final independent TC review after the bounded revision. Do not apply this legacy chain to a new scope.
 - Explicit production shadow after qualification: `ft-test-case-iteration` through `ft-agent run` with schema-v2 config.
 - Explicit full source-qualified scope in the development environment: `ft-source-locator` -> `ft-scope-analyzer` -> independent source review -> `ft-test-case-iteration`.
 - New FT-version update: `ft-test-case-iteration` in `incremental-update` mode after explicit selection of both versions and target scope.

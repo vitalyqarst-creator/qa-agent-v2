@@ -52,10 +52,12 @@ class PracticalRouteV08ContractTests(unittest.TestCase):
         agents = self.read("AGENTS.md")
         skills = self.read("skills/README.md")
 
-        self.assertIn("practical route v0.8", agents)
+        self.assertIn("compact practical route v0.9", agents)
+        self.assertIn("ft-practical-route", agents)
         self.assertIn("не являются default-маршрутом", agents)
         self.assertIn("New test-case suite, macro-stage default", skills)
-        self.assertIn("practical route v0.8", skills)
+        self.assertIn("ft-practical-route` v0.9", skills)
+        self.assertIn("v0.8 is legacy-only", skills)
         self.assertIn("separate-session", skills)
         self.assertIn("Explicit production shadow", skills)
 

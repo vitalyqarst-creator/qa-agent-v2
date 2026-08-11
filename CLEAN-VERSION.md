@@ -1,6 +1,13 @@
 # FT Test Case Agent clean-version
 
-Источник сборки:
+## Текущий маршрут
+
+Новые scope ФТ используют **compact practical route v0.9**: одноразовую
+dependency-closed валидацию scope, явного владельца blocker, условный review
+матрицы и неизменяемый manifest каждого независимого review. `practical-v0.8`
+сохранён только для уже начатой legacy-работы.
+
+## Базовая сборка
 
 - source worktree: `C:\Users\Пользователь\Documents\Виталя\GitProjects\qa-agent-v2-practical-route-v0.8-partners-v1-clean`
 - source branch: `codex/practical-route-v0.8-partners-v1-clean`
@@ -8,7 +15,7 @@
 
 Назначение:
 
-- чистая рабочая версия агента для написания тест-кейсов по practical route v0.8;
+- чистая рабочая версия агента для написания тест-кейсов по compact practical route v0.9;
 - без исходных ФТ, рабочих артефактов, benchmark/eval-наборов и старых release bundle.
 
 Включено:
@@ -33,17 +40,17 @@
 - `output/`
 - untracked локальные материалы, включая `_delayed-ba-answers/`
 
-Default route:
+Маршрут по умолчанию для нового scope:
 
-1. source locator
-2. scope analyzer
-3. test-design matrix
-4. writer
-5. independent reviewer
-6. one bounded revision when needed
-7. final baseline
+1. пакетный source manifest, связывающий DOCX, XHTML и PDF;
+2. обязательства, нормализованные из источников;
+3. компактная русскоязычная матрица тест-дизайна;
+4. review матрицы только для детерминированно сложного scope;
+5. canonical test cases;
+6. финальный независимый review в отдельной верхнеуровневой Codex-сессии;
+7. не более одной целевой revision writer-а и одного нового финального review.
 
-Не default:
+Не используется по умолчанию:
 
 - benchmark
 - sharding

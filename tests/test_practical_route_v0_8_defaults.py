@@ -22,7 +22,7 @@ class PracticalRouteV08DefaultsTests(unittest.TestCase):
         return module
 
     def test_practical_route_runs_as_macro_stage_by_default(self) -> None:
-        route = (ROOT_DIR / "references" / "agent" / "practical-test-case-route-v0.8.md").read_text(
+        route = (ROOT_DIR / "references" / "agent" / "practical-test-case-route-v0.9.md").read_text(
             encoding="utf-8"
         )
         agents = (ROOT_DIR / "AGENTS.md").read_text(encoding="utf-8")
@@ -35,17 +35,11 @@ class PracticalRouteV08DefaultsTests(unittest.TestCase):
             self.assertIn("macro-stage", content)
             self.assertIn("accepted baseline", content)
 
-        self.assertIn("Do not stop for user confirmation", route)
-        self.assertIn("matrix-only writer handoff -> independent matrix review", route)
-        self.assertIn("one bounded TC revision", route)
-        self.assertIn("one independent matrix re-review", route)
-        self.assertIn("stop before TC", route)
-        self.assertIn("one final independent TC review after that bounded revision", route)
-        self.assertIn("Default review budget per scope is capped", route)
-        self.assertIn("Do not start an extra matrix review", route)
-        self.assertIn("final independent TC review in a separate session", skills)
-        self.assertIn("fast path", route)
-        self.assertIn("without user confirmation", routing)
+        self.assertIn("условный matrix review", route)
+        self.assertIn("ровно одна целевая writer revision", route)
+        self.assertIn("final TC review", route)
+        self.assertIn("one compact macro-stage", skills)
+        self.assertIn("accepted baseline", routing)
 
     def test_scope_selection_is_compact_and_not_a_false_input_blocker(self) -> None:
         route = (ROOT_DIR / "references" / "agent" / "practical-test-case-route-v0.8.md").read_text(
@@ -143,25 +137,27 @@ class PracticalRouteV08DefaultsTests(unittest.TestCase):
         self.assertIn("inside the actual FT package root", routing)
 
     def test_round_cap_policy_prefers_explicit_status_tc_over_blocking_when_source_is_clear(self) -> None:
-        route = (ROOT_DIR / "references" / "agent" / "practical-test-case-route-v0.8.md").read_text(
+        route = (ROOT_DIR / "references" / "agent" / "practical-test-case-route-v0.9.md").read_text(
             encoding="utf-8"
         )
         agents = (ROOT_DIR / "AGENTS.md").read_text(encoding="utf-8")
         skills = (ROOT_DIR / "skills" / "README.md").read_text(encoding="utf-8")
-        writer = (ROOT_DIR / "skills" / "ft-test-case-writer" / "SKILL.md").read_text(
-            encoding="utf-8"
-        )
-        reviewer = (ROOT_DIR / "skills" / "ft-test-case-reviewer" / "SKILL.md").read_text(
+        compact = (ROOT_DIR / "skills" / "ft-practical-route" / "SKILL.md").read_text(
             encoding="utf-8"
         )
 
-        for content in (route, agents, skills, writer, reviewer):
-            self.assertIn("source contradiction", content)
+        self.assertIn("Противоречие источников", route)
+        for content in (route, agents, compact):
             self.assertIn("candidate-ui-calibration", content)
             self.assertIn("needs-test-data", content)
             self.assertIn("blocked-observability", content)
 
-        self.assertIn("do not write TC", route)
+        for content in (agents, compact):
+            self.assertIn("source contradiction", content)
+
+        self.assertIn("Source contradiction", skills)
+
+        self.assertIn("непредставимое требование", route)
         self.assertIn("не выдумывай TC", agents)
 
     def test_scope_analyzer_requires_source_parity_before_practical_writer(self) -> None:
@@ -241,34 +237,26 @@ class PracticalRouteV08DefaultsTests(unittest.TestCase):
         self.assertIn("The only practical exception is a matching per-scope round-cap record", reviewer)
 
     def test_practical_route_caps_default_review_rounds(self) -> None:
-        route = (ROOT_DIR / "references" / "agent" / "practical-test-case-route-v0.8.md").read_text(
+        route = (ROOT_DIR / "references" / "agent" / "practical-test-case-route-v0.9.md").read_text(
             encoding="utf-8"
         )
         agents = (ROOT_DIR / "AGENTS.md").read_text(encoding="utf-8")
         skills = (ROOT_DIR / "skills" / "README.md").read_text(encoding="utf-8")
-        reviewer = (ROOT_DIR / "skills" / "ft-test-case-reviewer" / "SKILL.md").read_text(
-            encoding="utf-8"
-        )
-        writer = (ROOT_DIR / "skills" / "ft-test-case-writer" / "SKILL.md").read_text(
+        compact = (ROOT_DIR / "skills" / "ft-practical-route" / "SKILL.md").read_text(
             encoding="utf-8"
         )
         routing = (ROOT_DIR / "references" / "agent" / "task-start-skill-routing-format.md").read_text(
             encoding="utf-8"
         )
 
-        for content in (route, skills, reviewer, routing):
-            self.assertIn("matrix re-review", content)
+        for content in (route, skills, compact, routing):
             self.assertIn("final independent TC review", content)
 
-        self.assertIn("repair re-review", route)
+        self.assertIn("Matrix review обязателен только", route)
         self.assertIn("final independent TC review", agents)
-        self.assertIn("matrix-repair-summary.md", route)
-        self.assertIn("matrix-changes-required", writer)
-        self.assertIn("matrix-changes-required", reviewer)
-        self.assertIn("one bounded writer repair/revision", route)
-        self.assertIn("at most one bounded TC revision", writer)
-        self.assertIn("one bounded revision", routing)
-        self.assertIn("a third\nTC review", route)
+        self.assertIn("одна целевая writer revision", route)
+        self.assertIn("one targeted revision", skills)
+        self.assertIn("one targeted writer revision at most", routing)
 
     def test_practical_bounded_revision_requires_status_assertions_and_full_final_review(self) -> None:
         route = (ROOT_DIR / "references" / "agent" / "practical-test-case-route-v0.8.md").read_text(

@@ -63,6 +63,18 @@ Resolver должен читать JSON-блок ниже как канонич�
         "references/qa/coverage-class-catalog.md"
       ]
     },
+    "practical_v09_core": {
+      "rationale": "Compact default route with one workflow state, source obligations, native scoped validation and immutable independent review.",
+      "paths": [
+        "skills/ft-practical-route/SKILL.md",
+        "references/agent/practical-test-case-route-v0.9.md",
+        "references/agent/practical-v0.9-workflow-state-format.md",
+        "references/agent/practical-v0.9-scope-obligations-format.md",
+        "references/agent/practical-v0.9-review-result-format.md",
+        "references/qa/test-case-runtime-format.md",
+        "references/qa/coverage-runtime-checklist.md"
+      ]
+    },
     "scope_practical_core": {
       "rationale": "Compact scope brief context for practical v0.8 test-case writing.",
       "paths": [
@@ -535,6 +547,17 @@ Resolver должен читать JSON-блок ниже как канонич�
     }
   },
   "scenarios": [
+    {
+      "id": "practical.v0_9",
+      "phase": "practical",
+      "mode": "v0_9",
+      "scope_profile": "any",
+      "required_groups": ["global_core", "practical_v09_core"],
+      "conditional_groups": [],
+      "audit_only_groups": ["audit_only_history", "governance_audit_only"],
+      "budget_limit_kib": 120,
+      "rationale": "Default compact practical route. It has no legacy state summaries, self-checks, WQG or dispatch receipts."
+    },
     {
       "id": "source_locator.discovery",
       "phase": "source_locator",

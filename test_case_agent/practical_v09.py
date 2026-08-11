@@ -1,0 +1,734 @@
+"""Small, deterministic contracts for the compact practical v0.9 route.
+
+The v0.8 practical route accumulated controller artefacts that repeated the
+same state in several mutable files.  This module deliberately keeps the
+v0.9 control plane narrow: a source manifest, source obligations, one matrix,
+canonical test cases, a validator report, review manifests/results and one
+workflow state.  It has no dependency on the legacy package-wide validator.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, asdict
+import hashlib
+import json
+from pathlib import Path
+import re
+from typing import Any, Iterable
+
+
+ROUTE_VERSION = "practical-v0.9"
+SOURCE_CONTRACT_VERSION = "source-package-v1"
+REVIEW_MANIFEST_VERSION = "practical-review-manifest-v1"
+VALIDATOR_REPORT_VERSION = "practical-scope-validator-v1"
+SOURCE_MANIFEST_RELATIVE_PATH = "work/practical-v0.9/source-package-manifest.json"
+
+REQUIRED_SOURCE_ROLES = {"main-docx", "main-xhtml", "pdf-cross-check"}
+REQUIRED_TC_FIELDS = (
+    "Название",
+    "Тип",
+    "Приоритет",
+    "Статус исполнения",
+    "Трассировка",
+    "Цель",
+    "Предусловия",
+    "Тестовые данные",
+    "Шаги",
+    "Итоговый ожидаемый результат",
+)
+BLOCKING_CATEGORIES = {
+    "source-integrity",
+    "unresolved-requirement",
+    "semantic-completeness",
+    "traceability",
+    "execution-readiness",
+    "review-integrity",
+    "artifact-tampering",
+}
+NONBLOCKING_CATEGORIES = {"format", "style", "transport", "advisory-risk"}
+MATRIX_REVIEW_RISK_FLAGS = {
+    "status-transition",
+    "cross-field-rule",
+    "closed-dictionary",
+    "integration",
+    "authorization",
+    "high-risk",
+}
+MATRIX_REVIEW_OBLIGATION_THRESHOLD = 8
+ALLOWED_EXECUTION_STATUSES = {
+    "ready",
+    "needs-test-data",
+    "candidate-ui-calibration",
+    "blocked-observability",
+    "needs-future-clarification",
+}
+CODEX_THREAD_ID_RE = re.compile(
+    r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+    flags=re.IGNORECASE,
+)
+
+
+@dataclass(frozen=True)
+class ScopeFinding:
+    id: str
+    category: str
+    severity: str
+    blocking: bool
+    remediation_owner: str
+    title: str
+    details: str
+    artifact: str
+    evidence: list[str]
+
+    def as_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+class PracticalV09Error(ValueError):
+    """Raised when a v0.9 contract input is unreadable or unsafe."""
+
+
+def sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def sha256_json(value: Any) -> str:
+    return hashlib.sha256(
+        json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    ).hexdigest()
+
+
+def is_durable_codex_thread_id(value: object) -> bool:
+    return isinstance(value, str) and bool(CODEX_THREAD_ID_RE.fullmatch(value))
+
+
+def read_json(path: Path) -> dict[str, Any]:
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise PracticalV09Error(f"Cannot read JSON {path}: {exc}") from exc
+    if not isinstance(payload, dict):
+        raise PracticalV09Error(f"JSON object expected in {path}")
+    return payload
+
+
+def write_json(path: Path, payload: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    rendered = json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
+    path.write_text(rendered, encoding="utf-8")
+
+
+def package_relative_path(package_root: Path, raw: object, *, artifact: str) -> Path:
+    if not isinstance(raw, str) or not raw.strip():
+        raise PracticalV09Error(f"{artifact}: expected a non-empty package-relative path")
+    candidate = (package_root / raw).resolve()
+    try:
+        candidate.relative_to(package_root.resolve())
+    except ValueError as exc:
+        raise PracticalV09Error(f"{artifact}: path escapes FT package: {raw}") from exc
+    return candidate
+
+
+def relative_to_package(package_root: Path, path: Path) -> str:
+    return path.resolve().relative_to(package_root.resolve()).as_posix()
+
+
+def finding(
+    finding_id: str,
+    category: str,
+    title: str,
+    details: str,
+    artifact: str,
+    *,
+    evidence: Iterable[str] = (),
+    severity: str = "error",
+    remediation_owner: str = "writer",
+    blocking: bool | None = None,
+) -> ScopeFinding:
+    if blocking is None:
+        blocking = category in BLOCKING_CATEGORIES
+    if category in NONBLOCKING_CATEGORIES:
+        blocking = False
+    return ScopeFinding(
+        id=finding_id,
+        category=category,
+        severity=severity,
+        blocking=bool(blocking),
+        remediation_owner=remediation_owner,
+        title=title,
+        details=details,
+        artifact=artifact,
+        evidence=list(evidence),
+    )
+
+
+def workflow_artifact_path(
+    state: dict[str, Any], package_root: Path, key: str, *, required: bool = False
+) -> Path | None:
+    artifacts = state.get("artifacts")
+    if not isinstance(artifacts, dict):
+        if required:
+            raise PracticalV09Error("workflow-state.json: object artifacts is required")
+        return None
+    raw = artifacts.get(key)
+    if raw in (None, "", "not-created", "not-applicable"):
+        if required:
+            raise PracticalV09Error(f"workflow-state.json: artifacts.{key} is required")
+        return None
+    return package_relative_path(package_root, raw, artifact=f"workflow artifacts.{key}")
+
+
+def load_workflow_state(path: Path, package_root: Path) -> dict[str, Any]:
+    state = read_json(path)
+    if state.get("route_version") != ROUTE_VERSION:
+        raise PracticalV09Error(
+            f"workflow-state.json: route_version must be {ROUTE_VERSION!r}"
+        )
+    for key in ("scope_id", "scope_slug", "phase", "artifacts"):
+        if not state.get(key):
+            raise PracticalV09Error(f"workflow-state.json: missing {key}")
+    if not isinstance(state.get("artifacts"), dict):
+        raise PracticalV09Error("workflow-state.json: artifacts must be an object")
+    contract_versions = state.get("contract_versions")
+    if not isinstance(contract_versions, dict):
+        raise PracticalV09Error("workflow-state.json: contract_versions must be an object")
+    if contract_versions.get("route") != ROUTE_VERSION:
+        raise PracticalV09Error(
+            f"workflow-state.json: contract_versions.route must be {ROUTE_VERSION!r}"
+        )
+    if contract_versions.get("source_package") != SOURCE_CONTRACT_VERSION:
+        raise PracticalV09Error(
+            "workflow-state.json: contract_versions.source_package must be "
+            f"{SOURCE_CONTRACT_VERSION!r}"
+        )
+    reviews = state.get("reviews", [])
+    if not isinstance(reviews, list):
+        raise PracticalV09Error("workflow-state.json: reviews must be an array")
+    source_manifest = workflow_artifact_path(
+        state, package_root, "source_package_manifest", required=True
+    )
+    assert source_manifest is not None
+    if relative_to_package(package_root, source_manifest) != SOURCE_MANIFEST_RELATIVE_PATH:
+        raise PracticalV09Error(
+            "workflow-state.json: source_package_manifest must be the shared "
+            f"{SOURCE_MANIFEST_RELATIVE_PATH}"
+        )
+    workflow_artifact_path(state, package_root, "scope_obligations", required=True)
+    return state
+
+
+def validate_source_package_manifest(
+    manifest_path: Path, package_root: Path
+) -> tuple[list[ScopeFinding], dict[str, Any]]:
+    artifact = relative_to_package(package_root, manifest_path)
+    try:
+        manifest = read_json(manifest_path)
+    except PracticalV09Error as exc:
+        return [finding("source-manifest-unreadable", "source-integrity", "Недоступен манифест исходных материалов", str(exc), artifact, remediation_owner="controller")], {}
+
+    findings: list[ScopeFinding] = []
+    if manifest.get("route_version") != ROUTE_VERSION:
+        findings.append(finding("source-manifest-route-version", "source-integrity", "У манифеста исходных материалов неверная версия маршрута", f"Ожидается {ROUTE_VERSION}.", artifact, remediation_owner="controller"))
+    if manifest.get("source_contract_version") != SOURCE_CONTRACT_VERSION:
+        findings.append(finding("source-manifest-contract-version", "source-integrity", "У манифеста исходных материалов неверная версия контракта", f"Ожидается {SOURCE_CONTRACT_VERSION}.", artifact, remediation_owner="controller"))
+    documents = manifest.get("documents")
+    if not isinstance(documents, list):
+        findings.append(finding("source-manifest-documents-missing", "source-integrity", "В манифесте не указан перечень исходных файлов", "Поле documents должно быть массивом DOCX, XHTML и PDF.", artifact, remediation_owner="controller"))
+        return findings, manifest
+
+    seen_roles: set[str] = set()
+    for index, entry in enumerate(documents, start=1):
+        if not isinstance(entry, dict):
+            findings.append(finding("source-manifest-document-invalid", "source-integrity", "Строка исходных материалов имеет неверный формат", f"documents[{index}] должен быть объектом.", artifact, remediation_owner="controller"))
+            continue
+        role = str(entry.get("role") or "")
+        seen_roles.add(role)
+        raw_path = entry.get("path")
+        try:
+            document_path = package_relative_path(package_root, raw_path, artifact=artifact)
+        except PracticalV09Error as exc:
+            findings.append(finding("source-manifest-document-path", "source-integrity", "Некорректен путь исходного материала", str(exc), artifact, remediation_owner="controller"))
+            continue
+        if not document_path.is_file():
+            findings.append(finding("source-manifest-document-missing", "source-integrity", "Исходный материал отсутствует", f"Не найден {raw_path} для роли {role}.", artifact, evidence=[str(raw_path)], remediation_owner="controller"))
+            continue
+        expected_hash = str(entry.get("sha256") or "")
+        actual_hash = sha256_file(document_path)
+        if expected_hash != actual_hash:
+            findings.append(finding("source-manifest-document-hash", "source-integrity", "Контрольная сумма исходного материала не совпадает", f"Файл {raw_path} изменён после создания манифеста.", artifact, evidence=[f"expected={expected_hash}", f"actual={actual_hash}"], remediation_owner="controller"))
+
+    missing_roles = sorted(REQUIRED_SOURCE_ROLES - seen_roles)
+    if missing_roles:
+        findings.append(finding("source-manifest-required-roles", "source-integrity", "Манифест исходных материалов неполон", "Отсутствуют обязательные роли: " + ", ".join(missing_roles) + ".", artifact, remediation_owner="controller"))
+
+    notes = manifest.get("agent_notes")
+    notes_path = package_root / "AGENT-NOTES.md"
+    if notes_path.is_file():
+        if not isinstance(notes, dict) or notes.get("path") != "AGENT-NOTES.md":
+            findings.append(finding("source-manifest-agent-notes-unbound", "source-integrity", "Не учтён обязательный контекст AGENT-NOTES.md", "Файл существует в корне FT-пакета и должен быть связан в source-package-manifest.json.", artifact, remediation_owner="controller"))
+        elif str(notes.get("sha256") or "") != sha256_file(notes_path):
+            findings.append(finding("source-manifest-agent-notes-hash", "source-integrity", "Контрольная сумма AGENT-NOTES.md не совпадает", "Контекст пакета изменился после создания манифеста.", artifact, remediation_owner="controller"))
+    elif notes not in (None, "", "not-applicable"):
+        findings.append(finding("source-manifest-agent-notes-stale", "source-integrity", "Манифест ссылается на отсутствующий AGENT-NOTES.md", "Удалите устаревшую ссылку или восстановите файл.", artifact, remediation_owner="controller"))
+    return findings, manifest
+
+
+def validate_scope_obligations(
+    obligations_path: Path, package_root: Path, source_manifest_path: Path
+) -> tuple[list[ScopeFinding], dict[str, Any]]:
+    artifact = relative_to_package(package_root, obligations_path)
+    try:
+        payload = read_json(obligations_path)
+    except PracticalV09Error as exc:
+        return [finding("scope-obligations-unreadable", "source-integrity", "Недоступен реестр обязательств scope", str(exc), artifact, remediation_owner="controller")], {}
+    findings: list[ScopeFinding] = []
+    if payload.get("route_version") != ROUTE_VERSION:
+        findings.append(finding("scope-obligations-route-version", "source-integrity", "У реестра обязательств неверная версия маршрута", f"Ожидается {ROUTE_VERSION}.", artifact, remediation_owner="controller"))
+    if str(payload.get("source_manifest_sha256") or "") != sha256_file(source_manifest_path):
+        findings.append(finding("scope-obligations-source-manifest-stale", "source-integrity", "Реестр обязательств не связан с текущим манифестом источников", "Пересоберите scope-obligations.json от неизменённого source-package-manifest.json.", artifact, remediation_owner="controller"))
+    obligations = payload.get("obligations")
+    if not isinstance(obligations, list) or not obligations:
+        findings.append(finding("scope-obligations-empty", "unresolved-requirement", "В scope не зафиксированы проверяемые обязательства", "Нужен хотя бы один OBL-* с source_anchor и формулировкой требования.", artifact, remediation_owner="scope-analyzer"))
+        return findings, payload
+    seen: set[str] = set()
+    for index, obligation in enumerate(obligations, start=1):
+        if not isinstance(obligation, dict):
+            findings.append(finding("scope-obligation-invalid", "source-integrity", "Строка реестра обязательств имеет неверный формат", f"obligations[{index}] должен быть объектом.", artifact, remediation_owner="scope-analyzer"))
+            continue
+        obligation_id = str(obligation.get("id") or "")
+        statement = str(obligation.get("statement") or "")
+        source_anchor = str(obligation.get("source_anchor") or "")
+        if not re.fullmatch(r"OBL-[A-Z0-9-]+", obligation_id):
+            findings.append(finding("scope-obligation-id", "traceability", "У обязательства некорректный идентификатор", f"obligations[{index}].id={obligation_id!r}; ожидается OBL-*.", artifact, remediation_owner="scope-analyzer"))
+        elif obligation_id in seen:
+            findings.append(finding("scope-obligation-duplicate", "traceability", "В реестре повторяется идентификатор обязательства", f"Повторяется {obligation_id}.", artifact, remediation_owner="scope-analyzer"))
+        seen.add(obligation_id)
+        if not statement or not source_anchor:
+            findings.append(finding("scope-obligation-incomplete", "unresolved-requirement", "Обязательство не содержит формулировку или привязку к ФТ", f"{obligation_id or f'строка {index}'} требует statement и source_anchor.", artifact, remediation_owner="scope-analyzer"))
+        if re.search(r"\b(source-backed|residual|blocked-observability|fixture)\b", statement, flags=re.IGNORECASE):
+            findings.append(finding("scope-obligation-process-language", "style", "В формулировке обязательства остался служебный английский текст", f"Проверьте statement для {obligation_id}.", artifact, remediation_owner="scope-analyzer", severity="warning"))
+    return findings, payload
+
+
+def parse_matrix_rows(path: Path) -> tuple[list[dict[str, str]], list[str]]:
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except (OSError, UnicodeDecodeError) as exc:
+        raise PracticalV09Error(f"Cannot read matrix {path}: {exc}") from exc
+    rows: list[dict[str, str]] = []
+    errors: list[str] = []
+    header: list[str] | None = None
+    for raw_line in lines:
+        line = raw_line.strip()
+        if not line.startswith("|") or line.count("|") < 3:
+            continue
+        cells = [cell.strip() for cell in line.strip("|").split("|")]
+        if all(re.fullmatch(r":?-{3,}:?", cell.replace(" ", "")) for cell in cells):
+            continue
+        if header is None and "Проверка" in cells and "Обязательство ФТ" in cells:
+            header = cells
+            continue
+        if header is not None:
+            if len(cells) != len(header):
+                errors.append(f"строка матрицы имеет {len(cells)} ячеек вместо {len(header)}")
+                continue
+            rows.append(dict(zip(header, cells)))
+    if header is None:
+        errors.append("не найдена таблица с колонками «Проверка» и «Обязательство ФТ»")
+    return rows, errors
+
+
+def validate_matrix(
+    matrix_path: Path, package_root: Path, obligations: dict[str, Any]
+) -> tuple[list[ScopeFinding], dict[str, list[str]]]:
+    artifact = relative_to_package(package_root, matrix_path)
+    findings: list[ScopeFinding] = []
+    try:
+        rows, errors = parse_matrix_rows(matrix_path)
+    except PracticalV09Error as exc:
+        return [finding("matrix-unreadable", "source-integrity", "Недоступна матрица тест-дизайна", str(exc), artifact, remediation_owner="writer")], {}
+    for error in errors:
+        findings.append(finding("matrix-format", "format", "Матрица тест-дизайна не соответствует компактному шаблону", error, artifact, remediation_owner="writer", severity="warning"))
+    by_obligation: dict[str, list[str]] = {}
+    seen_matrix_ids: set[str] = set()
+    for row in rows:
+        matrix_id = row.get("Проверка", "")
+        obligation_id = row.get("Обязательство ФТ", "")
+        tc_id = row.get("Планируемый TC-ID", "")
+        if not re.fullmatch(r"MTX-[A-Z0-9-]+", matrix_id):
+            findings.append(finding("matrix-id", "traceability", "У строки матрицы некорректный идентификатор", f"Проверка={matrix_id!r}; ожидается MTX-*.", artifact, remediation_owner="writer"))
+        elif matrix_id in seen_matrix_ids:
+            findings.append(finding("matrix-duplicate-id", "traceability", "В матрице повторяется идентификатор проверки", f"Повторяется {matrix_id}.", artifact, remediation_owner="writer"))
+        seen_matrix_ids.add(matrix_id)
+        if not re.fullmatch(r"TC-[A-Z0-9-]+", tc_id):
+            findings.append(finding("matrix-tc-id", "traceability", "У строки матрицы нет планируемого TC-ID", f"Проверка {matrix_id or '<без ID>'} должна иметь TC-*.", artifact, remediation_owner="writer"))
+        if not re.fullmatch(r"OBL-[A-Z0-9-]+", obligation_id):
+            findings.append(finding("matrix-obligation-id", "traceability", "У строки матрицы нет одного обязательства ФТ", f"Проверка {matrix_id or '<без ID>'} должна ссылаться ровно на один OBL-*.", artifact, remediation_owner="writer"))
+        else:
+            by_obligation.setdefault(obligation_id, []).append(matrix_id)
+        for required_column in ("Сценарий", "Тип", "Приоритет", "Статус исполнения"):
+            if not row.get(required_column, "").strip():
+                findings.append(finding("matrix-required-cell", "semantic-completeness", "В строке матрицы не заполнено обязательное поле", f"Проверка {matrix_id or '<без ID>'}: отсутствует «{required_column}».", artifact, remediation_owner="writer"))
+        execution_status = row.get("Статус исполнения", "").strip()
+        if execution_status and execution_status not in ALLOWED_EXECUTION_STATUSES:
+            findings.append(finding(
+                "matrix-execution-status",
+                "semantic-completeness",
+                "В матрице указан неизвестный статус исполнения",
+                f"Проверка {matrix_id or '<без ID>'}: «{execution_status}» не входит в допустимый перечень.",
+                artifact,
+                remediation_owner="writer",
+            ))
+    expected_ids = {str(item.get("id")) for item in obligations.get("obligations", []) if isinstance(item, dict)}
+    for obligation_id in sorted(expected_ids):
+        mapped = by_obligation.get(obligation_id, [])
+        if not mapped:
+            findings.append(finding("matrix-obligation-unmapped", "semantic-completeness", "Обязательство ФТ не покрыто матрицей", f"Для {obligation_id} нет строки матрицы.", artifact, remediation_owner="writer"))
+        elif len(mapped) > 1:
+            findings.append(finding("matrix-obligation-duplicated", "traceability", "Обязательство ФТ повторно спроектировано в матрице", f"{obligation_id} связано со строками: {', '.join(mapped)}.", artifact, remediation_owner="writer"))
+    return findings, by_obligation
+
+
+def parse_test_case_blocks(path: Path) -> list[dict[str, str]]:
+    try:
+        content = path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
+        raise PracticalV09Error(f"Cannot read test cases {path}: {exc}") from exc
+    headings = list(re.finditer(r"(?m)^#{2,3}\s+(TC-[A-Z0-9-]+)\b.*$", content))
+    blocks: list[dict[str, str]] = []
+    for position, heading in enumerate(headings):
+        end = headings[position + 1].start() if position + 1 < len(headings) else len(content)
+        blocks.append({"id": heading.group(1), "body": content[heading.start() : end]})
+    return blocks
+
+
+def validate_test_cases(
+    tc_path: Path, package_root: Path, obligations: dict[str, Any], matrix_mapping: dict[str, list[str]]
+) -> list[ScopeFinding]:
+    artifact = relative_to_package(package_root, tc_path)
+    try:
+        blocks = parse_test_case_blocks(tc_path)
+    except PracticalV09Error as exc:
+        return [finding("test-cases-unreadable", "source-integrity", "Недоступен файл тест-кейсов", str(exc), artifact, remediation_owner="writer")]
+    findings: list[ScopeFinding] = []
+    if not blocks:
+        return [finding("test-cases-empty", "semantic-completeness", "В файле нет тест-кейсов компактного формата", "Ожидается заголовок уровня ## или ### с TC-*.", artifact, remediation_owner="writer")]
+    seen_ids: set[str] = set()
+    covered_obligations: dict[str, list[str]] = {}
+    for block in blocks:
+        tc_id = block["id"]
+        body = block["body"]
+        if tc_id in seen_ids:
+            findings.append(finding("test-case-duplicate-id", "traceability", "Повторяется TC-ID", f"Повторяется {tc_id}.", artifact, remediation_owner="writer"))
+        seen_ids.add(tc_id)
+        for field in REQUIRED_TC_FIELDS:
+            if not re.search(rf"(?m)^\*\*{re.escape(field)}:\*\*\s*\S", body):
+                findings.append(finding("test-case-required-field", "execution-readiness", "В тест-кейсе отсутствует обязательное поле", f"{tc_id}: отсутствует «{field}».", artifact, remediation_owner="writer"))
+        status_match = re.search(r"(?m)^\*\*Статус исполнения:\*\*\s*(\S+)", body)
+        if status_match and status_match.group(1) not in ALLOWED_EXECUTION_STATUSES:
+            findings.append(finding(
+                "test-case-execution-status",
+                "execution-readiness",
+                "В тест-кейсе указан неизвестный статус исполнения",
+                f"{tc_id}: «{status_match.group(1)}» не входит в допустимый перечень.",
+                artifact,
+                remediation_owner="writer",
+            ))
+        expected_result_count = len(re.findall(r"(?m)^\*\*Итоговый ожидаемый результат:\*\*", body))
+        if expected_result_count != 1:
+            findings.append(finding("test-case-primary-oracle", "semantic-completeness", "У тест-кейса должен быть один основной ожидаемый результат", f"{tc_id}: найдено полей ожидаемого результата: {expected_result_count}.", artifact, remediation_owner="writer"))
+        trace_match = re.search(r"(?m)^\*\*Трассировка:\*\*\s*(.+)$", body)
+        trace = trace_match.group(1) if trace_match else ""
+        obligation_ids = re.findall(r"\bOBL-[A-Z0-9-]+\b", trace)
+        if len(obligation_ids) != 1:
+            findings.append(finding("test-case-obligation-trace", "traceability", "Тест-кейс должен ссылаться ровно на одно обязательство ФТ", f"{tc_id}: в трассировке найдено OBL: {', '.join(obligation_ids) or 'нет'}.", artifact, remediation_owner="writer"))
+        else:
+            covered_obligations.setdefault(obligation_ids[0], []).append(tc_id)
+        body_without_metadata = re.sub(r"(?m)^\*\*(Тип|Приоритет|Статус исполнения):\*\*.*$", "", body)
+        if re.search(r"\b(source-backed|residual|fixture|blocked-observability)\b", body_without_metadata, flags=re.IGNORECASE):
+            findings.append(finding("test-case-process-language", "style", "В тест-кейсе остался служебный английский текст", f"Проверьте пользовательские поля {tc_id}.", artifact, remediation_owner="writer", severity="warning"))
+    for obligation_id in sorted(matrix_mapping):
+        mapped_tcs = covered_obligations.get(obligation_id, [])
+        if not mapped_tcs:
+            findings.append(finding("test-case-obligation-uncovered", "semantic-completeness", "Обязательство матрицы не покрыто тест-кейсом", f"Для {obligation_id} нет TC.", artifact, remediation_owner="writer"))
+        elif len(mapped_tcs) > 1:
+            findings.append(finding("test-case-obligation-duplicated", "traceability", "Обязательство покрыто несколькими тест-кейсами", f"{obligation_id}: {', '.join(mapped_tcs)}. Для v0.9 это допустимо только после явного разбиения на самостоятельные OBL.", artifact, remediation_owner="writer"))
+    expected_obligations = {str(item.get("id")) for item in obligations.get("obligations", []) if isinstance(item, dict)}
+    unknown = sorted(set(covered_obligations) - expected_obligations)
+    if unknown:
+        findings.append(finding("test-case-unknown-obligation", "traceability", "Тест-кейс ссылается на отсутствующее обязательство", ", ".join(unknown), artifact, remediation_owner="writer"))
+    return findings
+
+
+def matrix_review_required(obligations: dict[str, Any]) -> tuple[bool, list[str]]:
+    entries = [item for item in obligations.get("obligations", []) if isinstance(item, dict)]
+    reasons: list[str] = []
+    if len(entries) >= MATRIX_REVIEW_OBLIGATION_THRESHOLD:
+        reasons.append(f"Количество обязательств: {len(entries)} (порог {MATRIX_REVIEW_OBLIGATION_THRESHOLD}).")
+    flags = {
+        str(flag)
+        for item in entries
+        for flag in (item.get("risk_flags") if isinstance(item.get("risk_flags"), list) else [])
+    }
+    matched = sorted(flags & MATRIX_REVIEW_RISK_FLAGS)
+    if matched:
+        reasons.append("Риски scope: " + ", ".join(matched) + ".")
+    return bool(reasons), reasons
+
+
+def validate_workflow_artifact_links(state: dict[str, Any], package_root: Path) -> list[ScopeFinding]:
+    findings: list[ScopeFinding] = []
+    artifact = "workflow-state.json"
+    phase = str(state.get("phase") or "")
+    required_by_phase = {
+        "scope": ("source_package_manifest", "scope_obligations"),
+        "matrix": ("source_package_manifest", "scope_obligations", "test_design_matrix"),
+        "test-cases": ("source_package_manifest", "scope_obligations", "test_design_matrix", "canonical_test_cases"),
+        "review": ("source_package_manifest", "scope_obligations", "test_design_matrix", "canonical_test_cases"),
+        "accepted": ("source_package_manifest", "scope_obligations", "test_design_matrix", "canonical_test_cases"),
+        "blocked": ("source_package_manifest", "scope_obligations"),
+    }
+    if phase not in required_by_phase:
+        findings.append(finding("workflow-phase", "transport", "В workflow указан неизвестный этап", f"phase={phase!r}.", artifact, remediation_owner="controller", severity="warning"))
+        return findings
+    for key in required_by_phase[phase]:
+        try:
+            path = workflow_artifact_path(state, package_root, key, required=True)
+        except PracticalV09Error as exc:
+            findings.append(finding("workflow-artifact-reference", "source-integrity", "В workflow отсутствует обязательная ссылка на артефакт", str(exc), artifact, remediation_owner="controller"))
+            continue
+        if path is not None and not path.is_file():
+            findings.append(finding("workflow-artifact-missing", "source-integrity", "Workflow ссылается на отсутствующий артефакт", f"artifacts.{key}={relative_to_package(package_root, path)}.", artifact, remediation_owner="controller"))
+    return findings
+
+
+def approved_review_exists(state: dict[str, Any], review_mode: str) -> bool:
+    """Return whether the single workflow state records a valid accepted review mode."""
+    return any(
+        isinstance(entry, dict)
+        and entry.get("mode") == review_mode
+        and entry.get("verdict") == "approved"
+        for entry in state.get("reviews", [])
+    )
+
+
+def validate_scope(
+    *, package_root: Path, workflow_state_path: Path, include_test_cases: bool | None = None
+) -> tuple[dict[str, Any], list[ScopeFinding]]:
+    package_root = package_root.resolve()
+    state = load_workflow_state(workflow_state_path, package_root)
+    findings = validate_workflow_artifact_links(state, package_root)
+    source_path = workflow_artifact_path(state, package_root, "source_package_manifest", required=True)
+    obligations_path = workflow_artifact_path(state, package_root, "scope_obligations", required=True)
+    assert source_path is not None and obligations_path is not None
+    source_findings, _ = validate_source_package_manifest(source_path, package_root)
+    findings.extend(source_findings)
+    obligation_findings, obligations = validate_scope_obligations(obligations_path, package_root, source_path)
+    findings.extend(obligation_findings)
+
+    matrix_path = workflow_artifact_path(state, package_root, "test_design_matrix")
+    matrix_mapping: dict[str, list[str]] = {}
+    if matrix_path is not None:
+        if matrix_path.is_file():
+            matrix_findings, matrix_mapping = validate_matrix(matrix_path, package_root, obligations)
+            findings.extend(matrix_findings)
+        else:
+            findings.append(finding("matrix-missing", "source-integrity", "Матрица тест-дизайна отсутствует", relative_to_package(package_root, matrix_path), "workflow-state.json", remediation_owner="writer"))
+
+    tc_path = workflow_artifact_path(state, package_root, "canonical_test_cases")
+    need_tc = include_test_cases if include_test_cases is not None else tc_path is not None
+    if need_tc:
+        if tc_path is None:
+            findings.append(finding("test-cases-reference-missing", "traceability", "В workflow не указан файл тест-кейсов", "Для этапа тест-кейсов нужна artifacts.canonical_test_cases.", "workflow-state.json", remediation_owner="writer"))
+        elif tc_path.is_file():
+            findings.extend(validate_test_cases(tc_path, package_root, obligations, matrix_mapping))
+        else:
+            findings.append(finding("test-cases-missing", "source-integrity", "Файл тест-кейсов отсутствует", relative_to_package(package_root, tc_path), "workflow-state.json", remediation_owner="writer"))
+
+    matrix_required, matrix_reasons = matrix_review_required(obligations)
+    declared = state.get("matrix_review_required")
+    if declared is not None and bool(declared) != matrix_required:
+        findings.append(finding("matrix-review-decision-stale", "transport", "Workflow содержит устаревшее решение о matrix review", "; ".join(matrix_reasons) or "Scope не достигает порога обязательного matrix review.", "workflow-state.json", remediation_owner="controller", severity="warning"))
+
+    phase = str(state.get("phase") or "")
+    if matrix_required and phase in {"test-cases", "review", "accepted"} and not approved_review_exists(state, "matrix"):
+        findings.append(finding(
+            "matrix-review-required-before-test-cases",
+            "review-integrity",
+            "Перед написанием тест-кейсов не подтверждено обязательное review матрицы",
+            "Для данного scope matrix review обязательно по complexity rule; в workflow-state.json нет approved результата независимого matrix review.",
+            "workflow-state.json",
+            remediation_owner="controller",
+        ))
+    if phase == "accepted" and not approved_review_exists(state, "test-cases"):
+        findings.append(finding(
+            "test-cases-review-required-before-acceptance",
+            "review-integrity",
+            "Scope принят без обязательного независимого review тест-кейсов",
+            "В workflow-state.json отсутствует approved результат final TC review из отдельной Codex-сессии.",
+            "workflow-state.json",
+            remediation_owner="controller",
+        ))
+
+    report_context = {
+        "route_version": ROUTE_VERSION,
+        "scope_id": state["scope_id"],
+        "scope_slug": state["scope_slug"],
+        "phase": state["phase"],
+        "matrix_review_required": matrix_required,
+        "matrix_review_reasons": matrix_reasons,
+        "input_hashes": {
+            key: sha256_file(path)
+            for key in ("workflow_state", "source_package_manifest", "scope_obligations", "test_design_matrix", "canonical_test_cases")
+            for path in [
+                workflow_state_path if key == "workflow_state" else workflow_artifact_path(state, package_root, key)
+            ]
+            if path is not None and path.is_file()
+        },
+    }
+    return report_context, findings
+
+
+def build_validator_report(context: dict[str, Any], findings: Iterable[ScopeFinding]) -> dict[str, Any]:
+    rendered_findings = [item.as_dict() for item in findings]
+    blocking_count = sum(1 for item in rendered_findings if item["blocking"])
+    return {
+        "schema_version": 1,
+        "validator_contract_version": VALIDATOR_REPORT_VERSION,
+        **context,
+        "summary": {
+            "findings_count": len(rendered_findings),
+            "blocking_count": blocking_count,
+            "warnings_count": sum(1 for item in rendered_findings if item["severity"] == "warning"),
+            "clean": blocking_count == 0,
+        },
+        "findings": rendered_findings,
+    }
+
+
+def review_subject_paths(state: dict[str, Any], package_root: Path, review_mode: str) -> dict[str, Path]:
+    if review_mode not in {"matrix", "test-cases"}:
+        raise PracticalV09Error("review_mode must be matrix or test-cases")
+    keys = ["source_package_manifest", "scope_obligations", "test_design_matrix"]
+    if review_mode == "test-cases":
+        keys.append("canonical_test_cases")
+    paths: dict[str, Path] = {}
+    for key in keys:
+        path = workflow_artifact_path(state, package_root, key, required=True)
+        assert path is not None
+        if not path.is_file():
+            raise PracticalV09Error(f"Review input is missing: {relative_to_package(package_root, path)}")
+        paths[key] = path
+    return paths
+
+
+def build_review_manifest(
+    *,
+    package_root: Path,
+    workflow_state_path: Path,
+    review_mode: str,
+    controller_thread_id: str,
+    code_branch: str,
+    code_commit: str,
+    contract_digest: str,
+) -> dict[str, Any]:
+    state = load_workflow_state(workflow_state_path, package_root)
+    if not is_durable_codex_thread_id(controller_thread_id):
+        raise PracticalV09Error("controller_thread_id must be a durable Codex thread UUID")
+    context, findings = validate_scope(package_root=package_root, workflow_state_path=workflow_state_path)
+    blocking = [item for item in findings if item.blocking]
+    if blocking:
+        raise PracticalV09Error("Cannot create review manifest while scope has blocking findings: " + ", ".join(item.id for item in blocking))
+    paths = review_subject_paths(state, package_root, review_mode)
+    return {
+        "schema_version": 1,
+        "manifest_version": REVIEW_MANIFEST_VERSION,
+        "route_version": ROUTE_VERSION,
+        "scope_id": state["scope_id"],
+        "scope_slug": state["scope_slug"],
+        "review_mode": review_mode,
+        "controller_thread_id": controller_thread_id,
+        "execution_surface_required": "codex-thread",
+        "code_branch": code_branch,
+        "code_commit": code_commit,
+        "contract_digest": contract_digest,
+        "validator_report_digest": sha256_json(build_validator_report(context, findings)),
+        "inputs": [
+            {"role": key, "path": relative_to_package(package_root, path), "sha256": sha256_file(path)}
+            for key, path in paths.items()
+        ],
+        "reviewer_order": [
+            "Самостоятельно восстановить обязательства из исходных материалов.",
+            "Сопоставить обязательства с матрицей тест-дизайна.",
+            "Проверить тест-кейсы, если review_mode=test-cases.",
+        ],
+    }
+
+
+def verify_review_result(
+    *, package_root: Path,
+    manifest_path: Path,
+    result_path: Path,
+) -> tuple[dict[str, Any], list[ScopeFinding]]:
+    manifest = read_json(manifest_path)
+    result = read_json(result_path)
+    artifact = relative_to_package(package_root, result_path)
+    findings: list[ScopeFinding] = []
+    if manifest.get("manifest_version") != REVIEW_MANIFEST_VERSION:
+        findings.append(finding("review-manifest-version", "review-integrity", "У manifest review неверная версия контракта", f"Ожидается {REVIEW_MANIFEST_VERSION}.", artifact, remediation_owner="controller"))
+    if manifest.get("route_version") != ROUTE_VERSION:
+        findings.append(finding("review-manifest-route", "review-integrity", "Manifest review относится к другому маршруту", f"Ожидается {ROUTE_VERSION}.", artifact, remediation_owner="controller"))
+    if result.get("review_manifest_sha256") != sha256_file(manifest_path):
+        findings.append(finding("review-result-manifest-hash", "review-integrity", "Результат review не связан с переданным manifest", "review_manifest_sha256 не совпадает с контрольной суммой review-manifest.json.", artifact, remediation_owner="controller"))
+    if result.get("execution_surface") != "codex-thread":
+        findings.append(finding("review-result-execution-surface", "review-integrity", "Независимое review выполнено не в отдельной Codex-сессии", "execution_surface должен быть codex-thread.", artifact, remediation_owner="controller"))
+    reviewer_thread_id = str(result.get("reviewer_thread_id") or "")
+    if (
+        not is_durable_codex_thread_id(reviewer_thread_id)
+        or reviewer_thread_id == str(manifest.get("controller_thread_id") or "")
+    ):
+        findings.append(finding("review-result-thread-independence", "review-integrity", "Не доказана отдельность reviewer-сессии", "reviewer_thread_id должен быть durable Codex thread UUID и отличаться от controller_thread_id.", artifact, remediation_owner="controller"))
+    independent = result.get("independent_obligations")
+    if not isinstance(independent, list) or not independent:
+        findings.append(finding("review-result-independent-obligations", "review-integrity", "Reviewer не зафиксировал самостоятельный список обязательств", "До сравнения с matrix/TC reviewer обязан перечислить independently derived obligations.", artifact, remediation_owner="reviewer"))
+    if result.get("review_mode") != manifest.get("review_mode"):
+        findings.append(finding("review-result-mode", "review-integrity", "Режим результата review не совпадает с manifest", "review_mode результата должен совпадать с review_mode manifest.", artifact, remediation_owner="reviewer"))
+    for key in ("scope_id", "scope_slug"):
+        if result.get(key) != manifest.get(key):
+            findings.append(finding("review-result-scope", "review-integrity", "Результат review относится к другому scope", f"Поле {key} должно совпадать с review-manifest.json.", artifact, remediation_owner="reviewer"))
+    if result.get("verdict") not in {"approved", "changes-required", "blocked-input"}:
+        findings.append(finding("review-result-verdict", "review-integrity", "У результата review неизвестный verdict", "Допустимы approved, changes-required или blocked-input.", artifact, remediation_owner="reviewer"))
+    for entry in manifest.get("inputs", []):
+        if not isinstance(entry, dict):
+            continue
+        path = package_relative_path(package_root, entry.get("path"), artifact=artifact)
+        if not path.is_file() or sha256_file(path) != entry.get("sha256"):
+            findings.append(finding("review-result-snapshot-changed", "artifact-tampering", "Изменён входной snapshot независимого review", f"Изменился {entry.get('path')} после создания manifest.", artifact, remediation_owner="controller"))
+    obligations_entry = next(
+        (entry for entry in manifest.get("inputs", []) if isinstance(entry, dict) and entry.get("role") == "scope_obligations"),
+        None,
+    )
+    if isinstance(independent, list) and obligations_entry:
+        obligations_path = package_relative_path(package_root, obligations_entry.get("path"), artifact=artifact)
+        if obligations_path.is_file():
+            expected = {
+                str(item.get("id"))
+                for item in read_json(obligations_path).get("obligations", [])
+                if isinstance(item, dict)
+            }
+            actual = {str(item) for item in independent if isinstance(item, str)}
+            if actual != expected:
+                findings.append(finding(
+                    "review-result-independent-coverage",
+                    "review-integrity",
+                    "Reviewer восстановил неполный или иной набор обязательств",
+                    "independent_obligations должен содержать в точности все OBL-* из зафиксированного scope-obligations.json.",
+                    artifact,
+                    remediation_owner="reviewer",
+                    evidence=["expected=" + ",".join(sorted(expected)), "actual=" + ",".join(sorted(actual))],
+                ))
+    return result, findings
