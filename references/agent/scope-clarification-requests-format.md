@@ -1,6 +1,8 @@
 # Формат `scope-clarification-requests.md`
 
-`scope-clarification-requests.md` — conditional companion-артефакт к `scope-coverage-gaps.md` для вопросов пользователю или аналитику и фиксации ответов по конкретным coverage gaps.
+`scope-clarification-requests.md` — conditional companion-артефакт к gaps
+текущего scope для вопросов пользователю или аналитику и фиксации ответов по
+конкретным coverage gaps.
 
 ## Назначение
 
@@ -11,6 +13,18 @@
 - не превращать ответы пользователя в неявную замену текста ФТ.
 
 ## Расположение
+
+Для `practical-v0.9`:
+
+- `fts/<domain>/<ft>/work/practical-v0.9/<scope-slug>/scope-clarification-requests.md`
+  — companion к `scope-obligations.json` текущего scope;
+- `fts/<domain>/<ft>/support/<scope-slug>-approved-clarifications.md`
+  — утверждённый ответ, повторно используемый как hash-bound evidence только
+  для связанных `GAP-*`/`OBL-*`. Его путь и SHA-256 записываются в
+  `scope-obligations.json`; пакетный `source-package-manifest.json` не
+  изменяется, чтобы не делать stale не связанные scope.
+
+Для legacy route:
 
 - `fts/<ft-slug>/work/stage-handoffs/NN-<scope-slug>/scope-clarification-requests.md`
   — рабочий companion к gaps текущего handoff;
@@ -24,6 +38,15 @@ run. В source registry его всегда регистрируют с `role = 
 и `manifest_binding = approved-clarification`, а не как обычный support.
 
 ## Когда создавать
+
+Для `practical-v0.9` создавай файл в том же запуске, если в
+`scope-obligations.json` есть хотя бы один `GAP-*` с
+`requires_business_answer: true`. Для каждого такого gap должна быть ровно
+одна карточка `CLR-*`, связанная заголовком `### CLR-* — GAP-*`. Gaps о UI,
+наблюдаемости, подготовке данных и границах будущего scope не становятся
+вопросами к БА, пока для них не требуется продуктовое решение.
+
+Для legacy route:
 
 - создавай файл всегда, если в `scope-coverage-gaps.md` есть хотя бы один `GAP-*`;
 - для каждого gap с `Needs User Input: yes` добавляй минимум одну карточку в `Clarification Requests`;
@@ -65,6 +88,7 @@ run. В source registry его всегда регистрируют с `role = 
 - `scope_slug`
 - `requirement_codes`
 - `related_ft_reference`
+- `related_obligation_ids`
 - `source_quote`
 - `question`
 - `needed_for`
@@ -87,6 +111,8 @@ run. В source registry его всегда регистрируют с `role = 
 - `scope_slug` — точный scope, для которого получен ответ.
 - `requirement_codes` — один или несколько точных кодов требований через `;`.
 - `related_ft_reference` — краткая ссылка на утверждение ФТ: раздел, `GSR`, таблица/строка, поле/условие, `ATOM-*` или страница PDF.
+- `related_obligation_ids` — связанные `OBL-*` для `practical-v0.9`; в legacy
+  route допускается `-`, если обязательства ещё не материализованы.
 - `source_quote` — конкретный текст из ФТ/source, который вызвал вопрос.
   Если вопрос возник из нескольких строк, укажи короткие цитаты с кодами
   требований. Это должен быть текст источника, а не пересказ агента.
@@ -115,6 +141,21 @@ Production-ready semantics разрешено строить только из �
 `user/user-confirmed`, `analyst/analyst-confirmed` или
 `product-owner/product-confirmed`. `working-assumption`, `rejected`,
 `superseded`, `unanswered` и `not-provided` не являются утверждённым evidence.
+
+## Использование утвержденного ответа в practical-v0.9
+
+После получения ответа агент не подменяет им ФТ и не помечает gap закрытым
+одним редактированием этого файла. Он должен:
+
+1. создать или обновить `support/<scope-slug>-approved-clarifications.md`;
+2. в `scope-obligations.json` установить у связанного gap `status: resolved`,
+   `resolution: approved-clarification:CLR-*`,
+   `approved_clarification_path` и `approved_clarification_sha256`;
+3. обновить только связанные `OBL-*`, а затем их строки matrix и TC, если они
+   уже существуют.
+
+Если ответ не подтвержден или противоречит основному ФТ, gap остается `open`;
+его нельзя использовать как источник новой ожидаемой реакции системы.
 
 ## Достаточность и детализация вопроса
 
@@ -163,6 +204,7 @@ request_kind: ba-business-ambiguity
 scope_slug: application-search
 requirement_codes: GSR 1
 related_ft_reference: GSR 1, поле ..., ATOM-001
+related_obligation_ids: OBL-001
 source_quote: GSR 1. Поле должно заполняться после сохранения.
 question: Какое точное значение получает поле после сохранения?
 needed_for: Полное покрытие GSR 1

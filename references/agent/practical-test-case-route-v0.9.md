@@ -16,11 +16,12 @@
 2. `../source-package-manifest.json` — DOCX, XHTML, доступный PDF, package notes и их SHA-256;
    единый неизменяемый manifest для всех scope данного ФТ-пакета.
 3. `scope-obligations.json` — нормализованные `OBL-*` с точной source-привязкой, формулировкой ФТ и рисками. Это не test design.
-4. `test-design-matrix.md` — человекочитаемый дизайн будущих проверок на русском.
-5. `validator-report.json` — output единственного scoped validator run для замороженного набора входов.
-6. `<mode>-review-manifest.json` — неизменяемый snapshot входов отдельного review.
-7. `<mode>-review-result.json` — независимый verdict и findings reviewer.
-8. `fts/<domain>/<ft>/test-cases/<section>-<scope>.md` — canonical test cases.
+4. `scope-clarification-requests.md` — только если один или несколько gaps требуют продуктового ответа БА; companion к `scope-obligations.json`, а не второй workflow state.
+5. `test-design-matrix.md` — человекочитаемый дизайн будущих проверок на русском.
+6. `validator-report.json` — output единственного scoped validator run для замороженного набора входов.
+7. `<mode>-review-manifest.json` — неизменяемый snapshot входов отдельного review.
+8. `<mode>-review-result.json` — независимый verdict и findings reviewer.
+9. `fts/<domain>/<ft>/test-cases/<section>-<scope>.md` — canonical test cases.
 
 Не создавай для v0.9 `writer-self-check.md`, `tc-self-check.md`, Writer Quality Gate, отдельный stage summary, launch/dispatch receipts, parking prompts или вспомогательные coverage tables. Если нужно пояснить недетерминированное решение, добавь короткую запись `decision_notes` в `workflow-state.json` рядом с решением.
 
@@ -44,7 +45,17 @@
 python scripts/create_practical_source_manifest.py --ft-package-root <package> --docx <docx> --xhtml <xhtml> [--pdf <pdf>] --output work/practical-v0.9/source-package-manifest.json
 ```
 
+После утвержденного ответа БА сохрани его в
+`support/<scope>-approved-clarifications.md` и запиши путь с SHA-256 в
+связанном `GAP-*` внутри `scope-obligations.json`. Ответ становится основанием
+для обновления только связанных OBL и downstream matrix/TC. Не изменяй общий
+`source-package-manifest.json`: это сделало бы stale не связанные scope.
+
 `ft-scope-analyzer` читает DOCX/XHTML/PDF, support и доступный Figma только как visual reference. Он создаёт `scope-obligations.json`, не матрицу и не тест-кейсы. Каждое обязательство содержит `id`, `source_anchor`, русскоязычный `statement` и при необходимости `risk_flags`.
+
+На этом же этапе агент фиксирует gaps в `clarifications`. Если gap требует продуктового ответа, он обязан сразу создать `scope-clarification-requests.md` с карточкой `CLR-* — GAP-*`; вопрос нельзя оставлять только в JSON. Терминологическое расхождение между заголовком раздела и ближайшими таблицами/утверждениями — отдельный `source-terminology-discrepancy`. Рабочий объект выбирается по содержательным требованиям, а не по заголовку; необходимость подтверждения БА определяется влиянием расхождения на состав TC.
+
+До `workflow-state.json` агент может запустить только `validate_practical_obligations.py`. Это проверка структуры source manifest, OBL и GAP; она не заменяет scoped validator и не подтверждает готовность маршрута целиком. В итоговом сообщении этапа агент обязан назвать вид выполненной проверки точно.
 
 ### 2. Матрица и условный matrix review
 

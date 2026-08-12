@@ -242,6 +242,142 @@ class PracticalV09Tests(unittest.TestCase):
             )
             self.assertIn("tool_version", created)
 
+    def test_business_gap_requires_linked_clarification_request(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            fixture = PracticalV09Fixture(Path(raw))
+            obligations = json.loads(fixture.obligations.read_text(encoding="utf-8"))
+            obligations["clarifications"] = [
+                {
+                    "id": "GAP-001",
+                    "gap_type": "ba-business-ambiguity",
+                    "source_anchor": "XHTML, раздел 9.1, строка «Партнеры»",
+                    "source_statement": "Пункт доступен пользователю.",
+                    "description": "Не определено условие доступности.",
+                    "impact": "non-blocking",
+                    "affected_obligation_ids": ["OBL-001"],
+                    "question_to_analyst": "Какое условие доступности применяется?",
+                    "requires_business_answer": True,
+                    "clarification_id": "CLR-001",
+                    "temporary_handling": "Не задавать условие доступа до ответа.",
+                    "status": "open",
+                }
+            ]
+            write_json(fixture.obligations, obligations)
+
+            _, findings = validate_scope(package_root=fixture.root, workflow_state_path=fixture.state)
+            self.assertIn(
+                "scope-clarification-request-missing",
+                [item.id for item in findings if item.blocking],
+            )
+
+            (fixture.scope_dir / "scope-clarification-requests.md").write_text(
+                "## Clarification Requests\n\n"
+                "### CLR-001 — GAP-001\n\n"
+                "Вопрос к БА.\n",
+                encoding="utf-8",
+            )
+            _, findings = validate_scope(package_root=fixture.root, workflow_state_path=fixture.state)
+            self.assertNotIn(
+                "scope-clarification-request-missing",
+                [item.id for item in findings],
+            )
+            self.assertNotIn(
+                "scope-clarification-request-link",
+                [item.id for item in findings],
+            )
+
+    def test_resolved_gap_requires_hash_bound_approved_clarification(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            fixture = PracticalV09Fixture(Path(raw))
+            approved = fixture.root / "support" / "menu-approved-clarifications.md"
+            approved.parent.mkdir()
+            approved.write_text("# Подтвержденное уточнение\n", encoding="utf-8")
+            obligations = json.loads(fixture.obligations.read_text(encoding="utf-8"))
+            obligations["clarifications"] = [
+                {
+                    "id": "GAP-001",
+                    "gap_type": "ba-business-ambiguity",
+                    "source_anchor": "XHTML, раздел 9.1, строка «Партнеры»",
+                    "source_statement": "Пункт доступен пользователю.",
+                    "description": "Не определено условие доступности.",
+                    "impact": "non-blocking",
+                    "affected_obligation_ids": ["OBL-001"],
+                    "question_to_analyst": "Какое условие доступности применяется?",
+                    "requires_business_answer": True,
+                    "clarification_id": "CLR-001",
+                    "temporary_handling": "Использовать подтвержденный ответ.",
+                    "status": "resolved",
+                    "resolution": "approved-clarification:CLR-001",
+                    "approved_clarification_path": "support/menu-approved-clarifications.md",
+                    "approved_clarification_sha256": sha256_file(approved),
+                }
+            ]
+            write_json(fixture.obligations, obligations)
+            (fixture.scope_dir / "scope-clarification-requests.md").write_text(
+                "### CLR-001 — GAP-001\n\nОтвет БА.\n",
+                encoding="utf-8",
+            )
+
+            _, findings = validate_scope(package_root=fixture.root, workflow_state_path=fixture.state)
+            self.assertNotIn(
+                "scope-clarification-approved-hash",
+                [item.id for item in findings],
+            )
+            self.assertNotIn(
+                "scope-clarification-resolution",
+                [item.id for item in findings],
+            )
+            approved.write_text("# Измененный ответ БА\n", encoding="utf-8")
+            _, findings = validate_scope(package_root=fixture.root, workflow_state_path=fixture.state)
+            self.assertIn(
+                "scope-clarification-approved-hash",
+                [item.id for item in findings if item.blocking],
+            )
+
+    def test_pre_matrix_check_is_not_scoped_route_validation(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            fixture = PracticalV09Fixture(Path(raw))
+            fixture.state.unlink()
+            command = [
+                sys.executable,
+                str(REPO_ROOT / "scripts" / "validate_practical_obligations.py"),
+                "--ft-package-root",
+                str(fixture.root),
+                "--source-package-manifest",
+                str(fixture.source_manifest),
+                "--scope-obligations",
+                str(fixture.obligations),
+                "--require-clean",
+            ]
+            completed = subprocess.run(
+                command,
+                text=True,
+                capture_output=True,
+                encoding="utf-8",
+                errors="replace",
+            )
+            self.assertEqual(0, completed.returncode, completed.stderr)
+            payload = json.loads(completed.stdout)
+            self.assertEqual("scope-obligations-structure", payload["check_type"])
+            self.assertIn("ещё не запускалась", payload["note"])
+
+    def test_v09_scope_contract_requires_ba_and_terminology_handling(self) -> None:
+        route = (REPO_ROOT / "references" / "agent" / "practical-test-case-route-v0.9.md").read_text(
+            encoding="utf-8"
+        )
+        scope_format = (REPO_ROOT / "references" / "agent" / "practical-v0.9-scope-obligations-format.md").read_text(
+            encoding="utf-8"
+        )
+        analyzer = (REPO_ROOT / "skills" / "ft-scope-analyzer" / "SKILL.md").read_text(
+            encoding="utf-8"
+        )
+        for content in (route, scope_format, analyzer):
+            self.assertIn("scope-clarification-requests.md", content)
+            self.assertIn("source-terminology-discrepancy", content)
+            self.assertIn("validate_practical_obligations.py", content)
+        self.assertIn("practical route v0.9", analyzer)
+        self.assertIn("v0.8 instructions below are legacy-only", analyzer)
+
     def test_style_warning_is_visible_but_not_blocking(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             fixture = PracticalV09Fixture(Path(raw), obligation_statement="Проверить source-backed значение.")

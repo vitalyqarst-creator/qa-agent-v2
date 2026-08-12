@@ -14,10 +14,84 @@
       "risk_flags": []
     }
   ],
-  "clarifications": []
+  "clarifications": [
+    {
+      "id": "GAP-001",
+      "gap_type": "ba-business-ambiguity",
+      "source_anchor": "XHTML, раздел 9.1, Таблица 2, строка «Партнеры»",
+      "source_statement": "В меню доступен пункт «Партнеры».",
+      "description": "В источнике не определено условие доступности пункта.",
+      "impact": "non-blocking",
+      "affected_obligation_ids": ["OBL-001"],
+      "question_to_analyst": "При каком условии пункт «Партнеры» должен быть доступен пользователю?",
+      "requires_business_answer": true,
+      "clarification_id": "CLR-001",
+      "temporary_handling": "Не задавать условие доступа в тест-кейсе до ответа.",
+      "status": "open"
+    }
+  ]
 }
 ```
 
 `statement` — точное, проверяемое русскоязычное утверждение ФТ. Здесь не фиксируются шаги, конкретные fixtures, предполагаемый UI oracle, matrix ID и TC ID: это принадлежит последующим этапам.
 
 `risk_flags` используй только из: `status-transition`, `cross-field-rule`, `closed-dictionary`, `integration`, `authorization`, `exception-over-general-rule`, `mapping-table`, `temporal-rule`, `high-fan-out`, `high-risk`. Они запускают conditional matrix review.
+
+## Gaps и вопросы к БА
+
+`clarifications` — компактный реестр `GAP-*` текущего scope. Это не отдельная
+матрица покрытия и не workflow state. Каждый gap обязан содержать:
+
+- `id` формата `GAP-*`;
+- `gap_type`: `ba-business-ambiguity`, `missing-source-definition`,
+  `source-terminology-discrepancy`, `ui-calibration`,
+  `external-scope-boundary` или `test-data-setup`;
+- `source_anchor`, `source_statement`, `description` и `temporary_handling`;
+- `impact`: `blocking` или `non-blocking`;
+- `affected_obligation_ids` с существующими `OBL-*`;
+- `status`: `open` или `resolved`.
+
+Если для gap требуется продуктовое решение (`requires_business_answer: true`),
+в том же запуске обязательно создай соседний
+`scope-clarification-requests.md`. Укажи `question_to_analyst` и
+`clarification_id` формата `CLR-*`; файл должен содержать связанную карточку
+`### CLR-* — GAP-*` по каноническому формату вопросов к БА.
+
+Не создавай вопрос к БА для подготовки тестовых данных, UI-наблюдения или
+внешней границы scope, если продуктовое правило уже понятно. Такие gaps всё
+равно остаются в `clarifications` и определяют статус будущего TC.
+
+Перед созданием обязательств сравни наименование выбранного раздела с
+наименованиями ближайших таблиц и утверждений ФТ. Если они называют разные
+объекты, добавь `source-terminology-discrepancy`; рабочий объект scope выбирай
+по содержательным утверждениям и явно укажи временную трактовку. Если это
+влияет на состав проверок, запроси подтверждение БА как non-blocking вопрос.
+
+После утвержденного ответа БА не редактируй старый gap молча. Добавь
+утверждённый файл в `support/`, свяжи его с gap полями
+`approved_clarification_path` и `approved_clarification_sha256`, обнови только
+связанные `OBL-*`, затем установи `status: resolved` и
+`resolution: approved-clarification:CLR-*`. Ответ привязывается к scope, а не
+к общему `source-package-manifest.json`: пакетный manifest остаётся
+неизменяемым и не делает stale не связанные scope. Полный scope и уже принятые
+review заново не запускаются, если изменились только связанные обязательства и
+их downstream matrix/TC.
+
+## Источники и итог этапа
+
+`source_anchor` должен называть фактический носитель требования: например,
+`XHTML, раздел ...`, `DOCX, Таблица ...` или `PDF, стр. ...`. Не сообщай, что
+код или текст «утрачен» в источнике, пока не проверены DOCX, XHTML и доступный
+PDF. Если ограничение вызвано извлечением, укажи ограничение извлечения, а не
+отсутствие требования в источнике.
+
+До создания `workflow-state.json` допускается только stdout-проверка:
+
+```text
+python scripts/validate_practical_obligations.py --ft-package-root <package> --source-package-manifest <manifest> --scope-obligations <scope-obligations> --require-clean
+```
+
+В отчете этапа называй её «проверкой структуры обязательств». Каноническая
+`scoped validation` маршрута выполняется только после появления
+`workflow-state.json` и замороженной матрицы; не называй предварительную
+проверку успешной валидацией всего маршрута.

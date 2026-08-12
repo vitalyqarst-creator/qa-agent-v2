@@ -18,14 +18,27 @@ from typing import Any, Iterable
 
 
 ROUTE_VERSION = "practical-v0.9"
-ROUTE_TOOL_VERSION = "practical-v0.9.2"
+ROUTE_TOOL_VERSION = "practical-v0.9.3"
 WORKFLOW_STATE_SCHEMA_VERSION = 1
 SOURCE_CONTRACT_VERSION = "source-package-v1"
 REVIEW_MANIFEST_VERSION = "practical-review-manifest-v1"
 VALIDATOR_REPORT_VERSION = "practical-scope-validator-v1"
 SOURCE_MANIFEST_RELATIVE_PATH = "work/practical-v0.9/source-package-manifest.json"
+CLARIFICATION_REQUESTS_FILENAME = "scope-clarification-requests.md"
 
 REQUIRED_SOURCE_ROLES = {"main-docx", "main-xhtml"}
+ALLOWED_SUPPORT_ROLES = {"support"}
+ALLOWED_GAP_TYPES = {
+    "ba-business-ambiguity",
+    "missing-source-definition",
+    "source-terminology-discrepancy",
+    "ui-calibration",
+    "external-scope-boundary",
+    "test-data-setup",
+    # Compatibility with artifacts written by practical-v0.9.2.
+    "ambiguity",
+}
+ALLOWED_GAP_STATUSES = {"open", "resolved"}
 REQUIRED_TC_FIELDS = (
     "Название",
     "Тип",
@@ -142,6 +155,11 @@ def package_relative_path(package_root: Path, raw: object, *, artifact: str) -> 
 
 def relative_to_package(package_root: Path, path: Path) -> str:
     return path.resolve().relative_to(package_root.resolve()).as_posix()
+
+
+def clarification_requests_path(obligations_path: Path) -> Path:
+    """Return the single user-facing clarification companion for one scope."""
+    return obligations_path.with_name(CLARIFICATION_REQUESTS_FILENAME)
 
 
 def finding(
@@ -290,6 +308,98 @@ def validate_source_package_manifest(
     if missing_roles:
         findings.append(finding("source-manifest-required-roles", "source-integrity", "Манифест исходных материалов неполон", "Отсутствуют обязательные роли: " + ", ".join(missing_roles) + ".", artifact, remediation_owner="controller"))
 
+    support_inputs = manifest.get("support_inputs", [])
+    if not isinstance(support_inputs, list):
+        findings.append(finding(
+            "source-manifest-support-inputs-format",
+            "source-integrity",
+            "Некорректен перечень support-материалов",
+            "Поле support_inputs должно быть массивом hash-bound файлов.",
+            artifact,
+            remediation_owner="controller",
+        ))
+    else:
+        seen_support_paths: set[str] = set()
+        for index, entry in enumerate(support_inputs, start=1):
+            if not isinstance(entry, dict):
+                findings.append(finding(
+                    "source-manifest-support-input-invalid",
+                    "source-integrity",
+                    "Строка support-материалов имеет неверный формат",
+                    f"support_inputs[{index}] должен быть объектом.",
+                    artifact,
+                    remediation_owner="controller",
+                ))
+                continue
+            role = str(entry.get("role") or "")
+            raw_path = entry.get("path")
+            if role not in ALLOWED_SUPPORT_ROLES:
+                findings.append(finding(
+                    "source-manifest-support-role",
+                    "source-integrity",
+                    "У support-материала неизвестная роль",
+                    f"support_inputs[{index}].role={role!r}; допустимы: "
+                    + ", ".join(sorted(ALLOWED_SUPPORT_ROLES))
+                    + ".",
+                    artifact,
+                    remediation_owner="controller",
+                ))
+            if not isinstance(raw_path, str) or not raw_path.strip():
+                findings.append(finding(
+                    "source-manifest-support-path",
+                    "source-integrity",
+                    "У support-материала не указан путь",
+                    f"support_inputs[{index}].path должен быть непустой строкой.",
+                    artifact,
+                    remediation_owner="controller",
+                ))
+                continue
+            if raw_path in seen_support_paths:
+                findings.append(finding(
+                    "source-manifest-support-path-duplicate",
+                    "traceability",
+                    "Support-материал повторяется в манифесте",
+                    f"Повторяется {raw_path}.",
+                    artifact,
+                    remediation_owner="controller",
+                ))
+            seen_support_paths.add(raw_path)
+            try:
+                support_path = package_relative_path(package_root, raw_path, artifact=artifact)
+            except PracticalV09Error as exc:
+                findings.append(finding(
+                    "source-manifest-support-path",
+                    "source-integrity",
+                    "Некорректен путь support-материала",
+                    str(exc),
+                    artifact,
+                    remediation_owner="controller",
+                ))
+                continue
+            if not support_path.is_file():
+                findings.append(finding(
+                    "source-manifest-support-missing",
+                    "source-integrity",
+                    "Support-материал отсутствует",
+                    f"Не найден {raw_path} для роли {role}.",
+                    artifact,
+                    evidence=[raw_path],
+                    remediation_owner="controller",
+                ))
+                continue
+            expected_hash = str(entry.get("sha256") or "")
+            actual_hash = sha256_file(support_path)
+            if expected_hash != actual_hash:
+                findings.append(finding(
+                    "source-manifest-support-hash",
+                    "source-integrity",
+                    "Контрольная сумма support-материала не совпадает",
+                    f"Файл {raw_path} изменён после создания манифеста.",
+                    artifact,
+                    evidence=[f"expected={expected_hash}", f"actual={actual_hash}"],
+                    remediation_owner="controller",
+                ))
+
     notes = manifest.get("agent_notes")
     notes_path = package_root / "AGENT-NOTES.md"
     if notes_path.is_file():
@@ -302,8 +412,224 @@ def validate_source_package_manifest(
     return findings, manifest
 
 
+def clarification_requires_business_request(entry: dict[str, Any]) -> bool:
+    """Keep only business ambiguities in the BA-facing companion file."""
+    if entry.get("requires_business_answer") is True:
+        return True
+    # Compatibility with v0.9.2: a concrete analyst question was its only
+    # marker that the gap required a BA answer.
+    return bool(str(entry.get("question_to_analyst") or "").strip())
+
+
+def validate_scope_clarifications(
+    *,
+    payload: dict[str, Any],
+    obligations_path: Path,
+    package_root: Path,
+    obligation_ids: set[str],
+) -> list[ScopeFinding]:
+    """Validate the compact gap register and its conditional BA companion."""
+    artifact = relative_to_package(package_root, obligations_path)
+    clarifications = payload.get("clarifications", [])
+    if not isinstance(clarifications, list):
+        return [finding(
+            "scope-clarifications-format",
+            "source-integrity",
+            "Некорректен формат gaps scope",
+            "Поле clarifications должно быть массивом GAP-*.",
+            artifact,
+            remediation_owner="scope-analyzer",
+        )]
+
+    findings: list[ScopeFinding] = []
+    seen_gap_ids: set[str] = set()
+    requests_path = clarification_requests_path(obligations_path)
+    requests_text: str | None = None
+
+    for index, entry in enumerate(clarifications, start=1):
+        if not isinstance(entry, dict):
+            findings.append(finding(
+                "scope-clarification-invalid",
+                "source-integrity",
+                "Строка gaps scope имеет неверный формат",
+                f"clarifications[{index}] должен быть объектом.",
+                artifact,
+                remediation_owner="scope-analyzer",
+            ))
+            continue
+        gap_id = str(entry.get("id") or "")
+        if not re.fullmatch(r"GAP-[A-Z0-9-]+", gap_id):
+            findings.append(finding(
+                "scope-clarification-id",
+                "traceability",
+                "У gap некорректный идентификатор",
+                f"clarifications[{index}].id={gap_id!r}; ожидается GAP-*.",
+                artifact,
+                remediation_owner="scope-analyzer",
+            ))
+        elif gap_id in seen_gap_ids:
+            findings.append(finding(
+                "scope-clarification-duplicate",
+                "traceability",
+                "В scope повторяется GAP-ID",
+                f"Повторяется {gap_id}.",
+                artifact,
+                remediation_owner="scope-analyzer",
+            ))
+        seen_gap_ids.add(gap_id)
+
+        for field in ("source_anchor", "source_statement", "description", "temporary_handling"):
+            if not str(entry.get(field) or "").strip():
+                findings.append(finding(
+                    "scope-clarification-incomplete",
+                    "unresolved-requirement",
+                    "Gap не содержит обязательный контекст",
+                    f"{gap_id or f'строка {index}'}: отсутствует «{field}».",
+                    artifact,
+                    remediation_owner="scope-analyzer",
+                ))
+        gap_type = str(entry.get("gap_type") or "")
+        if gap_type not in ALLOWED_GAP_TYPES:
+            findings.append(finding(
+                "scope-clarification-type",
+                "semantic-completeness",
+                "У gap указан неизвестный тип",
+                f"{gap_id or f'строка {index}'}: «{gap_type}» не входит в допустимый перечень.",
+                artifact,
+                remediation_owner="scope-analyzer",
+            ))
+        impact = str(entry.get("impact") or "")
+        if impact not in {"blocking", "non-blocking"}:
+            findings.append(finding(
+                "scope-clarification-impact",
+                "semantic-completeness",
+                "У gap не указан корректный impact",
+                f"{gap_id or f'строка {index}'}: ожидается blocking или non-blocking.",
+                artifact,
+                remediation_owner="scope-analyzer",
+            ))
+        status = str(entry.get("status") or "")
+        if status not in ALLOWED_GAP_STATUSES:
+            findings.append(finding(
+                "scope-clarification-status",
+                "semantic-completeness",
+                "У gap не указан корректный статус",
+                f"{gap_id or f'строка {index}'}: ожидается open или resolved.",
+                artifact,
+                remediation_owner="scope-analyzer",
+            ))
+        affected = entry.get("affected_obligation_ids", [])
+        if not isinstance(affected, list) or not affected or not all(isinstance(item, str) for item in affected):
+            findings.append(finding(
+                "scope-clarification-obligations-format",
+                "traceability",
+                "У gap нет корректной связи с обязательствами",
+                f"{gap_id or f'строка {index}'}: affected_obligation_ids должен быть непустым массивом OBL-*.",
+                artifact,
+                remediation_owner="scope-analyzer",
+            ))
+        else:
+            unknown_obligations = sorted(set(affected) - obligation_ids)
+            if unknown_obligations:
+                findings.append(finding(
+                    "scope-clarification-unknown-obligation",
+                    "traceability",
+                    "Gap ссылается на отсутствующее обязательство",
+                    f"{gap_id}: " + ", ".join(unknown_obligations) + ".",
+                    artifact,
+                    remediation_owner="scope-analyzer",
+                ))
+
+        requires_request = clarification_requires_business_request(entry)
+        clarification_id = str(entry.get("clarification_id") or "")
+        if requires_request:
+            if not re.fullmatch(r"CLR-[A-Z0-9-]+", clarification_id):
+                findings.append(finding(
+                    "scope-clarification-request-id",
+                    "traceability",
+                    "Вопросу к БА не присвоен CLR-ID",
+                    f"{gap_id}: требуется clarification_id формата CLR-*.",
+                    artifact,
+                    remediation_owner="scope-analyzer",
+                ))
+            if not requests_path.is_file():
+                findings.append(finding(
+                    "scope-clarification-request-missing",
+                    "unresolved-requirement",
+                    "Не создан файл вопросов к БА",
+                    f"Для {gap_id} нужен {relative_to_package(package_root, requests_path)}.",
+                    artifact,
+                    remediation_owner="scope-analyzer",
+                ))
+            else:
+                if requests_text is None:
+                    requests_text = requests_path.read_text(encoding="utf-8")
+                marker = rf"(?m)^###\s+{re.escape(clarification_id)}\s+[—-]\s+{re.escape(gap_id)}\b"
+                if clarification_id and not re.search(marker, requests_text):
+                    findings.append(finding(
+                        "scope-clarification-request-link",
+                        "traceability",
+                        "Файл вопросов к БА не связан с GAP",
+                        f"Не найдена карточка «{clarification_id} — {gap_id}».",
+                        relative_to_package(package_root, requests_path),
+                        remediation_owner="scope-analyzer",
+                    ))
+
+        if status == "resolved":
+            resolution = str(entry.get("resolution") or "")
+            expected_resolution = f"approved-clarification:{clarification_id}" if clarification_id else ""
+            approved_path = str(entry.get("approved_clarification_path") or "")
+            approved_hash = str(entry.get("approved_clarification_sha256") or "")
+            if not expected_resolution or resolution != expected_resolution:
+                findings.append(finding(
+                    "scope-clarification-resolution",
+                    "traceability",
+                    "Закрытый gap не связан с подтверждённым ответом",
+                    f"{gap_id}: ожидается resolution={expected_resolution or 'approved-clarification:CLR-*'}.",
+                    artifact,
+                    remediation_owner="scope-analyzer",
+                ))
+            try:
+                approved_file = package_relative_path(
+                    package_root,
+                    approved_path,
+                    artifact=artifact,
+                )
+            except PracticalV09Error as exc:
+                findings.append(finding(
+                    "scope-clarification-approved-path",
+                    "source-integrity",
+                    "Некорректен путь к подтверждённому ответу БА",
+                    f"{gap_id}: {exc}",
+                    artifact,
+                    remediation_owner="scope-analyzer",
+                ))
+            else:
+                if not approved_file.is_file():
+                    findings.append(finding(
+                        "scope-clarification-approved-missing",
+                        "source-integrity",
+                        "Подтверждённый ответ БА отсутствует",
+                        f"{gap_id}: не найден {approved_path}.",
+                        artifact,
+                        remediation_owner="scope-analyzer",
+                    ))
+                elif not approved_hash or approved_hash != sha256_file(approved_file):
+                    findings.append(finding(
+                        "scope-clarification-approved-hash",
+                        "source-integrity",
+                        "Контрольная сумма подтверждённого ответа БА не совпадает",
+                        f"{gap_id}: approved_clarification_sha256 должен совпадать с {approved_path}.",
+                        artifact,
+                        remediation_owner="scope-analyzer",
+                    ))
+    return findings
+
+
 def validate_scope_obligations(
-    obligations_path: Path, package_root: Path, source_manifest_path: Path
+    obligations_path: Path,
+    package_root: Path,
+    source_manifest_path: Path,
 ) -> tuple[list[ScopeFinding], dict[str, Any]]:
     artifact = relative_to_package(package_root, obligations_path)
     try:
@@ -343,6 +669,14 @@ def validate_scope_obligations(
                 findings.append(finding("scope-obligation-risk-flags-unknown", "semantic-completeness", "У обязательства указан неизвестный риск matrix review", f"{obligation_id or f'строка {index}'}: " + ", ".join(unknown_flags) + ".", artifact, remediation_owner="scope-analyzer"))
         if re.search(r"\b(source-backed|residual|blocked-observability|fixture)\b", statement, flags=re.IGNORECASE):
             findings.append(finding("scope-obligation-process-language", "style", "В формулировке обязательства остался служебный английский текст", f"Проверьте statement для {obligation_id}.", artifact, remediation_owner="scope-analyzer", severity="warning"))
+    findings.extend(
+        validate_scope_clarifications(
+            payload=payload,
+            obligations_path=obligations_path,
+            package_root=package_root,
+            obligation_ids=seen,
+        )
+    )
     return findings, payload
 
 
@@ -559,7 +893,11 @@ def validate_scope(
     assert source_path is not None and obligations_path is not None
     source_findings, _ = validate_source_package_manifest(source_path, package_root)
     findings.extend(source_findings)
-    obligation_findings, obligations = validate_scope_obligations(obligations_path, package_root, source_path)
+    obligation_findings, obligations = validate_scope_obligations(
+        obligations_path,
+        package_root,
+        source_path,
+    )
     findings.extend(obligation_findings)
 
     matrix_path = workflow_artifact_path(state, package_root, "test_design_matrix")

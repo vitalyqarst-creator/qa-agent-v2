@@ -7,31 +7,38 @@ description: Выделяет релевантные разделы ФТ, суж
 
 ## Default practical route
 
-For ordinary work where the user wants test cases, use practical route v0.8 from
-[../../references/agent/practical-test-case-route-v0.8.md](../../references/agent/practical-test-case-route-v0.8.md).
+For ordinary work where the user wants test cases, this skill performs only
+stage 1 of practical route v0.9 from
+[../../references/agent/practical-test-case-route-v0.9.md](../../references/agent/practical-test-case-route-v0.9.md).
 
-In this route, scope analysis prepares only the next writer input:
+In a new v0.9 scope analysis:
 
 - confirm external scope boundaries by FT section/subsection;
-- create one compact `scope-brief.md` under
-  `fts/<ft-slug>/work/practical/<scope-slug>/`;
-- create `source-parity-check.md` before writer handoff when the main FT has
-  both DOCX and PDF;
-- create a compact `source-row-inventory.md` before writer handoff when the
-  selected scope is driven by FT table rows, action rows, field rows, status
-  rows, document mappings or fixed value lists;
-- keep FT context, gaps, dictionary values and candidate UI calibration concise
-  in `scope-brief.md`; create `scope-clarification-requests.md` only for a
-  concrete BA question;
-- route next to `ft-test-case-writer` in `practical_v0_8_matrix` mode, not to `source_assertion_review` or `ft-test-case-iteration`.
+- create one `scope-obligations.json` under
+  `fts/<domain>/<ft>/work/practical-v0.9/<scope-slug>/` with one `OBL-*` per
+  independent source assertion;
+- record all unknowns in `clarifications`; if a product decision is needed,
+  create the linked `scope-clarification-requests.md` in the same directory;
+- compare the section heading with the nearest tables/assertions and record a
+  non-blocking `source-terminology-discrepancy` when they name different objects;
+- use DOCX/XHTML/PDF to verify the native source anchor. A parsing limitation
+  is not evidence that the source code or statement is absent;
+- run only `validate_practical_obligations.py` before matrix creation and report
+  it as a structural obligations check, not as scoped route validation;
+- stop after obligations: do not create matrix, workflow state or canonical TC.
 
-Do not create `scope-contract.md`, a separate `scope-coverage-gaps.md`, oracle
-inventories, session/decision logs or heavy/source-first artifacts in
-`practical_v0_8`; those belong to legacy, diagnostic or explicitly selected routes.
+The v0.8 instructions below are legacy-only. They apply solely when resuming an
+existing `practical_v0_8` scope or when the user explicitly requests v0.8; they
+must not be used to start a new scope.
 
-Все актуальные practical artifacts scope — brief, matrix, prompts, summary и
-review receipts — хранятся в этой единственной директории. Не создавай второй
-параллельный каталог с повторным section id.
+## Legacy practical-v0.8 instructions
+
+Legacy v0.8 scope files remain under `work/practical/<scope-slug>/`; they are
+not a valid location for a new v0.9 scope.
+
+For a resumed v0.8 scope, route next to `ft-test-case-writer` only after the
+required `source-parity-check.md` is complete before writer handoff; otherwise
+the legacy workflow remains `blocked-input`, not to `source_assertion_review`.
 
 ### Mandatory route gate
 
