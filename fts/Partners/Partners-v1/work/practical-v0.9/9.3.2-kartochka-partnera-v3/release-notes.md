@@ -26,11 +26,12 @@
 
 ## Статус выпуска
 
-`candidate-pending-final-independent-rereview` — структура и тест-дизайн
-проверены вручную, а findings финального независимого review устранены или
-обоснованно отклонены по первичному источнику. Нужен один короткий independent
-re-review изменённого снимка. UI-поведение также не калибровано на стенде.
-Это не `automation-ready` и не замена baseline v2.
+`reviewed-candidate` — кандидат прошёл независимый re-review без findings.
+UI-поведение ещё не калибровано на стенде. Это не `automation-ready` и не
+замена baseline v2.
+
+Receipt: `independent-review-v3-round-3.md`; immutable input manifest:
+`independent-review-v3-round-3-manifest.json`.
 
 Baseline `test-cases/9.3.2-kartochka-partnera.md` не заменён и остаётся
 доступен для сравнения с v3.
