@@ -18,9 +18,9 @@ from typing import Any, Iterable
 
 
 ROUTE_VERSION = "practical-v0.9"
-ROUTE_TOOL_VERSION = "practical-v0.9.5"
+ROUTE_TOOL_VERSION = "practical-v0.9.6"
 WORKFLOW_STATE_SCHEMA_VERSION = 1
-SOURCE_CONTRACT_VERSION = "source-package-v1"
+SOURCE_CONTRACT_VERSION = "source-package-v2"
 REVIEW_MANIFEST_VERSION = "practical-review-manifest-v1"
 VALIDATOR_REPORT_VERSION = "practical-scope-validator-v1"
 SOURCE_MANIFEST_RELATIVE_PATH = "work/practical-v0.9/source-package-manifest.json"
@@ -35,6 +35,8 @@ CLARIFICATION_REQUEST_SECTION_HEADINGS = (
 
 REQUIRED_SOURCE_ROLES = {"main-docx", "main-xhtml"}
 ALLOWED_SUPPORT_ROLES = {"support"}
+ALLOWED_VISUAL_ROLES = {"visual-only"}
+VISUAL_ONLY_PATH_PREFIXES = ("mockups/", "support/figma/")
 ALLOWED_GAP_TYPES = {
     "ba-business-ambiguity",
     "missing-source-definition",
@@ -352,6 +354,140 @@ def load_workflow_state(path: Path, package_root: Path) -> dict[str, Any]:
     return state
 
 
+def is_visual_only_path(raw_path: str) -> bool:
+    normalized = raw_path.replace("\\", "/").lstrip("/").casefold()
+    return normalized.startswith(VISUAL_ONLY_PATH_PREFIXES)
+
+
+def validate_manifest_bound_inputs(
+    manifest: dict[str, Any],
+    package_root: Path,
+    artifact: str,
+    *,
+    field: str,
+    allowed_roles: set[str],
+    input_label: str,
+    seen_paths: set[str],
+    reject_visual_paths: bool,
+) -> list[ScopeFinding]:
+    entries = manifest.get(field)
+    if not isinstance(entries, list):
+        return [finding(
+            f"source-manifest-{field}-format",
+            "source-integrity",
+            f"Некорректен перечень {input_label}",
+            f"Поле {field} должно быть массивом hash-bound файлов.",
+            artifact,
+            remediation_owner="controller",
+        )]
+
+    findings: list[ScopeFinding] = []
+    for index, entry in enumerate(entries, start=1):
+        if not isinstance(entry, dict):
+            findings.append(finding(
+                f"source-manifest-{field}-invalid",
+                "source-integrity",
+                f"Строка {input_label} имеет неверный формат",
+                f"{field}[{index}] должен быть объектом.",
+                artifact,
+                remediation_owner="controller",
+            ))
+            continue
+
+        role = str(entry.get("role") or "")
+        raw_path = entry.get("path")
+        if role not in allowed_roles:
+            findings.append(finding(
+                f"source-manifest-{field}-role",
+                "source-integrity",
+                f"У {input_label} неизвестная роль",
+                f"{field}[{index}].role={role!r}; допустимы: "
+                + ", ".join(sorted(allowed_roles))
+                + ".",
+                artifact,
+                remediation_owner="controller",
+            ))
+        if not isinstance(raw_path, str) or not raw_path.strip():
+            findings.append(finding(
+                f"source-manifest-{field}-path",
+                "source-integrity",
+                f"У {input_label} не указан путь",
+                f"{field}[{index}].path должен быть непустой строкой.",
+                artifact,
+                remediation_owner="controller",
+            ))
+            continue
+
+        if reject_visual_paths and is_visual_only_path(raw_path):
+            findings.append(finding(
+                "source-manifest-visual-input-misclassified",
+                "source-integrity",
+                "Визуальный материал ошибочно зарегистрирован как support",
+                "Макеты и Figma-index должны находиться только в visual_inputs с ролью visual-only; "
+                "они не являются источником бизнес-правил.",
+                artifact,
+                evidence=[raw_path],
+                remediation_owner="controller",
+            ))
+        if APPROVED_CLARIFICATION_FILENAME_RE.search(raw_path.replace("\\", "/")):
+            findings.append(finding(
+                "source-manifest-scope-clarification",
+                "source-integrity",
+                "Утверждённый ответ БА ошибочно добавлен в общий source manifest",
+                "Scope-local approved clarification должен быть связан только через GAP-* "
+                "в scope-obligations.json и не должен делать stale другие scope.",
+                artifact,
+                remediation_owner="controller",
+            ))
+        if raw_path in seen_paths:
+            findings.append(finding(
+                "source-manifest-input-path-duplicate",
+                "traceability",
+                "Материал повторяется в source manifest",
+                f"Повторяется {raw_path}.",
+                artifact,
+                remediation_owner="controller",
+            ))
+        seen_paths.add(raw_path)
+
+        try:
+            input_path = package_relative_path(package_root, raw_path, artifact=artifact)
+        except PracticalV09Error as exc:
+            findings.append(finding(
+                f"source-manifest-{field}-path",
+                "source-integrity",
+                f"Некорректен путь {input_label}",
+                str(exc),
+                artifact,
+                remediation_owner="controller",
+            ))
+            continue
+        if not input_path.is_file():
+            findings.append(finding(
+                f"source-manifest-{field}-missing",
+                "source-integrity",
+                f"{input_label.capitalize()} отсутствует",
+                f"Не найден {raw_path} для роли {role}.",
+                artifact,
+                evidence=[raw_path],
+                remediation_owner="controller",
+            ))
+            continue
+        expected_hash = str(entry.get("sha256") or "")
+        actual_hash = sha256_file(input_path)
+        if expected_hash != actual_hash:
+            findings.append(finding(
+                f"source-manifest-{field}-hash",
+                "source-integrity",
+                f"Контрольная сумма {input_label} не совпадает",
+                f"Файл {raw_path} изменён после создания манифеста.",
+                artifact,
+                evidence=[f"expected={expected_hash}", f"actual={actual_hash}"],
+                remediation_owner="controller",
+            ))
+    return findings
+
+
 def validate_source_package_manifest(
     manifest_path: Path, package_root: Path
 ) -> tuple[list[ScopeFinding], dict[str, Any]]:
@@ -398,107 +534,31 @@ def validate_source_package_manifest(
     if missing_roles:
         findings.append(finding("source-manifest-required-roles", "source-integrity", "Манифест исходных материалов неполон", "Отсутствуют обязательные роли: " + ", ".join(missing_roles) + ".", artifact, remediation_owner="controller"))
 
-    support_inputs = manifest.get("support_inputs", [])
-    if not isinstance(support_inputs, list):
-        findings.append(finding(
-            "source-manifest-support-inputs-format",
-            "source-integrity",
-            "Некорректен перечень support-материалов",
-            "Поле support_inputs должно быть массивом hash-bound файлов.",
-            artifact,
-            remediation_owner="controller",
-        ))
-    else:
-        seen_support_paths: set[str] = set()
-        for index, entry in enumerate(support_inputs, start=1):
-            if not isinstance(entry, dict):
-                findings.append(finding(
-                    "source-manifest-support-input-invalid",
-                    "source-integrity",
-                    "Строка support-материалов имеет неверный формат",
-                    f"support_inputs[{index}] должен быть объектом.",
-                    artifact,
-                    remediation_owner="controller",
-                ))
-                continue
-            role = str(entry.get("role") or "")
-            raw_path = entry.get("path")
-            if role not in ALLOWED_SUPPORT_ROLES:
-                findings.append(finding(
-                    "source-manifest-support-role",
-                    "source-integrity",
-                    "У support-материала неизвестная роль",
-                    f"support_inputs[{index}].role={role!r}; допустимы: "
-                    + ", ".join(sorted(ALLOWED_SUPPORT_ROLES))
-                    + ".",
-                    artifact,
-                    remediation_owner="controller",
-                ))
-            if not isinstance(raw_path, str) or not raw_path.strip():
-                findings.append(finding(
-                    "source-manifest-support-path",
-                    "source-integrity",
-                    "У support-материала не указан путь",
-                    f"support_inputs[{index}].path должен быть непустой строкой.",
-                    artifact,
-                    remediation_owner="controller",
-                ))
-                continue
-            if APPROVED_CLARIFICATION_FILENAME_RE.search(raw_path.replace("\\", "/")):
-                findings.append(finding(
-                    "source-manifest-scope-clarification",
-                    "source-integrity",
-                    "Утверждённый ответ БА ошибочно добавлен в общий source manifest",
-                    "Scope-local approved clarification должен быть связан только через "
-                    "GAP-* в scope-obligations.json и не должен делать stale другие scope.",
-                    artifact,
-                    remediation_owner="controller",
-                ))
-            if raw_path in seen_support_paths:
-                findings.append(finding(
-                    "source-manifest-support-path-duplicate",
-                    "traceability",
-                    "Support-материал повторяется в манифесте",
-                    f"Повторяется {raw_path}.",
-                    artifact,
-                    remediation_owner="controller",
-                ))
-            seen_support_paths.add(raw_path)
-            try:
-                support_path = package_relative_path(package_root, raw_path, artifact=artifact)
-            except PracticalV09Error as exc:
-                findings.append(finding(
-                    "source-manifest-support-path",
-                    "source-integrity",
-                    "Некорректен путь support-материала",
-                    str(exc),
-                    artifact,
-                    remediation_owner="controller",
-                ))
-                continue
-            if not support_path.is_file():
-                findings.append(finding(
-                    "source-manifest-support-missing",
-                    "source-integrity",
-                    "Support-материал отсутствует",
-                    f"Не найден {raw_path} для роли {role}.",
-                    artifact,
-                    evidence=[raw_path],
-                    remediation_owner="controller",
-                ))
-                continue
-            expected_hash = str(entry.get("sha256") or "")
-            actual_hash = sha256_file(support_path)
-            if expected_hash != actual_hash:
-                findings.append(finding(
-                    "source-manifest-support-hash",
-                    "source-integrity",
-                    "Контрольная сумма support-материала не совпадает",
-                    f"Файл {raw_path} изменён после создания манифеста.",
-                    artifact,
-                    evidence=[f"expected={expected_hash}", f"actual={actual_hash}"],
-                    remediation_owner="controller",
-                ))
+    seen_manifest_paths = {
+        entry["path"]
+        for entry in documents
+        if isinstance(entry, dict) and isinstance(entry.get("path"), str)
+    }
+    findings.extend(validate_manifest_bound_inputs(
+        manifest,
+        package_root,
+        artifact,
+        field="support_inputs",
+        allowed_roles=ALLOWED_SUPPORT_ROLES,
+        input_label="support-материалов",
+        seen_paths=seen_manifest_paths,
+        reject_visual_paths=True,
+    ))
+    findings.extend(validate_manifest_bound_inputs(
+        manifest,
+        package_root,
+        artifact,
+        field="visual_inputs",
+        allowed_roles=ALLOWED_VISUAL_ROLES,
+        input_label="визуальных материалов",
+        seen_paths=seen_manifest_paths,
+        reject_visual_paths=False,
+    ))
 
     notes = manifest.get("agent_notes")
     notes_path = package_root / "AGENT-NOTES.md"

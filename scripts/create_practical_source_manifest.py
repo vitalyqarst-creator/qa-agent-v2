@@ -18,6 +18,7 @@ from test_case_agent.practical_v09 import (
     SOURCE_MANIFEST_RELATIVE_PATH,
     SOURCE_CONTRACT_VERSION,
     PracticalV09Error,
+    is_visual_only_path,
     relative_to_package,
     sha256_file,
     write_json,
@@ -37,6 +38,13 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         action="append",
         default=[],
         help="Stable package support only; do not pass scope-local approved BA clarifications.",
+    )
+    parser.add_argument(
+        "--visual",
+        type=Path,
+        action="append",
+        default=[],
+        help="Visual-only input such as a mockup or Figma index; never a business-rule source.",
     )
     return parser.parse_args(argv)
 
@@ -69,13 +77,22 @@ def main(argv: list[str] | None = None) -> int:
         )
     if output.exists():
         raise PracticalV09Error(f"Refusing to overwrite existing manifest: {output}")
-    for support_path in args.support:
-        relative = relative_to_package(package_root, support_path.resolve())
-        if APPROVED_CLARIFICATION_FILENAME_RE.search(relative):
-            raise PracticalV09Error(
-                "scope-local approved clarification must be bound through the related GAP-* "
-                "in scope-obligations.json, not added to source-package-manifest.json"
-            )
+    input_paths: set[str] = set()
+    for input_kind, paths in (("support", args.support), ("visual", args.visual)):
+        for input_path in paths:
+            relative = relative_to_package(package_root, input_path.resolve())
+            if APPROVED_CLARIFICATION_FILENAME_RE.search(relative):
+                raise PracticalV09Error(
+                    "scope-local approved clarification must be bound through the related GAP-* "
+                    "in scope-obligations.json, not added to source-package-manifest.json"
+                )
+            if input_kind == "support" and is_visual_only_path(relative):
+                raise PracticalV09Error(
+                    "mockups and Figma indexes must be passed through --visual, not --support"
+                )
+            if relative in input_paths:
+                raise PracticalV09Error(f"input is duplicated in manifest: {relative}")
+            input_paths.add(relative)
     payload: dict[str, object] = {
         "schema_version": 1,
         "route_version": ROUTE_VERSION,
@@ -86,6 +103,7 @@ def main(argv: list[str] | None = None) -> int:
             document(package_root, args.xhtml, "main-xhtml"),
         ],
         "support_inputs": [document(package_root, path, "support") for path in args.support],
+        "visual_inputs": [document(package_root, path, "visual-only") for path in args.visual],
     }
     if args.pdf is not None:
         payload["documents"].append(document(package_root, args.pdf, "pdf-cross-check"))

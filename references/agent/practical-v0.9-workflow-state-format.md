@@ -11,7 +11,7 @@
   "matrix_review_required": false,
   "contract_versions": {
     "route": "practical-v0.9",
-    "source_package": "source-package-v1"
+    "source_package": "source-package-v2"
   },
   "artifacts": {
     "source_package_manifest": "work/practical-v0.9/source-package-manifest.json",

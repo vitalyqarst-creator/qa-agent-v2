@@ -9,12 +9,14 @@ from pathlib import Path
 
 from test_case_agent.practical_v09 import (
     ROUTE_VERSION,
+    SOURCE_CONTRACT_VERSION,
     PracticalV09Error,
     build_review_manifest,
     build_validator_report,
     finding,
     matrix_review_required,
     sha256_file,
+    validate_source_package_manifest,
     validate_scope,
     verify_review_result,
     write_json,
@@ -91,7 +93,7 @@ class PracticalV09Fixture:
         source_payload = {
             "schema_version": 1,
             "route_version": ROUTE_VERSION,
-            "source_contract_version": "source-package-v1",
+            "source_contract_version": SOURCE_CONTRACT_VERSION,
             "documents": [
                 {"role": "main-docx", "path": "source/main.docx", "sha256": sha256_file(root / "source" / "main.docx")},
                 {"role": "main-xhtml", "path": "source/main.xhtml", "sha256": sha256_file(root / "source" / "main.xhtml")},
@@ -99,6 +101,7 @@ class PracticalV09Fixture:
             ],
             "agent_notes": {"path": "AGENT-NOTES.md", "sha256": sha256_file(root / "AGENT-NOTES.md")},
             "support_inputs": [],
+            "visual_inputs": [],
         }
         write_json(self.source_manifest, source_payload)
         self.obligations = self.scope_dir / "scope-obligations.json"
@@ -157,7 +160,7 @@ class PracticalV09Fixture:
                 "matrix_review_required": False,
                 "contract_versions": {
                     "route": ROUTE_VERSION,
-                    "source_package": "source-package-v1",
+                    "source_package": SOURCE_CONTRACT_VERSION,
                 },
                 "artifacts": {
                     "source_package_manifest": "work/practical-v0.9/source-package-manifest.json",
@@ -293,6 +296,95 @@ class PracticalV09Tests(unittest.TestCase):
                 {item["role"] for item in created["documents"]},
             )
             self.assertIn("tool_version", created)
+            self.assertEqual([], created["visual_inputs"])
+
+    def test_source_manifest_cli_separates_visual_inputs(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            fixture = PracticalV09Fixture(Path(raw))
+            fixture.source_manifest.unlink()
+            support = fixture.root / "support" / "dictionary.md"
+            visual = fixture.root / "mockups" / "partner-card.png"
+            support.parent.mkdir()
+            visual.parent.mkdir()
+            support.write_text("dictionary", encoding="utf-8")
+            visual.write_bytes(b"png")
+            rejected = subprocess.run(
+                [
+                    sys.executable,
+                    str(REPO_ROOT / "scripts" / "create_practical_source_manifest.py"),
+                    "--ft-package-root", str(fixture.root),
+                    "--docx", str(fixture.root / "source" / "main.docx"),
+                    "--xhtml", str(fixture.root / "source" / "main.xhtml"),
+                    "--support", str(visual),
+                    "--output", str(fixture.source_manifest),
+                ],
+                text=True,
+                capture_output=True,
+                encoding="utf-8",
+                errors="replace",
+            )
+            self.assertNotEqual(0, rejected.returncode)
+            self.assertIn("must be passed through --visual", rejected.stderr)
+            command = [
+                sys.executable,
+                str(REPO_ROOT / "scripts" / "create_practical_source_manifest.py"),
+                "--ft-package-root", str(fixture.root),
+                "--docx", str(fixture.root / "source" / "main.docx"),
+                "--xhtml", str(fixture.root / "source" / "main.xhtml"),
+                "--support", str(support),
+                "--visual", str(visual),
+                "--output", str(fixture.source_manifest),
+            ]
+            completed = subprocess.run(
+                command, text=True, capture_output=True, encoding="utf-8", errors="replace"
+            )
+            self.assertEqual(0, completed.returncode, completed.stderr)
+            created = json.loads(fixture.source_manifest.read_text(encoding="utf-8"))
+            self.assertEqual("support", created["support_inputs"][0]["role"])
+            self.assertEqual("visual-only", created["visual_inputs"][0]["role"])
+
+    def test_validator_rejects_visual_path_inside_support_inputs(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            fixture = PracticalV09Fixture(Path(raw))
+            visual = fixture.root / "mockups" / "partner-card.png"
+            visual.parent.mkdir()
+            visual.write_bytes(b"png")
+            manifest = json.loads(fixture.source_manifest.read_text(encoding="utf-8"))
+            manifest["support_inputs"] = [{
+                "role": "support",
+                "path": "mockups/partner-card.png",
+                "sha256": sha256_file(visual),
+            }]
+            write_json(fixture.source_manifest, manifest)
+            findings, _ = validate_source_package_manifest(fixture.source_manifest, fixture.root)
+            self.assertIn(
+                "source-manifest-visual-input-misclassified",
+                [item.id for item in findings],
+            )
+
+    def test_scope_source_inspector_uses_title_fallback_without_writing_artifacts(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            source = root / "main.xhtml"
+            source.write_text(
+                "<html><body><h2>Карточка партнера</h2><p>Требование</p></body></html>",
+                encoding="utf-8",
+            )
+            command = [
+                sys.executable,
+                str(REPO_ROOT / "scripts" / "inspect_practical_scope_sources.py"),
+                "--section", "9.3.2",
+                "--xhtml", str(source),
+                "--fallback-title", "Карточка партнера",
+            ]
+            completed = subprocess.run(
+                command, text=True, capture_output=True, encoding="utf-8", errors="replace"
+            )
+            self.assertEqual(0, completed.returncode, completed.stderr)
+            inspected = json.loads(completed.stdout)
+            self.assertEqual("xhtml", inspected["sources"][0]["kind"])
+            self.assertEqual(1, len(inspected["sources"][0]["matches"]))
+            self.assertFalse((root / "work").exists())
 
     def test_business_gap_requires_linked_clarification_request(self) -> None:
         with tempfile.TemporaryDirectory() as raw:

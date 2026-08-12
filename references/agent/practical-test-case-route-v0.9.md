@@ -43,8 +43,20 @@
 `ft-source-locator` создаёт `source-package-manifest.json` командой:
 
 ```text
-python scripts/create_practical_source_manifest.py --ft-package-root <package> --docx <docx> --xhtml <xhtml> [--pdf <pdf>] --output work/practical-v0.9/source-package-manifest.json
+python scripts/create_practical_source_manifest.py --ft-package-root <package> --docx <docx> --xhtml <xhtml> [--pdf <pdf>] [--support <stable-support>] [--visual <mockup-or-figma-index>] --output work/practical-v0.9/source-package-manifest.json
 ```
+
+В `support_inputs` включай только стабильные нормативные или справочные материалы. Макеты,
+изображения экранов и Figma-index передавай только через `--visual`: они попадают в
+`visual_inputs` с ролью `visual-only` и не могут стать источником бизнес-правила.
+
+Для первичного извлечения выбранного scope используй штатный read-only helper
+`scripts/inspect_practical_scope_sources.py` с XHTML, DOCX, PDF, section ID и при
+необходимости fallback title. Он не создаёт артефактов в `work/`. Не создавай и не
+итеративно не исправляй source-specific парсер в `work/debug`, пока штатный helper не
+зафиксировал конкретное ограничение. Если для structural cross-check достаточно текста
+PDF, не рендери его; визуальный рендер используй только при существенном для scope
+layout-вопросе.
 
 После утвержденного ответа БА сохрани его в
 `support/<scope>-approved-clarifications.md` и запиши путь с SHA-256 в
