@@ -1955,10 +1955,85 @@ class PracticalV09Tests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as raw:
             fixture = PracticalV09Fixture(
                 Path(raw),
-                obligation_statement="Система проверяет соответствие внутреннему правилу.",
+                obligation_statement="При нажатии «Сохранить» система проверяет соответствие внутреннему правилу.",
             )
             _, findings = validate_scope(package_root=fixture.root, workflow_state_path=fixture.state)
             self.assertIn("matrix-internal-oracle-status", [item.id for item in findings if item.blocking])
+
+    def test_internal_unobservable_status_precedes_missing_setup_data(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            fixture = PracticalV09Fixture(
+                Path(raw),
+                obligation_statement="При нажатии «Сохранить» система проверяет соответствие внутреннему правилу.",
+            )
+            obligations = json.loads(fixture.obligations.read_text(encoding="utf-8"))
+            obligations["execution_setups"].append(
+                {
+                    "id": "SETUP-FIXTURE-001",
+                    "kind": "fixture",
+                    "availability": "needs-test-data",
+                    "evidence": "Подходящий объект для проверки ещё не подготовлен.",
+                }
+            )
+            context = obligations["obligations"][0]["execution_contexts"][0]
+            context["required_setup_kinds"] = ["actor", "fixture"]
+            context["setup_ids"] = ["SETUP-ACTOR-001", "SETUP-FIXTURE-001"]
+            write_json(fixture.obligations, obligations)
+            fixture.matrix.write_text(
+                fixture.matrix.read_text(encoding="utf-8").replace(
+                    "Открывается раздел «Партнеры». | SETUP-ACTOR-001 — пользователь с доступом к модулю. | Positive | High | ready",
+                    "Источник не задаёт наблюдаемый результат внутренней проверки. | "
+                    "SETUP-ACTOR-001 — пользователь с доступом к модулю; "
+                    "SETUP-FIXTURE-001 — объект для проверки не подготовлен. | "
+                    "Positive | High | blocked-observability",
+                ),
+                encoding="utf-8",
+            )
+            _, findings = validate_scope(package_root=fixture.root, workflow_state_path=fixture.state)
+            blocking_ids = [item.id for item in findings if item.blocking]
+            self.assertNotIn("matrix-internal-oracle-status", blocking_ids)
+            self.assertNotIn("matrix-internal-oracle-justification", blocking_ids)
+            self.assertNotIn("matrix-execution-status-prerequisites", blocking_ids)
+
+    def test_internal_unobservable_status_requires_explicit_matrix_justification(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            fixture = PracticalV09Fixture(
+                Path(raw),
+                obligation_statement="При нажатии «Сохранить» система проверяет соответствие внутреннему правилу.",
+            )
+            fixture.matrix.write_text(
+                fixture.matrix.read_text(encoding="utf-8").replace(
+                    "| Positive | High | ready |",
+                    "| Positive | High | blocked-observability |",
+                ),
+                encoding="utf-8",
+            )
+            _, findings = validate_scope(package_root=fixture.root, workflow_state_path=fixture.state)
+            blocking_ids = [item.id for item in findings if item.blocking]
+            self.assertNotIn("matrix-internal-oracle-status", blocking_ids)
+            self.assertIn("matrix-internal-oracle-justification", blocking_ids)
+
+    def test_observable_check_with_missing_setup_data_stays_needs_test_data(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            fixture = PracticalV09Fixture(Path(raw))
+            obligations = json.loads(fixture.obligations.read_text(encoding="utf-8"))
+            obligations["execution_setups"].append(
+                {
+                    "id": "SETUP-FIXTURE-001",
+                    "kind": "fixture",
+                    "availability": "needs-test-data",
+                    "evidence": "Подходящий объект для проверки ещё не подготовлен.",
+                }
+            )
+            context = obligations["obligations"][0]["execution_contexts"][0]
+            context["required_setup_kinds"] = ["actor", "fixture"]
+            context["setup_ids"] = ["SETUP-ACTOR-001", "SETUP-FIXTURE-001"]
+            write_json(fixture.obligations, obligations)
+            _, findings = validate_scope(package_root=fixture.root, workflow_state_path=fixture.state)
+            prerequisite_finding = next(
+                item for item in findings if item.id == "matrix-execution-status-prerequisites"
+            )
+            self.assertIn("ожидается needs-test-data", prerequisite_finding.details)
 
     def test_validator_marks_test_case_writing_phase_stale_after_tc_exists(self) -> None:
         with tempfile.TemporaryDirectory() as raw:

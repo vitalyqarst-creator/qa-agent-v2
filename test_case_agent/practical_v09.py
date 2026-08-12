@@ -18,7 +18,7 @@ from typing import Any, Iterable, Mapping
 
 
 ROUTE_VERSION = "practical-v0.9"
-ROUTE_TOOL_VERSION = "practical-v0.9.13"
+ROUTE_TOOL_VERSION = "practical-v0.9.14"
 WORKFLOW_STATE_SCHEMA_VERSION = 1
 SOURCE_CONTRACT_VERSION = "source-package-v3"
 MATRIX_CONTRACT_VERSION = "practical-matrix-v2"
@@ -168,6 +168,14 @@ INPUT_OR_SELECTION_RE = re.compile(
 NAME_FIELD_RE = re.compile(r"\b(?:наименован|назван)\w*\b", re.IGNORECASE)
 SOURCE_MESSAGE_CUE_RE = re.compile(
     r"\b(?:вывод|отображ|показыв|сообщени|текст|уведомлен|ошибк)\w*\b",
+    re.IGNORECASE,
+)
+INTERNAL_UNOBSERVABILITY_JUSTIFICATION_RE = re.compile(
+    r"(?:\b(?:источник|фт|требовани\w*)\b.{0,120}"
+    r"\b(?:не\s+(?:зада\w*|содерж\w*|определ\w*)|отсутств\w*)\b.{0,120}"
+    r"\b(?:наблюдаем\w*|признак\w*|результат\w*)\b|"
+    r"\b(?:нет|отсутств\w*)\b.{0,120}\b(?:наблюдаем\w*|признак\w*|результат\w*)\b"
+    r".{0,120}\b(?:источник|фт|требовани\w*)\b)",
     re.IGNORECASE,
 )
 CODEX_THREAD_ID_RE = re.compile(
@@ -1861,12 +1869,22 @@ def is_internal_unobservable_statement(statement: str) -> bool:
     presumed absent.
     """
     text = statement.casefold()
-    if not re.search(r"\bсистем\w*\s+провер\w*\b", text):
+    internal_check = re.search(r"\bсистем\w*\s+провер\w*\b", text)
+    if internal_check is None:
         return False
+    # An action before the assertion (for example, «При нажатии Сохранить»)
+    # is not an observable result.  Only a result described after the internal
+    # check can make the source assertion executable.
+    result_clause = text[internal_check.end() :]
     return not re.search(
         r"\b(?:сообщени|текст|ошибк|отображ|показыв|доступ|сохран|закры|откры|переход)\w*\b",
-        text,
+        result_clause,
     )
+
+
+def has_internal_unobservability_justification(expected_result: str) -> bool:
+    """Require an explicit source-backed reason for an unobservable oracle."""
+    return bool(INTERNAL_UNOBSERVABILITY_JUSTIFICATION_RE.search(expected_result))
 
 
 def validate_matrix(
@@ -2002,18 +2020,34 @@ def validate_matrix(
                         artifact,
                         remediation_owner="writer",
                     ))
-            if is_internal_unobservable_statement(str(obligation.get("statement") or "")):
+            source_requires_blocked_observability = is_internal_unobservable_statement(
+                str(obligation.get("statement") or "")
+            )
+            if source_requires_blocked_observability:
                 if execution_status != "blocked-observability":
                     findings.append(finding(
                         "matrix-internal-oracle-status",
                         "execution-readiness",
                         "Ненаблюдаемое внутреннее действие не помечено как blocked-observability",
-                        f"Проверка {matrix_id or '<без ID>'}: для внутреннего действия без source-backed oracle требуется blocked-observability и соответствующая предпосылка SETUP-*.",
+                        f"Проверка {matrix_id or '<без ID>'}: для внутреннего действия без source-backed oracle требуется blocked-observability.",
+                        artifact,
+                        remediation_owner="writer",
+                    ))
+                elif not has_internal_unobservability_justification(expected_result):
+                    findings.append(finding(
+                        "matrix-internal-oracle-justification",
+                        "execution-readiness",
+                        "Ненаблюдаемость внутреннего действия не обоснована в матрице",
+                        f"Проверка {matrix_id or '<без ID>'}: ожидаемый результат должен явно объяснять, что источник не задаёт наблюдаемый признак или результат.",
                         artifact,
                         remediation_owner="writer",
                     ))
             if context is not None:
-                expected_status = derived_execution_status(context, setup_catalog)
+                expected_status = (
+                    "blocked-observability"
+                    if source_requires_blocked_observability
+                    else derived_execution_status(context, setup_catalog)
+                )
                 if execution_status and execution_status != expected_status:
                     findings.append(finding(
                         "matrix-execution-status-prerequisites",
