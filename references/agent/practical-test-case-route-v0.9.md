@@ -170,6 +170,48 @@ python scripts/capture_practical_review_result.py --submission <raw-reviewer-jso
 `blocked-observability` с соответствующей предпосылкой `SETUP-*`; не выдавай
 его за наблюдаемую проверку.
 
+### Явная миграция активного matrix-контракта
+
+Новая схема `practical-matrix-v2` несовместима с прежней matrix: в ней есть
+обязательные `SCN-*` и поля состояния/действия. Если активный scope был
+начат с `practical-matrix-v1`, controller не исправляет его частично и не
+сбрасывает `matrix_revision_count` или `tc_revision_count`.
+
+Сначала он выполняет только read-only план:
+
+```text
+python scripts/migrate_practical_matrix_contract.py --ft-package-root <package> --workflow-state <scope-dir>/workflow-state.json --action plan
+```
+
+После явного разрешения пользователя допустим только такой структурный
+переход:
+
+```text
+python scripts/migrate_practical_matrix_contract.py --ft-package-root <package> --workflow-state <scope-dir>/workflow-state.json --action start --snapshot-dir <scope-dir>/contract-migration-v1-to-v2-snapshot --explicit-user-authorization
+```
+
+Команда сохраняет хешированный snapshot прежних workflow/matrix/TC,
+переводит workflow в `matrix-migration` и фиксирует неизменённые бюджеты. Она
+не изменяет содержательную matrix или TC. Затем writer переводит matrix в
+новую схему, controller отмечает только структурную готовность:
+
+```text
+python scripts/migrate_practical_matrix_contract.py --ft-package-root <package> --workflow-state <scope-dir>/workflow-state.json --action mark-matrix-ready
+```
+
+После чистой валидации и нового независимого matrix review прежние TC ещё не
+являются валидным входом. Writer синхронизирует их с SCN/matrix и existing
+findings в рамках прежнего TC-бюджета; затем controller завершает только
+contract migration:
+
+```text
+python scripts/migrate_practical_matrix_contract.py --ft-package-root <package> --workflow-state <scope-dir>/workflow-state.json --action complete-tc-sync
+```
+
+Лишь после новой scoped validation допустимо final TC review. Второй
+content-verdict той же фазы остаётся blocker: migration не создаёт новый
+repair-loop и не отменяет уже полученные reviewer findings.
+
 ## Scoped validator и блокеры
 
 `validate_practical_scope.py` читает только artifacts, явно связанные из `workflow-state.json`; он не сканирует исторические attempts/sibling scopes и не читает создаваемый report. Finding имеет независимые поля:
@@ -183,4 +225,4 @@ python scripts/capture_practical_review_result.py --submission <raw-reviewer-jso
 
 ## Compatibility
 
-Workflow хранит `route_version`, а validator/report manifests — `tool_version`, contract digest и SHA-256 содержательных входов. Git commit фиксируется в review manifest только для аудита: нерелевантное изменение agent-layer кода не инвалидирует scope, если route/tool contract и content input hashes не изменились. Изменение поведения route требует явного повышения `tool_version` или соответствующей версии контракта.
+Workflow хранит `route_version` и `contract_versions.matrix`, а validator/report manifests — `tool_version`, contract digest и SHA-256 содержательных входов. Git commit фиксируется в review manifest только для аудита: нерелевантное изменение agent-layer кода не инвалидирует scope, если route/tool contract и content input hashes не изменились. Изменение поведения route требует явного повышения `tool_version` или соответствующей версии контракта.

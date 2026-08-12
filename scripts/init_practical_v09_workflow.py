@@ -14,6 +14,7 @@ if str(REPO_ROOT) not in sys.path:
 from test_case_agent.practical_v09 import (
     ROUTE_VERSION,
     SOURCE_CONTRACT_VERSION,
+    MATRIX_CONTRACT_VERSION,
     WORKFLOW_STATE_SCHEMA_VERSION,
     SOURCE_MANIFEST_RELATIVE_PATH,
     PracticalV09Error,
@@ -65,6 +66,7 @@ def main(argv: list[str] | None = None) -> int:
         "contract_versions": {
             "route": ROUTE_VERSION,
             "source_package": SOURCE_CONTRACT_VERSION,
+            "matrix": MATRIX_CONTRACT_VERSION,
         },
         "artifacts": {
             "source_package_manifest": relative_to_package(package_root, source_path),

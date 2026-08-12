@@ -8,6 +8,7 @@ import unittest
 from pathlib import Path
 
 from test_case_agent.practical_v09 import (
+    MATRIX_CONTRACT_VERSION,
     ROUTE_VERSION,
     SOURCE_CONTRACT_VERSION,
     PracticalV09Error,
@@ -197,6 +198,7 @@ class PracticalV09Fixture:
                 "contract_versions": {
                     "route": ROUTE_VERSION,
                     "source_package": SOURCE_CONTRACT_VERSION,
+                    "matrix": MATRIX_CONTRACT_VERSION,
                 },
                 "artifacts": {
                     "source_package_manifest": "work/practical-v0.9/source-package-manifest.json",
@@ -1324,6 +1326,68 @@ class PracticalV09Tests(unittest.TestCase):
             self.assertEqual("changes-required", state["final_verdict"])
             self.assertEqual("test-cases", state["phase"])
 
+    def test_matrix_approval_during_contract_migration_requires_tc_sync(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            fixture = PracticalV09Fixture(Path(raw))
+            state = json.loads(fixture.state.read_text(encoding="utf-8"))
+            state["phase"] = "matrix"
+            state["contract_migration"] = {
+                "status": "matrix-ready",
+                "from_matrix_contract": "practical-matrix-v1",
+                "to_matrix_contract": MATRIX_CONTRACT_VERSION,
+                "authorization": "explicit-user",
+                "snapshot_manifest": "work/practical-v0.9/menu/migration-manifest.json",
+                "canonical_tc_sync_required": True,
+            }
+            write_json(fixture.scope_dir / "migration-manifest.json", {"schema_version": 1})
+            write_json(fixture.state, state)
+            context, findings = validate_scope(
+                package_root=fixture.root, workflow_state_path=fixture.state
+            )
+            write_json(
+                fixture.scope_dir / "validator-report.json",
+                build_validator_report(context, findings),
+            )
+            manifest = build_review_manifest(
+                package_root=fixture.root,
+                workflow_state_path=fixture.state,
+                review_mode="matrix",
+                controller_thread_id="019feebf-3cde-79d2-9f87-ba9c61ff7b13",
+                code_branch="codex/test",
+                code_commit="abc123",
+                contract_digest="contract",
+            )
+            manifest_path = fixture.scope_dir / "matrix-review-manifest.json"
+            write_json(manifest_path, manifest)
+            result_path = fixture.scope_dir / "matrix-review-result.json"
+            write_json(
+                result_path,
+                {
+                    "review_manifest_sha256": sha256_file(manifest_path),
+                    "scope_id": "01",
+                    "scope_slug": "menu",
+                    "review_mode": "matrix",
+                    "execution_surface": "codex-thread",
+                    "reviewer_thread_id": "019feebf-3cde-79d2-9f87-ba9c61ff7b14",
+                    "independent_obligations": independently_derived_obligation(),
+                    "verdict": "approved",
+                    "findings": [],
+                },
+            )
+            command = [
+                sys.executable, str(REPO_ROOT / "scripts" / "finalize_practical_review.py"),
+                "--ft-package-root", str(fixture.root),
+                "--workflow-state", str(fixture.state),
+                "--review-manifest", str(manifest_path),
+                "--review-result", str(result_path),
+            ]
+            completed = subprocess.run(command, text=True, capture_output=True, encoding="utf-8", errors="replace")
+            self.assertEqual(0, completed.returncode, completed.stderr)
+            state = json.loads(fixture.state.read_text(encoding="utf-8"))
+            self.assertEqual("matrix-accepted", state["contract_migration"]["status"])
+            self.assertEqual("test-cases", state["phase"])
+            self.assertIn("Синхронизировать канонические ТК", state["next_action"])
+
     def test_nonblocking_execution_status_correction_does_not_consume_revision(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             fixture = PracticalV09Fixture(Path(raw))
@@ -1405,6 +1469,167 @@ class PracticalV09Tests(unittest.TestCase):
             self.assertNotIn("revision_count", state)
             self.assertEqual(1, state["matrix_revision_count"])
             self.assertEqual(0, state["tc_revision_count"])
+
+    def test_legacy_matrix_contract_requires_explicit_migration(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            fixture = PracticalV09Fixture(Path(raw))
+            legacy_matrix = (
+                "# Матрица тест-дизайна\n\n"
+                "| Проверка | Обязательство ФТ | Контекст исполнения | Проверяемое правило | Ожидаемый результат | Нужные предпосылки | Сценарий | Тип | Приоритет | Статус исполнения | Планируемый TC-ID |\n"
+                "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |\n"
+                "| MTX-001 | OBL-001 | CTX-OPEN-MENU — Открытие раздела из меню | Пункт меню доступен. | Раздел открыт. | SETUP-ACTOR-001. | Открыть раздел. | Positive | High | ready | TC-MENU-001 |\n"
+            )
+            fixture.matrix.write_text(legacy_matrix, encoding="utf-8")
+            state = json.loads(fixture.state.read_text(encoding="utf-8"))
+            state["contract_versions"].pop("matrix")
+            write_json(fixture.state, state)
+
+            _, findings = validate_scope(
+                package_root=fixture.root, workflow_state_path=fixture.state
+            )
+            self.assertIn(
+                "matrix-contract-migration-required",
+                [item.id for item in findings if item.blocking],
+            )
+            self.assertNotIn(
+                "matrix-scenario-id", [item.id for item in findings]
+            )
+
+    def test_v2_matrix_without_legacy_metadata_is_compatible(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            fixture = PracticalV09Fixture(Path(raw))
+            state = json.loads(fixture.state.read_text(encoding="utf-8"))
+            state["contract_versions"].pop("matrix")
+            write_json(fixture.state, state)
+            loaded = load_workflow_state(fixture.state, fixture.root)
+            self.assertEqual(MATRIX_CONTRACT_VERSION, loaded["contract_versions"]["matrix"])
+            _, findings = validate_scope(
+                package_root=fixture.root, workflow_state_path=fixture.state
+            )
+            self.assertNotIn(
+                "matrix-contract-migration-required", [item.id for item in findings]
+            )
+
+    def test_contract_migration_snapshots_legacy_inputs_without_resetting_budgets(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            fixture = PracticalV09Fixture(Path(raw))
+            fixture.matrix.write_text(
+                "# Матрица тест-дизайна\n\n"
+                "| Проверка | Обязательство ФТ | Контекст исполнения | Проверяемое правило | Ожидаемый результат | Нужные предпосылки | Сценарий | Тип | Приоритет | Статус исполнения | Планируемый TC-ID |\n"
+                "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |\n"
+                "| MTX-001 | OBL-001 | CTX-OPEN-MENU — Открытие раздела из меню | Пункт меню доступен. | Раздел открыт. | SETUP-ACTOR-001. | Открыть раздел. | Positive | High | ready | TC-MENU-001 |\n",
+                encoding="utf-8",
+            )
+            state = json.loads(fixture.state.read_text(encoding="utf-8"))
+            state["contract_versions"].pop("matrix")
+            state["matrix_revision_count"] = 1
+            state["tc_revision_count"] = 1
+            write_json(fixture.state, state)
+            original_matrix_hash = sha256_file(fixture.matrix)
+            snapshot_dir = fixture.scope_dir / "contract-migration-v1-to-v2-snapshot"
+            command = [
+                sys.executable,
+                str(REPO_ROOT / "scripts" / "migrate_practical_matrix_contract.py"),
+                "--ft-package-root", str(fixture.root),
+                "--workflow-state", str(fixture.state),
+                "--action", "start",
+                "--snapshot-dir", str(snapshot_dir),
+            ]
+            denied = subprocess.run(command, text=True, capture_output=True, encoding="utf-8", errors="replace")
+            self.assertNotEqual(0, denied.returncode)
+            self.assertFalse(snapshot_dir.exists())
+
+            completed = subprocess.run(
+                [*command, "--explicit-user-authorization"],
+                text=True,
+                capture_output=True,
+                encoding="utf-8",
+                errors="replace",
+            )
+            self.assertEqual(0, completed.returncode, completed.stderr)
+            migrated = json.loads(fixture.state.read_text(encoding="utf-8"))
+            self.assertEqual("matrix-migration", migrated["phase"])
+            self.assertEqual(MATRIX_CONTRACT_VERSION, migrated["contract_versions"]["matrix"])
+            self.assertEqual("active", migrated["contract_migration"]["status"])
+            self.assertEqual(1, migrated["matrix_revision_count"])
+            self.assertEqual(1, migrated["tc_revision_count"])
+            self.assertTrue((snapshot_dir / "migration-manifest.json").is_file())
+            self.assertTrue((snapshot_dir / "test-design-matrix.md").is_file())
+            self.assertEqual(original_matrix_hash, sha256_file(fixture.matrix))
+
+            _, findings = validate_scope(
+                package_root=fixture.root, workflow_state_path=fixture.state
+            )
+            self.assertIn("contract-migration-active", [item.id for item in findings if item.blocking])
+
+    def test_contract_migration_marks_matrix_then_tc_sync_in_order(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            fixture = PracticalV09Fixture(Path(raw))
+            fixture.matrix.write_text(
+                "# Матрица тест-дизайна\n\n"
+                "| Проверка | Обязательство ФТ | Контекст исполнения | Проверяемое правило | Ожидаемый результат | Нужные предпосылки | Сценарий | Тип | Приоритет | Статус исполнения | Планируемый TC-ID |\n"
+                "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |\n"
+                "| MTX-001 | OBL-001 | CTX-OPEN-MENU — Открытие раздела из меню | Пункт меню доступен. | Раздел открыт. | SETUP-ACTOR-001. | Открыть раздел. | Positive | High | ready | TC-MENU-001 |\n",
+                encoding="utf-8",
+            )
+            state = json.loads(fixture.state.read_text(encoding="utf-8"))
+            state["contract_versions"].pop("matrix")
+            write_json(fixture.state, state)
+            migration_script = str(REPO_ROOT / "scripts" / "migrate_practical_matrix_contract.py")
+            snapshot_dir = fixture.scope_dir / "contract-migration-v1-to-v2-snapshot"
+            started = subprocess.run(
+                [
+                    sys.executable, migration_script,
+                    "--ft-package-root", str(fixture.root),
+                    "--workflow-state", str(fixture.state),
+                    "--action", "start", "--snapshot-dir", str(snapshot_dir),
+                    "--explicit-user-authorization",
+                ],
+                text=True, capture_output=True, encoding="utf-8", errors="replace",
+            )
+            self.assertEqual(0, started.returncode, started.stderr)
+            # Restore a valid v2 table without touching the preserved TC.
+            fixture.matrix.write_text(
+                "# Матрица тест-дизайна\n\n"
+                "| Проверка | Идентификатор сценария | Обязательство ФТ | Контекст исполнения | Проверяемое правило | Исходное состояние | Формирование состояния | Проверяемое действие | Ожидаемый результат | Нужные предпосылки | Тип | Приоритет | Статус исполнения | Планируемый TC-ID |\n"
+                "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |\n"
+                "| MTX-001 | SCN-001 | OBL-001 | CTX-OPEN-MENU — Открытие раздела из меню | Пункт меню доступен. | Пользователь вошёл. | Не требуется: состояние задано предусловием. | Открыть раздел. | Раздел открыт. | SETUP-ACTOR-001. | Positive | High | ready | TC-MENU-001 |\n",
+                encoding="utf-8",
+            )
+            ready = subprocess.run(
+                [
+                    sys.executable, migration_script,
+                    "--ft-package-root", str(fixture.root),
+                    "--workflow-state", str(fixture.state),
+                    "--action", "mark-matrix-ready",
+                ],
+                text=True, capture_output=True, encoding="utf-8", errors="replace",
+            )
+            self.assertEqual(0, ready.returncode, ready.stderr)
+            state = json.loads(fixture.state.read_text(encoding="utf-8"))
+            self.assertEqual("matrix-ready", state["contract_migration"]["status"])
+            self.assertEqual("matrix", state["phase"])
+
+            state["contract_migration"]["status"] = "matrix-accepted"
+            state["phase"] = "test-cases"
+            write_json(fixture.state, state)
+            _, findings = validate_scope(package_root=fixture.root, workflow_state_path=fixture.state)
+            self.assertIn("contract-migration-tc-sync-required", [item.id for item in findings if item.blocking])
+
+            completed = subprocess.run(
+                [
+                    sys.executable, migration_script,
+                    "--ft-package-root", str(fixture.root),
+                    "--workflow-state", str(fixture.state),
+                    "--action", "complete-tc-sync",
+                ],
+                text=True, capture_output=True, encoding="utf-8", errors="replace",
+            )
+            self.assertEqual(0, completed.returncode, completed.stderr)
+            state = json.loads(fixture.state.read_text(encoding="utf-8"))
+            self.assertEqual("completed", state["contract_migration"]["status"])
+            self.assertEqual("review", state["phase"])
+            self.assertEqual("not-finalized", state["final_verdict"])
 
     def test_second_tc_content_review_blocks_only_tc_phase(self) -> None:
         with tempfile.TemporaryDirectory() as raw:

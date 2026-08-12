@@ -76,9 +76,22 @@ def main(argv: list[str] | None = None) -> int:
         raise PracticalV09Error("workflow-state.json: reviews must be an array")
     reviews.append(review_entry)
     if result["verdict"] == "approved":
-        state["phase"] = "test-cases" if review_mode == "matrix" else "accepted"
-        state["next_action"] = "Написать тест-кейсы" if review_mode == "matrix" else "Завершить scope"
-        state["final_verdict"] = "not-finalized" if review_mode == "matrix" else "approved"
+        migration = state.get("contract_migration")
+        if (
+            review_mode == "matrix"
+            and isinstance(migration, dict)
+            and migration.get("status") == "matrix-ready"
+        ):
+            migration["status"] = "matrix-accepted"
+            state["phase"] = "test-cases"
+            state["next_action"] = (
+                "Синхронизировать канонические ТК с матрицей после миграции, затем завершить миграцию контракта"
+            )
+            state["final_verdict"] = "not-finalized"
+        else:
+            state["phase"] = "test-cases" if review_mode == "matrix" else "accepted"
+            state["next_action"] = "Написать тест-кейсы" if review_mode == "matrix" else "Завершить scope"
+            state["final_verdict"] = "not-finalized" if review_mode == "matrix" else "approved"
     elif result["verdict"] == "changes-required":
         if review_mode == "test-cases":
             state["final_verdict"] = "changes-required"

@@ -14,13 +14,15 @@ import hashlib
 import json
 from pathlib import Path
 import re
-from typing import Any, Iterable
+from typing import Any, Iterable, Mapping
 
 
 ROUTE_VERSION = "practical-v0.9"
-ROUTE_TOOL_VERSION = "practical-v0.9.12"
+ROUTE_TOOL_VERSION = "practical-v0.9.13"
 WORKFLOW_STATE_SCHEMA_VERSION = 1
 SOURCE_CONTRACT_VERSION = "source-package-v3"
+MATRIX_CONTRACT_VERSION = "practical-matrix-v2"
+LEGACY_MATRIX_CONTRACT_VERSION = "practical-matrix-v1"
 REVIEW_MANIFEST_VERSION = "practical-review-manifest-v2"
 VALIDATOR_REPORT_VERSION = "practical-scope-validator-v2"
 SOURCE_MANIFEST_RELATIVE_PATH = "work/practical-v0.9/source-package-manifest.json"
@@ -119,6 +121,19 @@ MATRIX_REQUIRED_COLUMNS = (
     "Проверяемое действие",
     "Ожидаемый результат",
     "Нужные предпосылки",
+    "Тип",
+    "Приоритет",
+    "Статус исполнения",
+    "Планируемый TC-ID",
+)
+LEGACY_MATRIX_REQUIRED_COLUMNS = (
+    "Проверка",
+    "Обязательство ФТ",
+    "Контекст исполнения",
+    "Проверяемое правило",
+    "Ожидаемый результат",
+    "Нужные предпосылки",
+    "Сценарий",
     "Тип",
     "Приоритет",
     "Статус исполнения",
@@ -441,6 +456,20 @@ def load_workflow_state(path: Path, package_root: Path) -> dict[str, Any]:
             f"{SOURCE_MANIFEST_RELATIVE_PATH}"
         )
     workflow_artifact_path(state, package_root, "scope_obligations", required=True)
+    # The first v2 tool release predates the explicit matrix-version field.
+    # A scope whose actual table already has the v2 header is compatible; add
+    # the missing metadata in-memory, without touching budgets or content.
+    if contract_versions.get("matrix") is None:
+        matrix_path = workflow_artifact_path(state, package_root, "test_design_matrix")
+        if matrix_path is not None and matrix_path.is_file():
+            if matrix_contract_version_from_path(matrix_path) == MATRIX_CONTRACT_VERSION:
+                contract_versions["matrix"] = MATRIX_CONTRACT_VERSION
+    workflow_matrix_contract_version(state)
+    migration = workflow_contract_migration(state)
+    if migration is not None and workflow_matrix_contract_version(state) != MATRIX_CONTRACT_VERSION:
+        raise PracticalV09Error(
+            "workflow-state.json: active contract migration must declare practical-matrix-v2"
+        )
     return state
 
 
@@ -495,6 +524,49 @@ def normalize_final_verdict(state: dict[str, Any]) -> None:
     )
     if not test_case_review_exists and state.get("final_verdict") == "changes-required":
         state["final_verdict"] = "not-finalized"
+
+
+def workflow_matrix_contract_version(state: Mapping[str, Any]) -> str:
+    """Return the declared matrix contract without silently persisting a migration.
+
+    Workflows created before ``practical-matrix-v2`` did not record a matrix
+    contract.  They remain readable as v1, but a controller must explicitly
+    run the contract-migration command before it can use v2-only rules.
+    """
+    versions = state.get("contract_versions")
+    if not isinstance(versions, Mapping):
+        raise PracticalV09Error("workflow-state.json: contract_versions must be an object")
+    declared = versions.get("matrix")
+    if declared is None:
+        return LEGACY_MATRIX_CONTRACT_VERSION
+    if declared not in {LEGACY_MATRIX_CONTRACT_VERSION, MATRIX_CONTRACT_VERSION}:
+        raise PracticalV09Error(
+            "workflow-state.json: contract_versions.matrix has unsupported value"
+        )
+    return str(declared)
+
+
+def workflow_contract_migration(state: Mapping[str, Any]) -> dict[str, Any] | None:
+    """Validate and return an explicit active-scope contract migration record."""
+    raw = state.get("contract_migration")
+    if raw is None:
+        return None
+    if not isinstance(raw, dict):
+        raise PracticalV09Error("workflow-state.json: contract_migration must be an object")
+    status = raw.get("status")
+    if status not in {"active", "matrix-ready", "matrix-accepted", "completed"}:
+        raise PracticalV09Error("workflow-state.json: contract_migration.status has unsupported value")
+    if raw.get("from_matrix_contract") != LEGACY_MATRIX_CONTRACT_VERSION:
+        raise PracticalV09Error("workflow-state.json: contract_migration.from_matrix_contract must be practical-matrix-v1")
+    if raw.get("to_matrix_contract") != MATRIX_CONTRACT_VERSION:
+        raise PracticalV09Error("workflow-state.json: contract_migration.to_matrix_contract must be practical-matrix-v2")
+    if raw.get("authorization") != "explicit-user":
+        raise PracticalV09Error("workflow-state.json: contract migration requires explicit-user authorization")
+    if not isinstance(raw.get("snapshot_manifest"), str) or not raw["snapshot_manifest"]:
+        raise PracticalV09Error("workflow-state.json: contract_migration.snapshot_manifest is required")
+    if not isinstance(raw.get("canonical_tc_sync_required"), bool):
+        raise PracticalV09Error("workflow-state.json: contract_migration.canonical_tc_sync_required must be boolean")
+    return raw
 
 
 def is_visual_only_path(raw_path: str) -> bool:
@@ -1706,6 +1778,34 @@ def validate_scope_obligations(
     return findings, payload
 
 
+def matrix_header(path: Path) -> list[str] | None:
+    """Read the sole human-readable matrix header without interpreting rows."""
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except (OSError, UnicodeDecodeError) as exc:
+        raise PracticalV09Error(f"Cannot read matrix {path}: {exc}") from exc
+    for raw_line in lines:
+        line = raw_line.strip()
+        if not line.startswith("|") or line.count("|") < 3:
+            continue
+        cells = [cell.strip() for cell in line.strip("|").split("|")]
+        if "Проверка" in cells and "Обязательство ФТ" in cells:
+            return cells
+    return None
+
+
+def matrix_contract_version_from_path(path: Path) -> str | None:
+    """Classify a matrix by its declared table schema, never by prose content."""
+    header = matrix_header(path)
+    if header is None:
+        return None
+    if all(column in header for column in MATRIX_REQUIRED_COLUMNS):
+        return MATRIX_CONTRACT_VERSION
+    if all(column in header for column in LEGACY_MATRIX_REQUIRED_COLUMNS):
+        return LEGACY_MATRIX_CONTRACT_VERSION
+    return None
+
+
 def parse_matrix_rows(path: Path) -> tuple[list[dict[str, str]], list[str]]:
     try:
         lines = path.read_text(encoding="utf-8").splitlines()
@@ -2377,6 +2477,7 @@ def validate_workflow_artifact_links(state: dict[str, Any], package_root: Path) 
     required_by_phase = {
         "scope": ("source_package_manifest", "scope_obligations"),
         "matrix": ("source_package_manifest", "scope_obligations", "test_design_matrix"),
+        "matrix-migration": ("source_package_manifest", "scope_obligations", "test_design_matrix"),
         "test-cases": ("source_package_manifest", "scope_obligations", "test_design_matrix"),
         "review": ("source_package_manifest", "scope_obligations", "test_design_matrix", "canonical_test_cases"),
         "accepted": ("source_package_manifest", "scope_obligations", "test_design_matrix", "canonical_test_cases"),
@@ -2424,21 +2525,86 @@ def validate_scope(
     )
     findings.extend(obligation_findings)
 
+    migration = workflow_contract_migration(state)
+    migration_status = str(migration.get("status")) if migration else ""
+    migration_active = migration_status == "active"
+    migration_tc_sync_required = bool(
+        migration
+        and migration.get("canonical_tc_sync_required")
+        and migration_status in {"matrix-accepted", "completed"}
+    )
+    if migration_active:
+        findings.append(finding(
+            "contract-migration-active",
+            "transport",
+            "Scope ожидает завершения явной миграции контракта матрицы",
+            "До создания матрицы в новом контракте practical-matrix-v2 нельзя валидировать или ревьюить прежние matrix/TC. "
+            "Бюджеты matrix_revision_count и tc_revision_count при миграции не сбрасываются.",
+            "workflow-state.json",
+            remediation_owner="controller",
+            blocking=True,
+            blocking_reason="contract-migration-active",
+        ))
+
     matrix_path = workflow_artifact_path(state, package_root, "test_design_matrix")
     matrix_by_scenario: dict[str, dict[str, str]] = {}
     if matrix_path is not None:
-        if matrix_path.is_file():
-            matrix_findings, matrix_by_scenario, _matrix_by_obligation_context = validate_matrix(
-                matrix_path, package_root, obligations
-            )
-            findings.extend(matrix_findings)
+        if migration_active:
+            pass
+        elif matrix_path.is_file():
+            expected_matrix_contract = workflow_matrix_contract_version(state)
+            actual_matrix_contract = matrix_contract_version_from_path(matrix_path)
+            if actual_matrix_contract != expected_matrix_contract:
+                findings.append(finding(
+                    "matrix-contract-schema-mismatch",
+                    "transport",
+                    "Схема матрицы не соответствует версии контракта workflow",
+                    f"Workflow ожидает {expected_matrix_contract}, а таблица имеет "
+                    f"{actual_matrix_contract or 'неизвестную'} схему. Требуется явная миграция контракта, а не частичная правка.",
+                    relative_to_package(package_root, matrix_path),
+                    remediation_owner="controller",
+                    blocking=True,
+                    blocking_reason="matrix-contract-schema-mismatch",
+                ))
+            elif expected_matrix_contract == LEGACY_MATRIX_CONTRACT_VERSION:
+                findings.append(finding(
+                    "matrix-contract-migration-required",
+                    "transport",
+                    "Активный scope использует устаревший контракт матрицы",
+                    "Для перехода к текущему practical route выполните явную миграцию контракта со snapshot и явным разрешением пользователя.",
+                    "workflow-state.json",
+                    remediation_owner="controller",
+                    blocking=True,
+                    blocking_reason="matrix-contract-migration-required",
+                ))
+            else:
+                matrix_findings, matrix_by_scenario, _matrix_by_obligation_context = validate_matrix(
+                    matrix_path, package_root, obligations
+                )
+                findings.extend(matrix_findings)
         else:
             findings.append(finding("matrix-missing", "source-integrity", "Матрица тест-дизайна отсутствует", relative_to_package(package_root, matrix_path), "workflow-state.json", remediation_owner="writer"))
 
     tc_path = workflow_artifact_path(state, package_root, "canonical_test_cases")
     phase_requires_tc = str(state.get("phase") or "") in {"review", "accepted"}
     need_tc = include_test_cases if include_test_cases is not None else (phase_requires_tc or tc_path is not None)
-    if need_tc:
+    if migration_tc_sync_required:
+        findings.append(finding(
+            "contract-migration-tc-sync-required",
+            "transport",
+            "Канонические ТК требуют синхронизации с матрицей после миграции",
+            "Матрица уже принята после миграции, но прежние TC нельзя использовать до отдельной проверяемой синхронизации с новым SCN-контрактом.",
+            "workflow-state.json",
+            remediation_owner="writer",
+            blocking=True,
+            blocking_reason="contract-migration-tc-sync-required",
+        ))
+    elif migration is not None and migration_status in {"active", "matrix-ready", "matrix-accepted"}:
+        # Old TC are snapshot-preserved during a matrix-contract migration.  A
+        # structural matrix review must not accidentally treat them as current
+        # proof before the explicit synchronization transition.
+        pass
+    elif need_tc:
         if tc_path is None:
             findings.append(finding("test-cases-reference-missing", "traceability", "В workflow не указан файл тест-кейсов", "Для этапа тест-кейсов нужна artifacts.canonical_test_cases.", "workflow-state.json", remediation_owner="writer"))
         elif tc_path.is_file():
@@ -2457,7 +2623,7 @@ def validate_scope(
         findings.append(finding("matrix-review-decision-stale", "transport", "Workflow содержит устаревшее решение о matrix review", "; ".join(matrix_reasons) or "Scope не достигает порога обязательного matrix review.", "workflow-state.json", remediation_owner="controller", severity="warning"))
 
     phase = str(state.get("phase") or "")
-    if matrix_required and phase in {"test-cases", "review", "accepted"} and not approved_review_exists(state, "matrix"):
+    if not migration_active and matrix_required and phase in {"test-cases", "review", "accepted"} and not approved_review_exists(state, "matrix"):
         findings.append(finding(
             "matrix-review-required-before-test-cases",
             "review-integrity",
@@ -2508,6 +2674,8 @@ def validate_scope(
         "scope_id": state["scope_id"],
         "scope_slug": state["scope_slug"],
         "phase": state["phase"],
+        "matrix_contract_version": workflow_matrix_contract_version(state),
+        "contract_migration_status": migration_status or "not-required",
         "matrix_review_required": matrix_required,
         "matrix_review_reasons": matrix_reasons,
         "content_input_hashes": content_input_hashes,
