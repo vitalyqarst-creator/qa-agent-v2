@@ -18,7 +18,7 @@ from typing import Any, Iterable
 
 
 ROUTE_VERSION = "practical-v0.9"
-ROUTE_TOOL_VERSION = "practical-v0.9.11"
+ROUTE_TOOL_VERSION = "practical-v0.9.12"
 WORKFLOW_STATE_SCHEMA_VERSION = 1
 SOURCE_CONTRACT_VERSION = "source-package-v3"
 REVIEW_MANIFEST_VERSION = "practical-review-manifest-v2"
@@ -110,12 +110,15 @@ EXECUTION_STATUS_PRECEDENCE = (
 )
 MATRIX_REQUIRED_COLUMNS = (
     "Проверка",
+    "Идентификатор сценария",
     "Обязательство ФТ",
     "Контекст исполнения",
     "Проверяемое правило",
+    "Исходное состояние",
+    "Формирование состояния",
+    "Проверяемое действие",
     "Ожидаемый результат",
     "Нужные предпосылки",
-    "Сценарий",
     "Тип",
     "Приоритет",
     "Статус исполнения",
@@ -126,6 +129,31 @@ TEST_DATA_TAUTOLOGY_PATTERNS = (
     re.compile(r"\bданные,?\s+предусмотренные\s+проверяемым\s+правилом\b", re.IGNORECASE),
     re.compile(r"\bвалидные\s+данные\b", re.IGNORECASE),
     re.compile(r"\bзначение\s+из\s+тестовых\s+данных\b", re.IGNORECASE),
+)
+SCENARIO_ID_RE = re.compile(r"^SCN-[A-Z0-9-]+$")
+MATRIX_STATE_NOT_ACTIONABLE_RE = re.compile(
+    r"\b(?:не\s+требуется|зада[её]тс[яь]\s+предуслов)\b", re.IGNORECASE
+)
+STATE_FORMATION_VERB_RE = re.compile(
+    r"\b(?:ввест|указ|выбр|заполн|остав|очист|измен|прикреп|загруз|созда|откр|найт|перейт)\w*\b",
+    re.IGNORECASE,
+)
+SAVE_OR_CLOSE_ACTION_RE = re.compile(
+    r"\b(?:сохран|отмен|закр|крестик)\w*\b", re.IGNORECASE
+)
+FOLLOW_UP_OBSERVATION_RE = re.compile(
+    r"\b(?:повторн|откр|найт|провер|убед|поиск)\w*\b", re.IGNORECASE
+)
+EMPTY_STATE_RE = re.compile(
+    r"\b(?:не\s+заполня\w*|остав\w*[^.\n]{0,80}\bпуст\w*|очист\w*)\b", re.IGNORECASE
+)
+INPUT_OR_SELECTION_RE = re.compile(
+    r"\b(?:ввест|указ|наб[оа]р|заполн|выбр)\w*\b", re.IGNORECASE
+)
+NAME_FIELD_RE = re.compile(r"\b(?:наименован|назван)\w*\b", re.IGNORECASE)
+SOURCE_MESSAGE_CUE_RE = re.compile(
+    r"\b(?:вывод|отображ|показыв|сообщени|текст|уведомлен|ошибк)\w*\b",
+    re.IGNORECASE,
 )
 CODEX_THREAD_ID_RE = re.compile(
     r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
@@ -1709,18 +1737,55 @@ def parse_matrix_rows(path: Path) -> tuple[list[dict[str, str]], list[str]]:
     return rows, errors
 
 
+def required_message_literals(statement: str) -> list[str]:
+    """Return source-prescribed message text, not ordinary quoted labels.
+
+    A literal is mandatory only when the source frames it as a visible message,
+    text, notification or error.  Quoted field names, dictionary values and
+    button labels must not become an accidental exact-text oracle.
+    """
+    literals: list[str] = []
+    for match in re.finditer(r"«([^»\n]{4,})»", statement):
+        prefix = statement[max(0, match.start() - 180) : match.start()]
+        literal = match.group(1).strip()
+        if literal and SOURCE_MESSAGE_CUE_RE.search(prefix):
+            literals.append(literal)
+    return list(dict.fromkeys(literals))
+
+
+def is_internal_unobservable_statement(statement: str) -> bool:
+    """Identify a source assertion that describes only an internal check.
+
+    This deliberately remains narrow: visible result words exempt the
+    statement, because their observability must be designed rather than
+    presumed absent.
+    """
+    text = statement.casefold()
+    if not re.search(r"\bсистем\w*\s+провер\w*\b", text):
+        return False
+    return not re.search(
+        r"\b(?:сообщени|текст|ошибк|отображ|показыв|доступ|сохран|закры|откры|переход)\w*\b",
+        text,
+    )
+
+
 def validate_matrix(
     matrix_path: Path, package_root: Path, obligations: dict[str, Any]
-) -> tuple[list[ScopeFinding], dict[tuple[str, str], list[dict[str, str]]]]:
+) -> tuple[
+    list[ScopeFinding],
+    dict[str, dict[str, str]],
+    dict[tuple[str, str], list[dict[str, str]]],
+]:
     artifact = relative_to_package(package_root, matrix_path)
     findings: list[ScopeFinding] = []
     try:
         rows, errors = parse_matrix_rows(matrix_path)
     except PracticalV09Error as exc:
-        return [finding("matrix-unreadable", "source-integrity", "Недоступна матрица тест-дизайна", str(exc), artifact, remediation_owner="writer")], {}
+        return [finding("matrix-unreadable", "source-integrity", "Недоступна матрица тест-дизайна", str(exc), artifact, remediation_owner="writer")], {}, {}
     for error in errors:
         findings.append(finding("matrix-format", "format", "Матрица тест-дизайна не соответствует компактному шаблону", error, artifact, remediation_owner="writer", severity="warning"))
     by_obligation_context: dict[tuple[str, str], list[dict[str, str]]] = {}
+    by_scenario: dict[str, dict[str, str]] = {}
     seen_matrix_ids: set[str] = set()
     active_ids = active_obligation_ids(obligations)
     active_entries = {str(item.get("id")): item for item in active_obligations(obligations)}
@@ -1732,6 +1797,7 @@ def validate_matrix(
     }
     for row in rows:
         matrix_id = row.get("Проверка", "")
+        scenario_id = row.get("Идентификатор сценария", "")
         obligation_id = row.get("Обязательство ФТ", "")
         context_id = context_id_from_cell(row.get("Контекст исполнения", ""))
         tc_id = row.get("Планируемый TC-ID", "")
@@ -1740,6 +1806,26 @@ def validate_matrix(
         elif matrix_id in seen_matrix_ids:
             findings.append(finding("matrix-duplicate-id", "traceability", "В матрице повторяется идентификатор проверки", f"Повторяется {matrix_id}.", artifact, remediation_owner="writer"))
         seen_matrix_ids.add(matrix_id)
+        if not SCENARIO_ID_RE.fullmatch(scenario_id):
+            findings.append(finding(
+                "matrix-scenario-id",
+                "traceability",
+                "У строки матрицы нет идентификатора атомарного сценария",
+                f"Проверка {matrix_id or '<без ID>'}: «Идентификатор сценария» должен содержать SCN-*.",
+                artifact,
+                remediation_owner="writer",
+            ))
+        elif scenario_id in by_scenario:
+            findings.append(finding(
+                "matrix-scenario-duplicate",
+                "traceability",
+                "Идентификатор сценария повторяется в матрице",
+                f"Повторяется {scenario_id}.",
+                artifact,
+                remediation_owner="writer",
+            ))
+        else:
+            by_scenario[scenario_id] = row
         if not re.fullmatch(r"TC-[A-Z0-9-]+", tc_id):
             findings.append(finding("matrix-tc-id", "traceability", "У строки матрицы нет планируемого TC-ID", f"Проверка {matrix_id or '<без ID>'} должна иметь TC-*.", artifact, remediation_owner="writer"))
         if not re.fullmatch(r"OBL-[A-Z0-9-]+", obligation_id):
@@ -1767,9 +1853,11 @@ def validate_matrix(
                 ))
         for required_column in (
             "Проверяемое правило",
+            "Исходное состояние",
+            "Формирование состояния",
+            "Проверяемое действие",
             "Ожидаемый результат",
             "Нужные предпосылки",
-            "Сценарий",
             "Тип",
             "Приоритет",
             "Статус исполнения",
@@ -1802,7 +1890,29 @@ def validate_matrix(
                     artifact,
                     remediation_owner="writer",
                 ))
-            else:
+            required_literals = required_message_literals(str(obligation.get("statement") or ""))
+            expected_result = row.get("Ожидаемый результат", "")
+            for literal in required_literals:
+                if literal not in expected_result:
+                    findings.append(finding(
+                        "matrix-source-message-literal",
+                        "semantic-completeness",
+                        "Матрица потеряла дословное сообщение из ФТ",
+                        f"Проверка {matrix_id or '<без ID>'}: ожидаемый результат должен содержать «{literal}».",
+                        artifact,
+                        remediation_owner="writer",
+                    ))
+            if is_internal_unobservable_statement(str(obligation.get("statement") or "")):
+                if execution_status != "blocked-observability":
+                    findings.append(finding(
+                        "matrix-internal-oracle-status",
+                        "execution-readiness",
+                        "Ненаблюдаемое внутреннее действие не помечено как blocked-observability",
+                        f"Проверка {matrix_id or '<без ID>'}: для внутреннего действия без source-backed oracle требуется blocked-observability и соответствующая предпосылка SETUP-*.",
+                        artifact,
+                        remediation_owner="writer",
+                    ))
+            if context is not None:
                 expected_status = derived_execution_status(context, setup_catalog)
                 if execution_status and execution_status != expected_status:
                     findings.append(finding(
@@ -1844,16 +1954,7 @@ def validate_matrix(
                 artifact,
                 remediation_owner="writer",
             ))
-        elif len(mapped) > 1:
-            findings.append(finding(
-                "matrix-obligation-context-duplicated",
-                "traceability",
-                "Контекст обязательства повторно спроектирован в матрице",
-                f"{obligation_id} / {context_id} связан со строками: " + ", ".join(row.get("Проверка", "<без ID>") for row in mapped) + ".",
-                artifact,
-                remediation_owner="writer",
-            ))
-    return findings, {
+    return findings, by_scenario, {
         key: value
         for key, value in by_obligation_context.items()
         if key in expected_pairs
@@ -1889,6 +1990,21 @@ def numbered_steps(value: str) -> list[str]:
     ]
 
 
+def attachment_identity(step: str) -> str | None:
+    """Return a stable attached-file identity when the step declares one."""
+    quoted = re.findall(r"`([^`]+)`", step)
+    if quoted:
+        return quoted[-1].casefold()
+    numbered = re.search(r"\b(\d+)\s*(?:-?й|[- ]?й)?\s+файл", step, re.IGNORECASE)
+    if numbered:
+        return numbered.group(1)
+    if re.search(r"\bперв\w*\s+файл", step, re.IGNORECASE):
+        return "first"
+    if re.search(r"\bвтор\w*\s+файл", step, re.IGNORECASE):
+        return "second"
+    return None
+
+
 def has_complete_single_file_trigger(steps: list[str]) -> bool:
     """Check the minimal observable setup for a one-file upload limit.
 
@@ -1901,16 +2017,160 @@ def has_complete_single_file_trigger(steps: list[str]) -> bool:
         if re.search(r"\b(?:прикрепить|загрузить)\w*\b", step, re.IGNORECASE)
         and re.search(r"\bфайл\w*\b", step, re.IGNORECASE)
     ]
-    if len(file_actions) < 2:
-        return False
-    return any(re.search(r"\bвтор\w*\b", step, re.IGNORECASE) for step in file_actions)
+    for index, initial_action in enumerate(file_actions):
+        if re.search(r"\bпопыт\w*\b", initial_action, re.IGNORECASE):
+            continue
+        initial_identity = attachment_identity(initial_action)
+        for attempted_action in file_actions[index + 1 :]:
+            if not re.search(r"\bпопыт\w*\b", attempted_action, re.IGNORECASE):
+                continue
+            attempted_identity = attachment_identity(attempted_action)
+            if initial_identity and attempted_identity and initial_identity == attempted_identity:
+                continue
+            return True
+    return False
+
+
+def has_nontrivial_state_formation(row: dict[str, str]) -> bool:
+    formation = row.get("Формирование состояния", "").strip()
+    return bool(formation) and not MATRIX_STATE_NOT_ACTIONABLE_RE.search(formation)
+
+
+def has_explicit_follow_up_observation(steps: list[str]) -> bool:
+    action_indexes = [
+        index for index, step in enumerate(steps) if SAVE_OR_CLOSE_ACTION_RE.search(step)
+    ]
+    return any(
+        FOLLOW_UP_OBSERVATION_RE.search(step)
+        for index in action_indexes
+        for step in steps[index + 1 :]
+    )
+
+
+def validate_state_formation_contract(
+    *,
+    tc_id: str,
+    body: str,
+    row: dict[str, str],
+    obligation: dict[str, Any] | None,
+    artifact: str,
+) -> list[ScopeFinding]:
+    """Validate deterministic parts of state → action → observation design.
+
+    The validator deliberately checks only repeatable structural signals.  It
+    does not claim to infer product semantics from prose; that remains the job
+    of the independent reviewer.
+    """
+    findings: list[ScopeFinding] = []
+    steps = numbered_steps(test_case_field(body, "Шаги"))
+    if not steps:
+        findings.append(finding(
+            "test-case-numbered-steps",
+            "execution-readiness",
+            "Шаги тест-кейса должны быть отдельными нумерованными действиями",
+            f"{tc_id}: поле «Шаги» не содержит нумерованного действия.",
+            artifact,
+            remediation_owner="writer",
+        ))
+        return findings
+    if has_nontrivial_state_formation(row):
+        if len(steps) < 2 or not any(STATE_FORMATION_VERB_RE.search(step) for step in steps[:-1]):
+            findings.append(finding(
+                "test-case-state-formation-step",
+                "execution-readiness",
+                "Состояние для проверки не сформировано отдельным шагом",
+                f"{tc_id}: сначала отразите «Формирование состояния» из matrix, затем отдельным шагом выполните проверяемое действие.",
+                artifact,
+                remediation_owner="writer",
+            ))
+    statement = str((obligation or {}).get("statement") or "")
+    expected_result = test_case_field(body, "Итоговый ожидаемый результат")
+    source_literal_required = required_message_literals(statement)
+    for literal in source_literal_required:
+        if literal not in expected_result:
+            findings.append(finding(
+                "test-case-source-message-literal",
+                "semantic-completeness",
+                "Тест-кейс потерял дословное сообщение из ФТ",
+                f"{tc_id}: ожидаемый результат должен содержать «{literal}».",
+                artifact,
+                remediation_owner="writer",
+            ))
+    lowered_statement = statement.casefold()
+    if "dadata" in lowered_statement and re.search(r"\b(?:выбор|выбран|автоматическ)\w*\b", lowered_statement):
+        selection_indexes = [
+            index for index, step in enumerate(steps)
+            if re.search(r"\bвыбр\w*\b", step, re.IGNORECASE)
+        ]
+        if not selection_indexes:
+            findings.append(finding(
+                "test-case-autocomplete-trigger",
+                "execution-readiness",
+                "В тест-кейсе отсутствует выбор подсказки DaData",
+                f"{tc_id}: после ввода поискового значения отдельным шагом выберите подсказку DaData.",
+                artifact,
+                remediation_owner="writer",
+            ))
+        elif not any(
+            INPUT_OR_SELECTION_RE.search(step) and re.search(r"\b(?:ввест|указ|наб[оа]р)\w*\b", step, re.IGNORECASE)
+            for index in selection_indexes
+            for step in steps[:index]
+        ):
+            findings.append(finding(
+                "test-case-autocomplete-trigger",
+                "execution-readiness",
+                "Перед выбором подсказки не сформирован поисковый запрос",
+                f"{tc_id}: добавьте отдельный шаг ввода поискового значения до выбора подсказки.",
+                artifact,
+                remediation_owner="writer",
+            ))
+    if re.search(r"\b(?:одинаков|существующ).*\b(?:наименован|назван)|такой\s+партнер", lowered_statement):
+        save_indexes = [index for index, step in enumerate(steps) if re.search(r"\bсохран\w*\b", step, re.IGNORECASE)]
+        if not save_indexes or not any(
+            INPUT_OR_SELECTION_RE.search(step) and NAME_FIELD_RE.search(step)
+            for index in save_indexes
+            for step in steps[:index]
+        ):
+            findings.append(finding(
+                "test-case-duplicate-trigger",
+                "execution-readiness",
+                "Перед сохранением не сформировано состояние дубля",
+                f"{tc_id}: отдельным шагом укажите существующее наименование до нажатия «Сохранить».",
+                artifact,
+                remediation_owner="writer",
+            ))
+    if "обязательн" in lowered_statement and re.search(r"\b(?:не\s+сохран|ошибк|подсвеч|валидац)\w*", expected_result, re.IGNORECASE):
+        save_indexes = [index for index, step in enumerate(steps) if re.search(r"\bсохран\w*\b", step, re.IGNORECASE)]
+        if save_indexes and not any(
+            EMPTY_STATE_RE.search(step)
+            for index in save_indexes
+            for step in steps[:index]
+        ):
+            findings.append(finding(
+                "test-case-required-empty-trigger",
+                "execution-readiness",
+                "Перед проверкой обязательности не задано пустое значение поля",
+                f"{tc_id}: отдельным шагом оставьте проверяемое поле пустым до нажатия «Сохранить».",
+                artifact,
+                remediation_owner="writer",
+            ))
+    if re.search(r"\bне\s+сохран\w*\b", statement, re.IGNORECASE) and not has_explicit_follow_up_observation(steps):
+        findings.append(finding(
+            "test-case-no-save-observation",
+            "execution-readiness",
+            "Отсутствие сохранения не подтверждено повторным наблюдением",
+            f"{tc_id}: после сохранения, отмены или закрытия добавьте отдельный шаг проверки отсутствия нового объекта или изменений.",
+            artifact,
+            remediation_owner="writer",
+        ))
+    return findings
 
 
 def validate_test_cases(
     tc_path: Path,
     package_root: Path,
     obligations: dict[str, Any],
-    matrix_mapping: dict[tuple[str, str], list[dict[str, str]]],
+    matrix_by_scenario: dict[str, dict[str, str]],
 ) -> list[ScopeFinding]:
     artifact = relative_to_package(package_root, tc_path)
     try:
@@ -1921,7 +2181,12 @@ def validate_test_cases(
     if not blocks:
         return [finding("test-cases-empty", "semantic-completeness", "В файле нет тест-кейсов компактного формата", "Ожидается заголовок уровня ## или ### с TC-*.", artifact, remediation_owner="writer")]
     seen_ids: set[str] = set()
-    covered_contexts: dict[tuple[str, str], list[str]] = {}
+    covered_scenarios: dict[str, list[str]] = {}
+    covered_obligation_contexts: dict[tuple[str, str], list[str]] = {}
+    active_entries = {
+        str(item.get("id")): item
+        for item in active_obligations(obligations)
+    }
     for block in blocks:
         tc_id = block["id"]
         body = block["body"]
@@ -1983,11 +2248,12 @@ def validate_test_cases(
         trace_match = re.search(r"(?m)^\*\*Трассировка:\*\*\s*(.+)$", body)
         trace = trace_match.group(1) if trace_match else ""
         obligation_ids = re.findall(r"\bOBL-[A-Z0-9-]+\b", trace)
+        scenario_ids = re.findall(r"\bSCN-[A-Z0-9-]+\b", trace)
         if len(obligation_ids) != 1:
             findings.append(finding("test-case-obligation-trace", "traceability", "Тест-кейс должен ссылаться ровно на одно обязательство ФТ", f"{tc_id}: в трассировке найдено OBL: {', '.join(obligation_ids) or 'нет'}.", artifact, remediation_owner="writer"))
         else:
             pair = (obligation_ids[0], context_id)
-            covered_contexts.setdefault(pair, []).append(tc_id)
+            covered_obligation_contexts.setdefault(pair, []).append(tc_id)
             if obligation_ids[0] not in active_obligation_ids(obligations):
                 findings.append(finding(
                     "test-case-obligation-superseded",
@@ -1997,50 +2263,92 @@ def validate_test_cases(
                     artifact,
                     remediation_owner="writer",
                 ))
-            mapped_rows = matrix_mapping.get(pair, [])
-            if len(mapped_rows) != 1:
+            if len(scenario_ids) != 1:
                 findings.append(finding(
-                    "test-case-matrix-context-trace",
+                    "test-case-scenario-trace",
                     "traceability",
-                    "Тест-кейс не связан с одной строкой матрицы в том же контексте",
-                    f"{tc_id}: не найдена единственная matrix row для {obligation_ids[0]} / {context_id or '<без CTX>'}.",
+                    "Тест-кейс должен ссылаться ровно на один сценарий матрицы",
+                    f"{tc_id}: в трассировке найдено SCN: {', '.join(scenario_ids) or 'нет'}.",
                     artifact,
                     remediation_owner="writer",
                 ))
-            elif status_match and status_match.group(1) != mapped_rows[0].get("Статус исполнения"):
-                findings.append(finding(
-                    "test-case-execution-status-matrix",
-                    "execution-readiness",
-                    "Статус исполнения тест-кейса отличается от статуса в матрице",
-                    f"{tc_id}: указан {status_match.group(1)}, в матрице {mapped_rows[0].get('Статус исполнения')}.",
-                    artifact,
-                    remediation_owner="writer",
-                ))
+            else:
+                scenario_id = scenario_ids[0]
+                covered_scenarios.setdefault(scenario_id, []).append(tc_id)
+                mapped_row = matrix_by_scenario.get(scenario_id)
+                if mapped_row is None:
+                    findings.append(finding(
+                        "test-case-scenario-unknown",
+                        "traceability",
+                        "Тест-кейс ссылается на отсутствующий сценарий матрицы",
+                        f"{tc_id}: {scenario_id} не найден в test-design-matrix.md.",
+                        artifact,
+                        remediation_owner="writer",
+                    ))
+                else:
+                    mapped_pair = (
+                        mapped_row.get("Обязательство ФТ", ""),
+                        context_id_from_cell(mapped_row.get("Контекст исполнения", "")),
+                    )
+                    if pair != mapped_pair:
+                        findings.append(finding(
+                            "test-case-scenario-context-mismatch",
+                            "traceability",
+                            "Сценарий тест-кейса относится к другой паре обязательства и контекста",
+                            f"{tc_id}: {scenario_id} связан с {mapped_pair[0]} / {mapped_pair[1] or '<без CTX>'}, а не с {pair[0]} / {pair[1] or '<без CTX>'}.",
+                            artifact,
+                            remediation_owner="writer",
+                        ))
+                    if tc_id != mapped_row.get("Планируемый TC-ID", ""):
+                        findings.append(finding(
+                            "test-case-scenario-tc-id-mismatch",
+                            "traceability",
+                            "Фактический TC-ID не совпадает с планом сценария",
+                            f"{tc_id}: {scenario_id} планирует {mapped_row.get('Планируемый TC-ID', '<без TC-ID>')}.",
+                            artifact,
+                            remediation_owner="writer",
+                        ))
+                    if status_match and status_match.group(1) != mapped_row.get("Статус исполнения"):
+                        findings.append(finding(
+                            "test-case-execution-status-matrix",
+                            "execution-readiness",
+                            "Статус исполнения тест-кейса отличается от статуса в матрице",
+                            f"{tc_id}: указан {status_match.group(1)}, в матрице {mapped_row.get('Статус исполнения')}.",
+                            artifact,
+                            remediation_owner="writer",
+                        ))
+                    findings.extend(validate_state_formation_contract(
+                        tc_id=tc_id,
+                        body=body,
+                        row=mapped_row,
+                        obligation=active_entries.get(obligation_ids[0]),
+                        artifact=artifact,
+                    ))
         body_without_metadata = re.sub(r"(?m)^\*\*(Тип|Приоритет|Статус исполнения):\*\*.*$", "", body)
         if re.search(r"\b(source-backed|residual|fixture|blocked-observability)\b", body_without_metadata, flags=re.IGNORECASE):
             findings.append(finding("test-case-process-language", "style", "В тест-кейсе остался служебный английский текст", f"Проверьте пользовательские поля {tc_id}.", artifact, remediation_owner="writer", severity="warning"))
-    for obligation_id, context_id in sorted(matrix_mapping):
-        mapped_tcs = covered_contexts.get((obligation_id, context_id), [])
+    for scenario_id, row in sorted(matrix_by_scenario.items()):
+        mapped_tcs = covered_scenarios.get(scenario_id, [])
         if not mapped_tcs:
             findings.append(finding(
-                "test-case-obligation-context-uncovered",
+                "test-case-scenario-uncovered",
                 "semantic-completeness",
-                "Контекст обязательства матрицы не покрыт тест-кейсом",
-                f"Для {obligation_id} в контексте {context_id} нет TC.",
+                "Сценарий матрицы не покрыт тест-кейсом",
+                f"Для {scenario_id} нет TC.",
                 artifact,
                 remediation_owner="writer",
             ))
         elif len(mapped_tcs) > 1:
             findings.append(finding(
-                "test-case-obligation-context-duplicated",
+                "test-case-scenario-duplicated",
                 "traceability",
-                "Контекст обязательства покрыт несколькими тест-кейсами",
-                f"{obligation_id} / {context_id}: {', '.join(mapped_tcs)}. Для v0.9 это допустимо только после явного разбиения на самостоятельные OBL/CTX.",
+                "Сценарий матрицы покрыт несколькими тест-кейсами",
+                f"{scenario_id}: {', '.join(mapped_tcs)}. Один SCN-* должен иметь ровно один TC.",
                 artifact,
                 remediation_owner="writer",
             ))
     expected_obligations = active_obligation_ids(obligations)
-    unknown = sorted({obligation_id for obligation_id, _ in covered_contexts} - expected_obligations)
+    unknown = sorted({obligation_id for obligation_id, _ in covered_obligation_contexts} - expected_obligations)
     if unknown:
         findings.append(finding("test-case-unknown-obligation", "traceability", "Тест-кейс ссылается на отсутствующее обязательство", ", ".join(unknown), artifact, remediation_owner="writer"))
     return findings
@@ -2117,10 +2425,12 @@ def validate_scope(
     findings.extend(obligation_findings)
 
     matrix_path = workflow_artifact_path(state, package_root, "test_design_matrix")
-    matrix_mapping: dict[tuple[str, str], list[dict[str, str]]] = {}
+    matrix_by_scenario: dict[str, dict[str, str]] = {}
     if matrix_path is not None:
         if matrix_path.is_file():
-            matrix_findings, matrix_mapping = validate_matrix(matrix_path, package_root, obligations)
+            matrix_findings, matrix_by_scenario, _matrix_by_obligation_context = validate_matrix(
+                matrix_path, package_root, obligations
+            )
             findings.extend(matrix_findings)
         else:
             findings.append(finding("matrix-missing", "source-integrity", "Матрица тест-дизайна отсутствует", relative_to_package(package_root, matrix_path), "workflow-state.json", remediation_owner="writer"))
@@ -2132,7 +2442,12 @@ def validate_scope(
         if tc_path is None:
             findings.append(finding("test-cases-reference-missing", "traceability", "В workflow не указан файл тест-кейсов", "Для этапа тест-кейсов нужна artifacts.canonical_test_cases.", "workflow-state.json", remediation_owner="writer"))
         elif tc_path.is_file():
-            findings.extend(validate_test_cases(tc_path, package_root, obligations, matrix_mapping))
+            findings.extend(validate_test_cases(
+                tc_path,
+                package_root,
+                obligations,
+                matrix_by_scenario,
+            ))
         else:
             findings.append(finding("test-cases-missing", "source-integrity", "Файл тест-кейсов отсутствует", relative_to_package(package_root, tc_path), "workflow-state.json", remediation_owner="writer"))
 

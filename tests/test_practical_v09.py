@@ -161,9 +161,9 @@ class PracticalV09Fixture:
         self.matrix = self.scope_dir / "test-design-matrix.md"
         self.matrix.write_text(
             "# Матрица тест-дизайна\n\n"
-            "| Проверка | Обязательство ФТ | Контекст исполнения | Проверяемое правило | Ожидаемый результат | Нужные предпосылки | Сценарий | Тип | Приоритет | Статус исполнения | Планируемый TC-ID |\n"
-            "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |\n"
-            "| MTX-001 | OBL-001 | CTX-OPEN-MENU — Открытие раздела из меню | Пункт меню «Партнеры» доступен пользователю. | Открывается раздел «Партнеры». | SETUP-ACTOR-001 — пользователь с доступом к модулю. | Открытие пункта меню | Positive | High | ready | TC-MENU-001 |\n",
+            "| Проверка | Идентификатор сценария | Обязательство ФТ | Контекст исполнения | Проверяемое правило | Исходное состояние | Формирование состояния | Проверяемое действие | Ожидаемый результат | Нужные предпосылки | Тип | Приоритет | Статус исполнения | Планируемый TC-ID |\n"
+            "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |\n"
+            "| MTX-001 | SCN-001 | OBL-001 | CTX-OPEN-MENU — Открытие раздела из меню | Пункт меню «Партнеры» доступен пользователю. | Пользователь вошёл в систему. | Не требуется: состояние задано предусловием. | Открыть пункт меню «Партнеры». | Открывается раздел «Партнеры». | SETUP-ACTOR-001 — пользователь с доступом к модулю. | Positive | High | ready | TC-MENU-001 |\n",
             encoding="utf-8",
         )
         self.tc = root / "test-cases" / "9.1-menu.md"
@@ -175,11 +175,11 @@ class PracticalV09Fixture:
             "**Приоритет:** High\n"
             "**Статус исполнения:** ready\n"
             "**Контекст исполнения:** `CTX-OPEN-MENU` — открытие раздела из меню.\n"
-            "**Трассировка:** `OBL-001`; Раздел 9.1.\n"
+            "**Трассировка:** `OBL-001`; `SCN-001`; Раздел 9.1.\n"
             "**Цель:** Проверить открытие раздела «Партнеры».\n"
             "**Предусловия:** Пользователь вошел в систему.\n"
             "**Тестовые данные:** Не требуются.\n"
-            "**Шаги:** Открыть раздел «Партнеры».\n"
+            "**Шаги:**\n1. Открыть раздел «Партнеры».\n"
             "**Итоговый ожидаемый результат:** Открывается раздел «Партнеры».\n",
             encoding="utf-8",
         )
@@ -589,8 +589,8 @@ class PracticalV09Tests(unittest.TestCase):
             write_json(fixture.obligations, obligations)
             fixture.matrix.write_text(
                 "# Матрица тест-дизайна\n\n"
-                "| Проверка | Обязательство ФТ | Контекст исполнения | Проверяемое правило | Ожидаемый результат | Нужные предпосылки | Сценарий | Тип | Приоритет | Статус исполнения | Планируемый TC-ID |\n"
-                "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |\n",
+                "| Проверка | Идентификатор сценария | Обязательство ФТ | Контекст исполнения | Проверяемое правило | Исходное состояние | Формирование состояния | Проверяемое действие | Ожидаемый результат | Нужные предпосылки | Тип | Приоритет | Статус исполнения | Планируемый TC-ID |\n"
+                "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |\n",
                 encoding="utf-8",
             )
             state = json.loads(fixture.state.read_text(encoding="utf-8"))
@@ -603,7 +603,7 @@ class PracticalV09Tests(unittest.TestCase):
 
             fixture.matrix.write_text(
                 fixture.matrix.read_text(encoding="utf-8")
-                + "| MTX-001 | OBL-001 | CTX-OPEN-MENU | Проверка поля | Поле доступно. | SETUP-ACTOR-001 | Проверка поля | Positive | High | ready | TC-MENU-001 |\n",
+                + "| MTX-001 | SCN-001 | OBL-001 | CTX-OPEN-MENU | Проверка поля | Форма открыта. | Не требуется: состояние задано предусловием. | Проверить поле. | Поле доступно. | SETUP-ACTOR-001 | Positive | High | ready | TC-MENU-001 |\n",
                 encoding="utf-8",
             )
             _, findings = validate_scope(package_root=fixture.root, workflow_state_path=fixture.state)
@@ -1479,7 +1479,7 @@ class PracticalV09Tests(unittest.TestCase):
             broken = fixture.tc.read_text(encoding="utf-8")
             broken = broken.replace("Открытие раздела «Партнеры»", "В поле можно прикрепить не более одного файла")
             broken = broken.replace(
-                "**Шаги:** Открыть раздел «Партнеры».",
+                "**Шаги:**\n1. Открыть раздел «Партнеры».",
                 "**Шаги:**\n1. Открыть форму.\n2. Попытаться прикрепить второй допустимый файл.",
             )
             fixture.tc.write_text(broken, encoding="utf-8")
@@ -1493,6 +1493,247 @@ class PracticalV09Tests(unittest.TestCase):
             fixture.tc.write_text(fixed, encoding="utf-8")
             _, findings = validate_scope(package_root=fixture.root, workflow_state_path=fixture.state)
             self.assertNotIn("test-case-upload-cardinality-trigger", [item.id for item in findings if item.blocking])
+
+            without_ordinals = fixed.replace(
+                "Прикрепить первый допустимый файл.",
+                "Прикрепить файл `решение-1.pdf`.",
+            ).replace(
+                "Попытаться прикрепить второй допустимый файл.",
+                "Попытаться прикрепить файл `решение-2.pdf`.",
+            )
+            fixture.tc.write_text(without_ordinals, encoding="utf-8")
+            _, findings = validate_scope(package_root=fixture.root, workflow_state_path=fixture.state)
+            self.assertNotIn("test-case-upload-cardinality-trigger", [item.id for item in findings if item.blocking])
+
+    def test_matrix_allows_independent_boundary_scenarios_for_one_obligation_context(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            fixture = PracticalV09Fixture(Path(raw))
+            fixture.matrix.write_text(
+                fixture.matrix.read_text(encoding="utf-8")
+                + "| MTX-002 | SCN-002 | OBL-001 | CTX-OPEN-MENU — Открытие раздела из меню | Пункт меню «Партнеры» доступен пользователю. | Пользователь вошёл в систему. | Не требуется: состояние задано предусловием. | Открыть пункт меню «Партнеры» с граничным значением. | Открывается раздел «Партнеры» для граничного значения. | SETUP-ACTOR-001 — пользователь с доступом к модулю. | Positive | High | ready | TC-MENU-002 |\n",
+                encoding="utf-8",
+            )
+            fixture.tc.write_text(
+                fixture.tc.read_text(encoding="utf-8")
+                + "\n## TC-MENU-002\n"
+                "**Название:** Открытие раздела «Партнеры» с граничным значением\n"
+                "**Тип:** Positive\n"
+                "**Приоритет:** High\n"
+                "**Статус исполнения:** ready\n"
+                "**Контекст исполнения:** `CTX-OPEN-MENU` — открытие раздела из меню.\n"
+                "**Трассировка:** `OBL-001`; `SCN-002`; Раздел 9.1.\n"
+                "**Цель:** Проверить открытие раздела с граничным значением.\n"
+                "**Предусловия:** Пользователь вошел в систему.\n"
+                "**Тестовые данные:** Граничное значение из предусловий.\n"
+                "**Шаги:**\n1. Открыть раздел «Партнеры» с граничным значением.\n"
+                "**Итоговый ожидаемый результат:** Открывается раздел «Партнеры» для граничного значения.\n",
+                encoding="utf-8",
+            )
+            _, findings = validate_scope(package_root=fixture.root, workflow_state_path=fixture.state)
+            finding_ids = [item.id for item in findings if item.blocking]
+            self.assertNotIn("matrix-obligation-context-duplicated", finding_ids)
+            self.assertNotIn("test-case-scenario-uncovered", finding_ids)
+            self.assertNotIn("test-case-scenario-duplicated", finding_ids)
+
+    def test_validator_requires_source_message_literal_in_matrix_and_tc(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            fixture = PracticalV09Fixture(
+                Path(raw),
+                obligation_statement=(
+                    "При ошибке система выводит текст «Документ не загружен: формат не поддерживается»."
+                ),
+            )
+            _, findings = validate_scope(package_root=fixture.root, workflow_state_path=fixture.state)
+            finding_ids = [item.id for item in findings if item.blocking]
+            self.assertIn("matrix-source-message-literal", finding_ids)
+            self.assertIn("test-case-source-message-literal", finding_ids)
+
+            literal = "Документ не загружен: формат не поддерживается"
+            fixture.matrix.write_text(
+                fixture.matrix.read_text(encoding="utf-8").replace(
+                    "Открывается раздел «Партнеры».",
+                    f"Отображается текст «{literal}».",
+                ),
+                encoding="utf-8",
+            )
+            fixture.tc.write_text(
+                fixture.tc.read_text(encoding="utf-8").replace(
+                    "Открывается раздел «Партнеры».",
+                    f"Отображается текст «{literal}».",
+                ),
+                encoding="utf-8",
+            )
+            _, findings = validate_scope(package_root=fixture.root, workflow_state_path=fixture.state)
+            finding_ids = [item.id for item in findings if item.blocking]
+            self.assertNotIn("matrix-source-message-literal", finding_ids)
+            self.assertNotIn("test-case-source-message-literal", finding_ids)
+
+    def test_validator_requires_state_formation_and_follow_up_observation(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            fixture = PracticalV09Fixture(
+                Path(raw),
+                obligation_statement="При нажатии «Отменить» система не сохраняет данные.",
+            )
+            fixture.matrix.write_text(
+                fixture.matrix.read_text(encoding="utf-8").replace(
+                    "Не требуется: состояние задано предусловием.",
+                    "Внести несохранённое изменение в поле «Наименование».",
+                ).replace(
+                    "Открыть пункт меню «Партнеры».",
+                    "Нажать «Отменить».",
+                ),
+                encoding="utf-8",
+            )
+            fixture.tc.write_text(
+                fixture.tc.read_text(encoding="utf-8").replace(
+                    "1. Открыть раздел «Партнеры».",
+                    "1. Нажать «Отменить».",
+                ),
+                encoding="utf-8",
+            )
+            _, findings = validate_scope(package_root=fixture.root, workflow_state_path=fixture.state)
+            finding_ids = [item.id for item in findings if item.blocking]
+            self.assertIn("test-case-state-formation-step", finding_ids)
+            self.assertIn("test-case-no-save-observation", finding_ids)
+
+            fixture.tc.write_text(
+                fixture.tc.read_text(encoding="utf-8").replace(
+                    "1. Нажать «Отменить».",
+                    "1. Внести несохранённое изменение в поле «Наименование».\n"
+                    "2. Нажать «Отменить».\n"
+                    "3. Повторно открыть карточку и проверить отсутствие изменения.",
+                ),
+                encoding="utf-8",
+            )
+            _, findings = validate_scope(package_root=fixture.root, workflow_state_path=fixture.state)
+            finding_ids = [item.id for item in findings if item.blocking]
+            self.assertNotIn("test-case-state-formation-step", finding_ids)
+            self.assertNotIn("test-case-no-save-observation", finding_ids)
+
+    def test_validator_requires_search_and_duplicate_trigger_steps(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            fixture = PracticalV09Fixture(
+                Path(raw),
+                obligation_statement=(
+                    "При выборе организации из DaData система автоматически заполняет наименование."
+                ),
+            )
+            fixture.matrix.write_text(
+                fixture.matrix.read_text(encoding="utf-8").replace(
+                    "Не требуется: состояние задано предусловием.",
+                    "Ввести поисковый запрос для получения подсказки DaData.",
+                ).replace(
+                    "Открыть пункт меню «Партнеры».",
+                    "Выбрать подсказку DaData.",
+                ),
+                encoding="utf-8",
+            )
+            fixture.tc.write_text(
+                fixture.tc.read_text(encoding="utf-8").replace(
+                    "1. Открыть раздел «Партнеры».",
+                    "1. Выбрать подсказку DaData.",
+                ),
+                encoding="utf-8",
+            )
+            _, findings = validate_scope(package_root=fixture.root, workflow_state_path=fixture.state)
+            self.assertIn("test-case-autocomplete-trigger", [item.id for item in findings if item.blocking])
+
+            fixture.tc.write_text(
+                fixture.tc.read_text(encoding="utf-8").replace(
+                    "1. Выбрать подсказку DaData.",
+                    "1. Ввести поисковый запрос DaData.\n2. Выбрать подсказку DaData.",
+                ),
+                encoding="utf-8",
+            )
+            _, findings = validate_scope(package_root=fixture.root, workflow_state_path=fixture.state)
+            self.assertNotIn("test-case-autocomplete-trigger", [item.id for item in findings if item.blocking])
+
+            fixture = PracticalV09Fixture(
+                Path(raw) / "duplicate",
+                obligation_statement=(
+                    "При сохранении система проверяет, что нет двух одинаковых названий партнеров."
+                ),
+            )
+            fixture.matrix.write_text(
+                fixture.matrix.read_text(encoding="utf-8").replace(
+                    "Не требуется: состояние задано предусловием.",
+                    "Ввести наименование существующего партнера.",
+                ).replace(
+                    "Открыть пункт меню «Партнеры».",
+                    "Нажать «Сохранить».",
+                ),
+                encoding="utf-8",
+            )
+            fixture.tc.write_text(
+                fixture.tc.read_text(encoding="utf-8").replace(
+                    "1. Открыть раздел «Партнеры».",
+                    "1. Нажать «Сохранить».",
+                ),
+                encoding="utf-8",
+            )
+            _, findings = validate_scope(package_root=fixture.root, workflow_state_path=fixture.state)
+            self.assertIn("test-case-duplicate-trigger", [item.id for item in findings if item.blocking])
+
+            fixture.tc.write_text(
+                fixture.tc.read_text(encoding="utf-8").replace(
+                    "1. Нажать «Сохранить».",
+                    "1. Ввести наименование существующего партнера.\n2. Нажать «Сохранить».",
+                ),
+                encoding="utf-8",
+            )
+            _, findings = validate_scope(package_root=fixture.root, workflow_state_path=fixture.state)
+            self.assertNotIn("test-case-duplicate-trigger", [item.id for item in findings if item.blocking])
+
+    def test_validator_requires_empty_value_before_required_field_validation(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            fixture = PracticalV09Fixture(
+                Path(raw),
+                obligation_statement="Поле «Наименование» обязательно для заполнения.",
+            )
+            fixture.matrix.write_text(
+                fixture.matrix.read_text(encoding="utf-8").replace(
+                    "Не требуется: состояние задано предусловием.",
+                    "Оставить поле «Наименование» пустым.",
+                ).replace(
+                    "Открыть пункт меню «Партнеры».",
+                    "Нажать «Сохранить».",
+                ).replace(
+                    "Открывается раздел «Партнеры».",
+                    "Карточка не сохраняется, поле подсвечено ошибкой.",
+                ),
+                encoding="utf-8",
+            )
+            fixture.tc.write_text(
+                fixture.tc.read_text(encoding="utf-8").replace(
+                    "1. Открыть раздел «Партнеры».",
+                    "1. Нажать «Сохранить».",
+                ).replace(
+                    "Открывается раздел «Партнеры».",
+                    "Карточка не сохраняется, поле подсвечено ошибкой.",
+                ),
+                encoding="utf-8",
+            )
+            _, findings = validate_scope(package_root=fixture.root, workflow_state_path=fixture.state)
+            self.assertIn("test-case-required-empty-trigger", [item.id for item in findings if item.blocking])
+
+            fixture.tc.write_text(
+                fixture.tc.read_text(encoding="utf-8").replace(
+                    "1. Нажать «Сохранить».",
+                    "1. Оставить поле «Наименование» пустым.\n2. Нажать «Сохранить».",
+                ),
+                encoding="utf-8",
+            )
+            _, findings = validate_scope(package_root=fixture.root, workflow_state_path=fixture.state)
+            self.assertNotIn("test-case-required-empty-trigger", [item.id for item in findings if item.blocking])
+
+    def test_validator_marks_source_only_internal_check_as_blocked_observability(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            fixture = PracticalV09Fixture(
+                Path(raw),
+                obligation_statement="Система проверяет соответствие внутреннему правилу.",
+            )
+            _, findings = validate_scope(package_root=fixture.root, workflow_state_path=fixture.state)
+            self.assertIn("matrix-internal-oracle-status", [item.id for item in findings if item.blocking])
 
     def test_validator_marks_test_case_writing_phase_stale_after_tc_exists(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
