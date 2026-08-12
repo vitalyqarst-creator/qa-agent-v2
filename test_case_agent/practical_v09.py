@@ -57,6 +57,7 @@ REQUIRED_TC_FIELDS = (
     "Название",
     "Тип",
     "Приоритет",
+    "package_id",
     "Статус исполнения",
     "Контекст исполнения",
     "Трассировка",
@@ -2369,6 +2370,16 @@ def validate_test_cases(
         for field in REQUIRED_TC_FIELDS:
             if not re.search(rf"(?m)^\*\*{re.escape(field)}:\*\*\s*\S", body):
                 findings.append(finding("test-case-required-field", "execution-readiness", "В тест-кейсе отсутствует обязательное поле", f"{tc_id}: отсутствует «{field}».", artifact, remediation_owner="writer"))
+        package_id = test_case_field(body, "package_id")
+        if package_id and not re.fullmatch(r"WP-\d{2,}", package_id):
+            findings.append(finding(
+                "test-case-package-id",
+                "traceability",
+                "В тест-кейсе указан недопустимый package_id",
+                f"{tc_id}: package_id должен иметь вид WP-01.",
+                artifact,
+                remediation_owner="writer",
+            ))
         test_data = test_case_field(body, "Тестовые данные")
         if any(pattern.search(test_data) for pattern in TEST_DATA_TAUTOLOGY_PATTERNS):
             findings.append(finding(

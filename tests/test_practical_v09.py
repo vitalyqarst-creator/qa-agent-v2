@@ -177,6 +177,7 @@ class PracticalV09Fixture:
             "**Название:** Открытие раздела «Партнеры»\n"
             "**Тип:** Positive\n"
             "**Приоритет:** High\n"
+            "**package_id:** WP-01\n"
             "**Статус исполнения:** ready\n"
             "**Контекст исполнения:** `CTX-OPEN-MENU` — открытие раздела из меню.\n"
             "**Трассировка:** `OBL-001`; `SCN-001`; Раздел 9.1.\n"
@@ -1824,6 +1825,30 @@ class PracticalV09Tests(unittest.TestCase):
             self.assertIn("matrix-meta-state-description", finding_ids)
             self.assertIn("test-case-test-data-tautology", finding_ids)
             self.assertIn("test-case-meta-state-step", finding_ids)
+
+    def test_validator_requires_valid_package_id(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            fixture = PracticalV09Fixture(Path(raw))
+            fixture.tc.write_text(
+                fixture.tc.read_text(encoding="utf-8").replace(
+                    "**package_id:** WP-01", "**package_id:** package-menu"
+                ),
+                encoding="utf-8",
+            )
+            _, findings = validate_scope(package_root=fixture.root, workflow_state_path=fixture.state)
+            self.assertIn("test-case-package-id", [item.id for item in findings if item.blocking])
+
+    def test_validator_requires_package_id(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            fixture = PracticalV09Fixture(Path(raw))
+            fixture.tc.write_text(
+                fixture.tc.read_text(encoding="utf-8").replace(
+                    "**package_id:** WP-01\n", ""
+                ),
+                encoding="utf-8",
+            )
+            _, findings = validate_scope(package_root=fixture.root, workflow_state_path=fixture.state)
+            self.assertIn("test-case-required-field", [item.id for item in findings if item.blocking])
 
     def test_validator_rejects_only_mixed_create_edit_title(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
