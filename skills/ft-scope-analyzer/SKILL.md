@@ -16,11 +16,14 @@ In a new v0.9 scope analysis:
 - confirm external scope boundaries by FT section/subsection;
 - create one `scope-obligations.json` under
   `fts/<domain>/<ft>/work/practical-v0.9/<scope-slug>/` with one `OBL-*` per
-  independent source assertion;
+  independent source assertion; split one autofill action into one `OBL-*` per
+  target field and split autofill from manual edit/input of the same field;
 - record all unknowns in `clarifications`; if a product decision is needed,
   create the linked `scope-clarification-requests.md` in the same directory;
 - compare the section heading with the nearest tables/assertions and record a
   non-blocking `source-terminology-discrepancy` when they name different objects;
+  do not ask БА merely to normalize a heading if the normative content already
+  identifies one object and one set of functions;
 - use DOCX/XHTML/PDF to verify the native source anchor. A parsing limitation
   is not evidence that the source code or statement is absent;
 - run only `validate_practical_obligations.py` before matrix creation and report

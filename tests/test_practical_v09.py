@@ -34,6 +34,42 @@ def independently_derived_obligation(obligation_id: str = "OBL-001") -> list[dic
     ]
 
 
+def clarification_card(
+    *,
+    clarification_id: str = "CLR-001",
+    gap_id: str = "GAP-001",
+    scope_slug: str = "menu",
+    related_obligation_ids: str = "OBL-001",
+) -> str:
+    fields = {
+        "clarification_id": clarification_id,
+        "gap_id": gap_id,
+        "request_kind": "ba-business-ambiguity",
+        "scope_slug": scope_slug,
+        "requirement_codes": "-",
+        "related_ft_reference": "Раздел 9.1, строка «Партнеры»",
+        "related_obligation_ids": related_obligation_ids,
+        "source_quote": "Пункт доступен пользователю.",
+        "question": "Какое условие доступности применяется?",
+        "needed_for": "Полное покрытие требования.",
+        "blocking": "no",
+        "requested_from": "analyst",
+        "authority": "analyst",
+        "user_response": "-",
+        "response_status": "unanswered",
+        "response_type": "not-provided",
+        "updated_at": "-",
+    }
+    yaml_body = "\n".join(
+        f"{key}: {json.dumps(value, ensure_ascii=False)}" for key, value in fields.items()
+    )
+    return (
+        "## Запросы на уточнение\n\n"
+        f"### {clarification_id} — {gap_id}\n\n"
+        f"```yaml\n{yaml_body}\n```\n"
+    )
+
+
 class PracticalV09Fixture:
     def __init__(self, root: Path, *, obligation_statement: str = "Пункт меню «Партнеры» доступен пользователю.") -> None:
         self.root = root
@@ -271,9 +307,7 @@ class PracticalV09Tests(unittest.TestCase):
             )
 
             (fixture.scope_dir / "scope-clarification-requests.md").write_text(
-                "## Clarification Requests\n\n"
-                "### CLR-001 — GAP-001\n\n"
-                "Вопрос к БА.\n",
+                clarification_card(),
                 encoding="utf-8",
             )
             _, findings = validate_scope(package_root=fixture.root, workflow_state_path=fixture.state)
@@ -284,6 +318,54 @@ class PracticalV09Tests(unittest.TestCase):
             self.assertNotIn(
                 "scope-clarification-request-link",
                 [item.id for item in findings],
+            )
+
+    def test_clarification_card_requires_strict_yaml_and_all_fields(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            fixture = PracticalV09Fixture(Path(raw))
+            obligations = json.loads(fixture.obligations.read_text(encoding="utf-8"))
+            obligations["clarifications"] = [
+                {
+                    "id": "GAP-001",
+                    "gap_type": "ba-business-ambiguity",
+                    "source_anchor": "XHTML, раздел 9.1, строка «Партнеры»",
+                    "source_statement": "Пункт доступен пользователю.",
+                    "description": "Не определено условие доступности.",
+                    "impact": "non-blocking",
+                    "affected_obligation_ids": ["OBL-001"],
+                    "question_to_analyst": "Какое условие доступности применяется?",
+                    "requires_business_answer": True,
+                    "clarification_id": "CLR-001",
+                    "temporary_handling": "Не задавать условие доступа до ответа.",
+                    "status": "open",
+                }
+            ]
+            write_json(fixture.obligations, obligations)
+            card_path = fixture.scope_dir / "scope-clarification-requests.md"
+            card_path.write_text(clarification_card(), encoding="utf-8")
+
+            _, findings = validate_scope(package_root=fixture.root, workflow_state_path=fixture.state)
+            self.assertNotIn("scope-clarification-request-yaml", [item.id for item in findings])
+            self.assertNotIn("scope-clarification-request-fields", [item.id for item in findings])
+
+            card_path.write_text(
+                clarification_card().replace('requirement_codes: "-"', "requirement_codes: -"),
+                encoding="utf-8",
+            )
+            _, findings = validate_scope(package_root=fixture.root, workflow_state_path=fixture.state)
+            self.assertIn(
+                "scope-clarification-request-yaml",
+                [item.id for item in findings if item.blocking],
+            )
+
+            card_path.write_text(
+                clarification_card().replace('user_response: "-"\n', ""),
+                encoding="utf-8",
+            )
+            _, findings = validate_scope(package_root=fixture.root, workflow_state_path=fixture.state)
+            self.assertIn(
+                "scope-clarification-request-fields",
+                [item.id for item in findings if item.blocking],
             )
 
     def test_resolved_gap_requires_hash_bound_approved_clarification(self) -> None:
@@ -314,7 +396,7 @@ class PracticalV09Tests(unittest.TestCase):
             ]
             write_json(fixture.obligations, obligations)
             (fixture.scope_dir / "scope-clarification-requests.md").write_text(
-                "### CLR-001 — GAP-001\n\nОтвет БА.\n",
+                clarification_card(),
                 encoding="utf-8",
             )
 
@@ -377,6 +459,8 @@ class PracticalV09Tests(unittest.TestCase):
             self.assertIn("validate_practical_obligations.py", content)
         self.assertIn("practical route v0.9", analyzer)
         self.assertIn("v0.8 instructions below are legacy-only", analyzer)
+        self.assertIn("автозаполняет несколько полей", scope_format)
+        self.assertIn("Не создавай `CLR-*` только из-за различия заголовка", scope_format)
 
     def test_style_warning_is_visible_but_not_blocking(self) -> None:
         with tempfile.TemporaryDirectory() as raw:

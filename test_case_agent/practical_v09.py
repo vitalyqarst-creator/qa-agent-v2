@@ -85,6 +85,43 @@ CODEX_THREAD_ID_RE = re.compile(
     r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
     flags=re.IGNORECASE,
 )
+CLARIFICATION_CARD_HEADER_RE = re.compile(
+    r"(?m)^###\s+(?P<clarification_id>CLR-[A-Z0-9-]+)\s+[—-]\s+(?P<gap_id>GAP-[A-Z0-9-]+)\s*$"
+)
+CLARIFICATION_REQUEST_REQUIRED_FIELDS = (
+    "clarification_id",
+    "gap_id",
+    "request_kind",
+    "scope_slug",
+    "requirement_codes",
+    "related_ft_reference",
+    "related_obligation_ids",
+    "source_quote",
+    "question",
+    "needed_for",
+    "blocking",
+    "requested_from",
+    "authority",
+    "user_response",
+    "response_status",
+    "response_type",
+    "updated_at",
+)
+CLARIFICATION_REQUEST_ENUMS = {
+    "request_kind": {"ba-business-ambiguity"},
+    "blocking": {"yes", "no"},
+    "requested_from": {"user", "analyst", "product-owner", "developer", "unknown"},
+    "authority": {"user", "analyst", "product-owner"},
+    "response_status": {"unanswered", "answered", "superseded", "rejected"},
+    "response_type": {
+        "not-provided",
+        "working-assumption",
+        "user-confirmed",
+        "analyst-confirmed",
+        "product-confirmed",
+        "rejected",
+    },
+}
 
 
 @dataclass(frozen=True)
@@ -421,6 +458,62 @@ def clarification_requires_business_request(entry: dict[str, Any]) -> bool:
     return bool(str(entry.get("question_to_analyst") or "").strip())
 
 
+def parse_clarification_request_cards(
+    content: str,
+) -> tuple[dict[tuple[str, str], dict[str, str]], list[str]]:
+    """Parse the deliberately narrow YAML profile used in CLR cards.
+
+    Full YAML parsing would introduce a runtime dependency for one small,
+    flat, user-facing record.  The canonical profile instead requires a flat
+    map whose values are double-quoted YAML/JSON scalars.  This is valid YAML,
+    handles punctuation in Russian prose, and is deterministic to validate
+    with the standard library.
+    """
+    headers = list(CLARIFICATION_CARD_HEADER_RE.finditer(content))
+    cards: dict[tuple[str, str], dict[str, str]] = {}
+    errors: list[str] = []
+    for index, header in enumerate(headers, start=1):
+        card_end = headers[index].start() if index < len(headers) else len(content)
+        body = content[header.end() : card_end]
+        clarification_id = header.group("clarification_id")
+        gap_id = header.group("gap_id")
+        card_key = (clarification_id, gap_id)
+        if card_key in cards:
+            errors.append(f"повторяется карточка «{clarification_id} — {gap_id}»")
+            continue
+        fence = re.search(r"(?ms)^```yaml\s*\n(?P<payload>.*?)^```\s*$", body)
+        if fence is None:
+            errors.append(f"карточка «{clarification_id} — {gap_id}» не содержит YAML-блок")
+            continue
+        data: dict[str, str] = {}
+        card_errors: list[str] = []
+        for line_number, raw_line in enumerate(fence.group("payload").splitlines(), start=1):
+            line = raw_line.strip()
+            if not line:
+                continue
+            match = re.fullmatch(r"(?P<key>[a-z_]+):\s*(?P<value>\"(?:\\\\.|[^\"\\\\])*\")", line)
+            if match is None:
+                card_errors.append(
+                    f"строка {line_number}: ожидается ключ и значение в двойных кавычках"
+                )
+                continue
+            key = match.group("key")
+            if key in data:
+                card_errors.append(f"повторяется поле {key}")
+                continue
+            try:
+                data[key] = str(json.loads(match.group("value")))
+            except json.JSONDecodeError:
+                card_errors.append(f"некорректная строка YAML для {key}")
+        if card_errors:
+            details = "; ".join(card_errors[:3])
+            suffix = "; …" if len(card_errors) > 3 else ""
+            errors.append(f"карточка «{clarification_id} — {gap_id}»: {details}{suffix}")
+        else:
+            cards[card_key] = data
+    return cards, errors
+
+
 def validate_scope_clarifications(
     *,
     payload: dict[str, Any],
@@ -444,7 +537,33 @@ def validate_scope_clarifications(
     findings: list[ScopeFinding] = []
     seen_gap_ids: set[str] = set()
     requests_path = clarification_requests_path(obligations_path)
+    request_cards: dict[tuple[str, str], dict[str, str]] | None = None
     requests_text: str | None = None
+
+    if requests_path.is_file():
+        try:
+            requests_text = requests_path.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError) as exc:
+            findings.append(finding(
+                "scope-clarification-request-unreadable",
+                "source-integrity",
+                "Не удалось прочитать файл вопросов к БА",
+                str(exc),
+                relative_to_package(package_root, requests_path),
+                remediation_owner="scope-analyzer",
+            ))
+            request_cards = {}
+        else:
+            request_cards, parse_errors = parse_clarification_request_cards(requests_text)
+            for error in parse_errors:
+                findings.append(finding(
+                    "scope-clarification-request-yaml",
+                    "source-integrity",
+                    "Карточка вопроса БА не соответствует машиночитаемому YAML-профилю",
+                    error,
+                    relative_to_package(package_root, requests_path),
+                    remediation_owner="scope-analyzer",
+                ))
 
     for index, entry in enumerate(clarifications, start=1):
         if not isinstance(entry, dict):
@@ -562,10 +681,16 @@ def validate_scope_clarifications(
                     remediation_owner="scope-analyzer",
                 ))
             else:
-                if requests_text is None:
-                    requests_text = requests_path.read_text(encoding="utf-8")
-                marker = rf"(?m)^###\s+{re.escape(clarification_id)}\s+[—-]\s+{re.escape(gap_id)}\b"
-                if clarification_id and not re.search(marker, requests_text):
+                card = (request_cards or {}).get((clarification_id, gap_id))
+                header_exists = bool(
+                    clarification_id
+                    and requests_text
+                    and re.search(
+                        rf"(?m)^###\s+{re.escape(clarification_id)}\s+[—-]\s+{re.escape(gap_id)}\b",
+                        requests_text,
+                    )
+                )
+                if clarification_id and card is None and not header_exists:
                     findings.append(finding(
                         "scope-clarification-request-link",
                         "traceability",
@@ -574,6 +699,55 @@ def validate_scope_clarifications(
                         relative_to_package(package_root, requests_path),
                         remediation_owner="scope-analyzer",
                     ))
+                elif card is not None:
+                    missing_fields = [
+                        field for field in CLARIFICATION_REQUEST_REQUIRED_FIELDS
+                        if not card.get(field, "").strip()
+                    ]
+                    if missing_fields:
+                        findings.append(finding(
+                            "scope-clarification-request-fields",
+                            "semantic-completeness",
+                            "В карточке вопроса БА отсутствуют обязательные поля",
+                            f"{clarification_id} — {gap_id}: " + ", ".join(missing_fields) + ".",
+                            relative_to_package(package_root, requests_path),
+                            remediation_owner="scope-analyzer",
+                        ))
+                    expected_scope_slug = str((payload.get("scope") or {}).get("slug") or "")
+                    mismatches: list[str] = []
+                    for field, expected in (
+                        ("clarification_id", clarification_id),
+                        ("gap_id", gap_id),
+                        ("request_kind", "ba-business-ambiguity"),
+                        ("scope_slug", expected_scope_slug),
+                    ):
+                        if expected and card.get(field) != expected:
+                            mismatches.append(f"{field}={card.get(field)!r}, ожидается {expected!r}")
+                    related_obligation_ids = {
+                        value.strip()
+                        for value in card.get("related_obligation_ids", "").split(";")
+                        if value.strip()
+                    }
+                    missing_related = sorted(set(affected) - related_obligation_ids)
+                    if missing_related:
+                        mismatches.append(
+                            "related_obligation_ids не содержит " + ", ".join(missing_related)
+                        )
+                    for field, allowed_values in CLARIFICATION_REQUEST_ENUMS.items():
+                        value = card.get(field, "")
+                        if value and value not in allowed_values:
+                            mismatches.append(
+                                f"{field}={value!r} не входит в допустимый перечень"
+                            )
+                    if mismatches:
+                        findings.append(finding(
+                            "scope-clarification-request-binding",
+                            "traceability",
+                            "Карточка вопроса БА не согласована с реестром gaps",
+                            f"{clarification_id} — {gap_id}: " + "; ".join(mismatches) + ".",
+                            relative_to_package(package_root, requests_path),
+                            remediation_owner="scope-analyzer",
+                        ))
 
         if status == "resolved":
             resolution = str(entry.get("resolution") or "")

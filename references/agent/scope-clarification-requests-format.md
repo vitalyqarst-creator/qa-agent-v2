@@ -76,8 +76,8 @@ run. В source registry его всегда регистрируют с `role = 
 
 - `## Контекст`
 - `## Как Заполнять`
-- `## Clarification Requests`
-- `## Gaps Without Requests`
+- `## Запросы на уточнение`
+- `## Пробелы без запросов`
 - `## Правила Использования Ответов`
 
 ## Обязательные поля записи
@@ -142,6 +142,19 @@ Production-ready semantics разрешено строить только из �
 `product-owner/product-confirmed`. `working-assumption`, `rejected`,
 `superseded`, `unanswered` и `not-provided` не являются утверждённым evidence.
 
+## Машиночитаемый YAML-профиль
+
+Каждая карточка `CLR-*` содержит ровно один YAML-блок с плоским набором
+обязательных полей. Все значения в этом блоке записывай двойными кавычками;
+это сохраняет валидность YAML при двоеточиях, кавычках и пунктуации в русской
+прозе и позволяет детерминированному валидатору прочитать карточку без внешней
+зависимости. Одиночное значение «нет данных» также записывай как `"-"`, а не
+как некавыченный `-`.
+
+Если нужны несколько источников, объедини короткие цитаты одной строкой в
+поле `source_quote`, разделив их точкой с запятой внутри кавычек. Не используй
+в карточке свободные списки, вложенные YAML-объекты или block scalar.
+
 ## Использование утвержденного ответа в practical-v0.9
 
 После получения ответа агент не подменяет им ФТ и не помечает gap закрытым
@@ -193,27 +206,28 @@ Production-ready semantics разрешено строить только из �
 - Если ответ заменен более новым, агент установит старой карточке `response_status = superseded` и добавит новую карточку с тем же `gap_id`.
 - Если вопрос содержит нумерованные подпункты, ответьте по каждому подпункту отдельно; если по подпункту нет подтвержденной информации, напишите это явно.
 
-## Clarification Requests
+## Запросы на уточнение
 
 ### CLR-001 — GAP-001
 
 ```yaml
-clarification_id: CLR-001
-gap_id: GAP-001
-request_kind: ba-business-ambiguity
-scope_slug: application-search
-requirement_codes: GSR 1
-related_ft_reference: GSR 1, поле ..., ATOM-001
-related_obligation_ids: OBL-001
-source_quote: GSR 1. Поле должно заполняться после сохранения.
-question: Какое точное значение получает поле после сохранения?
-needed_for: Полное покрытие GSR 1
-blocking: no
-requested_from: user
-authority: user
-response_status: unanswered
-response_type: not-provided
-updated_at: -
+clarification_id: "CLR-001"
+gap_id: "GAP-001"
+request_kind: "ba-business-ambiguity"
+scope_slug: "application-search"
+requirement_codes: "GSR 1"
+related_ft_reference: "GSR 1, поле ..., ATOM-001"
+related_obligation_ids: "OBL-001"
+source_quote: "GSR 1. Поле должно заполняться после сохранения."
+question: "Какое точное значение получает поле после сохранения?"
+needed_for: "Полное покрытие GSR 1"
+blocking: "no"
+requested_from: "user"
+authority: "user"
+user_response: "-"
+response_status: "unanswered"
+response_type: "not-provided"
+updated_at: "-"
 ```
 
 **Текст из ФТ:** GSR 1. Поле должно заполняться после сохранения.
@@ -228,7 +242,7 @@ updated_at: -
 -
 ```
 
-## Gaps Without Requests
+## Пробелы без запросов
 
 | gap_id | related_ft_reference | reason |
 | --- | --- | --- |
