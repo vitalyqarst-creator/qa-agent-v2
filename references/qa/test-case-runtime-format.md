@@ -42,6 +42,11 @@
   `needs-future-clarification`. Формулировка `Не требуется; ...` допустима,
   если продолжение только фиксирует уже доступное evidence и не объявляет новую
   неполученную зависимость.
+- `needs-test-data` означает недоступный внешний ресурс: актор, объект,
+  исходный статус, интеграционный ответ или файл. Он не означает, что автор
+  ещё не выбрал значения. Сначала используй конкретные literals из ФТ,
+  support, справочника или сохранённого fixture; если набора нет, опиши его
+  точные свойства и способ подготовки.
 - Используй ровно одно поле статуса: `**Статус исполнения:**`. Не добавляй
   синонимы `Статус oracle` или `Статус тест-кейса`: вид остаточной зависимости
   раскрывается русским текстом в `Требуется подтверждение`.
@@ -59,6 +64,11 @@
 - Production runtime files must not embed internal diagnostic/design sections (`Artifact Write Strategy`, source inventory/normalization, TDDT, applicability matrix, ledger, coverage obligations, Writer Quality Gate); keep them in `fts/**/work/**`, `evals/**`, or diagnostic reports.
 - Все исполнимые разделы production `TC-*`, включая `Постусловия`, не должны содержать служебные маркеры агентного процесса (`runtime receipt`, `manifest digest`, `hash-bound`, `fixture-blocked`, `source-backed`, `writer`, `reviewer`, `runner`). Переводи их в конкретные действия, данные и наблюдаемые результаты; служебную квалификацию храни только в work/review artifacts.
 - В шагах описывай действие пользователя, а не внутреннюю реализацию.
+- Не используй мета-шаги вроде «Сформировать исходное состояние», «Выполнить
+  подготовку состояния» или «Подготовить данные для проверяемого правила».
+  Каждый шаг подготовки должен назвать экран/карточку, элемент, действие и
+  конкретное значение; внешний недоступный набор фиксируй в предусловиях и
+  статусе исполнения.
 - Expected result должен быть наблюдаемым: visible UI state, accepted/rejected value, saved/not saved state, navigation blocked/opened, generated document, message, API/log artifact only if source explicitly allows it.
 - Separate business state from observable evidence. A source status such as
   `Подтвержден`, `Скрыт`, `active`, `archived`, `approved` or `hidden` may be

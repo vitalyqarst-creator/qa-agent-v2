@@ -1792,6 +1792,69 @@ class PracticalV09Tests(unittest.TestCase):
             _, findings = validate_scope(package_root=fixture.root, workflow_state_path=fixture.state)
             self.assertIn("test-case-test-data-tautology", [item.id for item in findings if item.blocking])
 
+    def test_validator_rejects_circular_data_and_meta_state_steps(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            fixture = PracticalV09Fixture(Path(raw))
+            fixture.matrix.write_text(
+                fixture.matrix.read_text(encoding="utf-8")
+                .replace(
+                    "Не требуется: состояние задано предусловием.",
+                    "Доступны указанные предпосылки; подготовлена строка запроса.",
+                )
+                .replace(
+                    "Открыть пункт меню «Партнеры».",
+                    "Открыть пункт меню «Партнеры» и подготовить данные для проверяемого правила.",
+                ),
+                encoding="utf-8",
+            )
+            fixture.tc.write_text(
+                fixture.tc.read_text(encoding="utf-8")
+                .replace(
+                    "**Тестовые данные:** Не требуются.",
+                    "**Тестовые данные:** Подготовлена строка запроса; параметры, указанные в тестовых данных.",
+                )
+                .replace(
+                    "1. Открыть раздел «Партнеры».",
+                    "1. Сформировать исходное состояние.\n2. Открыть раздел «Партнеры».",
+                ),
+                encoding="utf-8",
+            )
+            _, findings = validate_scope(package_root=fixture.root, workflow_state_path=fixture.state)
+            finding_ids = [item.id for item in findings if item.blocking]
+            self.assertIn("matrix-meta-state-description", finding_ids)
+            self.assertIn("test-case-test-data-tautology", finding_ids)
+            self.assertIn("test-case-meta-state-step", finding_ids)
+
+    def test_validator_rejects_only_mixed_create_edit_title(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            fixture = PracticalV09Fixture(Path(raw))
+            obligations = json.loads(fixture.obligations.read_text(encoding="utf-8"))
+            obligations["obligations"][0]["execution_contexts"][0]["id"] = "CTX-CREATE"
+            write_json(fixture.obligations, obligations)
+            fixture.matrix.write_text(
+                fixture.matrix.read_text(encoding="utf-8").replace("CTX-OPEN-MENU", "CTX-CREATE"),
+                encoding="utf-8",
+            )
+            fixture.tc.write_text(
+                fixture.tc.read_text(encoding="utf-8").replace("CTX-OPEN-MENU", "CTX-CREATE").replace(
+                    "**Название:** Открытие раздела «Партнеры»",
+                    "**Название:** При создании и редактировании открывается раздел «Партнеры».",
+                ),
+                encoding="utf-8",
+            )
+            _, findings = validate_scope(package_root=fixture.root, workflow_state_path=fixture.state)
+            self.assertIn("test-case-title-context-mismatch", [item.id for item in findings if item.blocking])
+
+            fixture.tc.write_text(
+                fixture.tc.read_text(encoding="utf-8").replace(
+                    "**Название:** При создании и редактировании открывается раздел «Партнеры».",
+                    "**Название:** При создании поле доступно для редактирования.",
+                ),
+                encoding="utf-8",
+            )
+            _, findings = validate_scope(package_root=fixture.root, workflow_state_path=fixture.state)
+            self.assertNotIn("test-case-title-context-mismatch", [item.id for item in findings if item.blocking])
+
     def test_validator_requires_separate_first_file_upload_for_cardinality(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             fixture = PracticalV09Fixture(Path(raw))

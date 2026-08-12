@@ -147,6 +147,25 @@ TEST_DATA_TAUTOLOGY_PATTERNS = (
     re.compile(r"\bданные,?\s+предусмотренные\s+проверяемым\s+правилом\b", re.IGNORECASE),
     re.compile(r"\bвалидные\s+данные\b", re.IGNORECASE),
     re.compile(r"\bзначение\s+из\s+тестовых\s+данных\b", re.IGNORECASE),
+    re.compile(r"\bподготовлена?\s+строка\s+запроса\b", re.IGNORECASE),
+    re.compile(r"\bпараметр\w*\s*,?\s+указанн\w*\s+в\s+тестовых\s+данных\b", re.IGNORECASE),
+    re.compile(r"\bподготовить\s+данные\s+для\s+проверяемого\s+правила\b", re.IGNORECASE),
+)
+MATRIX_META_STATE_PATTERNS = (
+    re.compile(r"\bдоступны\s+указанные\s+предпосылки\b", re.IGNORECASE),
+    re.compile(r"\bподготовлена?\s+строка\s+запроса\b", re.IGNORECASE),
+    re.compile(r"\bподготовить\s+данные\s+для\s+проверяемого\s+правила\b", re.IGNORECASE),
+    re.compile(r"\bвнести\s+только\s+изменение\s*,?\s+требуем\w*\s+проверяемым\s+правилом\b", re.IGNORECASE),
+)
+META_STATE_STEP_PATTERNS = (
+    re.compile(r"\bсформировать\s+исходное\s+состояние\b", re.IGNORECASE),
+    re.compile(r"\bвыполнить\s+подготовку\s+состояния\b", re.IGNORECASE),
+    re.compile(r"\bподготовить\s+данные\s+для\s+проверяемого\s+правила\b", re.IGNORECASE),
+    re.compile(r"\bвнести\s+только\s+изменение\s*,?\s+требуем\w*\s+проверяемым\s+правилом\b", re.IGNORECASE),
+)
+MIXED_CREATE_EDIT_TITLE_RE = re.compile(
+    r"\bсоздани\w*\b[^.]{0,48}\b(?:и|или)\b[^.]{0,48}\bредактир\w*\b",
+    re.IGNORECASE,
 )
 SCENARIO_ID_RE = re.compile(r"^SCN-[A-Z0-9-]+$")
 MATRIX_STATE_NOT_ACTIONABLE_RE = re.compile(
@@ -1991,6 +2010,17 @@ def validate_matrix(
         ):
             if not row.get(required_column, "").strip():
                 findings.append(finding("matrix-required-cell", "semantic-completeness", "В строке матрицы не заполнено обязательное поле", f"Проверка {matrix_id or '<без ID>'}: отсутствует «{required_column}».", artifact, remediation_owner="writer"))
+        for column in ("Исходное состояние", "Формирование состояния", "Проверяемое действие"):
+            value = row.get(column, "")
+            if any(pattern.search(value) for pattern in MATRIX_META_STATE_PATTERNS):
+                findings.append(finding(
+                    "matrix-meta-state-description",
+                    "execution-readiness",
+                    "Матрица содержит служебное описание состояния вместо исполнимого действия или данных",
+                    f"Проверка {matrix_id or '<без ID>'}: в колонке «{column}» укажите конкретное действие пользователя, поле и значение либо точный fixture и способ подготовки.",
+                    artifact,
+                    remediation_owner="writer",
+                ))
         execution_status = row.get("Статус исполнения", "").strip()
         if execution_status and execution_status not in ALLOWED_EXECUTION_STATUSES:
             findings.append(finding(
@@ -2350,6 +2380,16 @@ def validate_test_cases(
                 remediation_owner="writer",
             ))
         steps_value = test_case_field(body, "Шаги")
+        for step in numbered_steps(steps_value):
+            if any(pattern.search(step) for pattern in META_STATE_STEP_PATTERNS):
+                findings.append(finding(
+                    "test-case-meta-state-step",
+                    "execution-readiness",
+                    "Шаг тест-кейса описывает служебную подготовку вместо действия пользователя",
+                    f"{tc_id}: замените «{step}» конкретным действием с экраном, полем и значением либо перенесите недоступный fixture в предпосылки.",
+                    artifact,
+                    remediation_owner="writer",
+                ))
         single_file_limit = re.search(
             r"\b(?:не\s+более\s+одн\w*\s+файл\w*|втор\w*\s+файл\w*)\b",
             body,
@@ -2382,6 +2422,25 @@ def validate_test_cases(
                 "execution-readiness",
                 "Тест-кейс не связан ровно с одним контекстом исполнения",
                 f"{tc_id}: поле «Контекст исполнения» должно содержать один CTX-*.",
+                artifact,
+                remediation_owner="writer",
+            ))
+        title = test_case_field(body, "Название").casefold()
+        if context_id.endswith("CREATE") and MIXED_CREATE_EDIT_TITLE_RE.search(title):
+            findings.append(finding(
+                "test-case-title-context-mismatch",
+                "semantic-completeness",
+                "Название тест-кейса смешивает создание и редактирование",
+                f"{tc_id}: контекст {context_id} относится к созданию; уберите из названия редактирование и вынесите его в отдельный TC контекста CTX-EDIT.",
+                artifact,
+                remediation_owner="writer",
+            ))
+        if context_id.endswith("EDIT") and MIXED_CREATE_EDIT_TITLE_RE.search(title):
+            findings.append(finding(
+                "test-case-title-context-mismatch",
+                "semantic-completeness",
+                "Название тест-кейса смешивает создание и редактирование",
+                f"{tc_id}: контекст {context_id} относится к редактированию; уберите из названия создание и вынесите его в отдельный TC контекста CTX-CREATE.",
                 artifact,
                 remediation_owner="writer",
             ))
