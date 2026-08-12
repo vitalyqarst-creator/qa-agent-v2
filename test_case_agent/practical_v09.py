@@ -18,11 +18,11 @@ from typing import Any, Iterable
 
 
 ROUTE_VERSION = "practical-v0.9"
-ROUTE_TOOL_VERSION = "practical-v0.9.7"
+ROUTE_TOOL_VERSION = "practical-v0.9.8"
 WORKFLOW_STATE_SCHEMA_VERSION = 1
 SOURCE_CONTRACT_VERSION = "source-package-v3"
-REVIEW_MANIFEST_VERSION = "practical-review-manifest-v1"
-VALIDATOR_REPORT_VERSION = "practical-scope-validator-v1"
+REVIEW_MANIFEST_VERSION = "practical-review-manifest-v2"
+VALIDATOR_REPORT_VERSION = "practical-scope-validator-v2"
 SOURCE_MANIFEST_RELATIVE_PATH = "work/practical-v0.9/source-package-manifest.json"
 CLARIFICATION_REQUESTS_FILENAME = "scope-clarification-requests.md"
 CLARIFICATION_REQUEST_SECTION_HEADINGS = (
@@ -56,6 +56,7 @@ REQUIRED_TC_FIELDS = (
     "Тип",
     "Приоритет",
     "Статус исполнения",
+    "Контекст исполнения",
     "Трассировка",
     "Цель",
     "Предусловия",
@@ -92,6 +93,34 @@ ALLOWED_EXECUTION_STATUSES = {
     "blocked-observability",
     "needs-future-clarification",
 }
+ALLOWED_EXECUTION_SETUP_KINDS = {
+    "actor",
+    "fixture",
+    "integration",
+    "initial-state",
+    "environment",
+    "navigation",
+}
+ALLOWED_EXECUTION_SETUP_AVAILABILITY = {"provided", *ALLOWED_EXECUTION_STATUSES}
+EXECUTION_STATUS_PRECEDENCE = (
+    "needs-future-clarification",
+    "blocked-observability",
+    "candidate-ui-calibration",
+    "needs-test-data",
+)
+MATRIX_REQUIRED_COLUMNS = (
+    "Проверка",
+    "Обязательство ФТ",
+    "Контекст исполнения",
+    "Проверяемое правило",
+    "Ожидаемый результат",
+    "Нужные предпосылки",
+    "Сценарий",
+    "Тип",
+    "Приоритет",
+    "Статус исполнения",
+    "Планируемый TC-ID",
+)
 ALLOWED_FINAL_VERDICTS = {"not-finalized", "approved", "changes-required", "blocked-input"}
 CODEX_THREAD_ID_RE = re.compile(
     r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
@@ -148,8 +177,13 @@ AUTOFILL_MANUAL_INPUT_RE = re.compile(
 # the two common forms of Russian UTF-8 mojibake without treating ordinary
 # Russian prose as invalid.
 MOJIBAKE_RE = re.compile(
-    r"(?:[ÐÑÃÂ][\x80-\xBF]|[РС][\u0400-\u040f\u0450-\u045f\u00b0-\u00bf])"
+    # Latin-1 fragments are the usual UTF-8-as-single-byte form.  The second
+    # alternative requires two malformed Cyrillic-pair fragments: a single
+    # ordinary Russian word such as "Реквизит" must never be treated as damage.
+    r"(?:[ÐÑÃÂ][\x80-\xBF]|(?:[РС][\u0400-\u045f]){2,})"
 )
+EXECUTION_CONTEXT_ID_RE = re.compile(r"^CTX-[A-Z0-9-]+$")
+EXECUTION_SETUP_ID_RE = re.compile(r"^SETUP-[A-Z0-9-]+$")
 APPROVED_CLARIFICATION_FILENAME_RE = re.compile(
     r"(?:^|/)[^/]+-approved-clarifications\.md$", flags=re.IGNORECASE
 )
@@ -881,6 +915,60 @@ def active_obligation_ids(obligations: dict[str, Any]) -> set[str]:
     return {str(item.get("id")) for item in active_obligations(obligations)}
 
 
+def execution_setups(obligations: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    """Return declared reusable execution prerequisites keyed by SETUP-* id."""
+    entries = obligations.get("execution_setups", [])
+    if not isinstance(entries, list):
+        return {}
+    return {
+        str(item.get("id")): item
+        for item in entries
+        if isinstance(item, dict) and isinstance(item.get("id"), str)
+    }
+
+
+def execution_contexts(obligation: dict[str, Any]) -> list[dict[str, Any]]:
+    """Return explicitly declared user-execution contexts for one OBL."""
+    entries = obligation.get("execution_contexts", [])
+    return [item for item in entries if isinstance(item, dict)] if isinstance(entries, list) else []
+
+
+def derived_execution_status(
+    context: dict[str, Any],
+    setup_catalog: dict[str, dict[str, Any]],
+) -> str:
+    """Derive the honest execution status from every prerequisite of a context."""
+    setup_ids = context.get("setup_ids", [])
+    required_kinds = context.get("required_setup_kinds", [])
+    if not isinstance(setup_ids, list) or not isinstance(required_kinds, list):
+        return "needs-test-data"
+    selected = [setup_catalog.get(str(setup_id)) for setup_id in setup_ids]
+    if any(item is None for item in selected):
+        return "needs-test-data"
+    kinds = {
+        str(item.get("kind"))
+        for item in selected
+        if isinstance(item, dict)
+    }
+    if not set(required_kinds).issubset(kinds):
+        return "needs-test-data"
+    availability = {
+        str(item.get("availability"))
+        for item in selected
+        if isinstance(item, dict)
+    }
+    for status in EXECUTION_STATUS_PRECEDENCE:
+        if status in availability:
+            return status
+    return "ready"
+
+
+def context_id_from_cell(value: object) -> str:
+    """Extract exactly one CTX-* token from a human-readable matrix/TC field."""
+    matches = re.findall(r"\bCTX-[A-Z0-9-]+\b", str(value or ""))
+    return matches[0] if len(matches) == 1 else ""
+
+
 def validate_scope_clarifications(
     *,
     payload: dict[str, Any],
@@ -1253,6 +1341,81 @@ def validate_scope_obligations(
         return findings, payload
     seen: set[str] = set()
     obligation_ba_decisions: dict[str, str] = {}
+    raw_setups = payload.get("execution_setups")
+    if not isinstance(raw_setups, list):
+        findings.append(finding(
+            "scope-execution-setups-format",
+            "execution-readiness",
+            "В scope не задан корректный каталог предпосылок исполнения",
+            "execution_setups должен быть массивом SETUP-*; он описывает акторов, fixture, интеграции и исходные состояния.",
+            artifact,
+            remediation_owner="scope-analyzer",
+        ))
+        raw_setups = []
+    seen_setup_ids: set[str] = set()
+    for index, setup in enumerate(raw_setups, start=1):
+        if not isinstance(setup, dict):
+            findings.append(finding(
+                "scope-execution-setup-invalid",
+                "execution-readiness",
+                "Строка каталога предпосылок имеет неверный формат",
+                f"execution_setups[{index}] должен быть объектом.",
+                artifact,
+                remediation_owner="scope-analyzer",
+            ))
+            continue
+        setup_id = str(setup.get("id") or "")
+        kind = str(setup.get("kind") or "")
+        availability = str(setup.get("availability") or "")
+        evidence = str(setup.get("evidence") or "").strip()
+        if not EXECUTION_SETUP_ID_RE.fullmatch(setup_id):
+            findings.append(finding(
+                "scope-execution-setup-id",
+                "traceability",
+                "У предпосылки исполнения некорректный идентификатор",
+                f"execution_setups[{index}].id={setup_id!r}; ожидается SETUP-*.",
+                artifact,
+                remediation_owner="scope-analyzer",
+            ))
+        elif setup_id in seen_setup_ids:
+            findings.append(finding(
+                "scope-execution-setup-duplicate",
+                "traceability",
+                "В каталоге повторяется предпосылка исполнения",
+                f"Повторяется {setup_id}.",
+                artifact,
+                remediation_owner="scope-analyzer",
+            ))
+        seen_setup_ids.add(setup_id)
+        if kind not in ALLOWED_EXECUTION_SETUP_KINDS:
+            findings.append(finding(
+                "scope-execution-setup-kind",
+                "execution-readiness",
+                "У предпосылки указан неизвестный вид",
+                f"{setup_id or f'строка {index}'}: kind={kind!r}; допустимы: "
+                + ", ".join(sorted(ALLOWED_EXECUTION_SETUP_KINDS)) + ".",
+                artifact,
+                remediation_owner="scope-analyzer",
+            ))
+        if availability not in ALLOWED_EXECUTION_SETUP_AVAILABILITY:
+            findings.append(finding(
+                "scope-execution-setup-availability",
+                "execution-readiness",
+                "У предпосылки указан неизвестный статус доступности",
+                f"{setup_id or f'строка {index}'}: availability={availability!r}.",
+                artifact,
+                remediation_owner="scope-analyzer",
+            ))
+        if not evidence:
+            findings.append(finding(
+                "scope-execution-setup-evidence",
+                "execution-readiness",
+                "Для предпосылки не указано подтверждение подготовки",
+                f"{setup_id or f'строка {index}'}: укажите воспроизводимый способ подготовки или источник доступности.",
+                artifact,
+                remediation_owner="scope-analyzer",
+            ))
+    setup_catalog = execution_setups(payload)
     for index, obligation in enumerate(obligations, start=1):
         if not isinstance(obligation, dict):
             findings.append(finding("scope-obligation-invalid", "source-integrity", "Строка реестра обязательств имеет неверный формат", f"obligations[{index}] должен быть объектом.", artifact, remediation_owner="scope-analyzer"))
@@ -1298,6 +1461,126 @@ def validate_scope_obligations(
                 artifact,
                 remediation_owner="scope-analyzer",
             ))
+        if disposition == "active":
+            raw_contexts = obligation.get("execution_contexts")
+            if not isinstance(raw_contexts, list) or not raw_contexts:
+                findings.append(finding(
+                    "scope-obligation-execution-contexts",
+                    "execution-readiness",
+                    "У активного обязательства не указаны контексты исполнения",
+                    f"{obligation_id or f'строка {index}'} требует непустой execution_contexts с CTX-*.",
+                    artifact,
+                    remediation_owner="scope-analyzer",
+                ))
+            else:
+                seen_context_ids: set[str] = set()
+                for context_index, context in enumerate(raw_contexts, start=1):
+                    if not isinstance(context, dict):
+                        findings.append(finding(
+                            "scope-obligation-execution-context-invalid",
+                            "execution-readiness",
+                            "Контекст исполнения имеет неверный формат",
+                            f"{obligation_id}: execution_contexts[{context_index}] должен быть объектом.",
+                            artifact,
+                            remediation_owner="scope-analyzer",
+                        ))
+                        continue
+                    context_id = str(context.get("id") or "")
+                    label = str(context.get("label") or "").strip()
+                    required_kinds = context.get("required_setup_kinds")
+                    setup_ids = context.get("setup_ids")
+                    if not EXECUTION_CONTEXT_ID_RE.fullmatch(context_id):
+                        findings.append(finding(
+                            "scope-obligation-execution-context-id",
+                            "traceability",
+                            "У контекста исполнения некорректный идентификатор",
+                            f"{obligation_id}: execution_contexts[{context_index}].id={context_id!r}; ожидается CTX-*.",
+                            artifact,
+                            remediation_owner="scope-analyzer",
+                        ))
+                    elif context_id in seen_context_ids:
+                        findings.append(finding(
+                            "scope-obligation-execution-context-duplicate",
+                            "traceability",
+                            "У обязательства повторяется контекст исполнения",
+                            f"{obligation_id}: повторяется {context_id}.",
+                            artifact,
+                            remediation_owner="scope-analyzer",
+                        ))
+                    seen_context_ids.add(context_id)
+                    if not label:
+                        findings.append(finding(
+                            "scope-obligation-execution-context-label",
+                            "execution-readiness",
+                            "У контекста исполнения нет понятного названия",
+                            f"{obligation_id}: {context_id or f'строка {context_index}'} требует русскоязычный label.",
+                            artifact,
+                            remediation_owner="scope-analyzer",
+                        ))
+                    if (
+                        not isinstance(required_kinds, list)
+                        or not all(isinstance(kind, str) for kind in required_kinds)
+                        or "actor" not in required_kinds
+                    ):
+                        findings.append(finding(
+                            "scope-obligation-execution-context-required-kinds",
+                            "execution-readiness",
+                            "Контекст не фиксирует полный набор предпосылок",
+                            f"{obligation_id}: {context_id or f'строка {context_index}'} требует required_setup_kinds, включая actor.",
+                            artifact,
+                            remediation_owner="scope-analyzer",
+                        ))
+                        required_kinds = []
+                    else:
+                        unknown_kinds = sorted(set(required_kinds) - ALLOWED_EXECUTION_SETUP_KINDS)
+                        if unknown_kinds:
+                            findings.append(finding(
+                                "scope-obligation-execution-context-required-kinds-unknown",
+                                "execution-readiness",
+                                "Контекст содержит неизвестный вид предпосылки",
+                                f"{obligation_id}: {context_id}: " + ", ".join(unknown_kinds) + ".",
+                                artifact,
+                                remediation_owner="scope-analyzer",
+                            ))
+                    if (
+                        not isinstance(setup_ids, list)
+                        or not setup_ids
+                        or not all(isinstance(item, str) and EXECUTION_SETUP_ID_RE.fullmatch(item) for item in setup_ids)
+                    ):
+                        findings.append(finding(
+                            "scope-obligation-execution-context-setups",
+                            "execution-readiness",
+                            "Контекст не связан с предпосылками исполнения",
+                            f"{obligation_id}: {context_id or f'строка {context_index}'} требует непустой setup_ids с SETUP-*.",
+                            artifact,
+                            remediation_owner="scope-analyzer",
+                        ))
+                    else:
+                        missing_setup_ids = sorted(set(setup_ids) - set(setup_catalog))
+                        if missing_setup_ids:
+                            findings.append(finding(
+                                "scope-obligation-execution-context-setup-missing",
+                                "execution-readiness",
+                                "Контекст ссылается на отсутствующую предпосылку",
+                                f"{obligation_id}: {context_id}: " + ", ".join(missing_setup_ids) + ".",
+                                artifact,
+                                remediation_owner="scope-analyzer",
+                            ))
+                        selected_kinds = {
+                            str(setup_catalog[setup_id].get("kind"))
+                            for setup_id in setup_ids
+                            if setup_id in setup_catalog
+                        }
+                        missing_kinds = sorted(set(required_kinds) - selected_kinds)
+                        if missing_kinds:
+                            findings.append(finding(
+                                "scope-obligation-execution-context-required-setup-missing",
+                                "execution-readiness",
+                                "Контекст не связан со всеми обязательными видами предпосылок",
+                                f"{obligation_id}: {context_id}: " + ", ".join(missing_kinds) + ".",
+                                artifact,
+                                remediation_owner="scope-analyzer",
+                            ))
         risk_flags = obligation.get("risk_flags", [])
         if not isinstance(risk_flags, list) or not all(isinstance(flag, str) for flag in risk_flags):
             findings.append(finding("scope-obligation-risk-flags-format", "semantic-completeness", "У обязательства некорректный формат risk_flags", f"{obligation_id or f'строка {index}'} требует массив известных строковых risk_flags.", artifact, remediation_owner="scope-analyzer"))
@@ -1355,6 +1638,9 @@ def parse_matrix_rows(path: Path) -> tuple[list[dict[str, str]], list[str]]:
             continue
         if header is None and "Проверка" in cells and "Обязательство ФТ" in cells:
             header = cells
+            missing = [column for column in MATRIX_REQUIRED_COLUMNS if column not in header]
+            if missing:
+                errors.append("в таблице матрицы отсутствуют колонки: " + ", ".join(f"«{column}»" for column in missing))
             continue
         if header is not None:
             if len(cells) != len(header):
@@ -1368,7 +1654,7 @@ def parse_matrix_rows(path: Path) -> tuple[list[dict[str, str]], list[str]]:
 
 def validate_matrix(
     matrix_path: Path, package_root: Path, obligations: dict[str, Any]
-) -> tuple[list[ScopeFinding], dict[str, list[str]]]:
+) -> tuple[list[ScopeFinding], dict[tuple[str, str], list[dict[str, str]]]]:
     artifact = relative_to_package(package_root, matrix_path)
     findings: list[ScopeFinding] = []
     try:
@@ -1377,9 +1663,11 @@ def validate_matrix(
         return [finding("matrix-unreadable", "source-integrity", "Недоступна матрица тест-дизайна", str(exc), artifact, remediation_owner="writer")], {}
     for error in errors:
         findings.append(finding("matrix-format", "format", "Матрица тест-дизайна не соответствует компактному шаблону", error, artifact, remediation_owner="writer", severity="warning"))
-    by_obligation: dict[str, list[str]] = {}
+    by_obligation_context: dict[tuple[str, str], list[dict[str, str]]] = {}
     seen_matrix_ids: set[str] = set()
     active_ids = active_obligation_ids(obligations)
+    active_entries = {str(item.get("id")): item for item in active_obligations(obligations)}
+    setup_catalog = execution_setups(obligations)
     all_ids = {
         str(item.get("id"))
         for item in obligations.get("obligations", [])
@@ -1388,6 +1676,7 @@ def validate_matrix(
     for row in rows:
         matrix_id = row.get("Проверка", "")
         obligation_id = row.get("Обязательство ФТ", "")
+        context_id = context_id_from_cell(row.get("Контекст исполнения", ""))
         tc_id = row.get("Планируемый TC-ID", "")
         if not re.fullmatch(r"MTX-[A-Z0-9-]+", matrix_id):
             findings.append(finding("matrix-id", "traceability", "У строки матрицы некорректный идентификатор", f"Проверка={matrix_id!r}; ожидается MTX-*.", artifact, remediation_owner="writer"))
@@ -1399,7 +1688,17 @@ def validate_matrix(
         if not re.fullmatch(r"OBL-[A-Z0-9-]+", obligation_id):
             findings.append(finding("matrix-obligation-id", "traceability", "У строки матрицы нет одного обязательства ФТ", f"Проверка {matrix_id or '<без ID>'} должна ссылаться ровно на один OBL-*.", artifact, remediation_owner="writer"))
         else:
-            by_obligation.setdefault(obligation_id, []).append(matrix_id)
+            if not context_id:
+                findings.append(finding(
+                    "matrix-execution-context",
+                    "execution-readiness",
+                    "В строке матрицы нет одного контекста исполнения",
+                    f"Проверка {matrix_id or '<без ID>'}: «Контекст исполнения» должен содержать ровно один CTX-*.",
+                    artifact,
+                    remediation_owner="writer",
+                ))
+            else:
+                by_obligation_context.setdefault((obligation_id, context_id), []).append(row)
             if obligation_id in all_ids and obligation_id not in active_ids:
                 findings.append(finding(
                     "matrix-obligation-superseded",
@@ -1409,7 +1708,15 @@ def validate_matrix(
                     artifact,
                     remediation_owner="writer",
                 ))
-        for required_column in ("Сценарий", "Тип", "Приоритет", "Статус исполнения"):
+        for required_column in (
+            "Проверяемое правило",
+            "Ожидаемый результат",
+            "Нужные предпосылки",
+            "Сценарий",
+            "Тип",
+            "Приоритет",
+            "Статус исполнения",
+        ):
             if not row.get(required_column, "").strip():
                 findings.append(finding("matrix-required-cell", "semantic-completeness", "В строке матрицы не заполнено обязательное поле", f"Проверка {matrix_id or '<без ID>'}: отсутствует «{required_column}».", artifact, remediation_owner="writer"))
         execution_status = row.get("Статус исполнения", "").strip()
@@ -1422,13 +1729,78 @@ def validate_matrix(
                 artifact,
                 remediation_owner="writer",
             ))
-    for obligation_id in sorted(active_ids):
-        mapped = by_obligation.get(obligation_id, [])
+        obligation = active_entries.get(obligation_id)
+        if obligation is not None and context_id:
+            contexts = {
+                str(item.get("id")): item
+                for item in execution_contexts(obligation)
+            }
+            context = contexts.get(context_id)
+            if context is None:
+                findings.append(finding(
+                    "matrix-execution-context-unknown",
+                    "traceability",
+                    "Матрица ссылается на неописанный контекст исполнения",
+                    f"Проверка {matrix_id or '<без ID>'}: {context_id} не принадлежит {obligation_id}.",
+                    artifact,
+                    remediation_owner="writer",
+                ))
+            else:
+                expected_status = derived_execution_status(context, setup_catalog)
+                if execution_status and execution_status != expected_status:
+                    findings.append(finding(
+                        "matrix-execution-status-prerequisites",
+                        "execution-readiness",
+                        "Статус исполнения не соответствует полной цепочке предпосылок",
+                        f"Проверка {matrix_id or '<без ID>'}: указан {execution_status}, ожидается {expected_status} по {context_id}.",
+                        artifact,
+                        remediation_owner="writer",
+                    ))
+                prerequisite_cell = row.get("Нужные предпосылки", "")
+                missing_setup_ids = [
+                    setup_id for setup_id in context.get("setup_ids", [])
+                    if setup_id not in prerequisite_cell
+                ]
+                if missing_setup_ids:
+                    findings.append(finding(
+                        "matrix-execution-prerequisites-incomplete",
+                        "execution-readiness",
+                        "Матрица не показывает все необходимые предпосылки",
+                        f"Проверка {matrix_id or '<без ID>'}: «Нужные предпосылки» не содержит " + ", ".join(missing_setup_ids) + ".",
+                        artifact,
+                        remediation_owner="writer",
+                    ))
+    expected_pairs = {
+        (str(obligation.get("id")), str(context.get("id")))
+        for obligation in active_entries.values()
+        for context in execution_contexts(obligation)
+        if EXECUTION_CONTEXT_ID_RE.fullmatch(str(context.get("id") or ""))
+    }
+    for obligation_id, context_id in sorted(expected_pairs):
+        mapped = by_obligation_context.get((obligation_id, context_id), [])
         if not mapped:
-            findings.append(finding("matrix-obligation-unmapped", "semantic-completeness", "Обязательство ФТ не покрыто матрицей", f"Для {obligation_id} нет строки матрицы.", artifact, remediation_owner="writer"))
+            findings.append(finding(
+                "matrix-obligation-context-unmapped",
+                "semantic-completeness",
+                "Контекст обязательства ФТ не покрыт матрицей",
+                f"Для {obligation_id} в контексте {context_id} нет строки матрицы.",
+                artifact,
+                remediation_owner="writer",
+            ))
         elif len(mapped) > 1:
-            findings.append(finding("matrix-obligation-duplicated", "traceability", "Обязательство ФТ повторно спроектировано в матрице", f"{obligation_id} связано со строками: {', '.join(mapped)}.", artifact, remediation_owner="writer"))
-    return findings, {key: value for key, value in by_obligation.items() if key in active_ids}
+            findings.append(finding(
+                "matrix-obligation-context-duplicated",
+                "traceability",
+                "Контекст обязательства повторно спроектирован в матрице",
+                f"{obligation_id} / {context_id} связан со строками: " + ", ".join(row.get("Проверка", "<без ID>") for row in mapped) + ".",
+                artifact,
+                remediation_owner="writer",
+            ))
+    return findings, {
+        key: value
+        for key, value in by_obligation_context.items()
+        if key in expected_pairs
+    }
 
 
 def parse_test_case_blocks(path: Path) -> list[dict[str, str]]:
@@ -1445,7 +1817,10 @@ def parse_test_case_blocks(path: Path) -> list[dict[str, str]]:
 
 
 def validate_test_cases(
-    tc_path: Path, package_root: Path, obligations: dict[str, Any], matrix_mapping: dict[str, list[str]]
+    tc_path: Path,
+    package_root: Path,
+    obligations: dict[str, Any],
+    matrix_mapping: dict[tuple[str, str], list[dict[str, str]]],
 ) -> list[ScopeFinding]:
     artifact = relative_to_package(package_root, tc_path)
     try:
@@ -1456,7 +1831,7 @@ def validate_test_cases(
     if not blocks:
         return [finding("test-cases-empty", "semantic-completeness", "В файле нет тест-кейсов компактного формата", "Ожидается заголовок уровня ## или ### с TC-*.", artifact, remediation_owner="writer")]
     seen_ids: set[str] = set()
-    covered_obligations: dict[str, list[str]] = {}
+    covered_contexts: dict[tuple[str, str], list[str]] = {}
     for block in blocks:
         tc_id = block["id"]
         body = block["body"]
@@ -1476,6 +1851,17 @@ def validate_test_cases(
                 artifact,
                 remediation_owner="writer",
             ))
+        context_match = re.search(r"(?m)^\*\*Контекст исполнения:\*\*\s*(.+)$", body)
+        context_id = context_id_from_cell(context_match.group(1) if context_match else "")
+        if not context_id:
+            findings.append(finding(
+                "test-case-execution-context",
+                "execution-readiness",
+                "Тест-кейс не связан ровно с одним контекстом исполнения",
+                f"{tc_id}: поле «Контекст исполнения» должно содержать один CTX-*.",
+                artifact,
+                remediation_owner="writer",
+            ))
         expected_result_count = len(re.findall(r"(?m)^\*\*Итоговый ожидаемый результат:\*\*", body))
         if expected_result_count != 1:
             findings.append(finding("test-case-primary-oracle", "semantic-completeness", "У тест-кейса должен быть один основной ожидаемый результат", f"{tc_id}: найдено полей ожидаемого результата: {expected_result_count}.", artifact, remediation_owner="writer"))
@@ -1485,7 +1871,8 @@ def validate_test_cases(
         if len(obligation_ids) != 1:
             findings.append(finding("test-case-obligation-trace", "traceability", "Тест-кейс должен ссылаться ровно на одно обязательство ФТ", f"{tc_id}: в трассировке найдено OBL: {', '.join(obligation_ids) or 'нет'}.", artifact, remediation_owner="writer"))
         else:
-            covered_obligations.setdefault(obligation_ids[0], []).append(tc_id)
+            pair = (obligation_ids[0], context_id)
+            covered_contexts.setdefault(pair, []).append(tc_id)
             if obligation_ids[0] not in active_obligation_ids(obligations):
                 findings.append(finding(
                     "test-case-obligation-superseded",
@@ -1495,17 +1882,50 @@ def validate_test_cases(
                     artifact,
                     remediation_owner="writer",
                 ))
+            mapped_rows = matrix_mapping.get(pair, [])
+            if len(mapped_rows) != 1:
+                findings.append(finding(
+                    "test-case-matrix-context-trace",
+                    "traceability",
+                    "Тест-кейс не связан с одной строкой матрицы в том же контексте",
+                    f"{tc_id}: не найдена единственная matrix row для {obligation_ids[0]} / {context_id or '<без CTX>'}.",
+                    artifact,
+                    remediation_owner="writer",
+                ))
+            elif status_match and status_match.group(1) != mapped_rows[0].get("Статус исполнения"):
+                findings.append(finding(
+                    "test-case-execution-status-matrix",
+                    "execution-readiness",
+                    "Статус исполнения тест-кейса отличается от статуса в матрице",
+                    f"{tc_id}: указан {status_match.group(1)}, в матрице {mapped_rows[0].get('Статус исполнения')}.",
+                    artifact,
+                    remediation_owner="writer",
+                ))
         body_without_metadata = re.sub(r"(?m)^\*\*(Тип|Приоритет|Статус исполнения):\*\*.*$", "", body)
         if re.search(r"\b(source-backed|residual|fixture|blocked-observability)\b", body_without_metadata, flags=re.IGNORECASE):
             findings.append(finding("test-case-process-language", "style", "В тест-кейсе остался служебный английский текст", f"Проверьте пользовательские поля {tc_id}.", artifact, remediation_owner="writer", severity="warning"))
-    for obligation_id in sorted(matrix_mapping):
-        mapped_tcs = covered_obligations.get(obligation_id, [])
+    for obligation_id, context_id in sorted(matrix_mapping):
+        mapped_tcs = covered_contexts.get((obligation_id, context_id), [])
         if not mapped_tcs:
-            findings.append(finding("test-case-obligation-uncovered", "semantic-completeness", "Обязательство матрицы не покрыто тест-кейсом", f"Для {obligation_id} нет TC.", artifact, remediation_owner="writer"))
+            findings.append(finding(
+                "test-case-obligation-context-uncovered",
+                "semantic-completeness",
+                "Контекст обязательства матрицы не покрыт тест-кейсом",
+                f"Для {obligation_id} в контексте {context_id} нет TC.",
+                artifact,
+                remediation_owner="writer",
+            ))
         elif len(mapped_tcs) > 1:
-            findings.append(finding("test-case-obligation-duplicated", "traceability", "Обязательство покрыто несколькими тест-кейсами", f"{obligation_id}: {', '.join(mapped_tcs)}. Для v0.9 это допустимо только после явного разбиения на самостоятельные OBL.", artifact, remediation_owner="writer"))
+            findings.append(finding(
+                "test-case-obligation-context-duplicated",
+                "traceability",
+                "Контекст обязательства покрыт несколькими тест-кейсами",
+                f"{obligation_id} / {context_id}: {', '.join(mapped_tcs)}. Для v0.9 это допустимо только после явного разбиения на самостоятельные OBL/CTX.",
+                artifact,
+                remediation_owner="writer",
+            ))
     expected_obligations = active_obligation_ids(obligations)
-    unknown = sorted(set(covered_obligations) - expected_obligations)
+    unknown = sorted({obligation_id for obligation_id, _ in covered_contexts} - expected_obligations)
     if unknown:
         findings.append(finding("test-case-unknown-obligation", "traceability", "Тест-кейс ссылается на отсутствующее обязательство", ", ".join(unknown), artifact, remediation_owner="writer"))
     return findings
@@ -1582,7 +2002,7 @@ def validate_scope(
     findings.extend(obligation_findings)
 
     matrix_path = workflow_artifact_path(state, package_root, "test_design_matrix")
-    matrix_mapping: dict[str, list[str]] = {}
+    matrix_mapping: dict[tuple[str, str], list[dict[str, str]]] = {}
     if matrix_path is not None:
         if matrix_path.is_file():
             matrix_findings, matrix_mapping = validate_matrix(matrix_path, package_root, obligations)

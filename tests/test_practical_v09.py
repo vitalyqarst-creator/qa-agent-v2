@@ -129,12 +129,28 @@ class PracticalV09Fixture:
                 "route_version": ROUTE_VERSION,
                 "source_manifest_sha256": sha256_file(self.source_manifest),
                 "scope": {"id": "01", "slug": "menu", "title": "Меню"},
+                "execution_setups": [
+                    {
+                        "id": "SETUP-ACTOR-001",
+                        "kind": "actor",
+                        "availability": "provided",
+                        "evidence": "Пользователь с доступом к модулю подготовлен в тестовом контуре.",
+                    }
+                ],
                 "obligations": [
                     {
                         "id": "OBL-001",
                         "source_anchor": "Раздел 9.1, строка «Партнеры»",
                         "statement": obligation_statement,
                         "risk_flags": [],
+                        "execution_contexts": [
+                            {
+                                "id": "CTX-OPEN-MENU",
+                                "label": "Открытие раздела из меню",
+                                "required_setup_kinds": ["actor"],
+                                "setup_ids": ["SETUP-ACTOR-001"],
+                            }
+                        ],
                     }
                 ],
                 "clarifications": [],
@@ -143,9 +159,9 @@ class PracticalV09Fixture:
         self.matrix = self.scope_dir / "test-design-matrix.md"
         self.matrix.write_text(
             "# Матрица тест-дизайна\n\n"
-            "| Проверка | Обязательство ФТ | Сценарий | Тип | Приоритет | Статус исполнения | Планируемый TC-ID |\n"
-            "| --- | --- | --- | --- | --- | --- | --- |\n"
-            "| MTX-001 | OBL-001 | Открытие пункта меню | Positive | High | ready | TC-MENU-001 |\n",
+            "| Проверка | Обязательство ФТ | Контекст исполнения | Проверяемое правило | Ожидаемый результат | Нужные предпосылки | Сценарий | Тип | Приоритет | Статус исполнения | Планируемый TC-ID |\n"
+            "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |\n"
+            "| MTX-001 | OBL-001 | CTX-OPEN-MENU — Открытие раздела из меню | Пункт меню «Партнеры» доступен пользователю. | Открывается раздел «Партнеры». | SETUP-ACTOR-001 — пользователь с доступом к модулю. | Открытие пункта меню | Positive | High | ready | TC-MENU-001 |\n",
             encoding="utf-8",
         )
         self.tc = root / "test-cases" / "9.1-menu.md"
@@ -156,6 +172,7 @@ class PracticalV09Fixture:
             "**Тип:** Positive\n"
             "**Приоритет:** High\n"
             "**Статус исполнения:** ready\n"
+            "**Контекст исполнения:** `CTX-OPEN-MENU` — открытие раздела из меню.\n"
             "**Трассировка:** `OBL-001`; Раздел 9.1.\n"
             "**Цель:** Проверить открытие раздела «Партнеры».\n"
             "**Предусловия:** Пользователь вошел в систему.\n"
@@ -569,8 +586,8 @@ class PracticalV09Tests(unittest.TestCase):
             write_json(fixture.obligations, obligations)
             fixture.matrix.write_text(
                 "# Матрица тест-дизайна\n\n"
-                "| Проверка | Обязательство ФТ | Сценарий | Тип | Приоритет | Статус исполнения | Планируемый TC-ID |\n"
-                "| --- | --- | --- | --- | --- | --- | --- |\n",
+                "| Проверка | Обязательство ФТ | Контекст исполнения | Проверяемое правило | Ожидаемый результат | Нужные предпосылки | Сценарий | Тип | Приоритет | Статус исполнения | Планируемый TC-ID |\n"
+                "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |\n",
                 encoding="utf-8",
             )
             state = json.loads(fixture.state.read_text(encoding="utf-8"))
@@ -583,7 +600,7 @@ class PracticalV09Tests(unittest.TestCase):
 
             fixture.matrix.write_text(
                 fixture.matrix.read_text(encoding="utf-8")
-                + "| MTX-001 | OBL-001 | Проверка поля | Positive | High | ready | TC-MENU-001 |\n",
+                + "| MTX-001 | OBL-001 | CTX-OPEN-MENU | Проверка поля | Поле доступно. | SETUP-ACTOR-001 | Проверка поля | Positive | High | ready | TC-MENU-001 |\n",
                 encoding="utf-8",
             )
             _, findings = validate_scope(package_root=fixture.root, workflow_state_path=fixture.state)
@@ -1376,3 +1393,82 @@ class PracticalV09Tests(unittest.TestCase):
                     code_commit="abc123",
                     contract_digest="contract",
                 )
+
+    def test_matrix_requires_a_separate_row_for_each_execution_context(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            fixture = PracticalV09Fixture(Path(raw))
+            obligations = json.loads(fixture.obligations.read_text(encoding="utf-8"))
+            obligations["obligations"][0]["execution_contexts"].append(
+                {
+                    "id": "CTX-EDIT-MENU",
+                    "label": "Повторное открытие после изменения прав",
+                    "required_setup_kinds": ["actor"],
+                    "setup_ids": ["SETUP-ACTOR-001"],
+                }
+            )
+            write_json(fixture.obligations, obligations)
+            _, findings = validate_scope(
+                package_root=fixture.root,
+                workflow_state_path=fixture.state,
+            )
+            self.assertIn(
+                "matrix-obligation-context-unmapped",
+                [item.id for item in findings if item.blocking],
+            )
+
+    def test_matrix_status_is_derived_from_context_prerequisites(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            fixture = PracticalV09Fixture(Path(raw))
+            obligations = json.loads(fixture.obligations.read_text(encoding="utf-8"))
+            obligations["execution_setups"][0]["availability"] = "needs-test-data"
+            write_json(fixture.obligations, obligations)
+            _, findings = validate_scope(
+                package_root=fixture.root,
+                workflow_state_path=fixture.state,
+            )
+            self.assertIn(
+                "matrix-execution-status-prerequisites",
+                [item.id for item in findings if item.blocking],
+            )
+
+    def test_review_result_allows_legitimate_russian_source_anchor(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            fixture = PracticalV09Fixture(Path(raw))
+            manifest = build_review_manifest(
+                package_root=fixture.root,
+                workflow_state_path=fixture.state,
+                review_mode="test-cases",
+                controller_thread_id="019feebf-3cde-79d2-9f87-ba9c61ff7b13",
+                code_branch="codex/test",
+                code_commit="abc123",
+                contract_digest="contract",
+            )
+            manifest_path = fixture.scope_dir / "test-cases-review-manifest.json"
+            write_json(manifest_path, manifest)
+            result_path = fixture.scope_dir / "test-cases-review-result.json"
+            write_json(
+                result_path,
+                {
+                    "review_manifest_sha256": sha256_file(manifest_path),
+                    "scope_id": "01",
+                    "scope_slug": "menu",
+                    "review_mode": "test-cases",
+                    "execution_surface": "codex-thread",
+                    "reviewer_thread_id": "019feebf-3cde-79d2-9f87-ba9c61ff7b14",
+                    "independent_obligations": [
+                        {
+                            "source_anchor": "Таблица 8, столбец Р",
+                            "statement": "Реквизит доступен для редактирования.",
+                            "obligation_ids": ["OBL-001"],
+                        }
+                    ],
+                    "verdict": "approved",
+                    "findings": [],
+                },
+            )
+            _, findings = verify_review_result(
+                package_root=fixture.root,
+                manifest_path=manifest_path,
+                result_path=result_path,
+            )
+            self.assertNotIn("review-result-mojibake", [item.id for item in findings])

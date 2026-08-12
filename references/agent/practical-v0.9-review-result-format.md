@@ -42,3 +42,9 @@
 source-backed покрытия или противоречие источников.
 
 `findings` содержит `id`, русскоязычное описание, `source_anchor`, `artifact_anchor`, `category`, `severity`, `blocking`, `blocking_reason` и `remediation_owner`.
+
+Reviewer возвращает этот объект как один raw JSON submission. Controller не
+исправляет и не переформулирует его поля, в том числе source anchors, а
+сохраняет byte-for-byte через `capture_practical_review_result.py`. Ошибка
+кодировки исправляется только новым submission reviewer-а или исправлением
+validator-а; она не даёт controller-у права нормализовать evidence.

@@ -15,12 +15,13 @@
 1. `workflow-state.json` — единственный mutable источник статуса и следующего действия.
 2. `../source-package-manifest.json` — DOCX, XHTML, доступный PDF, package notes, package-level утверждённые решения БА и их SHA-256;
    единый неизменяемый manifest для всех scope данного ФТ-пакета.
-3. `scope-obligations.json` — нормализованные `OBL-*` с точной source-привязкой, формулировкой ФТ и рисками. Это не test design.
+3. `scope-obligations.json` — нормализованные `OBL-*` с точной source-привязкой, формулировкой ФТ, контекстами исполнения и рисками. Это не test design.
 4. `scope-clarification-requests.md` — только если один или несколько gaps требуют продуктового ответа БА; companion к `scope-obligations.json`, а не второй workflow state.
 5. `test-design-matrix.md` — человекочитаемый дизайн будущих проверок на русском.
 6. `validator-report.json` — output единственного scoped validator run для замороженного набора входов.
-7. `<mode>-review-manifest.json` — неизменяемый snapshot входов отдельного review.
-8. `<mode>-review-result.json` — независимый verdict и findings reviewer.
+7. `<mode>-review-manifest.json` — неизменяемый snapshot состава входов отдельного review.
+8. `<mode>-review-input-snapshot/` — создаётся только если отдельная сессия не получает тот же checkout; read-only копия hash-bound входов reviewer-а.
+9. `<mode>-review-result.json` — дословно сохранённый независимый verdict и findings reviewer.
 9. `fts/<domain>/<ft>/test-cases/<section>-<scope>.md` — canonical test cases.
 
 Не создавай для v0.9 `writer-self-check.md`, `tc-self-check.md`, Writer Quality Gate, отдельный stage summary, launch/dispatch receipts, parking prompts или вспомогательные coverage tables. Если нужно пояснить недетерминированное решение, добавь короткую запись `decision_notes` в `workflow-state.json` рядом с решением.
@@ -71,7 +72,7 @@ layout-вопросе.
 исключением. При противоречии без утверждённого решения обязательно создай
 `scope-clarification-requests.md`.
 
-`ft-scope-analyzer` читает DOCX/XHTML/PDF, support и доступный Figma только как visual reference. Он создаёт `scope-obligations.json`, не матрицу и не тест-кейсы. Каждое обязательство содержит `id`, `source_anchor`, русскоязычный `statement` и при необходимости `risk_flags`.
+`ft-scope-analyzer` читает DOCX/XHTML/PDF, support и доступный Figma только как visual reference. Он создаёт `scope-obligations.json`, не матрицу и не тест-кейсы. Каждое активное обязательство содержит `id`, `source_anchor`, русскоязычный `statement`, один или несколько `execution_contexts` и при необходимости `risk_flags`. Контекст связывает требование с одним пользовательским потоком и с каталогом `execution_setups`: актор, fixture, интеграция, исходное состояние и другие действительно нужные предпосылки. У одного OBL с разными потоками создания/редактирования — отдельный `CTX-*` для каждого потока.
 
 На этом же этапе агент фиксирует gaps в `clarifications`. Если gap требует продуктового ответа, он обязан сразу создать `scope-clarification-requests.md` с карточкой `CLR-* — GAP-*`; вопрос нельзя оставлять только в JSON. Терминологическое расхождение между заголовком раздела и ближайшими таблицами/утверждениями — отдельный `source-terminology-discrepancy`. Рабочий объект выбирается по содержательным требованиям, а не по заголовку. Если содержательные требования однозначны, расхождение остаётся редакционным non-blocking gap без вопроса БА; `CLR-*` нужен только при конкурирующих правилах, меняющих состав TC.
 
@@ -81,8 +82,13 @@ layout-вопросе.
 
 Writer создаёт русскоязычный `test-design-matrix.md` с таблицей:
 
-| Проверка | Обязательство ФТ | Сценарий | Тип | Приоритет | Статус исполнения | Планируемый TC-ID |
-| --- | --- | --- | --- | --- | --- | --- |
+| Проверка | Обязательство ФТ | Контекст исполнения | Проверяемое правило | Ожидаемый результат | Нужные предпосылки | Сценарий | Тип | Приоритет | Статус исполнения | Планируемый TC-ID |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+
+Каждая строка покрывает одну пару `OBL-*` / `CTX-*`. В «Нужных предпосылках»
+перечисляй все связанные `SETUP-*`. Статус исполнения вычисляется из их
+доступности: если не подготовлен актор, fixture, интеграция или исходное
+состояние, строка не может быть `ready`.
 
 Один раз выполни scoped validator:
 
@@ -101,6 +107,29 @@ python scripts/create_practical_review_manifest.py --repo-root <repo> --ft-packa
 ```
 
 Reviewer запускается в новой верхнеуровневой Codex-сессии (`codex-thread`), read-only для matrix/TC. Если механизм создания отдельной Codex-сессии доступен, controller использует его напрямую: не ищет внешнюю документацию и не заменяет отдельную сессию subagent-ом. До чтения matrix и TC reviewer самостоятельно формирует в `<mode>-review-result.json` массив `independent_obligations`: для каждого восстановленного утверждения указывает `source_anchor`, русскоязычный `statement` и связанные `obligation_ids`. Формулировка обязана сохранять все применимые ограничители первичного источника: контекст создания/редактирования, кванторы, границы, условия и исключения. Не передавай writer self-check: такого артефакта в v0.9 нет.
+
+До dispatch controller обязан проверить доступность каждого hash-bound входа в
+целевом checkout:
+
+```text
+python scripts/practical_review_input_snapshot.py --manifest <scope-dir>/<mode>-review-manifest.json --verify-target <target-package-root>
+```
+
+Если target checkout не содержит текущие незакоммиченные артефакты, не запускай
+review на неполном наборе. Сначала создай разрешённый snapshot, передай его
+абсолютный путь reviewer-у и потребуй `--verify-snapshot` до чтения входов:
+
+```text
+python scripts/practical_review_input_snapshot.py --manifest <scope-dir>/<mode>-review-manifest.json --ft-package-root <package> --create-snapshot <scope-dir>/<mode>-review-input-snapshot
+python scripts/practical_review_input_snapshot.py --manifest <scope-dir>/<mode>-review-manifest.json --verify-snapshot <scope-dir>/<mode>-review-input-snapshot
+```
+
+Reviewer возвращает один JSON-object без нормализации семантики. Controller
+сохраняет его byte-for-byte, а не переписывает anchor или формулировки:
+
+```text
+python scripts/capture_practical_review_result.py --submission <raw-reviewer-json> --output <scope-dir>/<mode>-review-result.json
+```
 
 Результат review содержит `review_manifest_sha256`, `reviewer_thread_id`, `execution_surface: codex-thread`, `review_mode`, `independent_obligations`, `verdict` и findings. Перед созданием manifest controller обязан иметь свежий чистый `validator-report.json`, чьи content hashes совпадают с текущими входами scope. Controller проверяет неизменность snapshot и обновляет только `workflow-state.json` командой `finalize_practical_review.py`.
 

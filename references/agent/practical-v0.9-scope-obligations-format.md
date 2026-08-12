@@ -6,13 +6,29 @@
   "route_version": "practical-v0.9",
   "source_manifest_sha256": "<sha256 source-package-manifest.json>",
   "scope": {"id": "01", "slug": "9.1-menu", "title": "Меню"},
+  "execution_setups": [
+    {
+      "id": "SETUP-ACTOR-001",
+      "kind": "actor",
+      "availability": "provided",
+      "evidence": "Пользователь с доступом к модулю подготовлен в тестовом контуре."
+    }
+  ],
   "obligations": [
     {
       "id": "OBL-001",
       "source_anchor": "Раздел 9.1, Таблица 2, строка «Партнеры»",
       "statement": "В меню доступен пункт «Партнеры».",
       "risk_flags": [],
-      "disposition": "active"
+      "disposition": "active",
+      "execution_contexts": [
+        {
+          "id": "CTX-OPEN-MENU",
+          "label": "Открытие раздела из меню",
+          "required_setup_kinds": ["actor"],
+          "setup_ids": ["SETUP-ACTOR-001"]
+        }
+      ]
     }
   ],
   "clarifications": [
@@ -34,7 +50,16 @@
 }
 ```
 
-`statement` — точное, проверяемое русскоязычное утверждение ФТ. Здесь не фиксируются шаги, конкретные fixtures, предполагаемый UI oracle, matrix ID и TC ID: это принадлежит последующим этапам.
+`statement` — точное, проверяемое русскоязычное утверждение ФТ. Здесь не фиксируются шаги, конкретные literals, предполагаемый UI oracle, matrix ID и TC ID: это принадлежит последующим этапам.
+
+`execution_setups` — единый каталог предпосылок scope. Каждый `SETUP-*`
+содержит `kind` (`actor`, `fixture`, `integration`, `initial-state`,
+`environment` или `navigation`), `availability` (`provided` либо допустимый
+статус исполнения) и воспроизводимое `evidence`. Каждый активный OBL обязан
+содержать непустой `execution_contexts`. У `CTX-*` обязательны
+русскоязычный `label`, `required_setup_kinds` (включая `actor`) и `setup_ids`.
+Разные пользовательские потоки, например создание и редактирование, хранятся
+разными контекстами и затем становятся отдельными строками matrix и TC.
 
 Не сокращай смысл исходной нормы при нормализации: в `statement` сохраняй
 контексты выполнения (`создание`, `редактирование` и т. п.), кванторы,

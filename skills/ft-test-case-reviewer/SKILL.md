@@ -25,6 +25,14 @@ description: Делает review существующих тест-кейсов 
 
 Эти роли могут выполняться одним skill-ом, но reviewer обязан мыслить их как разные passes. Test-design не доказывает traceability, а traceability не доказывает покрытие риска.
 
+Для practical v0.9 перед чтением matrix/TC reviewer принимает только входы,
+прошедшие `practical_review_input_snapshot.py`: либо целевой checkout доказал
+наличие всех manifest inputs с теми же SHA-256, либо controller передал
+проверенный read-only snapshot. При недоступных входах reviewer не начинает
+содержательное review и возвращает `blocked-input`. Возвращай ровно один raw
+JSON object по `practical-v0.9-review-result-format.md`; controller сохраняет
+его byte-for-byte и не имеет права менять anchors, текст findings или verdict.
+
 ## Режимы review
 
 - `practical_v0_8` — default practical review route for ordinary test-case
