@@ -33,8 +33,12 @@ ordinary practical default. Artifact structure follows
 1. Confirm the selected scope and source package. Missing mandatory XHTML or
    required DOCX/PDF parity evidence blocks sign-off.
 2. Re-derive current-source obligations; do not accept writer ledger/matrix as
-   the source of truth. Preserve `gap` / `unclear` when behavior is not safely
-   derivable.
+   the source of truth. Before finding that behavior is not source-confirmed,
+   also check the direct parent section for statements that explicitly define
+   an action, condition or transition of the selected scope. Name the checked
+   anchors in that finding; without them, record insufficient source
+   inspection rather than unsupported behavior. Preserve `gap` / `unclear`
+   when behavior is not safely derivable.
 3. Review mockup inventory only as navigation/visible-label evidence and
    dictionary inventory as the complete value source; neither creates a new
    business rule.

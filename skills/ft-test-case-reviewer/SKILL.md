@@ -85,6 +85,13 @@ as the controlling route.
 
 Review in two practical gates:
 
+For every practical review finding that says a behavior is not confirmed by
+source, reconstruct the selected subsection and the direct parent section
+first. Check parent-level statements that explicitly establish an action,
+condition or transition for the selected scope. The finding must name the
+anchors checked; without them, classify the source inspection as insufficient
+instead of declaring the behavior unsupported.
+
 0. Matrix review gate: treat `test-design-matrix.md` as writer output, not source
    of truth. Re-derive coverage from FT DOCX/PDF/XHTML, support, dictionaries and
    mockups; return `matrix-changes-required` or `matrix-rejected` if dimensions,

@@ -534,6 +534,17 @@ class PracticalRouteV08ContractTests(unittest.TestCase):
         self.assertIn("Russian", reviewer)
         self.assertIn("visible headers", reviewer)
 
+    def test_reviewer_checks_parent_level_requirements_before_rejecting_behavior(self) -> None:
+        reviewer = self.read("skills/ft-test-case-reviewer/SKILL.md")
+        direct_workflow = self.read("references/agent/reviewer-general-workflow.md")
+
+        for content in (reviewer, direct_workflow):
+            self.assertIn("parent", content)
+            self.assertIn("anchors", content)
+
+        self.assertIn("behavior unsupported", reviewer)
+        self.assertIn("unsupported behavior", direct_workflow)
+
 
 if __name__ == "__main__":
     unittest.main()
