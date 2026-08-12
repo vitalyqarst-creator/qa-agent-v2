@@ -1628,8 +1628,31 @@ class PracticalV09Tests(unittest.TestCase):
             self.assertEqual(0, completed.returncode, completed.stderr)
             state = json.loads(fixture.state.read_text(encoding="utf-8"))
             self.assertEqual("completed", state["contract_migration"]["status"])
+            self.assertFalse(state["contract_migration"]["canonical_tc_sync_required"])
             self.assertEqual("review", state["phase"])
             self.assertEqual("not-finalized", state["final_verdict"])
+            _, findings = validate_scope(package_root=fixture.root, workflow_state_path=fixture.state)
+            self.assertNotIn(
+                "contract-migration-tc-sync-required",
+                [item.id for item in findings if item.blocking],
+            )
+
+            # A scope completed by the previous implementation can be repaired
+            # by rerunning the same explicit transition, not by editing state.
+            state["contract_migration"]["canonical_tc_sync_required"] = True
+            write_json(fixture.state, state)
+            repaired = subprocess.run(
+                [
+                    sys.executable, migration_script,
+                    "--ft-package-root", str(fixture.root),
+                    "--workflow-state", str(fixture.state),
+                    "--action", "complete-tc-sync",
+                ],
+                text=True, capture_output=True, encoding="utf-8", errors="replace",
+            )
+            self.assertEqual(0, repaired.returncode, repaired.stderr)
+            repaired_state = json.loads(fixture.state.read_text(encoding="utf-8"))
+            self.assertFalse(repaired_state["contract_migration"]["canonical_tc_sync_required"])
 
     def test_second_tc_content_review_blocks_only_tc_phase(self) -> None:
         with tempfile.TemporaryDirectory() as raw:

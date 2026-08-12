@@ -214,7 +214,7 @@
     `blocked` только из-за него. Регрессии покрывают mixed verdict с
     неправильным статусом и полностью корректный verdict.
 
-- [ ] `AGI-026` (`P1`) Сделать переход `complete-tc-sync` атомарным и
+- [x] `AGI-026` (`P1`) Сделать переход `complete-tc-sync` атомарным и
   проверяемо завершать migration gate.
   - Основание: в scope `9.3.2` canonical TC были синхронизированы с 103
     сценариями `SCN-*`, а прямой TC-validator не нашёл ошибок. Однако
@@ -229,6 +229,12 @@
     `complete-tc-sync` → clean scoped validation без transport finding.
     Не допускается ручное изменение `workflow-state.json` как обход
     transition.
+  - Выполнено: успешный transition снимает
+    `canonical_tc_sync_required`; transition безопасно повторяем для scope,
+    завершённого прежней версией с оставленным gate. Добавлена regression,
+    покрывающая обычное завершение и штатное восстановление без ручной правки
+    workflow-state. Реальный scope `9.3.2` восстановлен повторным CLI-вызовом
+    и прошёл scoped validation без blocking findings.
 
 - [ ] `AGI-001` (`P2`) Сохранить безопасный запас контекста для
   `source_locator.discovery`.

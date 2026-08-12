@@ -198,13 +198,21 @@ def mark_matrix_ready(*, state: dict[str, object], package_root: Path, state_pat
 
 def complete_tc_sync(*, state: dict[str, object], package_root: Path, state_path: Path) -> None:
     migration = workflow_contract_migration(state)
-    if migration is None or migration["status"] != "matrix-accepted":
-        raise PracticalV09Error("complete-tc-sync requires a matrix-accepted contract migration")
+    if migration is None or migration["status"] not in {"matrix-accepted", "completed"}:
+        raise PracticalV09Error(
+            "complete-tc-sync requires a matrix-accepted or previously completed contract migration"
+        )
     tc_path = workflow_artifact_path(state, package_root, "canonical_test_cases", required=True)
     assert tc_path is not None
     if not tc_path.is_file():
         raise PracticalV09Error("Canonical test cases are required before completing TC synchronization")
     migration["status"] = "completed"
+    # The required TC synchronization has just completed.  Keeping this gate
+    # enabled would make every subsequent scoped validation fail before it can
+    # validate the synchronized canonical test cases.  Allowing a completed
+    # state makes this transition safe to retry when an older tool version
+    # recorded status=completed without clearing the gate.
+    migration["canonical_tc_sync_required"] = False
     state["phase"] = "review"
     state["next_action"] = "Провести scoped validation и независимое final TC review"
     state["final_verdict"] = "not-finalized"
