@@ -50,6 +50,18 @@
     Добавлены узкие validator-regressions и проверка reviewer-ом на реальном
     scope.
 
+- [ ] `AGI-017` (`P1`) Разделить бюджеты содержательных доработок matrix и
+  canonical TC.
+  - Основание: scope `9.3.2` израсходовал общий `revision_count` на matrix
+    finding MR-001. В `finalize_practical_review.py` следующий blocking finding
+    final TC review при `revision_count >= 1` сразу переводит scope в `blocked`,
+    хотя practical route требует одну целевую TC-доработку после final review.
+  - Завершено, когда: matrix review имеет не более одной собственной
+    matrix-доработки и re-review, final TC review — не более одной собственной
+    TC-доработки и fresh final review; workflow migration, validator, renderer
+    и regression tests исключают новый repair-loop и не блокируют TC-revision
+    только потому, что ранее исправлялась matrix.
+
 - [ ] `AGI-001` (`P2`) Сохранить безопасный запас контекста для
   `source_locator.discovery`.
   - Основание: architecture audit, 129.8 KiB из 132 KiB; запас 2.2 KiB при
