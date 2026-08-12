@@ -214,6 +214,22 @@
     `blocked` только из-за него. Регрессии покрывают mixed verdict с
     неправильным статусом и полностью корректный verdict.
 
+- [ ] `AGI-026` (`P1`) Сделать переход `complete-tc-sync` атомарным и
+  проверяемо завершать migration gate.
+  - Основание: в scope `9.3.2` canonical TC были синхронизированы с 103
+    сценариями `SCN-*`, а прямой TC-validator не нашёл ошибок. Однако
+    `migrate_practical_matrix_contract.py --action complete-tc-sync` ставит
+    `contract_migration.status=completed`, но оставляет
+    `canonical_tc_sync_required=true`. Scoped validator из-за этого всегда
+    возвращает blocking `contract-migration-tc-sync-required` и не позволяет
+    запустить обязательное final TC review.
+  - Завершено, когда: успешный `complete-tc-sync` снимает только этот
+    migration-gate, сохраняет revision budgets и переводит scope в `review`;
+    CLI/regression test проходит цепочку `matrix-accepted` →
+    `complete-tc-sync` → clean scoped validation без transport finding.
+    Не допускается ручное изменение `workflow-state.json` как обход
+    transition.
+
 - [ ] `AGI-001` (`P2`) Сохранить безопасный запас контекста для
   `source_locator.discovery`.
   - Основание: architecture audit, 129.8 KiB из 132 KiB; запас 2.2 KiB при
