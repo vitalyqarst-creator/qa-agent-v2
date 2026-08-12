@@ -25,6 +25,16 @@
     или изменившихся source inputs; безопасное обновление agent-layer без
     изменения source package не создаёт шумного warning.
 
+- [ ] `AGI-015` (`P2`) Не оставлять устаревший `final_verdict` после
+  принятого matrix re-review.
+  - Основание: в scope `9.3.2` после verdict `approved` и перехода к
+    `phase: test-cases` поле `final_verdict` осталось `changes-required` от
+    предыдущего matrix review; это вводит в заблуждение человека и статусный
+    renderer.
+  - Завершено, когда: `final_verdict` описывает только final TC review, а
+    результат matrix review хранится в `reviews`; переходы и renderer не
+    показывают устаревший verdict как финальный.
+
 - [ ] `AGI-001` (`P2`) Сохранить безопасный запас контекста для
   `source_locator.discovery`.
   - Основание: architecture audit, 129.8 KiB из 132 KiB; запас 2.2 KiB при
