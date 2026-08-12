@@ -172,6 +172,14 @@ class PracticalV09Fixture:
                 "decision_notes": [],
             },
         )
+        context, findings = validate_scope(
+            package_root=self.root,
+            workflow_state_path=self.state,
+        )
+        write_json(
+            self.scope_dir / "validator-report.json",
+            build_validator_report(context, findings),
+        )
 
 
 class PracticalV09Tests(unittest.TestCase):
@@ -453,6 +461,53 @@ class PracticalV09Tests(unittest.TestCase):
                 [item.id for item in findings if item.blocking],
             )
 
+    def test_scope_local_approved_clarification_is_not_allowed_in_shared_manifest(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            fixture = PracticalV09Fixture(Path(raw))
+            approved = fixture.root / "support" / "menu-approved-clarifications.md"
+            approved.parent.mkdir()
+            approved.write_text("# Утвержденный ответ БА\n", encoding="utf-8")
+            manifest = json.loads(fixture.source_manifest.read_text(encoding="utf-8"))
+            manifest["support_inputs"] = [{
+                "role": "support",
+                "path": "support/menu-approved-clarifications.md",
+                "sha256": sha256_file(approved),
+            }]
+            write_json(fixture.source_manifest, manifest)
+            obligations = json.loads(fixture.obligations.read_text(encoding="utf-8"))
+            obligations["source_manifest_sha256"] = sha256_file(fixture.source_manifest)
+            write_json(fixture.obligations, obligations)
+            _, findings = validate_scope(
+                package_root=fixture.root,
+                workflow_state_path=fixture.state,
+            )
+            self.assertIn(
+                "source-manifest-scope-clarification",
+                [item.id for item in findings if item.blocking],
+            )
+
+    def test_agent_notes_warn_about_agent_layer_version_metadata(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            fixture = PracticalV09Fixture(Path(raw))
+            notes = fixture.root / "AGENT-NOTES.md"
+            notes.write_text("# Notes\n\n- Исходный commit: deadbeef\n", encoding="utf-8")
+            manifest = json.loads(fixture.source_manifest.read_text(encoding="utf-8"))
+            manifest["agent_notes"]["sha256"] = sha256_file(notes)
+            write_json(fixture.source_manifest, manifest)
+            obligations = json.loads(fixture.obligations.read_text(encoding="utf-8"))
+            obligations["source_manifest_sha256"] = sha256_file(fixture.source_manifest)
+            write_json(fixture.obligations, obligations)
+            _, findings = validate_scope(
+                package_root=fixture.root,
+                workflow_state_path=fixture.state,
+            )
+            matching = [
+                item for item in findings
+                if item.id == "source-manifest-agent-notes-version-metadata"
+            ]
+            self.assertEqual(1, len(matching))
+            self.assertFalse(matching[0].blocking)
+
     def test_pre_matrix_check_is_not_scoped_route_validation(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             fixture = PracticalV09Fixture(Path(raw))
@@ -678,6 +733,78 @@ class PracticalV09Tests(unittest.TestCase):
             )
             self.assertIn("review-result-snapshot-changed", [item.id for item in findings])
 
+    def test_review_manifest_requires_a_fresh_persisted_validator_report(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            fixture = PracticalV09Fixture(Path(raw))
+            fixture.matrix.write_text(
+                fixture.matrix.read_text(encoding="utf-8") + "\n",
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(PracticalV09Error, "validator-report.json is stale"):
+                build_review_manifest(
+                    package_root=fixture.root,
+                    workflow_state_path=fixture.state,
+                    review_mode="test-cases",
+                    controller_thread_id="019feebf-3cde-79d2-9f87-ba9c61ff7b13",
+                    code_branch="codex/test",
+                    code_commit="abc123",
+                    contract_digest="contract",
+                )
+            context, findings = validate_scope(
+                package_root=fixture.root,
+                workflow_state_path=fixture.state,
+            )
+            write_json(
+                fixture.scope_dir / "validator-report.json",
+                build_validator_report(context, findings),
+            )
+            manifest = build_review_manifest(
+                package_root=fixture.root,
+                workflow_state_path=fixture.state,
+                review_mode="test-cases",
+                controller_thread_id="019feebf-3cde-79d2-9f87-ba9c61ff7b13",
+                code_branch="codex/test",
+                code_commit="abc123",
+                contract_digest="contract",
+            )
+            self.assertIn("validator_report_sha256", manifest)
+
+    def test_review_result_rejects_readable_json_with_mojibake(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            fixture = PracticalV09Fixture(Path(raw))
+            manifest = build_review_manifest(
+                package_root=fixture.root,
+                workflow_state_path=fixture.state,
+                review_mode="test-cases",
+                controller_thread_id="019feebf-3cde-79d2-9f87-ba9c61ff7b13",
+                code_branch="codex/test",
+                code_commit="abc123",
+                contract_digest="contract",
+            )
+            manifest_path = fixture.scope_dir / "test-cases-review-manifest.json"
+            write_json(manifest_path, manifest)
+            result_path = fixture.scope_dir / "test-cases-review-result.json"
+            write_json(
+                result_path,
+                {
+                    "review_manifest_sha256": sha256_file(manifest_path),
+                    "scope_id": "01",
+                    "scope_slug": "menu",
+                    "review_mode": "test-cases",
+                    "execution_surface": "codex-thread",
+                    "reviewer_thread_id": "019feebf-3cde-79d2-9f87-ba9c61ff7b14",
+                    "independent_obligations": independently_derived_obligation(),
+                    "verdict": "approved",
+                    "findings": [{"description": "РџСЂРѕРІРµСЂРєР°"}],
+                },
+            )
+            _, findings = verify_review_result(
+                package_root=fixture.root,
+                manifest_path=manifest_path,
+                result_path=result_path,
+            )
+            self.assertIn("review-result-mojibake", [item.id for item in findings if item.blocking])
+
     def test_reviewer_must_reconstruct_the_full_obligation_set(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             fixture = PracticalV09Fixture(Path(raw))
@@ -885,7 +1012,13 @@ class PracticalV09Tests(unittest.TestCase):
                     "reviewer_thread_id": "019feebf-3cde-79d2-9f87-ba9c61ff7b14",
                     "independent_obligations": independently_derived_obligation(),
                     "verdict": "changes-required",
-                    "findings": [{"id": "RV-001"}],
+                    "findings": [
+                        {
+                            "id": "RV-001",
+                            "blocking": True,
+                            "remediation_owner": "writer",
+                        }
+                    ],
                 },
             )
             command = [
@@ -912,6 +1045,67 @@ class PracticalV09Tests(unittest.TestCase):
             self.assertEqual(1, state["revision_count"])
             self.assertEqual("changes-required", state["final_verdict"])
             self.assertEqual("test-cases", state["phase"])
+
+    def test_nonblocking_execution_status_correction_does_not_consume_revision(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            fixture = PracticalV09Fixture(Path(raw))
+            manifest = build_review_manifest(
+                package_root=fixture.root,
+                workflow_state_path=fixture.state,
+                review_mode="test-cases",
+                controller_thread_id="019feebf-3cde-79d2-9f87-ba9c61ff7b13",
+                code_branch="codex/test",
+                code_commit="abc123",
+                contract_digest="contract",
+            )
+            manifest_path = fixture.scope_dir / "test-cases-review-manifest.json"
+            write_json(manifest_path, manifest)
+            result_path = fixture.scope_dir / "test-cases-review-result.json"
+            write_json(
+                result_path,
+                {
+                    "review_manifest_sha256": sha256_file(manifest_path),
+                    "scope_id": "01",
+                    "scope_slug": "menu",
+                    "review_mode": "test-cases",
+                    "execution_surface": "codex-thread",
+                    "reviewer_thread_id": "019feebf-3cde-79d2-9f87-ba9c61ff7b14",
+                    "independent_obligations": independently_derived_obligation(),
+                    "verdict": "changes-required",
+                    "findings": [
+                        {
+                            "id": "RV-STATUS-001",
+                            "blocking": False,
+                            "remediation_owner": "writer",
+                            "description": "Нужно использовать blocked-observability.",
+                        }
+                    ],
+                },
+            )
+            command = [
+                sys.executable,
+                str(REPO_ROOT / "scripts" / "finalize_practical_review.py"),
+                "--ft-package-root",
+                str(fixture.root),
+                "--workflow-state",
+                str(fixture.state),
+                "--review-manifest",
+                str(manifest_path),
+                "--review-result",
+                str(result_path),
+            ]
+            completed = subprocess.run(
+                command,
+                text=True,
+                capture_output=True,
+                encoding="utf-8",
+                errors="replace",
+            )
+            self.assertEqual(0, completed.returncode, completed.stderr)
+            state = json.loads(fixture.state.read_text(encoding="utf-8"))
+            self.assertEqual(0, state["revision_count"])
+            self.assertEqual("test-cases", state["phase"])
+            self.assertIn("неблокирующие", state["next_action"])
 
     def test_review_contract_rejects_non_durable_thread_identifiers(self) -> None:
         with tempfile.TemporaryDirectory() as raw:

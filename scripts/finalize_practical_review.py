@@ -20,6 +20,25 @@ from test_case_agent.practical_v09 import (
 )
 
 
+def has_blocking_content_finding(result: dict[str, object]) -> bool:
+    """Return whether a review requires a bounded content revision.
+
+    A supported execution status such as `blocked-observability` is not an
+    external scope blocker.  A reviewer may ask to correct such a status, but
+    that administrative correction must not consume the one permitted
+    substantive writer revision.
+    """
+    raw_findings = result.get("findings")
+    if not isinstance(raw_findings, list):
+        return False
+    return any(
+        isinstance(item, dict)
+        and item.get("blocking") is True
+        and item.get("remediation_owner") not in {"controller", "validator"}
+        for item in raw_findings
+    )
+
+
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Finalize a separate-session practical v0.9 review.")
     parser.add_argument("--ft-package-root", type=Path, required=True)
@@ -63,7 +82,13 @@ def main(argv: list[str] | None = None) -> int:
             state["final_verdict"] = "approved"
     elif result["verdict"] == "changes-required":
         state["final_verdict"] = "changes-required"
-        if state["revision_count"] >= 1:
+        if not has_blocking_content_finding(result):
+            state["phase"] = "matrix" if review_mode == "matrix" else "test-cases"
+            state["next_action"] = (
+                "Исправить неблокирующие замечания review без расходования "
+                "содержательной доработки"
+            )
+        elif state["revision_count"] >= 1:
             state["phase"] = "blocked"
             state["next_action"] = "Лимит одной содержательной доработки исчерпан; требуется решение по scope"
         else:

@@ -36,6 +36,7 @@
 - общие QA-шаблоны и форматы;
 - содержимое, которое уже канонически живет в `references/`.
 - phase-specific UI operational notes для `ft-ui-automation-prep`, если для них подходит `fts/<ft-slug>/work/ui-automation-prep/UI-AGENT-NOTES.md`.
+- branch, commit, версию или иные метаданные agent-layer: они фиксируются в review manifest только для аудита и не должны менять hash package context.
 
 ## Рекомендуемая структура
 

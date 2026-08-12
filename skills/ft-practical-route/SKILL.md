@@ -26,7 +26,7 @@ Read [../../references/agent/practical-test-case-route-v0.9.md](../../references
 1. Resolve DOCX, XHTML, support, existing `AGENT-NOTES.md`, visual references and an available PDF. Create `source-package-manifest.json`.
 2. Create `scope-obligations.json` with one source-backed `OBL-*` per independent assertion. Record every gap in `clarifications`; if a business answer is required, create the linked `scope-clarification-requests.md` in the same run. Do not create TC yet.
 3. Create `workflow-state.json`, then write one Russian `test-design-matrix.md`.
-4. Run `validate_practical_scope.py` exactly once for the frozen stage.
+4. Run `validate_practical_scope.py` exactly once for the frozen stage. After any permitted revision, run it again for the new frozen inputs before the next review manifest.
 5. Run independent matrix review only when the deterministic v0.9 complexity rule requires it.
 6. Write canonical TC after accepted/skipped matrix review; run one fresh scoped validation.
 7. Run final independent TC review in a separate top-level Codex session. One targeted revision plus one fresh final review is the maximum.
@@ -41,8 +41,9 @@ Read [../../references/agent/practical-test-case-route-v0.9.md](../../references
 
 - TC, matrix and source obligations use Russian in user-facing text.
 - One OBL, one matrix row, one TC, one primary expected result.
+- Preserve source modifiers in OBL and review reconstruction: execution contexts, quantifiers, boundaries, conditions and exceptions. Split them if they create distinct flows or results.
 - A finite list is not automatically one TC: split items that trigger distinct transitions or results; keep one TC only for a same-action, same-logic composition/value check.
-- Missing UI/data/observability is an execution status, not invented behavior or a blocker unless the source assertion itself cannot be represented. Use `candidate-ui-calibration`, `needs-test-data` or `blocked-observability` as applicable. A source contradiction is a blocker and no TC may be invented for it.
+- Missing UI/data/observability is an execution status, not invented behavior or a blocker unless the source assertion itself cannot be represented. Use `candidate-ui-calibration`, `needs-test-data` or `blocked-observability` as applicable. `blocked-observability` is not an external blocker by itself. A source contradiction is a blocker and no TC may be invented for it.
 - Compare the selected section heading with nearby tables and source assertions. Record a terminology discrepancy as a gap; ground the working scope subject in the content, not a contradictory heading.
 - Before `workflow-state.json`, call the stdout-only `validate_practical_obligations.py` and call its result only an obligations-structure check. Call `validate_practical_scope.py` only after the workflow state and matrix exist.
 - A confirmed BA answer is not free prose: bind its support file and SHA-256 in the linked GAP, resolve only its linked GAP/OBL and update only affected downstream matrix/TC artifacts. Do not mutate the package-wide source manifest for a scope-local answer.
@@ -51,4 +52,4 @@ Read [../../references/agent/practical-test-case-route-v0.9.md](../../references
 
 ## Independent review
 
-The reviewer is a separate top-level `codex-thread`, read-only for reviewed matrix/TC. Give it only the immutable review manifest, source inputs, scope obligations, matrix/TC and review format. It must independently reconstruct obligations before comparing author artefacts. A subagent does not satisfy this requirement.
+The reviewer is a separate top-level `codex-thread`, read-only for reviewed matrix/TC. If the thread mechanism is available, dispatch it directly without searching external documentation. Give it only the immutable review manifest, source inputs, scope obligations, matrix/TC and review format. It must independently reconstruct obligations before comparing author artefacts. A subagent does not satisfy this requirement.

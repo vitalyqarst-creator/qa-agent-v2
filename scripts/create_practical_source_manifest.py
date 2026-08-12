@@ -12,6 +12,7 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from test_case_agent.practical_v09 import (
+    APPROVED_CLARIFICATION_FILENAME_RE,
     ROUTE_VERSION,
     ROUTE_TOOL_VERSION,
     SOURCE_MANIFEST_RELATIVE_PATH,
@@ -30,7 +31,13 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--xhtml", type=Path, required=True)
     parser.add_argument("--pdf", type=Path)
     parser.add_argument("--output", type=Path, required=True)
-    parser.add_argument("--support", type=Path, action="append", default=[])
+    parser.add_argument(
+        "--support",
+        type=Path,
+        action="append",
+        default=[],
+        help="Stable package support only; do not pass scope-local approved BA clarifications.",
+    )
     return parser.parse_args(argv)
 
 
@@ -62,6 +69,13 @@ def main(argv: list[str] | None = None) -> int:
         )
     if output.exists():
         raise PracticalV09Error(f"Refusing to overwrite existing manifest: {output}")
+    for support_path in args.support:
+        relative = relative_to_package(package_root, support_path.resolve())
+        if APPROVED_CLARIFICATION_FILENAME_RE.search(relative):
+            raise PracticalV09Error(
+                "scope-local approved clarification must be bound through the related GAP-* "
+                "in scope-obligations.json, not added to source-package-manifest.json"
+            )
     payload: dict[str, object] = {
         "schema_version": 1,
         "route_version": ROUTE_VERSION,

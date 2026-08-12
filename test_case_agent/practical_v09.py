@@ -18,7 +18,7 @@ from typing import Any, Iterable
 
 
 ROUTE_VERSION = "practical-v0.9"
-ROUTE_TOOL_VERSION = "practical-v0.9.4"
+ROUTE_TOOL_VERSION = "practical-v0.9.5"
 WORKFLOW_STATE_SCHEMA_VERSION = 1
 SOURCE_CONTRACT_VERSION = "source-package-v1"
 REVIEW_MANIFEST_VERSION = "practical-review-manifest-v1"
@@ -138,6 +138,20 @@ AUTOFILL_MANUAL_INPUT_RE = re.compile(
     r"ручн\w*\s+(?:ввод\w*|заполн\w*|редактир\w*)[^.]{0,400}автоматическ\w*\s+заполн\w*)",
     flags=re.IGNORECASE,
 )
+# A syntactically valid UTF-8 JSON file can still contain text that was
+# previously decoded through a wrong single-byte codec.  These markers cover
+# the two common forms of Russian UTF-8 mojibake without treating ordinary
+# Russian prose as invalid.
+MOJIBAKE_RE = re.compile(
+    r"(?:[ÐÑÃÂ][\x80-\xBF]|[РС][\u0400-\u040f\u0450-\u045f\u00b0-\u00bf])"
+)
+APPROVED_CLARIFICATION_FILENAME_RE = re.compile(
+    r"(?:^|/)[^/]+-approved-clarifications\.md$", flags=re.IGNORECASE
+)
+AGENT_NOTES_VERSION_METADATA_RE = re.compile(
+    r"(?im)^\s*(?:[-*]\s*)?(?:исходн\w*|agent(?:[- ]layer)?|агент\w*|код\w*)\s*"
+    r"(?:commit|коммит|version|версия)\s*[:=]"
+)
 
 
 @dataclass(frozen=True)
@@ -193,6 +207,20 @@ def write_json(path: Path, payload: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     rendered = json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
     path.write_text(rendered, encoding="utf-8")
+
+
+def has_suspicious_mojibake(value: object) -> bool:
+    """Return whether a JSON value contains likely corrupted UTF-8 prose."""
+    if isinstance(value, str):
+        return bool(MOJIBAKE_RE.search(value))
+    if isinstance(value, list):
+        return any(has_suspicious_mojibake(item) for item in value)
+    if isinstance(value, dict):
+        return any(
+            has_suspicious_mojibake(key) or has_suspicious_mojibake(item)
+            for key, item in value.items()
+        )
+    return False
 
 
 def package_relative_path(package_root: Path, raw: object, *, artifact: str) -> Path:
@@ -416,6 +444,16 @@ def validate_source_package_manifest(
                     remediation_owner="controller",
                 ))
                 continue
+            if APPROVED_CLARIFICATION_FILENAME_RE.search(raw_path.replace("\\", "/")):
+                findings.append(finding(
+                    "source-manifest-scope-clarification",
+                    "source-integrity",
+                    "Утверждённый ответ БА ошибочно добавлен в общий source manifest",
+                    "Scope-local approved clarification должен быть связан только через "
+                    "GAP-* в scope-obligations.json и не должен делать stale другие scope.",
+                    artifact,
+                    remediation_owner="controller",
+                ))
             if raw_path in seen_support_paths:
                 findings.append(finding(
                     "source-manifest-support-path-duplicate",
@@ -469,6 +507,29 @@ def validate_source_package_manifest(
             findings.append(finding("source-manifest-agent-notes-unbound", "source-integrity", "Не учтён обязательный контекст AGENT-NOTES.md", "Файл существует в корне FT-пакета и должен быть связан в source-package-manifest.json.", artifact, remediation_owner="controller"))
         elif str(notes.get("sha256") or "") != sha256_file(notes_path):
             findings.append(finding("source-manifest-agent-notes-hash", "source-integrity", "Контрольная сумма AGENT-NOTES.md не совпадает", "Контекст пакета изменился после создания манифеста.", artifact, remediation_owner="controller"))
+        try:
+            notes_text = notes_path.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError) as exc:
+            findings.append(finding(
+                "source-manifest-agent-notes-unreadable",
+                "source-integrity",
+                "Не удалось прочитать AGENT-NOTES.md как UTF-8",
+                str(exc),
+                artifact,
+                remediation_owner="controller",
+            ))
+        else:
+            if AGENT_NOTES_VERSION_METADATA_RE.search(notes_text):
+                findings.append(finding(
+                    "source-manifest-agent-notes-version-metadata",
+                    "transport",
+                    "В AGENT-NOTES.md записана версия agent-layer",
+                    "Версия и commit агента фиксируются в review manifest только для аудита; "
+                    "удалите их из package context, чтобы обновление агента не делало scope stale.",
+                    artifact,
+                    remediation_owner="controller",
+                    severity="warning",
+                ))
     elif notes not in (None, "", "not-applicable"):
         findings.append(finding("source-manifest-agent-notes-stale", "source-integrity", "Манифест ссылается на отсутствующий AGENT-NOTES.md", "Удалите устаревшую ссылку или восстановите файл.", artifact, remediation_owner="controller"))
     return findings, manifest
@@ -1227,6 +1288,50 @@ def review_subject_paths(state: dict[str, Any], package_root: Path, review_mode:
     return paths
 
 
+def require_current_validator_report(
+    *,
+    state: dict[str, Any],
+    package_root: Path,
+    context: dict[str, Any],
+) -> tuple[Path, dict[str, Any]]:
+    """Load the persisted scoped validation for exactly the frozen review inputs.
+
+    `build_review_manifest` performs a defensive in-memory validation as well,
+    but that is not a replacement for the canonical `validator-report.json`.
+    Requiring the persisted report prevents a revision from being reviewed with
+    an old report whose hashes describe an earlier matrix or obligations set.
+    """
+    report_path = workflow_artifact_path(
+        state, package_root, "validator_report", required=True
+    )
+    assert report_path is not None
+    if not report_path.is_file():
+        raise PracticalV09Error(
+            "Current scoped validator report is required before independent review: "
+            + relative_to_package(package_root, report_path)
+        )
+    report = read_json(report_path)
+    if report.get("route_version") != ROUTE_VERSION:
+        raise PracticalV09Error("validator-report.json belongs to another route version")
+    if report.get("tool_version") != ROUTE_TOOL_VERSION:
+        raise PracticalV09Error("validator-report.json was created by another tool version")
+    if report.get("validator_contract_version") != VALIDATOR_REPORT_VERSION:
+        raise PracticalV09Error("validator-report.json has an unsupported validator contract")
+    if report.get("scope_id") != state["scope_id"] or report.get("scope_slug") != state["scope_slug"]:
+        raise PracticalV09Error("validator-report.json belongs to another scope")
+    if report.get("phase") != state["phase"]:
+        raise PracticalV09Error("validator-report.json does not describe the current workflow phase")
+    if report.get("content_input_hashes") != context["content_input_hashes"]:
+        raise PracticalV09Error(
+            "validator-report.json is stale for the current scope inputs; "
+            "run validate_practical_scope.py again before independent review"
+        )
+    summary = report.get("summary")
+    if not isinstance(summary, dict) or summary.get("clean") is not True:
+        raise PracticalV09Error("validator-report.json is not clean for independent review")
+    return report_path, report
+
+
 def build_review_manifest(
     *,
     package_root: Path,
@@ -1244,6 +1349,11 @@ def build_review_manifest(
     blocking = [item for item in findings if item.blocking]
     if blocking:
         raise PracticalV09Error("Cannot create review manifest while scope has blocking findings: " + ", ".join(item.id for item in blocking))
+    validator_report_path, validator_report = require_current_validator_report(
+        state=state,
+        package_root=package_root,
+        context=context,
+    )
     paths = review_subject_paths(state, package_root, review_mode)
     return {
         "schema_version": 1,
@@ -1258,7 +1368,8 @@ def build_review_manifest(
         "code_branch": code_branch,
         "code_commit": code_commit,
         "contract_digest": contract_digest,
-        "validator_report_digest": sha256_json(build_validator_report(context, findings)),
+        "validator_report_sha256": sha256_file(validator_report_path),
+        "validator_report_digest": sha256_json(validator_report),
         "inputs": [
             {"role": key, "path": relative_to_package(package_root, path), "sha256": sha256_file(path)}
             for key, path in paths.items()
@@ -1280,6 +1391,15 @@ def verify_review_result(
     result = read_json(result_path)
     artifact = relative_to_package(package_root, result_path)
     findings: list[ScopeFinding] = []
+    if has_suspicious_mojibake(result):
+        findings.append(finding(
+            "review-result-mojibake",
+            "review-integrity",
+            "В результате review обнаружен повреждённый текст",
+            "JSON должен содержать читаемый UTF-8 текст; исправьте кодировку без изменения review snapshot.",
+            artifact,
+            remediation_owner="reviewer",
+        ))
     if manifest.get("manifest_version") != REVIEW_MANIFEST_VERSION:
         findings.append(finding("review-manifest-version", "review-integrity", "У manifest review неверная версия контракта", f"Ожидается {REVIEW_MANIFEST_VERSION}.", artifact, remediation_owner="controller"))
     if manifest.get("route_version") != ROUTE_VERSION:
@@ -1306,6 +1426,16 @@ def verify_review_result(
             findings.append(finding("review-result-scope", "review-integrity", "Результат review относится к другому scope", f"Поле {key} должно совпадать с review-manifest.json.", artifact, remediation_owner="reviewer"))
     if result.get("verdict") not in {"approved", "changes-required", "blocked-input"}:
         findings.append(finding("review-result-verdict", "review-integrity", "У результата review неизвестный verdict", "Допустимы approved, changes-required или blocked-input.", artifact, remediation_owner="reviewer"))
+    raw_review_findings = result.get("findings")
+    if not isinstance(raw_review_findings, list):
+        findings.append(finding(
+            "review-result-findings-format",
+            "review-integrity",
+            "У результата review неверный формат findings",
+            "Поле findings должно быть массивом формальных findings, включая пустой массив при approved verdict.",
+            artifact,
+            remediation_owner="reviewer",
+        ))
     for entry in manifest.get("inputs", []):
         if not isinstance(entry, dict):
             continue
