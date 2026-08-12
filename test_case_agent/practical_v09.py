@@ -122,6 +122,15 @@ CLARIFICATION_REQUEST_ENUMS = {
         "rejected",
     },
 }
+AUTOFILL_MULTI_TARGET_RE = re.compile(
+    r"автоматическ\w*\s+заполн\w*[^.]{0,400}[,;]",
+    flags=re.IGNORECASE,
+)
+AUTOFILL_MANUAL_INPUT_RE = re.compile(
+    r"(?:автоматическ\w*\s+заполн\w*[^.]{0,400}ручн\w*\s+(?:ввод\w*|заполн\w*|редактир\w*)|"
+    r"ручн\w*\s+(?:ввод\w*|заполн\w*|редактир\w*)[^.]{0,400}автоматическ\w*\s+заполн\w*)",
+    flags=re.IGNORECASE,
+)
 
 
 @dataclass(frozen=True)
@@ -843,6 +852,24 @@ def validate_scope_obligations(
                 findings.append(finding("scope-obligation-risk-flags-unknown", "semantic-completeness", "У обязательства указан неизвестный риск matrix review", f"{obligation_id or f'строка {index}'}: " + ", ".join(unknown_flags) + ".", artifact, remediation_owner="scope-analyzer"))
         if re.search(r"\b(source-backed|residual|blocked-observability|fixture)\b", statement, flags=re.IGNORECASE):
             findings.append(finding("scope-obligation-process-language", "style", "В формулировке обязательства остался служебный английский текст", f"Проверьте statement для {obligation_id}.", artifact, remediation_owner="scope-analyzer", severity="warning"))
+        if AUTOFILL_MULTI_TARGET_RE.search(statement):
+            findings.append(finding(
+                "scope-obligation-autofill-aggregated",
+                "semantic-completeness",
+                "Одно обязательство объединяет автозаполнение нескольких полей",
+                f"{obligation_id}: разделите автозаполнение на отдельный OBL-* для каждого целевого поля.",
+                artifact,
+                remediation_owner="scope-analyzer",
+            ))
+        if AUTOFILL_MANUAL_INPUT_RE.search(statement):
+            findings.append(finding(
+                "scope-obligation-autofill-manual-mixed",
+                "semantic-completeness",
+                "Одно обязательство смешивает автозаполнение и ручной ввод",
+                f"{obligation_id}: создайте отдельные OBL-* для автозаполнения и ручного ввода/редактирования.",
+                artifact,
+                remediation_owner="scope-analyzer",
+            ))
     findings.extend(
         validate_scope_clarifications(
             payload=payload,

@@ -368,6 +368,23 @@ class PracticalV09Tests(unittest.TestCase):
                 [item.id for item in findings if item.blocking],
             )
 
+    def test_scope_obligation_rejects_known_autofill_aggregation_patterns(self) -> None:
+        cases = (
+            (
+                "Система автоматически заполняет наименование, ИНН и ОГРН.",
+                "scope-obligation-autofill-aggregated",
+            ),
+            (
+                "Поле поддерживает автоматическое заполнение и ручной ввод.",
+                "scope-obligation-autofill-manual-mixed",
+            ),
+        )
+        for statement, finding_id in cases:
+            with self.subTest(statement=statement), tempfile.TemporaryDirectory() as raw:
+                fixture = PracticalV09Fixture(Path(raw), obligation_statement=statement)
+                _, findings = validate_scope(package_root=fixture.root, workflow_state_path=fixture.state)
+                self.assertIn(finding_id, [item.id for item in findings if item.blocking])
+
     def test_resolved_gap_requires_hash_bound_approved_clarification(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             fixture = PracticalV09Fixture(Path(raw))
