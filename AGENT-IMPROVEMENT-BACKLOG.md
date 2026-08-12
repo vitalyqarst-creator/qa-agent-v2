@@ -16,6 +16,26 @@
 
 ## Незакрытые улучшения practical v0.9
 
+- [ ] `AGI-013` (`P1`) Исправить приоритет вычисления статуса исполнения из
+  нескольких `SETUP-*`.
+  - Основание: независимый matrix review scope `9.3.2` выявил пять строк,
+    где одновременные `needs-test-data` и `candidate-ui-calibration` были
+    сведены к `candidate-ui-calibration`; validator повторил ту же ошибку и
+    выдал `0 blocking`.
+  - Завершено, когда: policy явно определяет первичный статус при нескольких
+    недоступных предпосылках, `needs-test-data` не маскируется UI-калибровкой,
+    а регрессии покрывают все пары availability-status, включая actor/fixture
+    плюс navigation.
+
+- [ ] `AGI-014` (`P2`) Разделить совместимость source package manifest и
+  версию запускающего инструмента.
+  - Основание: повторная materialization scope `9.3.2` получила единственное
+    transport-warning только потому, что source manifest создан v0.9.7, хотя
+    структура и хеши входов совместимы с v0.9.8.
+  - Завершено, когда: validator предупреждает только о несовместимой schema
+    или изменившихся source inputs; безопасное обновление agent-layer без
+    изменения source package не создаёт шумного warning.
+
 - [ ] `AGI-001` (`P2`) Сохранить безопасный запас контекста для
   `source_locator.discovery`.
   - Основание: architecture audit, 129.8 KiB из 132 KiB; запас 2.2 KiB при
