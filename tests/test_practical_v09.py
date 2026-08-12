@@ -15,6 +15,7 @@ from test_case_agent.practical_v09 import (
     build_validator_report,
     derived_execution_status,
     finding,
+    load_workflow_state,
     matrix_review_required,
     sha256_file,
     validate_source_package_manifest,
@@ -190,8 +191,8 @@ class PracticalV09Fixture:
                 "route_version": ROUTE_VERSION,
                 "scope_id": "01",
                 "scope_slug": "menu",
-                "phase": "test-cases",
-                "next_action": "Провести независимое review тест-кейсов",
+                "phase": "review",
+                "next_action": "Провести независимое final TC review",
                 "matrix_review_required": False,
                 "contract_versions": {
                     "route": ROUTE_VERSION,
@@ -205,7 +206,8 @@ class PracticalV09Fixture:
                     "validator_report": "work/practical-v0.9/menu/validator-report.json",
                 },
                 "reviews": [],
-                "revision_count": 0,
+                "matrix_revision_count": 0,
+                "tc_revision_count": 0,
                 "final_verdict": "not-finalized",
                 "decision_notes": [],
             },
@@ -1249,7 +1251,8 @@ class PracticalV09Tests(unittest.TestCase):
             state = json.loads(fixture.state.read_text(encoding="utf-8"))
             self.assertEqual("accepted", state["phase"])
             self.assertEqual("approved", state["final_verdict"])
-            self.assertEqual(0, state["revision_count"])
+            self.assertEqual(0, state["matrix_revision_count"])
+            self.assertEqual(0, state["tc_revision_count"])
             self.assertEqual(
                 [{
                     "mode": "test-cases",
@@ -1260,7 +1263,7 @@ class PracticalV09Tests(unittest.TestCase):
                 state["reviews"],
             )
 
-    def test_changes_required_consumes_the_single_content_revision(self) -> None:
+    def test_tc_changes_required_consumes_only_tc_revision_budget(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             fixture = PracticalV09Fixture(Path(raw))
             manifest = build_review_manifest(
@@ -1316,7 +1319,8 @@ class PracticalV09Tests(unittest.TestCase):
             )
             self.assertEqual(0, first.returncode, first.stderr)
             state = json.loads(fixture.state.read_text(encoding="utf-8"))
-            self.assertEqual(1, state["revision_count"])
+            self.assertEqual(0, state["matrix_revision_count"])
+            self.assertEqual(1, state["tc_revision_count"])
             self.assertEqual("changes-required", state["final_verdict"])
             self.assertEqual("test-cases", state["phase"])
 
@@ -1377,9 +1381,204 @@ class PracticalV09Tests(unittest.TestCase):
             )
             self.assertEqual(0, completed.returncode, completed.stderr)
             state = json.loads(fixture.state.read_text(encoding="utf-8"))
-            self.assertEqual(0, state["revision_count"])
+            self.assertEqual(0, state["matrix_revision_count"])
+            self.assertEqual(0, state["tc_revision_count"])
             self.assertEqual("test-cases", state["phase"])
             self.assertIn("неблокирующие", state["next_action"])
+
+    def test_legacy_matrix_revision_does_not_consume_tc_budget(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            fixture = PracticalV09Fixture(Path(raw))
+            legacy_state = json.loads(fixture.state.read_text(encoding="utf-8"))
+            legacy_state.pop("matrix_revision_count")
+            legacy_state.pop("tc_revision_count")
+            legacy_state["revision_count"] = 1
+            legacy_state["reviews"] = [{
+                "mode": "matrix",
+                "verdict": "changes-required",
+                "manifest": "work/practical-v0.9/menu/matrix-review-manifest.json",
+                "result": "work/practical-v0.9/menu/matrix-review-result.json",
+            }]
+            write_json(fixture.state, legacy_state)
+
+            state = load_workflow_state(fixture.state, fixture.root)
+            self.assertNotIn("revision_count", state)
+            self.assertEqual(1, state["matrix_revision_count"])
+            self.assertEqual(0, state["tc_revision_count"])
+
+    def test_second_tc_content_review_blocks_only_tc_phase(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            fixture = PracticalV09Fixture(Path(raw))
+            state = json.loads(fixture.state.read_text(encoding="utf-8"))
+            state["matrix_revision_count"] = 1
+            write_json(fixture.state, state)
+            manifest = build_review_manifest(
+                package_root=fixture.root,
+                workflow_state_path=fixture.state,
+                review_mode="test-cases",
+                controller_thread_id="019feebf-3cde-79d2-9f87-ba9c61ff7b13",
+                code_branch="codex/test",
+                code_commit="abc123",
+                contract_digest="contract",
+            )
+            manifest_path = fixture.scope_dir / "test-cases-review-manifest.json"
+            write_json(manifest_path, manifest)
+            result_path = fixture.scope_dir / "test-cases-review-result.json"
+            write_json(
+                result_path,
+                {
+                    "review_manifest_sha256": sha256_file(manifest_path),
+                    "scope_id": "01",
+                    "scope_slug": "menu",
+                    "review_mode": "test-cases",
+                    "execution_surface": "codex-thread",
+                    "reviewer_thread_id": "019feebf-3cde-79d2-9f87-ba9c61ff7b14",
+                    "independent_obligations": independently_derived_obligation(),
+                    "verdict": "changes-required",
+                    "findings": [{"id": "RV-001", "blocking": True, "remediation_owner": "writer"}],
+                },
+            )
+            command = [
+                sys.executable,
+                str(REPO_ROOT / "scripts" / "finalize_practical_review.py"),
+                "--ft-package-root", str(fixture.root),
+                "--workflow-state", str(fixture.state),
+                "--review-manifest", str(manifest_path),
+                "--review-result", str(result_path),
+            ]
+            first = subprocess.run(command, text=True, capture_output=True, encoding="utf-8", errors="replace")
+            self.assertEqual(0, first.returncode, first.stderr)
+            state = json.loads(fixture.state.read_text(encoding="utf-8"))
+            self.assertEqual(1, state["matrix_revision_count"])
+            self.assertEqual(1, state["tc_revision_count"])
+            self.assertEqual("test-cases", state["phase"])
+
+            second = subprocess.run(command, text=True, capture_output=True, encoding="utf-8", errors="replace")
+            self.assertEqual(0, second.returncode, second.stderr)
+            state = json.loads(fixture.state.read_text(encoding="utf-8"))
+            self.assertEqual("blocked", state["phase"])
+            self.assertEqual(1, state["matrix_revision_count"])
+            self.assertEqual(1, state["tc_revision_count"])
+
+    def test_validator_rejects_test_data_that_restate_rule(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            fixture = PracticalV09Fixture(Path(raw))
+            fixture.tc.write_text(
+                fixture.tc.read_text(encoding="utf-8").replace(
+                    "**Тестовые данные:** Не требуются.",
+                    "**Тестовые данные:** Данные, предусмотренные проверяемым правилом: раздел доступен.",
+                ),
+                encoding="utf-8",
+            )
+            _, findings = validate_scope(package_root=fixture.root, workflow_state_path=fixture.state)
+            self.assertIn("test-case-test-data-tautology", [item.id for item in findings if item.blocking])
+
+    def test_validator_requires_separate_first_file_upload_for_cardinality(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            fixture = PracticalV09Fixture(Path(raw))
+            broken = fixture.tc.read_text(encoding="utf-8")
+            broken = broken.replace("Открытие раздела «Партнеры»", "В поле можно прикрепить не более одного файла")
+            broken = broken.replace(
+                "**Шаги:** Открыть раздел «Партнеры».",
+                "**Шаги:**\n1. Открыть форму.\n2. Попытаться прикрепить второй допустимый файл.",
+            )
+            fixture.tc.write_text(broken, encoding="utf-8")
+            _, findings = validate_scope(package_root=fixture.root, workflow_state_path=fixture.state)
+            self.assertIn("test-case-upload-cardinality-trigger", [item.id for item in findings if item.blocking])
+
+            fixed = broken.replace(
+                "1. Открыть форму.\n2. Попытаться прикрепить второй допустимый файл.",
+                "1. Открыть форму.\n2. Прикрепить первый допустимый файл.\n3. Попытаться прикрепить второй допустимый файл.",
+            )
+            fixture.tc.write_text(fixed, encoding="utf-8")
+            _, findings = validate_scope(package_root=fixture.root, workflow_state_path=fixture.state)
+            self.assertNotIn("test-case-upload-cardinality-trigger", [item.id for item in findings if item.blocking])
+
+    def test_validator_marks_test_case_writing_phase_stale_after_tc_exists(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            fixture = PracticalV09Fixture(Path(raw))
+            state = json.loads(fixture.state.read_text(encoding="utf-8"))
+            state["phase"] = "test-cases"
+            state["next_action"] = "Написать тест-кейсы"
+            write_json(fixture.state, state)
+            _, findings = validate_scope(package_root=fixture.root, workflow_state_path=fixture.state)
+            self.assertIn("workflow-phase-stale-after-tc-write", [item.id for item in findings])
+
+    def test_legacy_matrix_verdict_is_not_projected_as_final_tc_verdict(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            fixture = PracticalV09Fixture(Path(raw))
+            state = json.loads(fixture.state.read_text(encoding="utf-8"))
+            state["final_verdict"] = "changes-required"
+            state["reviews"] = [{
+                "mode": "matrix",
+                "verdict": "changes-required",
+                "manifest": "work/practical-v0.9/menu/matrix-review-manifest.json",
+                "result": "work/practical-v0.9/menu/matrix-review-result.json",
+            }]
+            write_json(fixture.state, state)
+            normalized = load_workflow_state(fixture.state, fixture.root)
+            self.assertEqual("not-finalized", normalized["final_verdict"])
+
+    def test_matrix_approval_resets_final_tc_verdict(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            fixture = PracticalV09Fixture(Path(raw))
+            state = json.loads(fixture.state.read_text(encoding="utf-8"))
+            state["phase"] = "matrix"
+            state["final_verdict"] = "changes-required"
+            write_json(fixture.state, state)
+            context, findings = validate_scope(
+                package_root=fixture.root,
+                workflow_state_path=fixture.state,
+            )
+            write_json(
+                fixture.scope_dir / "validator-report.json",
+                build_validator_report(context, findings),
+            )
+            manifest = build_review_manifest(
+                package_root=fixture.root,
+                workflow_state_path=fixture.state,
+                review_mode="matrix",
+                controller_thread_id="019feebf-3cde-79d2-9f87-ba9c61ff7b13",
+                code_branch="codex/test",
+                code_commit="abc123",
+                contract_digest="contract",
+            )
+            manifest_path = fixture.scope_dir / "matrix-review-manifest.json"
+            write_json(manifest_path, manifest)
+            result_path = fixture.scope_dir / "matrix-review-result.json"
+            write_json(
+                result_path,
+                {
+                    "review_manifest_sha256": sha256_file(manifest_path),
+                    "scope_id": "01",
+                    "scope_slug": "menu",
+                    "review_mode": "matrix",
+                    "execution_surface": "codex-thread",
+                    "reviewer_thread_id": "019feebf-3cde-79d2-9f87-ba9c61ff7b14",
+                    "independent_obligations": independently_derived_obligation(),
+                    "verdict": "approved",
+                    "findings": [],
+                },
+            )
+            completed = subprocess.run(
+                [
+                    sys.executable,
+                    str(REPO_ROOT / "scripts" / "finalize_practical_review.py"),
+                    "--ft-package-root", str(fixture.root),
+                    "--workflow-state", str(fixture.state),
+                    "--review-manifest", str(manifest_path),
+                    "--review-result", str(result_path),
+                ],
+                text=True,
+                capture_output=True,
+                encoding="utf-8",
+                errors="replace",
+            )
+            self.assertEqual(0, completed.returncode, completed.stderr)
+            state = json.loads(fixture.state.read_text(encoding="utf-8"))
+            self.assertEqual("test-cases", state["phase"])
+            self.assertEqual("not-finalized", state["final_verdict"])
+            self.assertEqual("Написать тест-кейсы", state["next_action"])
 
     def test_review_contract_rejects_non_durable_thread_identifiers(self) -> None:
         with tempfile.TemporaryDirectory() as raw:

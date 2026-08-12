@@ -28,7 +28,7 @@ Read [../../references/agent/practical-test-case-route-v0.9.md](../../references
 3. Create `workflow-state.json`, then write one Russian `test-design-matrix.md`.
 4. Run `validate_practical_scope.py` exactly once for the frozen stage. After any permitted revision, run it again for the new frozen inputs before the next review manifest.
 5. Run independent matrix review only when the deterministic v0.9 complexity rule requires it.
-6. Write canonical TC after accepted/skipped matrix review; run one fresh scoped validation.
+6. Write canonical TC after accepted/skipped matrix review; run one fresh scoped validation; then set `phase: review`, `final_verdict: not-finalized` and next action to the independent final TC review.
 7. Run final independent TC review in a separate top-level Codex session. One targeted revision plus one fresh final review is the maximum.
 
 ## Do not create
@@ -41,6 +41,7 @@ Read [../../references/agent/practical-test-case-route-v0.9.md](../../references
 
 - TC, matrix and source obligations use Russian in user-facing text.
 - One OBL/CTX pair, one matrix row, one TC, one primary expected result. Different create/edit or other user flows are separate CTX and separate TC.
+- Test data are concrete values/files or precise properties plus a preparation method; never restate the checked rule as data. Put every action that creates the assertion's trigger state in its own numbered step. For a one-file limit, attach the first allowed file before attempting the second.
 - Preserve source modifiers in OBL and review reconstruction: execution contexts, quantifiers, boundaries, conditions and exceptions. Split them if they create distinct flows or results.
 - A finite list is not automatically one TC: split items that trigger distinct transitions or results; keep one TC only for a same-action, same-logic composition/value check.
 - Missing UI/data/observability is an execution status, not invented behavior or a blocker unless the source assertion itself cannot be represented. Derive it from all linked SETUP prerequisites; a missing actor, fixture, integration or initial state makes `ready` invalid. Apply the primary-status order defined in the canonical route reference: `needs-test-data` never becomes only `candidate-ui-calibration`. `blocked-observability` is not an external blocker by itself. A source contradiction is a blocker and no TC may be invented for it.

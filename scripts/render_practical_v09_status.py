@@ -31,7 +31,8 @@ def main(argv: list[str] | None = None) -> int:
     print()
     print(f"- Этап: `{state['phase']}`")
     print(f"- Следующее действие: {state['next_action']}")
-    print(f"- Содержательных доработок: {state['revision_count']} из 1")
+    print(f"- Доработки матрицы: {state['matrix_revision_count']} из 1")
+    print(f"- Доработки тест-кейсов: {state['tc_revision_count']} из 1")
     print(f"- Финальный вердикт: `{state['final_verdict']}`")
     print(f"- Matrix review обязателен: {'да' if state.get('matrix_review_required') else 'нет'}")
     if report is None:

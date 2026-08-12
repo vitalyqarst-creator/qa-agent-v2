@@ -18,7 +18,7 @@ from typing import Any, Iterable
 
 
 ROUTE_VERSION = "practical-v0.9"
-ROUTE_TOOL_VERSION = "practical-v0.9.9"
+ROUTE_TOOL_VERSION = "practical-v0.9.11"
 WORKFLOW_STATE_SCHEMA_VERSION = 1
 SOURCE_CONTRACT_VERSION = "source-package-v3"
 REVIEW_MANIFEST_VERSION = "practical-review-manifest-v2"
@@ -122,6 +122,11 @@ MATRIX_REQUIRED_COLUMNS = (
     "Планируемый TC-ID",
 )
 ALLOWED_FINAL_VERDICTS = {"not-finalized", "approved", "changes-required", "blocked-input"}
+TEST_DATA_TAUTOLOGY_PATTERNS = (
+    re.compile(r"\bданные,?\s+предусмотренные\s+проверяемым\s+правилом\b", re.IGNORECASE),
+    re.compile(r"\bвалидные\s+данные\b", re.IGNORECASE),
+    re.compile(r"\bзначение\s+из\s+тестовых\s+данных\b", re.IGNORECASE),
+)
 CODEX_THREAD_ID_RE = re.compile(
     r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
     flags=re.IGNORECASE,
@@ -392,9 +397,8 @@ def load_workflow_state(path: Path, package_root: Path) -> dict[str, Any]:
     reviews = state.get("reviews", [])
     if not isinstance(reviews, list):
         raise PracticalV09Error("workflow-state.json: reviews must be an array")
-    revision_count = state.get("revision_count")
-    if not isinstance(revision_count, int) or not 0 <= revision_count <= 1:
-        raise PracticalV09Error("workflow-state.json: revision_count must be 0 or 1")
+    normalize_revision_budgets(state)
+    normalize_final_verdict(state)
     if state.get("final_verdict") not in ALLOWED_FINAL_VERDICTS:
         raise PracticalV09Error(
             "workflow-state.json: final_verdict has unsupported value"
@@ -410,6 +414,59 @@ def load_workflow_state(path: Path, package_root: Path) -> dict[str, Any]:
         )
     workflow_artifact_path(state, package_root, "scope_obligations", required=True)
     return state
+
+
+def normalize_revision_budgets(state: dict[str, Any]) -> None:
+    """Normalize the v0.9 revision budget without breaking existing scopes.
+
+    Early v0.9 artifacts had one ``revision_count`` shared by matrix and TC
+    reviews.  A consumed matrix revision must not make the first final TC
+    finding unrepairable.  Legacy states are deterministically migrated in
+    memory and are persisted in the new form on the next finalization.
+    """
+    matrix_count = state.get("matrix_revision_count")
+    tc_count = state.get("tc_revision_count")
+    if matrix_count is None and tc_count is None:
+        legacy_count = state.pop("revision_count", None)
+        if not isinstance(legacy_count, int) or not 0 <= legacy_count <= 1:
+            raise PracticalV09Error(
+                "workflow-state.json: revision_count must be 0 or 1 for a legacy state"
+            )
+        reviews = state.get("reviews", [])
+        has_matrix_changes = any(
+            isinstance(entry, dict)
+            and entry.get("mode") == "matrix"
+            and entry.get("verdict") == "changes-required"
+            for entry in reviews
+        )
+        state["matrix_revision_count"] = legacy_count if has_matrix_changes else 0
+        state["tc_revision_count"] = 0 if has_matrix_changes else legacy_count
+        return
+    if matrix_count is None or tc_count is None:
+        raise PracticalV09Error(
+            "workflow-state.json: matrix_revision_count and tc_revision_count must be specified together"
+        )
+    if not isinstance(matrix_count, int) or not 0 <= matrix_count <= 1:
+        raise PracticalV09Error("workflow-state.json: matrix_revision_count must be 0 or 1")
+    if not isinstance(tc_count, int) or not 0 <= tc_count <= 1:
+        raise PracticalV09Error("workflow-state.json: tc_revision_count must be 0 or 1")
+    state.pop("revision_count", None)
+
+
+def normalize_final_verdict(state: dict[str, Any]) -> None:
+    """Keep final_verdict reserved for the final TC review.
+
+    Matrix review history is already retained in ``reviews``.  Older state
+    files projected a matrix ``changes-required`` result as the final verdict,
+    which made the route appear unfinished even after a matrix re-review was
+    approved.
+    """
+    test_case_review_exists = any(
+        isinstance(entry, dict) and entry.get("mode") == "test-cases"
+        for entry in state.get("reviews", [])
+    )
+    if not test_case_review_exists and state.get("final_verdict") == "changes-required":
+        state["final_verdict"] = "not-finalized"
 
 
 def is_visual_only_path(raw_path: str) -> bool:
@@ -1816,6 +1873,39 @@ def parse_test_case_blocks(path: Path) -> list[dict[str, str]]:
     return blocks
 
 
+def test_case_field(body: str, field: str) -> str:
+    """Return a Markdown TC field value, including a multi-line value."""
+    match = re.search(
+        rf"(?ms)^\*\*{re.escape(field)}:\*\*\s*(.*?)(?=^\*\*[^\n]+:\*\*|\Z)",
+        body,
+    )
+    return match.group(1).strip() if match else ""
+
+
+def numbered_steps(value: str) -> list[str]:
+    return [
+        match.group(1).strip()
+        for match in re.finditer(r"(?m)^\s*\d+\.\s+(.+?)\s*$", value)
+    ]
+
+
+def has_complete_single_file_trigger(steps: list[str]) -> bool:
+    """Check the minimal observable setup for a one-file upload limit.
+
+    The check is intentionally narrow.  It applies only when a TC explicitly
+    talks about a second file or a one-file limit, and requires separate file
+    actions before and during the attempted overflow.
+    """
+    file_actions = [
+        step for step in steps
+        if re.search(r"\b(?:прикрепить|загрузить)\w*\b", step, re.IGNORECASE)
+        and re.search(r"\bфайл\w*\b", step, re.IGNORECASE)
+    ]
+    if len(file_actions) < 2:
+        return False
+    return any(re.search(r"\bвтор\w*\b", step, re.IGNORECASE) for step in file_actions)
+
+
 def validate_test_cases(
     tc_path: Path,
     package_root: Path,
@@ -1841,6 +1931,31 @@ def validate_test_cases(
         for field in REQUIRED_TC_FIELDS:
             if not re.search(rf"(?m)^\*\*{re.escape(field)}:\*\*\s*\S", body):
                 findings.append(finding("test-case-required-field", "execution-readiness", "В тест-кейсе отсутствует обязательное поле", f"{tc_id}: отсутствует «{field}».", artifact, remediation_owner="writer"))
+        test_data = test_case_field(body, "Тестовые данные")
+        if any(pattern.search(test_data) for pattern in TEST_DATA_TAUTOLOGY_PATTERNS):
+            findings.append(finding(
+                "test-case-test-data-tautology",
+                "execution-readiness",
+                "Тестовые данные пересказывают проверяемое правило",
+                f"{tc_id}: укажите конкретные значения либо точные свойства и способ подготовки набора данных.",
+                artifact,
+                remediation_owner="writer",
+            ))
+        steps_value = test_case_field(body, "Шаги")
+        single_file_limit = re.search(
+            r"\b(?:не\s+более\s+одн\w*\s+файл\w*|втор\w*\s+файл\w*)\b",
+            body,
+            re.IGNORECASE,
+        )
+        if single_file_limit and not has_complete_single_file_trigger(numbered_steps(steps_value)):
+            findings.append(finding(
+                "test-case-upload-cardinality-trigger",
+                "execution-readiness",
+                "Для проверки ограничения числа файлов не создано исходное состояние",
+                f"{tc_id}: отдельно прикрепите первый допустимый файл, затем отдельным шагом попытайтесь прикрепить второй.",
+                artifact,
+                remediation_owner="writer",
+            ))
         status_match = re.search(r"(?m)^\*\*Статус исполнения:\*\*\s*(\S+)", body)
         if status_match and status_match.group(1) not in ALLOWED_EXECUTION_STATUSES:
             findings.append(finding(
@@ -1954,7 +2069,7 @@ def validate_workflow_artifact_links(state: dict[str, Any], package_root: Path) 
     required_by_phase = {
         "scope": ("source_package_manifest", "scope_obligations"),
         "matrix": ("source_package_manifest", "scope_obligations", "test_design_matrix"),
-        "test-cases": ("source_package_manifest", "scope_obligations", "test_design_matrix", "canonical_test_cases"),
+        "test-cases": ("source_package_manifest", "scope_obligations", "test_design_matrix"),
         "review": ("source_package_manifest", "scope_obligations", "test_design_matrix", "canonical_test_cases"),
         "accepted": ("source_package_manifest", "scope_obligations", "test_design_matrix", "canonical_test_cases"),
         "blocked": ("source_package_manifest", "scope_obligations"),
@@ -2011,7 +2126,8 @@ def validate_scope(
             findings.append(finding("matrix-missing", "source-integrity", "Матрица тест-дизайна отсутствует", relative_to_package(package_root, matrix_path), "workflow-state.json", remediation_owner="writer"))
 
     tc_path = workflow_artifact_path(state, package_root, "canonical_test_cases")
-    need_tc = include_test_cases if include_test_cases is not None else tc_path is not None
+    phase_requires_tc = str(state.get("phase") or "") in {"review", "accepted"}
+    need_tc = include_test_cases if include_test_cases is not None else (phase_requires_tc or tc_path is not None)
     if need_tc:
         if tc_path is None:
             findings.append(finding("test-cases-reference-missing", "traceability", "В workflow не указан файл тест-кейсов", "Для этапа тест-кейсов нужна artifacts.canonical_test_cases.", "workflow-state.json", remediation_owner="writer"))
@@ -2043,6 +2159,26 @@ def validate_scope(
             "В workflow-state.json отсутствует approved результат final TC review из отдельной Codex-сессии.",
             "workflow-state.json",
             remediation_owner="controller",
+        ))
+    if phase == "test-cases" and tc_path is not None and tc_path.is_file():
+        findings.append(finding(
+            "workflow-phase-stale-after-tc-write",
+            "transport",
+            "Workflow не переведён к финальному review после записи тест-кейсов",
+            "После создания canonical test cases установите phase=review и следующим действием укажите независимое final TC review.",
+            "workflow-state.json",
+            remediation_owner="controller",
+            severity="warning",
+        ))
+    if phase == "review" and state.get("final_verdict") != "not-finalized":
+        findings.append(finding(
+            "workflow-final-verdict-stale",
+            "transport",
+            "До final TC review указан устаревший финальный вердикт",
+            "В phase=review поле final_verdict должно быть not-finalized; результат matrix review хранится в reviews.",
+            "workflow-state.json",
+            remediation_owner="controller",
+            severity="warning",
         ))
 
     content_input_hashes = {

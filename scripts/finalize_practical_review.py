@@ -78,23 +78,29 @@ def main(argv: list[str] | None = None) -> int:
     if result["verdict"] == "approved":
         state["phase"] = "test-cases" if review_mode == "matrix" else "accepted"
         state["next_action"] = "Написать тест-кейсы" if review_mode == "matrix" else "Завершить scope"
-        if review_mode == "test-cases":
-            state["final_verdict"] = "approved"
+        state["final_verdict"] = "not-finalized" if review_mode == "matrix" else "approved"
     elif result["verdict"] == "changes-required":
-        state["final_verdict"] = "changes-required"
+        if review_mode == "test-cases":
+            state["final_verdict"] = "changes-required"
         if not has_blocking_content_finding(result):
             state["phase"] = "matrix" if review_mode == "matrix" else "test-cases"
             state["next_action"] = (
                 "Исправить неблокирующие замечания review без расходования "
                 "содержательной доработки"
             )
-        elif state["revision_count"] >= 1:
-            state["phase"] = "blocked"
-            state["next_action"] = "Лимит одной содержательной доработки исчерпан; требуется решение по scope"
         else:
-            state["revision_count"] += 1
-            state["phase"] = "matrix" if review_mode == "matrix" else "test-cases"
-            state["next_action"] = "Выполнить одну целевую доработку по findings reviewer"
+            revision_key = "matrix_revision_count" if review_mode == "matrix" else "tc_revision_count"
+            if state[revision_key] >= 1:
+                state["phase"] = "blocked"
+                stage_label = "матрицы" if review_mode == "matrix" else "тест-кейсов"
+                state["next_action"] = (
+                    f"Лимит одной содержательной доработки {stage_label} исчерпан; "
+                    "требуется решение по scope"
+                )
+            else:
+                state[revision_key] += 1
+                state["phase"] = "matrix" if review_mode == "matrix" else "test-cases"
+                state["next_action"] = "Выполнить одну целевую доработку по findings reviewer"
     else:
         state["phase"] = "blocked"
         state["next_action"] = "Получить внешнее уточнение по blocker reviewer"

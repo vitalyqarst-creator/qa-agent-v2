@@ -25,7 +25,7 @@
     или изменившихся source inputs; безопасное обновление agent-layer без
     изменения source package не создаёт шумного warning.
 
-- [ ] `AGI-015` (`P2`) Не оставлять устаревшую status-проекцию workflow после
+- [x] `AGI-015` (`P2`) Не оставлять устаревшую status-проекцию workflow после
   принятого matrix re-review или выпуска TC.
   - Основание: в scope `9.3.2` после verdict `approved` и перехода к
     `phase: test-cases` поле `final_verdict` осталось `changes-required` от
@@ -36,8 +36,12 @@
     результат matrix review хранится в `reviews`; `next_action` отражает
     фактическую следующую фазу; переходы и renderer не показывают устаревший
     verdict как финальный.
+  - Выполнено: `final_verdict` нормализуется и относится только к final TC
+    review; после matrix approval он сбрасывается в `not-finalized`. После
+    записи TC workflow обязан перейти в `phase: review`; validator выявляет
+    оставшийся writer-phase. Добавлены migration и transition regressions.
 
-- [ ] `AGI-016` (`P1`) Добавить practical writer-gate для исполнимости
+- [x] `AGI-016` (`P1`) Добавить practical writer-gate для исполнимости
   тестовых данных и полноты trigger-шагов.
   - Основание: в первом выпуске TC scope `9.3.2` восемь кейсов содержат
     тавтологичное «Данные, предусмотренные проверяемым правилом», а два кейса
@@ -49,8 +53,11 @@
     действия, создающие состояние trigger, перечислены отдельными шагами.
     Добавлены узкие validator-regressions и проверка reviewer-ом на реальном
     scope.
+  - Выполнено: scoped validator v0.9.11 блокирует tautological test data и
+    неполный trigger для явного ограничения «не более одного файла»; правило
+    закреплено в canonical route и practical skill, добавлены regression tests.
 
-- [ ] `AGI-017` (`P1`) Разделить бюджеты содержательных доработок matrix и
+- [x] `AGI-017` (`P1`) Разделить бюджеты содержательных доработок matrix и
   canonical TC.
   - Основание: scope `9.3.2` израсходовал общий `revision_count` на matrix
     finding MR-001. В `finalize_practical_review.py` следующий blocking finding
@@ -61,6 +68,10 @@
     TC-доработки и fresh final review; workflow migration, validator, renderer
     и regression tests исключают новый repair-loop и не блокируют TC-revision
     только потому, что ранее исправлялась matrix.
+  - Выполнено: `matrix_revision_count` и `tc_revision_count` имеют независимые
+    лимиты; legacy `revision_count` мигрируется детерминированно по истории
+    review при следующем чтении/финализации. Добавлены regression tests для
+    миграции, первого TC finding после matrix revision и второго TC finding.
 
 - [ ] `AGI-001` (`P2`) Сохранить безопасный запас контекста для
   `source_locator.discovery`.

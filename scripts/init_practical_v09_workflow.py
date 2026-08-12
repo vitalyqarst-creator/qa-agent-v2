@@ -74,7 +74,8 @@ def main(argv: list[str] | None = None) -> int:
             "validator_report": "not-created",
         },
         "reviews": [],
-        "revision_count": 0,
+        "matrix_revision_count": 0,
+        "tc_revision_count": 0,
         "final_verdict": "not-finalized",
         "decision_notes": [],
     }
