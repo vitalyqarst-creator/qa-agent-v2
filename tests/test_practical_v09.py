@@ -64,9 +64,17 @@ def clarification_card(
         f"{key}: {json.dumps(value, ensure_ascii=False)}" for key, value in fields.items()
     )
     return (
+        "## Контекст\n\n"
+        f"- `scope_slug`: `{scope_slug}`\n\n"
+        "## Как Заполнять\n\n"
+        "- Заполните только поле `user_response`.\n\n"
         "## Запросы на уточнение\n\n"
         f"### {clarification_id} — {gap_id}\n\n"
-        f"```yaml\n{yaml_body}\n```\n"
+        f"```yaml\n{yaml_body}\n```\n\n"
+        "## Пробелы без запросов\n\n"
+        "- Отсутствуют.\n\n"
+        "## Правила Использования Ответов\n\n"
+        "- Ответ не заменяет основной ФТ.\n"
     )
 
 
@@ -365,6 +373,18 @@ class PracticalV09Tests(unittest.TestCase):
             _, findings = validate_scope(package_root=fixture.root, workflow_state_path=fixture.state)
             self.assertIn(
                 "scope-clarification-request-fields",
+                [item.id for item in findings if item.blocking],
+            )
+
+            card_path.write_text(
+                clarification_card().replace(
+                    "## Запросы на уточнение", "## Clarification Requests"
+                ),
+                encoding="utf-8",
+            )
+            _, findings = validate_scope(package_root=fixture.root, workflow_state_path=fixture.state)
+            self.assertIn(
+                "scope-clarification-request-sections",
                 [item.id for item in findings if item.blocking],
             )
 

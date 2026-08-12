@@ -18,13 +18,20 @@ from typing import Any, Iterable
 
 
 ROUTE_VERSION = "practical-v0.9"
-ROUTE_TOOL_VERSION = "practical-v0.9.3"
+ROUTE_TOOL_VERSION = "practical-v0.9.4"
 WORKFLOW_STATE_SCHEMA_VERSION = 1
 SOURCE_CONTRACT_VERSION = "source-package-v1"
 REVIEW_MANIFEST_VERSION = "practical-review-manifest-v1"
 VALIDATOR_REPORT_VERSION = "practical-scope-validator-v1"
 SOURCE_MANIFEST_RELATIVE_PATH = "work/practical-v0.9/source-package-manifest.json"
 CLARIFICATION_REQUESTS_FILENAME = "scope-clarification-requests.md"
+CLARIFICATION_REQUEST_SECTION_HEADINGS = (
+    "Контекст",
+    "Как Заполнять",
+    "Запросы на уточнение",
+    "Пробелы без запросов",
+    "Правила Использования Ответов",
+)
 
 REQUIRED_SOURCE_ROLES = {"main-docx", "main-xhtml"}
 ALLOWED_SUPPORT_ROLES = {"support"}
@@ -206,6 +213,15 @@ def relative_to_package(package_root: Path, path: Path) -> str:
 def clarification_requests_path(obligations_path: Path) -> Path:
     """Return the single user-facing clarification companion for one scope."""
     return obligations_path.with_name(CLARIFICATION_REQUESTS_FILENAME)
+
+
+def missing_clarification_request_sections(text: str) -> list[str]:
+    """Return required Russian user-facing headings absent from a BA request file."""
+    headings = {
+        match.group("heading").strip()
+        for match in re.finditer(r"(?m)^##\s+(?P<heading>.+?)\s*$", text)
+    }
+    return [heading for heading in CLARIFICATION_REQUEST_SECTION_HEADINGS if heading not in headings]
 
 
 def finding(
@@ -563,6 +579,16 @@ def validate_scope_clarifications(
             ))
             request_cards = {}
         else:
+            missing_sections = missing_clarification_request_sections(requests_text)
+            if missing_sections:
+                findings.append(finding(
+                    "scope-clarification-request-sections",
+                    "semantic-completeness",
+                    "Файл вопросов к БА не содержит обязательные русскоязычные разделы",
+                    "Отсутствуют разделы: " + ", ".join(f"«{section}»" for section in missing_sections) + ".",
+                    relative_to_package(package_root, requests_path),
+                    remediation_owner="scope-analyzer",
+                ))
             request_cards, parse_errors = parse_clarification_request_cards(requests_text)
             for error in parse_errors:
                 findings.append(finding(
