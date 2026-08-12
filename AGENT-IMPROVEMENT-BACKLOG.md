@@ -164,6 +164,17 @@
     переводит migration в TC-sync, не сбрасывая ни один budget. Добавлены
     миграционные и transition-regressions.
 
+- [ ] `AGI-023` (`P2`) Разделить в read-only plan миграции snapshot-входы и
+  полный dependency inventory.
+  - Основание: при миграции scope `9.3.2` план перечислял source manifest и
+    scope-obligations рядом с копируемыми файлами, хотя migration snapshot по
+    контракту содержит только прежние workflow, matrix и canonical TC. Сам
+    snapshot был корректен, но plan мог создать неверное ожидание у
+    контроллера или аудитора.
+  - Завершено, когда: plan выводит отдельные списки `snapshot_inputs` и
+    `dependency_inventory`, каждый с ролью, путём и SHA-256; тест доказывает,
+    что список копирования точно соответствует migration manifest.
+
 - [ ] `AGI-001` (`P2`) Сохранить безопасный запас контекста для
   `source_locator.discovery`.
   - Основание: architecture audit, 129.8 KiB из 132 KiB; запас 2.2 KiB при
