@@ -196,6 +196,24 @@
     Добавлены три регрессии: приоритет над отсутствующим fixture, отсутствие
     обоснования и сохранение `needs-test-data` для наблюдаемой проверки.
 
+- [ ] `AGI-025` (`P1`) Ввести обязательную controller-triage проверку
+  findings независимого review до расходования revision budget или блокировки
+  scope.
+  - Основание: independent matrix review scope `9.3.2` корректно выявил
+    три содержательных дефекта, но его finding `MATRIX-004` потребовал
+    `candidate-ui-calibration` для строк, где также отсутствуют actor и
+    fixture. Это противоречит установленному practical-приоритету:
+    `needs-test-data` не маскируется UI-калибровкой. Без triage такой
+    неверный finding попадает в writer revision либо необратимо блокирует
+    scope после исчерпания budget.
+  - Завершено, когда: перед transition после `changes-required` controller
+    валидирует каждый blocking finding против route contract и фиксирует
+    `accepted` или `rejected` с причиной; только принятые findings расходуют
+    revision budget и попадают в prompt writer-а. При rejected blocking
+    finding receipt остаётся неизменяемым, а scope не переводится в
+    `blocked` только из-за него. Регрессии покрывают mixed verdict с
+    неправильным статусом и полностью корректный verdict.
+
 - [ ] `AGI-001` (`P2`) Сохранить безопасный запас контекста для
   `source_locator.discovery`.
   - Основание: architecture audit, 129.8 KiB из 132 KiB; запас 2.2 KiB при
