@@ -8,6 +8,8 @@ import unittest
 from pathlib import Path
 
 from test_case_agent.practical_v09 import (
+    COMPACT_REVIEWER_RECEIPT_FORMAT,
+    COMPACT_REVIEWER_RECEIPT_MAX_BYTES,
     MATRIX_CONTRACT_VERSION,
     ROUTE_VERSION,
     SOURCE_CONTRACT_VERSION,
@@ -18,6 +20,7 @@ from test_case_agent.practical_v09 import (
     finding,
     load_workflow_state,
     matrix_review_required,
+    obligation_ids_sha256,
     sha256_file,
     validate_source_package_manifest,
     validate_scope,
@@ -1201,6 +1204,66 @@ class PracticalV09Tests(unittest.TestCase):
                 [item.id for item in findings if item.blocking],
             )
 
+    def test_compact_reviewer_receipt_binds_large_scope_to_immutable_obligation_set(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            fixture = PracticalV09Fixture(Path(raw))
+            manifest = build_review_manifest(
+                package_root=fixture.root,
+                workflow_state_path=fixture.state,
+                review_mode="test-cases",
+                controller_thread_id="019feebf-3cde-79d2-9f87-ba9c61ff7b13",
+                code_branch="codex/test",
+                code_commit="abc123",
+                contract_digest="contract",
+            )
+            manifest["reviewer_receipt_contract"] = {
+                "format": COMPACT_REVIEWER_RECEIPT_FORMAT,
+                "max_bytes": COMPACT_REVIEWER_RECEIPT_MAX_BYTES,
+                "scope_obligations_sha256": sha256_file(fixture.obligations),
+                "active_obligation_count": 1,
+                "active_obligation_ids_sha256": obligation_ids_sha256({"OBL-001"}),
+            }
+            manifest_path = fixture.scope_dir / "test-cases-review-manifest.json"
+            write_json(manifest_path, manifest)
+            result_path = fixture.scope_dir / "test-cases-review-result.json"
+            write_json(
+                result_path,
+                {
+                    "review_manifest_sha256": sha256_file(manifest_path),
+                    "scope_id": "01",
+                    "scope_slug": "menu",
+                    "review_mode": "test-cases",
+                    "execution_surface": "codex-thread",
+                    "reviewer_thread_id": "019feebf-3cde-79d2-9f87-ba9c61ff7b14",
+                    "independent_obligation_set": {
+                        "source_anchor": "Раздел 9.1, строка «Партнеры»",
+                        "statement": "Проверены все обязательства immutable snapshot.",
+                        **manifest["reviewer_receipt_contract"],
+                    },
+                    "verdict": "approved",
+                    "findings": [],
+                },
+            )
+            _, findings = verify_review_result(
+                package_root=fixture.root,
+                manifest_path=manifest_path,
+                result_path=result_path,
+            )
+            self.assertFalse([item for item in findings if item.blocking])
+
+            result = json.loads(result_path.read_text(encoding="utf-8"))
+            result["independent_obligation_set"]["active_obligation_ids_sha256"] = "0" * 64
+            write_json(result_path, result)
+            _, findings = verify_review_result(
+                package_root=fixture.root,
+                manifest_path=manifest_path,
+                result_path=result_path,
+            )
+            self.assertIn(
+                "review-result-compact-obligation-set-digest",
+                [item.id for item in findings if item.blocking],
+            )
+
     def test_finalizer_records_review_and_allows_accepted_only_after_approval(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             fixture = PracticalV09Fixture(Path(raw))
@@ -1261,8 +1324,16 @@ class PracticalV09Tests(unittest.TestCase):
                     "verdict": "approved",
                     "manifest": "work/practical-v0.9/menu/test-cases-review-manifest.json",
                     "result": "work/practical-v0.9/menu/test-cases-review-result.json",
+                    "result_sha256": sha256_file(result_path),
                 }],
                 state["reviews"],
+            )
+
+            result_path.write_text(result_path.read_text(encoding="utf-8") + "\n", encoding="utf-8")
+            _, findings = validate_scope(package_root=fixture.root, workflow_state_path=fixture.state)
+            self.assertIn(
+                "workflow-review-result-drift",
+                [item.id for item in findings if item.blocking],
             )
 
     def test_tc_changes_required_consumes_only_tc_revision_budget(self) -> None:

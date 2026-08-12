@@ -88,6 +88,9 @@ MATRIX_REVIEW_RISK_FLAGS = {
     "high-risk",
 }
 MATRIX_REVIEW_OBLIGATION_THRESHOLD = 8
+COMPACT_REVIEWER_RECEIPT_OBLIGATION_THRESHOLD = 8
+COMPACT_REVIEWER_RECEIPT_FORMAT = "compact-obligation-set-v1"
+COMPACT_REVIEWER_RECEIPT_MAX_BYTES = 24 * 1024
 ALLOWED_EXECUTION_STATUSES = {
     "ready",
     "needs-test-data",
@@ -1078,6 +1081,12 @@ def active_obligations(obligations: dict[str, Any]) -> list[dict[str, Any]]:
 
 def active_obligation_ids(obligations: dict[str, Any]) -> set[str]:
     return {str(item.get("id")) for item in active_obligations(obligations)}
+
+
+def obligation_ids_sha256(obligation_ids: Iterable[str]) -> str:
+    """Return a stable digest for the complete independently recovered OBL set."""
+    payload = "\n".join(sorted(set(obligation_ids))).encode("utf-8")
+    return hashlib.sha256(payload).hexdigest()
 
 
 def execution_setups(obligations: dict[str, Any]) -> dict[str, dict[str, Any]]:
@@ -2531,6 +2540,73 @@ def validate_workflow_artifact_links(state: dict[str, Any], package_root: Path) 
     return findings
 
 
+def validate_review_history_integrity(
+    state: dict[str, Any], package_root: Path
+) -> list[ScopeFinding]:
+    """Verify hashes recorded for immutable reviewer submissions.
+
+    Older v0.9 review entries predate ``result_sha256`` and remain readable.
+    Every newly finalized review records it, so a later edit or replacement of
+    the preserved raw reviewer JSON becomes a scoped integrity blocker.
+    """
+    findings: list[ScopeFinding] = []
+    reviews = state.get("reviews", [])
+    if not isinstance(reviews, list):
+        return findings
+    for index, entry in enumerate(reviews, start=1):
+        if not isinstance(entry, dict):
+            continue
+        expected_hash = entry.get("result_sha256")
+        if expected_hash is None:
+            continue
+        artifact = "workflow-state.json"
+        if not isinstance(expected_hash, str) or not re.fullmatch(r"[0-9a-f]{64}", expected_hash):
+            findings.append(finding(
+                "workflow-review-result-hash-format",
+                "review-integrity",
+                "У записи независимого review неверный формат контрольной суммы",
+                f"reviews[{index}].result_sha256 должен быть SHA-256 сохранённого raw JSON reviewer-а.",
+                artifact,
+                remediation_owner="controller",
+            ))
+            continue
+        try:
+            result_path = package_relative_path(
+                package_root,
+                entry.get("result"),
+                artifact=artifact,
+            )
+        except PracticalV09Error as exc:
+            findings.append(finding(
+                "workflow-review-result-reference",
+                "review-integrity",
+                "Запись независимого review не содержит корректной ссылки на raw результат",
+                str(exc),
+                artifact,
+                remediation_owner="controller",
+            ))
+            continue
+        if not result_path.is_file():
+            findings.append(finding(
+                "workflow-review-result-missing",
+                "review-integrity",
+                "Сохранённый raw результат независимого review отсутствует",
+                f"reviews[{index}].result={relative_to_package(package_root, result_path)}.",
+                artifact,
+                remediation_owner="controller",
+            ))
+        elif sha256_file(result_path) != expected_hash:
+            findings.append(finding(
+                "workflow-review-result-drift",
+                "artifact-tampering",
+                "Сохранённый raw результат независимого review был изменён после финализации",
+                f"reviews[{index}].result_sha256 не совпадает с {relative_to_package(package_root, result_path)}.",
+                artifact,
+                remediation_owner="controller",
+            ))
+    return findings
+
+
 def approved_review_exists(state: dict[str, Any], review_mode: str) -> bool:
     """Return whether the single workflow state records a valid accepted review mode."""
     return any(
@@ -2547,6 +2623,7 @@ def validate_scope(
     package_root = package_root.resolve()
     state = load_workflow_state(workflow_state_path, package_root)
     findings = validate_workflow_artifact_links(state, package_root)
+    findings.extend(validate_review_history_integrity(state, package_root))
     source_path = workflow_artifact_path(state, package_root, "source_package_manifest", required=True)
     obligations_path = workflow_artifact_path(state, package_root, "scope_obligations", required=True)
     assert source_path is not None and obligations_path is not None
@@ -2821,7 +2898,7 @@ def build_review_manifest(
         context=context,
     )
     paths = review_subject_paths(state, package_root, review_mode)
-    return {
+    manifest = {
         "schema_version": 1,
         "manifest_version": REVIEW_MANIFEST_VERSION,
         "route_version": ROUTE_VERSION,
@@ -2846,6 +2923,17 @@ def build_review_manifest(
             "Проверить тест-кейсы, если review_mode=test-cases.",
         ],
     }
+    obligations_path = paths["scope_obligations"]
+    active_ids = active_obligation_ids(read_json(obligations_path))
+    if len(active_ids) > COMPACT_REVIEWER_RECEIPT_OBLIGATION_THRESHOLD:
+        manifest["reviewer_receipt_contract"] = {
+            "format": COMPACT_REVIEWER_RECEIPT_FORMAT,
+            "max_bytes": COMPACT_REVIEWER_RECEIPT_MAX_BYTES,
+            "scope_obligations_sha256": sha256_file(obligations_path),
+            "active_obligation_count": len(active_ids),
+            "active_obligation_ids_sha256": obligation_ids_sha256(active_ids),
+        }
+    return manifest
 
 
 def verify_review_result(
@@ -2882,8 +2970,19 @@ def verify_review_result(
         or reviewer_thread_id == str(manifest.get("controller_thread_id") or "")
     ):
         findings.append(finding("review-result-thread-independence", "review-integrity", "Не доказана отдельность reviewer-сессии", "reviewer_thread_id должен быть durable Codex thread UUID и отличаться от controller_thread_id.", artifact, remediation_owner="controller"))
+    receipt_contract = manifest.get("reviewer_receipt_contract")
+    compact_receipt_required = isinstance(receipt_contract, dict) and receipt_contract.get("format") == COMPACT_REVIEWER_RECEIPT_FORMAT
+    if receipt_contract is not None and not compact_receipt_required:
+        findings.append(finding(
+            "review-manifest-receipt-contract",
+            "review-integrity",
+            "Manifest review содержит неподдерживаемый контракт компактного результата",
+            f"reviewer_receipt_contract должен быть объектом format={COMPACT_REVIEWER_RECEIPT_FORMAT}.",
+            artifact,
+            remediation_owner="controller",
+        ))
     independent = result.get("independent_obligations")
-    if not isinstance(independent, list) or not independent:
+    if not compact_receipt_required and (not isinstance(independent, list) or not independent):
         findings.append(finding("review-result-independent-obligations", "review-integrity", "Reviewer не зафиксировал самостоятельный список обязательств", "До сравнения с matrix/TC reviewer обязан перечислить independently derived obligations.", artifact, remediation_owner="reviewer"))
     if result.get("review_mode") != manifest.get("review_mode"):
         findings.append(finding("review-result-mode", "review-integrity", "Режим результата review не совпадает с manifest", "review_mode результата должен совпадать с review_mode manifest.", artifact, remediation_owner="reviewer"))
@@ -2912,7 +3011,62 @@ def verify_review_result(
         (entry for entry in manifest.get("inputs", []) if isinstance(entry, dict) and entry.get("role") == "scope_obligations"),
         None,
     )
-    if isinstance(independent, list) and obligations_entry:
+    if compact_receipt_required and obligations_entry:
+        max_bytes = receipt_contract.get("max_bytes")
+        if not isinstance(max_bytes, int) or max_bytes <= 0 or max_bytes > COMPACT_REVIEWER_RECEIPT_MAX_BYTES:
+            findings.append(finding(
+                "review-manifest-receipt-size-limit",
+                "review-integrity",
+                "Manifest review содержит недопустимый лимит compact receipt",
+                f"max_bytes должен быть целым числом от 1 до {COMPACT_REVIEWER_RECEIPT_MAX_BYTES}.",
+                artifact,
+                remediation_owner="controller",
+            ))
+        elif result_path.stat().st_size > max_bytes:
+            findings.append(finding(
+                "review-result-compact-size",
+                "review-integrity",
+                "Raw результат reviewer-а превышает лимит compact receipt",
+                f"Размер {result_path.stat().st_size} байт превышает max_bytes={max_bytes} из immutable manifest.",
+                artifact,
+                remediation_owner="reviewer",
+            ))
+        compact_receipt = result.get("independent_obligation_set")
+        if not isinstance(compact_receipt, dict):
+            findings.append(finding(
+                "review-result-compact-obligation-set",
+                "review-integrity",
+                "Для большого scope отсутствует компактное подтверждение набора обязательств",
+                "Reviewer должен вернуть independent_obligation_set из первого raw JSON submission.",
+                artifact,
+                remediation_owner="reviewer",
+            ))
+        else:
+            expected_values = {
+                "scope_obligations_sha256": receipt_contract.get("scope_obligations_sha256"),
+                "active_obligation_count": receipt_contract.get("active_obligation_count"),
+                "active_obligation_ids_sha256": receipt_contract.get("active_obligation_ids_sha256"),
+            }
+            actual_values = {key: compact_receipt.get(key) for key in expected_values}
+            if actual_values != expected_values:
+                findings.append(finding(
+                    "review-result-compact-obligation-set-digest",
+                    "review-integrity",
+                    "Компактное подтверждение reviewer-а не связано с immutable набором обязательств",
+                    "scope_obligations_sha256, active_obligation_count и active_obligation_ids_sha256 должны в точности совпадать с reviewer_receipt_contract manifest.",
+                    artifact,
+                    remediation_owner="reviewer",
+                ))
+            if not str(compact_receipt.get("source_anchor") or "").strip() or not str(compact_receipt.get("statement") or "").strip():
+                findings.append(finding(
+                    "review-result-compact-obligation-set-content",
+                    "review-integrity",
+                    "Компактное подтверждение reviewer-а не содержит самостоятельной source-привязки или вывода",
+                    "independent_obligation_set требует непустые source_anchor и statement, сформулированные reviewer-ом после чтения snapshot.",
+                    artifact,
+                    remediation_owner="reviewer",
+                ))
+    elif isinstance(independent, list) and obligations_entry:
         obligations_path = package_relative_path(package_root, obligations_entry.get("path"), artifact=artifact)
         if obligations_path.is_file():
             expected = active_obligation_ids(read_json(obligations_path))

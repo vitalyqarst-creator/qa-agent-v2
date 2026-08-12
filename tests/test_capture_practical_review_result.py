@@ -49,3 +49,15 @@ class CapturePracticalReviewResultTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 module.capture(submission=submission, output=output)
             self.assertFalse(output.exists())
+
+    def test_capture_rejects_oversized_submission_without_creating_result(self) -> None:
+        module = load_capture_module()
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            submission = root / "reviewer-submission.json"
+            submission.write_text(json.dumps({"payload": "x" * 128}), encoding="utf-8")
+            output = root / "matrix-review-result.json"
+
+            with self.assertRaisesRegex(ValueError, "exceeds compact receipt limit"):
+                module.capture(submission=submission, output=output, max_bytes=64)
+            self.assertFalse(output.exists())

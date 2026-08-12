@@ -125,7 +125,7 @@ Matrix review обязателен только если в `scope-obligations.j
 python scripts/create_practical_review_manifest.py --repo-root <repo> --ft-package-root <package> --workflow-state <scope-dir>/workflow-state.json --review-mode <matrix|test-cases> --controller-thread-id <current-top-level-thread-id> --contract-file references/agent/practical-test-case-route-v0.9.md --output <scope-dir>/<mode>-review-manifest.json
 ```
 
-Reviewer запускается в новой верхнеуровневой Codex-сессии (`codex-thread`), read-only для matrix/TC. Если механизм создания отдельной Codex-сессии доступен, controller использует его напрямую: не ищет внешнюю документацию и не заменяет отдельную сессию subagent-ом. До чтения matrix и TC reviewer самостоятельно формирует в `<mode>-review-result.json` массив `independent_obligations`: для каждого восстановленного утверждения указывает `source_anchor`, русскоязычный `statement` и связанные `obligation_ids`. Формулировка обязана сохранять все применимые ограничители первичного источника: контекст создания/редактирования, кванторы, границы, условия и исключения. Не передавай writer self-check: такого артефакта в v0.9 нет.
+Reviewer запускается в новой верхнеуровневой Codex-сессии (`codex-thread`), read-only для matrix/TC. Если механизм создания отдельной Codex-сессии доступен, controller использует его напрямую: не ищет внешнюю документацию и не заменяет отдельную сессию subagent-ом. До чтения matrix и TC reviewer самостоятельно восстанавливает требования. Для обычного scope он возвращает `independent_obligations`: указывает `source_anchor`, русскоязычный `statement` и связанные `obligation_ids`. Если manifest содержит `reviewer_receipt_contract`, reviewer возвращает один `independent_obligation_set`, связанный с digest полного набора `OBL-*`; это не освобождает его от самостоятельного чтения источников. Формулировка обязана сохранять все применимые ограничители первичного источника: контекст создания/редактирования, кванторы, границы, условия и исключения. Не передавай writer self-check: такого артефакта в v0.9 нет.
 
 До dispatch controller обязан проверить доступность каждого hash-bound входа в
 целевом checkout:
@@ -143,14 +143,16 @@ python scripts/practical_review_input_snapshot.py --manifest <scope-dir>/<mode>-
 python scripts/practical_review_input_snapshot.py --manifest <scope-dir>/<mode>-review-manifest.json --verify-snapshot <scope-dir>/<mode>-review-input-snapshot
 ```
 
-Reviewer возвращает один JSON-object без нормализации семантики. Controller
-сохраняет его byte-for-byte, а не переписывает anchor или формулировки:
+Reviewer возвращает один JSON-object без нормализации семантики, сразу в
+лимите `reviewer_receipt_contract` при его наличии. Controller сохраняет
+первый валидный raw response byte-for-byte, а не переписывает anchor или
+формулировки и не делает follow-up для сжатия уже вынесенного verdict:
 
 ```text
 python scripts/capture_practical_review_result.py --submission <raw-reviewer-json> --output <scope-dir>/<mode>-review-result.json
 ```
 
-Результат review содержит `review_manifest_sha256`, `reviewer_thread_id`, `execution_surface: codex-thread`, `review_mode`, `independent_obligations`, `verdict` и findings. Перед созданием manifest controller обязан иметь свежий чистый `validator-report.json`, чьи content hashes совпадают с текущими входами scope. Controller проверяет неизменность snapshot и обновляет только `workflow-state.json` командой `finalize_practical_review.py`.
+Результат review содержит `review_manifest_sha256`, `reviewer_thread_id`, `execution_surface: codex-thread`, `review_mode`, `independent_obligations` либо digest-bound `independent_obligation_set`, `verdict` и findings. Перед созданием manifest controller обязан иметь свежий чистый `validator-report.json`, чьи content hashes совпадают с текущими входами scope. Controller проверяет неизменность snapshot и обновляет только `workflow-state.json` командой `finalize_practical_review.py`, которая сохраняет SHA-256 raw receipt в history review.
 
 ### 4. TC, final review и revision
 

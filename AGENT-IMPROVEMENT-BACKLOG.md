@@ -236,7 +236,7 @@
     workflow-state. Реальный scope `9.3.2` восстановлен повторным CLI-вызовом
     и прошёл scoped validation без blocking findings.
 
-- [ ] `AGI-027` (`P2`) Фиксировать final reviewer verdict одним ограниченным
+- [x] `AGI-027` (`P2`) Фиксировать final reviewer verdict одним ограниченным
   immutable-ответом без последующего «сжатия» контроллером.
   - Основание: в final TC review scope `9.3.2` reviewer сначала вернул полный
     результат по всем обязательствам, а контроллеру пришлось отдельным
@@ -248,6 +248,12 @@
     исходного ответа. Полное множество обязательств подтверждается digest-ом
     snapshot/manifest, а не предзаполненным контроллером массивом в follow-up.
     Регрессия отклоняет receipt, не связанный с первоначальным verdict.
+  - Выполнено: manifest для scope с более чем восемью активными обязательствами
+    задаёт компактный digest-bound receipt; capture принимает только первый raw
+    JSON в лимите 24 KiB и сохраняет его byte-for-byte. Повторное «сжатие»
+    завершённого verdict запрещено; новый independent review должен быть
+    отдельным immutable запуском. Finalizer сохраняет SHA-256 результата, а
+    scoped validator выявляет последующее изменение raw reviewer JSON.
 
 - [ ] `AGI-001` (`P2`) Сохранить безопасный запас контекста для
   `source_locator.discovery`.

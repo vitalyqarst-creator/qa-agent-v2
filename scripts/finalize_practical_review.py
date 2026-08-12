@@ -15,6 +15,7 @@ from test_case_agent.practical_v09 import (
     PracticalV09Error,
     load_workflow_state,
     relative_to_package,
+    sha256_file,
     verify_review_result,
     write_json,
 )
@@ -70,6 +71,7 @@ def main(argv: list[str] | None = None) -> int:
         "verdict": result["verdict"],
         "manifest": relative_to_package(package_root, args.review_manifest.resolve()),
         "result": relative_to_package(package_root, args.review_result.resolve()),
+        "result_sha256": sha256_file(args.review_result.resolve()),
     }
     reviews = state.setdefault("reviews", [])
     if not isinstance(reviews, list):
