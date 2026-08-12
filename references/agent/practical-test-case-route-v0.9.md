@@ -13,7 +13,7 @@
 `fts/<domain>/<ft>/work/practical-v0.9/<scope-slug>/`, кроме production тест-кейсов.
 
 1. `workflow-state.json` — единственный mutable источник статуса и следующего действия.
-2. `../source-package-manifest.json` — DOCX, XHTML, доступный PDF, package notes и их SHA-256;
+2. `../source-package-manifest.json` — DOCX, XHTML, доступный PDF, package notes, package-level утверждённые решения БА и их SHA-256;
    единый неизменяемый manifest для всех scope данного ФТ-пакета.
 3. `scope-obligations.json` — нормализованные `OBL-*` с точной source-привязкой, формулировкой ФТ и рисками. Это не test design.
 4. `scope-clarification-requests.md` — только если один или несколько gaps требуют продуктового ответа БА; companion к `scope-obligations.json`, а не второй workflow state.
@@ -43,12 +43,18 @@
 `ft-source-locator` создаёт `source-package-manifest.json` командой:
 
 ```text
-python scripts/create_practical_source_manifest.py --ft-package-root <package> --docx <docx> --xhtml <xhtml> [--pdf <pdf>] [--support <stable-support>] [--visual <mockup-or-figma-index>] --output work/practical-v0.9/source-package-manifest.json
+python scripts/create_practical_source_manifest.py --ft-package-root <package> --docx <docx> --xhtml <xhtml> [--pdf <pdf>] [--support <stable-support>] [--visual <mockup-or-figma-index>] [--ba-decisions <approved-ba-decisions>] --output work/practical-v0.9/source-package-manifest.json
 ```
 
 В `support_inputs` включай только стабильные нормативные или справочные материалы. Макеты,
 изображения экранов и Figma-index передавай только через `--visual`: они попадают в
 `visual_inputs` с ролью `visual-only` и не могут стать источником бизнес-правила.
+
+Если в `support/` есть `*-approved-ba-decisions.md`, передавай его только через
+`--ba-decisions`. Утверждённое решение БА, прямо отменяющее или изменяющее ФТ,
+имеет операционный приоритет в своей явно указанной области действия во всём
+текущем FT-пакете. Формат, границы распространения и materialization задаёт
+`practical-v0.9-ba-decision-registry-format.md`.
 
 Для первичного извлечения выбранного scope используй штатный read-only helper
 `scripts/inspect_practical_scope_sources.py` с XHTML, DOCX, PDF, section ID и при
@@ -58,11 +64,12 @@ python scripts/create_practical_source_manifest.py --ft-package-root <package> -
 PDF, не рендери его; визуальный рендер используй только при существенном для scope
 layout-вопросе.
 
-После утвержденного ответа БА сохрани его в
+Обычный scope-local утверждённый ответ БА сохрани в
 `support/<scope>-approved-clarifications.md` и запиши путь с SHA-256 в
-связанном `GAP-*` внутри `scope-obligations.json`. Ответ становится основанием
-для обновления только связанных OBL и downstream matrix/TC. Не изменяй общий
-`source-package-manifest.json`: это сделало бы stale не связанные scope.
+связанном `GAP-*` внутри `scope-obligations.json`. Если ответ прямо отменяет
+или меняет ФТ, оформи его package-level реестром решений БА, а не локальным
+исключением. При противоречии без утверждённого решения обязательно создай
+`scope-clarification-requests.md`.
 
 `ft-scope-analyzer` читает DOCX/XHTML/PDF, support и доступный Figma только как visual reference. Он создаёт `scope-obligations.json`, не матрицу и не тест-кейсы. Каждое обязательство содержит `id`, `source_anchor`, русскоязычный `statement` и при необходимости `risk_flags`.
 

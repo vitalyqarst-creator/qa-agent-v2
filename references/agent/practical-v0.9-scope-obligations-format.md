@@ -11,7 +11,8 @@
       "id": "OBL-001",
       "source_anchor": "Раздел 9.1, Таблица 2, строка «Партнеры»",
       "statement": "В меню доступен пункт «Партнеры».",
-      "risk_flags": []
+      "risk_flags": [],
+      "disposition": "active"
     }
   ],
   "clarifications": [
@@ -63,7 +64,8 @@
 - `id` формата `GAP-*`;
 - `gap_type`: `ba-business-ambiguity`, `missing-source-definition`,
   `source-terminology-discrepancy`, `ui-calibration`,
-  `external-scope-boundary` или `test-data-setup`;
+  `external-scope-boundary`, `test-data-setup`, `ba-decision-required` или
+  `ba-decision-supersedes-ft`;
 - `source_anchor`, `source_statement`, `description` и `temporary_handling`;
 - `impact`: `blocking` или `non-blocking`;
 - `affected_obligation_ids` с существующими `OBL-*`;
@@ -90,7 +92,8 @@
 `requires_business_answer: false`. Вопрос БА нужен лишь тогда, когда содержательные утверждения задают
 конкурирующие объекты, поля или сценарии и поэтому меняется состав проверок.
 
-После утвержденного ответа БА не редактируй старый gap молча. Добавь
+Для утверждённого **scope-local** ответа БА, который не отменяет норму ФТ, не
+редактируй старый gap молча. Добавь
 утверждённый файл в `support/`, свяжи его с gap полями
 `approved_clarification_path` и `approved_clarification_sha256`, обнови только
 связанные `OBL-*`, затем установи `status: resolved` и
@@ -99,6 +102,15 @@
 неизменяемым и не делает stale не связанные scope. Полный scope и уже принятые
 review заново не запускаются, если изменились только связанные обязательства и
 их downstream matrix/TC.
+
+Если утверждённое решение БА прямо отменяет либо изменяет норму ФТ, применяй
+package-level контракт из `practical-v0.9-ba-decision-registry-format.md`:
+сохрани исходный OBL для трассировки, укажи
+`disposition: "superseded-by-ba-decision"` и `ba_decision_id`, свяжи resolved
+gap через `approved-ba-decision:BA-DEC-*`, но не включай отменённый OBL в
+матрицу, TC и независимое review. Если такого решения нет, используй
+`ba-decision-required` с `requires_business_answer: true`; отсутствие вопроса
+к БА является ошибкой структуры.
 
 ## Источники и итог этапа
 

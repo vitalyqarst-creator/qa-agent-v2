@@ -20,6 +20,11 @@ In a new v0.9 scope analysis:
   target field and split autofill from manual edit/input of the same field;
 - record all unknowns in `clarifications`; if a product decision is needed,
   create the linked `scope-clarification-requests.md` in the same directory;
+- before materializing OBL, apply any hash-bound package-level approved BA
+  decision registry within its explicit object/rule boundary; retain superseded
+  OBL for traceability but do not design matrix rows or TC for it. A conflict
+  without such a decision is `ba-decision-required` and requires CLR in the
+  same run;
 - compare the section heading with the nearest tables/assertions and record a
   non-blocking `source-terminology-discrepancy` when they name different objects;
   do not ask БА merely to normalize a heading if the normative content already

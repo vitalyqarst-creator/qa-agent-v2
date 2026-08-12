@@ -18,9 +18,9 @@ from typing import Any, Iterable
 
 
 ROUTE_VERSION = "practical-v0.9"
-ROUTE_TOOL_VERSION = "practical-v0.9.6"
+ROUTE_TOOL_VERSION = "practical-v0.9.7"
 WORKFLOW_STATE_SCHEMA_VERSION = 1
-SOURCE_CONTRACT_VERSION = "source-package-v2"
+SOURCE_CONTRACT_VERSION = "source-package-v3"
 REVIEW_MANIFEST_VERSION = "practical-review-manifest-v1"
 VALIDATOR_REPORT_VERSION = "practical-scope-validator-v1"
 SOURCE_MANIFEST_RELATIVE_PATH = "work/practical-v0.9/source-package-manifest.json"
@@ -36,6 +36,7 @@ CLARIFICATION_REQUEST_SECTION_HEADINGS = (
 REQUIRED_SOURCE_ROLES = {"main-docx", "main-xhtml"}
 ALLOWED_SUPPORT_ROLES = {"support"}
 ALLOWED_VISUAL_ROLES = {"visual-only"}
+ALLOWED_APPROVED_BA_DECISION_ROLES = {"approved-ba-decision-registry"}
 VISUAL_ONLY_PATH_PREFIXES = ("mockups/", "support/figma/")
 ALLOWED_GAP_TYPES = {
     "ba-business-ambiguity",
@@ -44,6 +45,8 @@ ALLOWED_GAP_TYPES = {
     "ui-calibration",
     "external-scope-boundary",
     "test-data-setup",
+    "ba-decision-required",
+    "ba-decision-supersedes-ft",
     # Compatibility with artifacts written by practical-v0.9.2.
     "ambiguity",
 }
@@ -150,6 +153,27 @@ MOJIBAKE_RE = re.compile(
 APPROVED_CLARIFICATION_FILENAME_RE = re.compile(
     r"(?:^|/)[^/]+-approved-clarifications\.md$", flags=re.IGNORECASE
 )
+APPROVED_BA_DECISIONS_FILENAME_RE = re.compile(
+    r"(?:^|/)[^/]+-approved-ba-decisions\.md$", flags=re.IGNORECASE
+)
+APPROVED_BA_DECISION_CARD_HEADER_RE = re.compile(
+    r"(?m)^##\s+(?P<decision_id>BA-DEC-[A-Z0-9-]+)\b.*$"
+)
+APPROVED_BA_DECISION_REQUIRED_FIELDS = (
+    "decision_id",
+    "status",
+    "authority",
+    "decision_type",
+    "applies_to",
+    "requirement_refs",
+    "decision",
+)
+APPROVED_BA_DECISION_ENUMS = {
+    "status": {"approved"},
+    "authority": {"business-analyst", "product-owner"},
+    "decision_type": {"supersedes-ft"},
+}
+OBLIGATION_DISPOSITIONS = {"active", "superseded-by-ba-decision"}
 AGENT_NOTES_VERSION_METADATA_RE = re.compile(
     r"(?im)^\s*(?:[-*]\s*)?(?:исходн\w*|agent(?:[- ]layer)?|агент\w*|код\w*)\s*"
     r"(?:commit|коммит|version|версия)\s*[:=]"
@@ -369,6 +393,7 @@ def validate_manifest_bound_inputs(
     input_label: str,
     seen_paths: set[str],
     reject_visual_paths: bool,
+    reject_package_ba_decision_registries: bool = True,
 ) -> list[ScopeFinding]:
     entries = manifest.get(field)
     if not isinstance(entries, list):
@@ -436,6 +461,19 @@ def validate_manifest_bound_inputs(
                 "Утверждённый ответ БА ошибочно добавлен в общий source manifest",
                 "Scope-local approved clarification должен быть связан только через GAP-* "
                 "в scope-obligations.json и не должен делать stale другие scope.",
+                artifact,
+                remediation_owner="controller",
+            ))
+        if (
+            reject_package_ba_decision_registries
+            and APPROVED_BA_DECISIONS_FILENAME_RE.search(raw_path.replace("\\", "/"))
+        ):
+            findings.append(finding(
+                "source-manifest-ba-decision-registry-misclassified",
+                "source-integrity",
+                "Пакетный реестр решений БА добавлен не в специальное поле",
+                "Файл *-approved-ba-decisions.md должен находиться только в approved_ba_decisions "
+                "с ролью approved-ba-decision-registry.",
                 artifact,
                 remediation_owner="controller",
             ))
@@ -559,6 +597,42 @@ def validate_source_package_manifest(
         seen_paths=seen_manifest_paths,
         reject_visual_paths=False,
     ))
+    findings.extend(validate_manifest_bound_inputs(
+        manifest,
+        package_root,
+        artifact,
+        field="approved_ba_decisions",
+        allowed_roles=ALLOWED_APPROVED_BA_DECISION_ROLES,
+        input_label="утверждённых решений БА",
+        seen_paths=seen_manifest_paths,
+        reject_visual_paths=False,
+        reject_package_ba_decision_registries=False,
+    ))
+
+    approved_entries = manifest.get("approved_ba_decisions", [])
+    if isinstance(approved_entries, list) and len(approved_entries) > 1:
+        findings.append(finding(
+            "source-manifest-ba-decision-registry-count",
+            "source-integrity",
+            "В манифесте указано несколько реестров решений БА",
+            "Для одного FT-пакета допускается ровно один пакетный реестр утверждённых решений БА.",
+            artifact,
+            remediation_owner="controller",
+        ))
+    for entry in approved_entries if isinstance(approved_entries, list) else []:
+        if isinstance(entry, dict) and not APPROVED_BA_DECISIONS_FILENAME_RE.search(
+            str(entry.get("path") or "").replace("\\", "/")
+        ):
+            findings.append(finding(
+                "source-manifest-ba-decision-registry-name",
+                "source-integrity",
+                "Реестр решений БА имеет некорректное имя",
+                "Пакетный реестр должен называться *-approved-ba-decisions.md.",
+                artifact,
+                remediation_owner="controller",
+            ))
+    _, decision_findings = load_approved_ba_decisions(manifest, package_root, artifact)
+    findings.extend(decision_findings)
 
     notes = manifest.get("agent_notes")
     notes_path = package_root / "AGENT-NOTES.md"
@@ -660,12 +734,161 @@ def parse_clarification_request_cards(
     return cards, errors
 
 
+def parse_approved_ba_decision_cards(
+    content: str,
+) -> tuple[dict[str, dict[str, str]], list[str]]:
+    """Parse the compact, package-level registry of approved BA decisions."""
+    headers = list(APPROVED_BA_DECISION_CARD_HEADER_RE.finditer(content))
+    cards: dict[str, dict[str, str]] = {}
+    errors: list[str] = []
+    for index, header in enumerate(headers, start=1):
+        card_end = headers[index].start() if index < len(headers) else len(content)
+        body = content[header.end() : card_end]
+        decision_id = header.group("decision_id")
+        if decision_id in cards:
+            errors.append(f"повторяется карточка решения «{decision_id}»")
+            continue
+        fence = re.search(r"(?ms)^```yaml\s*\n(?P<payload>.*?)^```\s*$", body)
+        if fence is None:
+            errors.append(f"карточка решения «{decision_id}» не содержит YAML-блок")
+            continue
+        data: dict[str, str] = {}
+        card_errors: list[str] = []
+        for line_number, raw_line in enumerate(fence.group("payload").splitlines(), start=1):
+            line = raw_line.strip()
+            if not line:
+                continue
+            match = re.fullmatch(r"(?P<key>[a-z_]+):\s*(?P<value>\"(?:\\\\.|[^\"\\\\])*\")", line)
+            if match is None:
+                card_errors.append(
+                    f"строка {line_number}: ожидается ключ и значение в двойных кавычках"
+                )
+                continue
+            key = match.group("key")
+            if key in data:
+                card_errors.append(f"повторяется поле {key}")
+                continue
+            try:
+                data[key] = str(json.loads(match.group("value")))
+            except json.JSONDecodeError:
+                card_errors.append(f"некорректная строка YAML для {key}")
+        if card_errors:
+            details = "; ".join(card_errors[:3])
+            suffix = "; …" if len(card_errors) > 3 else ""
+            errors.append(f"карточка решения «{decision_id}»: {details}{suffix}")
+            continue
+        if data.get("decision_id") != decision_id:
+            errors.append(
+                f"карточка решения «{decision_id}»: decision_id={data.get('decision_id')!r} "
+                "не совпадает с заголовком"
+            )
+            continue
+        cards[decision_id] = data
+    return cards, errors
+
+
+def approved_ba_decision_registry_path(
+    manifest: dict[str, Any], package_root: Path, artifact: str
+) -> Path | None:
+    entries = manifest.get("approved_ba_decisions", [])
+    if not isinstance(entries, list) or len(entries) != 1 or not isinstance(entries[0], dict):
+        return None
+    try:
+        return package_relative_path(package_root, entries[0].get("path"), artifact=artifact)
+    except PracticalV09Error:
+        return None
+
+
+def load_approved_ba_decisions(
+    manifest: dict[str, Any], package_root: Path, artifact: str
+) -> tuple[dict[str, dict[str, str]], list[ScopeFinding]]:
+    """Read decision cards after their manifest binding has been checked."""
+    registry_path = approved_ba_decision_registry_path(manifest, package_root, artifact)
+    if registry_path is None:
+        return {}, []
+    registry_artifact = relative_to_package(package_root, registry_path)
+    if not registry_path.is_file():
+        return {}, []
+    try:
+        content = registry_path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
+        return {}, [finding(
+            "source-manifest-ba-decision-registry-unreadable",
+            "source-integrity",
+            "Не удалось прочитать реестр утверждённых решений БА",
+            str(exc),
+            registry_artifact,
+            remediation_owner="controller",
+        )]
+    cards, errors = parse_approved_ba_decision_cards(content)
+    findings: list[ScopeFinding] = []
+    if not cards:
+        findings.append(finding(
+            "source-manifest-ba-decision-registry-empty",
+            "source-integrity",
+            "В реестре решений БА нет машиночитаемых утверждённых решений",
+            "Нужна хотя бы одна карточка ## BA-DEC-* с YAML-профилем.",
+            registry_artifact,
+            remediation_owner="controller",
+        ))
+    for error in errors:
+        findings.append(finding(
+            "source-manifest-ba-decision-registry-format",
+            "source-integrity",
+            "Карточка решения БА не соответствует машиночитаемому профилю",
+            error,
+            registry_artifact,
+            remediation_owner="controller",
+        ))
+    for decision_id, card in cards.items():
+        missing = [field for field in APPROVED_BA_DECISION_REQUIRED_FIELDS if not card.get(field, "").strip()]
+        if missing:
+            findings.append(finding(
+                "source-manifest-ba-decision-registry-fields",
+                "semantic-completeness",
+                "В карточке решения БА отсутствуют обязательные поля",
+                f"{decision_id}: " + ", ".join(missing) + ".",
+                registry_artifact,
+                remediation_owner="controller",
+            ))
+        for field, allowed_values in APPROVED_BA_DECISION_ENUMS.items():
+            value = card.get(field, "")
+            if value and value not in allowed_values:
+                findings.append(finding(
+                    "source-manifest-ba-decision-registry-enum",
+                    "semantic-completeness",
+                    "У карточки решения БА некорректное значение поля",
+                    f"{decision_id}: {field}={value!r}; допустимы: {', '.join(sorted(allowed_values))}.",
+                    registry_artifact,
+                    remediation_owner="controller",
+                ))
+    return cards, findings
+
+
+def obligation_disposition(obligation: dict[str, Any]) -> str:
+    return str(obligation.get("disposition") or "active")
+
+
+def active_obligations(obligations: dict[str, Any]) -> list[dict[str, Any]]:
+    return [
+        item
+        for item in obligations.get("obligations", [])
+        if isinstance(item, dict) and obligation_disposition(item) == "active"
+    ]
+
+
+def active_obligation_ids(obligations: dict[str, Any]) -> set[str]:
+    return {str(item.get("id")) for item in active_obligations(obligations)}
+
+
 def validate_scope_clarifications(
     *,
     payload: dict[str, Any],
     obligations_path: Path,
     package_root: Path,
     obligation_ids: set[str],
+    obligation_ba_decisions: dict[str, str],
+    approved_ba_decision_ids: set[str],
 ) -> list[ScopeFinding]:
     """Validate the compact gap register and its conditional BA companion."""
     artifact = relative_to_package(package_root, obligations_path)
@@ -816,6 +1039,17 @@ def validate_scope_clarifications(
                 ))
 
         requires_request = clarification_requires_business_request(entry)
+        if gap_type == "ba-decision-required" and status == "open":
+            if entry.get("requires_business_answer") is not True:
+                findings.append(finding(
+                    "scope-ba-decision-request-flag",
+                    "unresolved-requirement",
+                    "Неразрешённое противоречие ФТ не помечено как вопрос к БА",
+                    f"{gap_id}: для открытого ba-decision-required требуется requires_business_answer=true.",
+                    artifact,
+                    remediation_owner="scope-analyzer",
+                ))
+            requires_request = True
         clarification_id = str(entry.get("clarification_id") or "")
         if requires_request:
             if not re.fullmatch(r"CLR-[A-Z0-9-]+", clarification_id):
@@ -907,6 +1141,39 @@ def validate_scope_clarifications(
 
         if status == "resolved":
             resolution = str(entry.get("resolution") or "")
+            if resolution.startswith("approved-ba-decision:"):
+                decision_id = resolution.partition(":")[2]
+                if decision_id not in approved_ba_decision_ids:
+                    findings.append(finding(
+                        "scope-ba-decision-missing",
+                        "source-integrity",
+                        "Закрытый gap ссылается на отсутствующее утверждённое решение БА",
+                        f"{gap_id}: не найдено решение {decision_id or '<без ID>'} в package-level реестре.",
+                        artifact,
+                        remediation_owner="scope-analyzer",
+                    ))
+                declared_decision = str(entry.get("ba_decision_id") or "")
+                if declared_decision != decision_id:
+                    findings.append(finding(
+                        "scope-ba-decision-gap-link",
+                        "traceability",
+                        "Закрытый gap не связан с решением БА явным полем",
+                        f"{gap_id}: ba_decision_id должен совпадать с {decision_id!r}.",
+                        artifact,
+                        remediation_owner="scope-analyzer",
+                    ))
+                for obligation_id in affected if isinstance(affected, list) else []:
+                    if obligation_ba_decisions.get(obligation_id) != decision_id:
+                        findings.append(finding(
+                            "scope-ba-decision-obligation-link",
+                            "traceability",
+                            "Решение БА не применено к связанному обязательству",
+                            f"{gap_id}: {obligation_id} должен иметь disposition=superseded-by-ba-decision "
+                            f"и ba_decision_id={decision_id}.",
+                            artifact,
+                            remediation_owner="scope-analyzer",
+                        ))
+                continue
             expected_resolution = f"approved-clarification:{clarification_id}" if clarification_id else ""
             approved_path = str(entry.get("approved_clarification_path") or "")
             approved_hash = str(entry.get("approved_clarification_sha256") or "")
@@ -971,11 +1238,21 @@ def validate_scope_obligations(
         findings.append(finding("scope-obligations-route-version", "source-integrity", "У реестра обязательств неверная версия маршрута", f"Ожидается {ROUTE_VERSION}.", artifact, remediation_owner="controller"))
     if str(payload.get("source_manifest_sha256") or "") != sha256_file(source_manifest_path):
         findings.append(finding("scope-obligations-source-manifest-stale", "source-integrity", "Реестр обязательств не связан с текущим манифестом источников", "Пересоберите scope-obligations.json от неизменённого source-package-manifest.json.", artifact, remediation_owner="controller"))
+    try:
+        source_manifest = read_json(source_manifest_path)
+    except PracticalV09Error:
+        source_manifest = {}
+    approved_ba_decisions, _ = load_approved_ba_decisions(
+        source_manifest,
+        package_root,
+        relative_to_package(package_root, source_manifest_path),
+    )
     obligations = payload.get("obligations")
     if not isinstance(obligations, list) or not obligations:
         findings.append(finding("scope-obligations-empty", "unresolved-requirement", "В scope не зафиксированы проверяемые обязательства", "Нужен хотя бы один OBL-* с source_anchor и формулировкой требования.", artifact, remediation_owner="scope-analyzer"))
         return findings, payload
     seen: set[str] = set()
+    obligation_ba_decisions: dict[str, str] = {}
     for index, obligation in enumerate(obligations, start=1):
         if not isinstance(obligation, dict):
             findings.append(finding("scope-obligation-invalid", "source-integrity", "Строка реестра обязательств имеет неверный формат", f"obligations[{index}] должен быть объектом.", artifact, remediation_owner="scope-analyzer"))
@@ -990,6 +1267,37 @@ def validate_scope_obligations(
         seen.add(obligation_id)
         if not statement or not source_anchor:
             findings.append(finding("scope-obligation-incomplete", "unresolved-requirement", "Обязательство не содержит формулировку или привязку к ФТ", f"{obligation_id or f'строка {index}'} требует statement и source_anchor.", artifact, remediation_owner="scope-analyzer"))
+        disposition = obligation_disposition(obligation)
+        if disposition not in OBLIGATION_DISPOSITIONS:
+            findings.append(finding(
+                "scope-obligation-disposition",
+                "semantic-completeness",
+                "У обязательства указан неизвестный disposition",
+                f"{obligation_id or f'строка {index}'}: «{disposition}» не входит в допустимый перечень.",
+                artifact,
+                remediation_owner="scope-analyzer",
+            ))
+        if disposition == "superseded-by-ba-decision":
+            decision_id = str(obligation.get("ba_decision_id") or "")
+            obligation_ba_decisions[obligation_id] = decision_id
+            if decision_id not in approved_ba_decisions:
+                findings.append(finding(
+                    "scope-obligation-ba-decision",
+                    "traceability",
+                    "Исключённое обязательство не связано с утверждённым решением БА",
+                    f"{obligation_id}: ba_decision_id={decision_id or '<не указан>'} не найден в package-level реестре.",
+                    artifact,
+                    remediation_owner="scope-analyzer",
+                ))
+        elif str(obligation.get("ba_decision_id") or ""):
+            findings.append(finding(
+                "scope-obligation-ba-decision-active",
+                "traceability",
+                "Активное обязательство не должно содержать решение, отменяющее требование",
+                f"{obligation_id}: ba_decision_id допустим только при disposition=superseded-by-ba-decision.",
+                artifact,
+                remediation_owner="scope-analyzer",
+            ))
         risk_flags = obligation.get("risk_flags", [])
         if not isinstance(risk_flags, list) or not all(isinstance(flag, str) for flag in risk_flags):
             findings.append(finding("scope-obligation-risk-flags-format", "semantic-completeness", "У обязательства некорректный формат risk_flags", f"{obligation_id or f'строка {index}'} требует массив известных строковых risk_flags.", artifact, remediation_owner="scope-analyzer"))
@@ -1023,6 +1331,8 @@ def validate_scope_obligations(
             obligations_path=obligations_path,
             package_root=package_root,
             obligation_ids=seen,
+            obligation_ba_decisions=obligation_ba_decisions,
+            approved_ba_decision_ids=set(approved_ba_decisions),
         )
     )
     return findings, payload
@@ -1069,6 +1379,12 @@ def validate_matrix(
         findings.append(finding("matrix-format", "format", "Матрица тест-дизайна не соответствует компактному шаблону", error, artifact, remediation_owner="writer", severity="warning"))
     by_obligation: dict[str, list[str]] = {}
     seen_matrix_ids: set[str] = set()
+    active_ids = active_obligation_ids(obligations)
+    all_ids = {
+        str(item.get("id"))
+        for item in obligations.get("obligations", [])
+        if isinstance(item, dict)
+    }
     for row in rows:
         matrix_id = row.get("Проверка", "")
         obligation_id = row.get("Обязательство ФТ", "")
@@ -1084,6 +1400,15 @@ def validate_matrix(
             findings.append(finding("matrix-obligation-id", "traceability", "У строки матрицы нет одного обязательства ФТ", f"Проверка {matrix_id or '<без ID>'} должна ссылаться ровно на один OBL-*.", artifact, remediation_owner="writer"))
         else:
             by_obligation.setdefault(obligation_id, []).append(matrix_id)
+            if obligation_id in all_ids and obligation_id not in active_ids:
+                findings.append(finding(
+                    "matrix-obligation-superseded",
+                    "traceability",
+                    "Матрица включает обязательство, отменённое утверждённым решением БА",
+                    f"Проверка {matrix_id or '<без ID>'} не должна ссылаться на {obligation_id}.",
+                    artifact,
+                    remediation_owner="writer",
+                ))
         for required_column in ("Сценарий", "Тип", "Приоритет", "Статус исполнения"):
             if not row.get(required_column, "").strip():
                 findings.append(finding("matrix-required-cell", "semantic-completeness", "В строке матрицы не заполнено обязательное поле", f"Проверка {matrix_id or '<без ID>'}: отсутствует «{required_column}».", artifact, remediation_owner="writer"))
@@ -1097,14 +1422,13 @@ def validate_matrix(
                 artifact,
                 remediation_owner="writer",
             ))
-    expected_ids = {str(item.get("id")) for item in obligations.get("obligations", []) if isinstance(item, dict)}
-    for obligation_id in sorted(expected_ids):
+    for obligation_id in sorted(active_ids):
         mapped = by_obligation.get(obligation_id, [])
         if not mapped:
             findings.append(finding("matrix-obligation-unmapped", "semantic-completeness", "Обязательство ФТ не покрыто матрицей", f"Для {obligation_id} нет строки матрицы.", artifact, remediation_owner="writer"))
         elif len(mapped) > 1:
             findings.append(finding("matrix-obligation-duplicated", "traceability", "Обязательство ФТ повторно спроектировано в матрице", f"{obligation_id} связано со строками: {', '.join(mapped)}.", artifact, remediation_owner="writer"))
-    return findings, by_obligation
+    return findings, {key: value for key, value in by_obligation.items() if key in active_ids}
 
 
 def parse_test_case_blocks(path: Path) -> list[dict[str, str]]:
@@ -1162,6 +1486,15 @@ def validate_test_cases(
             findings.append(finding("test-case-obligation-trace", "traceability", "Тест-кейс должен ссылаться ровно на одно обязательство ФТ", f"{tc_id}: в трассировке найдено OBL: {', '.join(obligation_ids) or 'нет'}.", artifact, remediation_owner="writer"))
         else:
             covered_obligations.setdefault(obligation_ids[0], []).append(tc_id)
+            if obligation_ids[0] not in active_obligation_ids(obligations):
+                findings.append(finding(
+                    "test-case-obligation-superseded",
+                    "traceability",
+                    "Тест-кейс ссылается на обязательство, отменённое решением БА",
+                    f"{tc_id}: {obligation_ids[0]} не должно попадать в test cases.",
+                    artifact,
+                    remediation_owner="writer",
+                ))
         body_without_metadata = re.sub(r"(?m)^\*\*(Тип|Приоритет|Статус исполнения):\*\*.*$", "", body)
         if re.search(r"\b(source-backed|residual|fixture|blocked-observability)\b", body_without_metadata, flags=re.IGNORECASE):
             findings.append(finding("test-case-process-language", "style", "В тест-кейсе остался служебный английский текст", f"Проверьте пользовательские поля {tc_id}.", artifact, remediation_owner="writer", severity="warning"))
@@ -1171,7 +1504,7 @@ def validate_test_cases(
             findings.append(finding("test-case-obligation-uncovered", "semantic-completeness", "Обязательство матрицы не покрыто тест-кейсом", f"Для {obligation_id} нет TC.", artifact, remediation_owner="writer"))
         elif len(mapped_tcs) > 1:
             findings.append(finding("test-case-obligation-duplicated", "traceability", "Обязательство покрыто несколькими тест-кейсами", f"{obligation_id}: {', '.join(mapped_tcs)}. Для v0.9 это допустимо только после явного разбиения на самостоятельные OBL.", artifact, remediation_owner="writer"))
-    expected_obligations = {str(item.get("id")) for item in obligations.get("obligations", []) if isinstance(item, dict)}
+    expected_obligations = active_obligation_ids(obligations)
     unknown = sorted(set(covered_obligations) - expected_obligations)
     if unknown:
         findings.append(finding("test-case-unknown-obligation", "traceability", "Тест-кейс ссылается на отсутствующее обязательство", ", ".join(unknown), artifact, remediation_owner="writer"))
@@ -1179,7 +1512,7 @@ def validate_test_cases(
 
 
 def matrix_review_required(obligations: dict[str, Any]) -> tuple[bool, list[str]]:
-    entries = [item for item in obligations.get("obligations", []) if isinstance(item, dict)]
+    entries = active_obligations(obligations)
     reasons: list[str] = []
     if len(entries) >= MATRIX_REVIEW_OBLIGATION_THRESHOLD:
         reasons.append(f"Количество обязательств: {len(entries)} (порог {MATRIX_REVIEW_OBLIGATION_THRESHOLD}).")
@@ -1509,11 +1842,7 @@ def verify_review_result(
     if isinstance(independent, list) and obligations_entry:
         obligations_path = package_relative_path(package_root, obligations_entry.get("path"), artifact=artifact)
         if obligations_path.is_file():
-            expected = {
-                str(item.get("id"))
-                for item in read_json(obligations_path).get("obligations", [])
-                if isinstance(item, dict)
-            }
+            expected = active_obligation_ids(read_json(obligations_path))
             actual: set[str] = set()
             for index, entry in enumerate(independent, start=1):
                 if not isinstance(entry, dict):
@@ -1551,7 +1880,7 @@ def verify_review_result(
                     "review-result-independent-coverage",
                     "review-integrity",
                     "Reviewer восстановил неполный или иной набор обязательств",
-                    "obligation_ids в independently derived obligations должны в сумме содержать в точности все OBL-* из зафиксированного scope-obligations.json.",
+                    "obligation_ids в independently derived obligations должны в сумме содержать в точности все активные OBL-* из зафиксированного scope-obligations.json.",
                     artifact,
                     remediation_owner="reviewer",
                     evidence=["expected=" + ",".join(sorted(expected)), "actual=" + ",".join(sorted(actual))],

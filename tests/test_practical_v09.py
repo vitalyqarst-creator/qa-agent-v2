@@ -80,6 +80,22 @@ def clarification_card(
     )
 
 
+def approved_ba_decision_registry(decision_id: str = "BA-DEC-001") -> str:
+    fields = {
+        "decision_id": decision_id,
+        "status": "approved",
+        "authority": "business-analyst",
+        "decision_type": "supersedes-ft",
+        "applies_to": "Весь FT-пакет; только карточка партнёра.",
+        "requirement_refs": "AS.34; таблица 6.",
+        "decision": "Поля «Фактический адрес» в карточке партнёра не будет.",
+    }
+    yaml_body = "\n".join(
+        f"{key}: {json.dumps(value, ensure_ascii=False)}" for key, value in fields.items()
+    )
+    return f"# Утверждённые решения БА\n\n## {decision_id} — Фактический адрес\n\n```yaml\n{yaml_body}\n```\n"
+
+
 class PracticalV09Fixture:
     def __init__(self, root: Path, *, obligation_statement: str = "Пункт меню «Партнеры» доступен пользователю.") -> None:
         self.root = root
@@ -102,6 +118,7 @@ class PracticalV09Fixture:
             "agent_notes": {"path": "AGENT-NOTES.md", "sha256": sha256_file(root / "AGENT-NOTES.md")},
             "support_inputs": [],
             "visual_inputs": [],
+            "approved_ba_decisions": [],
         }
         write_json(self.source_manifest, source_payload)
         self.obligations = self.scope_dir / "scope-obligations.json"
@@ -297,6 +314,7 @@ class PracticalV09Tests(unittest.TestCase):
             )
             self.assertIn("tool_version", created)
             self.assertEqual([], created["visual_inputs"])
+            self.assertEqual([], created["approved_ba_decisions"])
 
     def test_source_manifest_cli_separates_visual_inputs(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
@@ -342,6 +360,57 @@ class PracticalV09Tests(unittest.TestCase):
             created = json.loads(fixture.source_manifest.read_text(encoding="utf-8"))
             self.assertEqual("support", created["support_inputs"][0]["role"])
             self.assertEqual("visual-only", created["visual_inputs"][0]["role"])
+
+    def test_source_manifest_cli_binds_package_ba_decision_registry(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            fixture = PracticalV09Fixture(Path(raw))
+            fixture.source_manifest.unlink()
+            registry = fixture.root / "support" / "package-approved-ba-decisions.md"
+            registry.parent.mkdir()
+            registry.write_text(approved_ba_decision_registry(), encoding="utf-8")
+
+            rejected = subprocess.run(
+                [
+                    sys.executable,
+                    str(REPO_ROOT / "scripts" / "create_practical_source_manifest.py"),
+                    "--ft-package-root", str(fixture.root),
+                    "--docx", str(fixture.root / "source" / "main.docx"),
+                    "--xhtml", str(fixture.root / "source" / "main.xhtml"),
+                    "--support", str(registry),
+                    "--output", str(fixture.source_manifest),
+                ],
+                text=True,
+                capture_output=True,
+                encoding="utf-8",
+                errors="replace",
+            )
+            self.assertNotEqual(0, rejected.returncode)
+            self.assertIn("must be passed through --ba-decisions", rejected.stderr)
+
+            completed = subprocess.run(
+                [
+                    sys.executable,
+                    str(REPO_ROOT / "scripts" / "create_practical_source_manifest.py"),
+                    "--ft-package-root", str(fixture.root),
+                    "--docx", str(fixture.root / "source" / "main.docx"),
+                    "--xhtml", str(fixture.root / "source" / "main.xhtml"),
+                    "--ba-decisions", str(registry),
+                    "--output", str(fixture.source_manifest),
+                ],
+                text=True,
+                capture_output=True,
+                encoding="utf-8",
+                errors="replace",
+            )
+            self.assertEqual(0, completed.returncode, completed.stderr)
+            findings, created = validate_source_package_manifest(
+                fixture.source_manifest, fixture.root
+            )
+            self.assertEqual([], [item.id for item in findings if item.blocking])
+            self.assertEqual(
+                "approved-ba-decision-registry",
+                created["approved_ba_decisions"][0]["role"],
+            )
 
     def test_validator_rejects_visual_path_inside_support_inputs(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
@@ -426,6 +495,101 @@ class PracticalV09Tests(unittest.TestCase):
             self.assertNotIn(
                 "scope-clarification-request-link",
                 [item.id for item in findings],
+            )
+
+    def test_unresolved_ft_conflict_always_requires_ba_question(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            fixture = PracticalV09Fixture(Path(raw))
+            obligations = json.loads(fixture.obligations.read_text(encoding="utf-8"))
+            obligations["clarifications"] = [
+                {
+                    "id": "GAP-001",
+                    "gap_type": "ba-decision-required",
+                    "source_anchor": "XHTML, AS.34",
+                    "source_statement": "Заполняется фактический адрес.",
+                    "description": "Ожидаемая практика отменяет поле, но решения БА нет.",
+                    "impact": "blocking",
+                    "affected_obligation_ids": ["OBL-001"],
+                    "question_to_analyst": "Нужно ли исключить поле фактического адреса?",
+                    "requires_business_answer": False,
+                    "clarification_id": "CLR-001",
+                    "temporary_handling": "Не проектировать проверку до решения БА.",
+                    "status": "open",
+                }
+            ]
+            write_json(fixture.obligations, obligations)
+
+            _, findings = validate_scope(package_root=fixture.root, workflow_state_path=fixture.state)
+            finding_ids = [item.id for item in findings if item.blocking]
+            self.assertIn("scope-ba-decision-request-flag", finding_ids)
+            self.assertIn("scope-clarification-request-missing", finding_ids)
+
+            obligations["clarifications"][0]["requires_business_answer"] = True
+            write_json(fixture.obligations, obligations)
+            (fixture.scope_dir / "scope-clarification-requests.md").write_text(
+                clarification_card(), encoding="utf-8"
+            )
+            _, findings = validate_scope(package_root=fixture.root, workflow_state_path=fixture.state)
+            finding_ids = [item.id for item in findings]
+            self.assertNotIn("scope-ba-decision-request-flag", finding_ids)
+            self.assertNotIn("scope-clarification-request-missing", finding_ids)
+
+    def test_package_ba_decision_supersedes_obligation_and_excludes_it_from_matrix(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            fixture = PracticalV09Fixture(Path(raw))
+            registry = fixture.root / "support" / "package-approved-ba-decisions.md"
+            registry.parent.mkdir()
+            registry.write_text(approved_ba_decision_registry(), encoding="utf-8")
+            manifest = json.loads(fixture.source_manifest.read_text(encoding="utf-8"))
+            manifest["approved_ba_decisions"] = [{
+                "role": "approved-ba-decision-registry",
+                "path": "support/package-approved-ba-decisions.md",
+                "sha256": sha256_file(registry),
+            }]
+            write_json(fixture.source_manifest, manifest)
+
+            obligations = json.loads(fixture.obligations.read_text(encoding="utf-8"))
+            obligations["source_manifest_sha256"] = sha256_file(fixture.source_manifest)
+            obligations["obligations"][0]["disposition"] = "superseded-by-ba-decision"
+            obligations["obligations"][0]["ba_decision_id"] = "BA-DEC-001"
+            obligations["clarifications"] = [{
+                "id": "GAP-001",
+                "gap_type": "ba-decision-supersedes-ft",
+                "source_anchor": "XHTML, AS.34",
+                "source_statement": "Заполняется фактический адрес.",
+                "description": "Утверждённое решение БА отменяет поле.",
+                "impact": "non-blocking",
+                "affected_obligation_ids": ["OBL-001"],
+                "requires_business_answer": False,
+                "temporary_handling": "Не проектировать отменённое поле.",
+                "status": "resolved",
+                "resolution": "approved-ba-decision:BA-DEC-001",
+                "ba_decision_id": "BA-DEC-001",
+            }]
+            write_json(fixture.obligations, obligations)
+            fixture.matrix.write_text(
+                "# Матрица тест-дизайна\n\n"
+                "| Проверка | Обязательство ФТ | Сценарий | Тип | Приоритет | Статус исполнения | Планируемый TC-ID |\n"
+                "| --- | --- | --- | --- | --- | --- | --- |\n",
+                encoding="utf-8",
+            )
+            state = json.loads(fixture.state.read_text(encoding="utf-8"))
+            state["phase"] = "matrix"
+            state["artifacts"].pop("canonical_test_cases")
+            write_json(fixture.state, state)
+
+            _, findings = validate_scope(package_root=fixture.root, workflow_state_path=fixture.state)
+            self.assertEqual([], [item.id for item in findings if item.blocking])
+
+            fixture.matrix.write_text(
+                fixture.matrix.read_text(encoding="utf-8")
+                + "| MTX-001 | OBL-001 | Проверка поля | Positive | High | ready | TC-MENU-001 |\n",
+                encoding="utf-8",
+            )
+            _, findings = validate_scope(package_root=fixture.root, workflow_state_path=fixture.state)
+            self.assertIn(
+                "matrix-obligation-superseded",
+                [item.id for item in findings if item.blocking],
             )
 
     def test_clarification_card_requires_strict_yaml_and_all_fields(self) -> None:

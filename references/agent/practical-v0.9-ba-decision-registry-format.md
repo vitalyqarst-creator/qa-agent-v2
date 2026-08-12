@@ -1,0 +1,61 @@
+# Реестр утверждённых решений БА practical v0.9
+
+## Назначение и приоритет
+
+Основное ФТ остаётся исходной базой. Если утверждённое решение БА или
+владельца продукта прямо отменяет либо изменяет требование ФТ, оно имеет
+операционный приоритет **только** в явно указанной области `applies_to`.
+Такое решение действует для всех scope текущего FT-пакета, к которым относится
+эта область. Оно не меняет правила другого FT-пакета, карточки другого объекта
+или иной сценарий без прямого указания.
+
+Реестр хранится один раз в `support/<ft-slug>-approved-ba-decisions.md` и
+hash-bound в `work/practical-v0.9/source-package-manifest.json` полем
+`approved_ba_decisions` с ролью `approved-ba-decision-registry`. Его изменение
+делает scope artifacts stale: перед следующим downstream этапом затронутые
+scope нужно ограниченно пересобрать от нового манифеста.
+
+## Формат карточки
+
+Каждое решение оформляется так:
+
+~~~~markdown
+## BA-DEC-001 — Краткое название
+
+```yaml
+decision_id: "BA-DEC-001"
+status: "approved"
+authority: "business-analyst"
+decision_type: "supersedes-ft"
+applies_to: "Весь FT-пакет; карточка партнёра. Не относится к карточке реквизита."
+requirement_refs: "AS.34; таблица 6, правило автозаполнения."
+decision: "Поля «Фактический адрес» в карточке партнёра не будет."
+```
+~~~~
+
+Допустимые `authority`: `business-analyst`, `product-owner`. Решение не
+считается утверждённым по свободному тексту, переписке без источника или
+предположению агента.
+
+## Применение в scope
+
+Если решение отменяет конкретное обязательство:
+
+- сохраняй исходный `OBL-*` для трассировки, но указывай
+  `disposition: "superseded-by-ba-decision"` и
+  `ba_decision_id: "BA-DEC-*"`;
+- добавляй связанный resolved `GAP-*` с
+  `gap_type: "ba-decision-supersedes-ft"`,
+  `resolution: "approved-ba-decision:BA-DEC-*"` и тем же
+  `ba_decision_id`;
+- не включай такой `OBL-*` в матрицу, тест-кейсы или обязательства reviewer-а.
+
+Если текст ФТ и ожидаемая практика расходятся, но готового утверждённого
+решения нет, добавляй `GAP-*` типа `ba-decision-required` с
+`requires_business_answer: true` и в том же запуске создавай
+`scope-clarification-requests.md` с карточкой `CLR-*`. Нельзя заменять вопрос
+на временное `requires_business_answer: false`.
+
+Обычный scope-local ответ на вопрос, который не отменяет требование ФТ, может
+оставаться в `support/<scope>-approved-clarifications.md` и связываться через
+`approved-clarification:CLR-*` по старому контракту.

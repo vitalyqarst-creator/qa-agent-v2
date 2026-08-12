@@ -12,6 +12,7 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from test_case_agent.practical_v09 import (
+    APPROVED_BA_DECISIONS_FILENAME_RE,
     APPROVED_CLARIFICATION_FILENAME_RE,
     ROUTE_VERSION,
     ROUTE_TOOL_VERSION,
@@ -45,6 +46,14 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         action="append",
         default=[],
         help="Visual-only input such as a mockup or Figma index; never a business-rule source.",
+    )
+    parser.add_argument(
+        "--ba-decisions",
+        type=Path,
+        help=(
+            "Package-level approved BA decision registry. It may supersede a conflicting FT rule "
+            "only within its explicitly stated applicability."
+        ),
     )
     return parser.parse_args(argv)
 
@@ -86,6 +95,10 @@ def main(argv: list[str] | None = None) -> int:
                     "scope-local approved clarification must be bound through the related GAP-* "
                     "in scope-obligations.json, not added to source-package-manifest.json"
                 )
+            if APPROVED_BA_DECISIONS_FILENAME_RE.search(relative):
+                raise PracticalV09Error(
+                    "package-level approved BA decision registry must be passed through --ba-decisions"
+                )
             if input_kind == "support" and is_visual_only_path(relative):
                 raise PracticalV09Error(
                     "mockups and Figma indexes must be passed through --visual, not --support"
@@ -93,6 +106,15 @@ def main(argv: list[str] | None = None) -> int:
             if relative in input_paths:
                 raise PracticalV09Error(f"input is duplicated in manifest: {relative}")
             input_paths.add(relative)
+    if args.ba_decisions is not None:
+        ba_decisions_relative = relative_to_package(package_root, args.ba_decisions.resolve())
+        if not APPROVED_BA_DECISIONS_FILENAME_RE.search(ba_decisions_relative):
+            raise PracticalV09Error(
+                "--ba-decisions must reference a package-level *-approved-ba-decisions.md registry"
+            )
+        if ba_decisions_relative in input_paths:
+            raise PracticalV09Error(f"input is duplicated in manifest: {ba_decisions_relative}")
+        input_paths.add(ba_decisions_relative)
     payload: dict[str, object] = {
         "schema_version": 1,
         "route_version": ROUTE_VERSION,
@@ -104,6 +126,11 @@ def main(argv: list[str] | None = None) -> int:
         ],
         "support_inputs": [document(package_root, path, "support") for path in args.support],
         "visual_inputs": [document(package_root, path, "visual-only") for path in args.visual],
+        "approved_ba_decisions": (
+            [document(package_root, args.ba_decisions, "approved-ba-decision-registry")]
+            if args.ba_decisions is not None
+            else []
+        ),
     }
     if args.pdf is not None:
         payload["documents"].append(document(package_root, args.pdf, "pdf-cross-check"))
