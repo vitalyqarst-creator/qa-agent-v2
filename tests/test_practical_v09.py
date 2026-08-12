@@ -13,6 +13,7 @@ from test_case_agent.practical_v09 import (
     PracticalV09Error,
     build_review_manifest,
     build_validator_report,
+    derived_execution_status,
     finding,
     matrix_review_required,
     sha256_file,
@@ -1422,6 +1423,71 @@ class PracticalV09Tests(unittest.TestCase):
             obligations = json.loads(fixture.obligations.read_text(encoding="utf-8"))
             obligations["execution_setups"][0]["availability"] = "needs-test-data"
             write_json(fixture.obligations, obligations)
+            _, findings = validate_scope(
+                package_root=fixture.root,
+                workflow_state_path=fixture.state,
+            )
+            self.assertIn(
+                "matrix-execution-status-prerequisites",
+                [item.id for item in findings if item.blocking],
+            )
+
+    def test_execution_status_precedence_covers_every_pair_of_setup_availability(self) -> None:
+        statuses = (
+            "needs-future-clarification",
+            "blocked-observability",
+            "needs-test-data",
+            "candidate-ui-calibration",
+        )
+        availability_values = ("provided", *statuses)
+        for first in availability_values:
+            for second in availability_values:
+                with self.subTest(first=first, second=second):
+                    setup_catalog = {
+                        "SETUP-ACTOR-001": {"kind": "actor", "availability": first},
+                        "SETUP-FIXTURE-001": {"kind": "fixture", "availability": second},
+                    }
+                    expected = next(
+                        (status for status in statuses if status in {first, second}),
+                        "ready",
+                    )
+                    self.assertEqual(
+                        expected,
+                        derived_execution_status(
+                            {
+                                "required_setup_kinds": ["actor", "fixture"],
+                                "setup_ids": ["SETUP-ACTOR-001", "SETUP-FIXTURE-001"],
+                            },
+                            setup_catalog,
+                        ),
+                    )
+
+    def test_matrix_status_does_not_mask_missing_data_with_ui_calibration(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            fixture = PracticalV09Fixture(Path(raw))
+            obligations = json.loads(fixture.obligations.read_text(encoding="utf-8"))
+            obligations["execution_setups"][0]["availability"] = "needs-test-data"
+            obligations["execution_setups"].append(
+                {
+                    "id": "SETUP-NAVIGATION-001",
+                    "kind": "navigation",
+                    "availability": "candidate-ui-calibration",
+                    "evidence": "Точный UI-контрол требует калибровки.",
+                }
+            )
+            context = obligations["obligations"][0]["execution_contexts"][0]
+            context["required_setup_kinds"] = ["actor", "navigation"]
+            context["setup_ids"] = ["SETUP-ACTOR-001", "SETUP-NAVIGATION-001"]
+            write_json(fixture.obligations, obligations)
+            fixture.matrix.write_text(
+                fixture.matrix.read_text(encoding="utf-8").replace(
+                    "SETUP-ACTOR-001 — пользователь с доступом к модулю. | Открытие пункта меню | Positive | High | ready",
+                    "SETUP-ACTOR-001 — пользователь с доступом к модулю; "
+                    "SETUP-NAVIGATION-001 — UI-контрол требует калибровки | "
+                    "Открытие пункта меню | Positive | High | candidate-ui-calibration",
+                ),
+                encoding="utf-8",
+            )
             _, findings = validate_scope(
                 package_root=fixture.root,
                 workflow_state_path=fixture.state,

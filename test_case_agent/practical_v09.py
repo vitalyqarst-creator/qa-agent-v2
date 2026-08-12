@@ -18,7 +18,7 @@ from typing import Any, Iterable
 
 
 ROUTE_VERSION = "practical-v0.9"
-ROUTE_TOOL_VERSION = "practical-v0.9.8"
+ROUTE_TOOL_VERSION = "practical-v0.9.9"
 WORKFLOW_STATE_SCHEMA_VERSION = 1
 SOURCE_CONTRACT_VERSION = "source-package-v3"
 REVIEW_MANIFEST_VERSION = "practical-review-manifest-v2"
@@ -105,8 +105,8 @@ ALLOWED_EXECUTION_SETUP_AVAILABILITY = {"provided", *ALLOWED_EXECUTION_STATUSES}
 EXECUTION_STATUS_PRECEDENCE = (
     "needs-future-clarification",
     "blocked-observability",
-    "candidate-ui-calibration",
     "needs-test-data",
+    "candidate-ui-calibration",
 )
 MATRIX_REQUIRED_COLUMNS = (
     "Проверка",

@@ -16,17 +16,6 @@
 
 ## Незакрытые улучшения practical v0.9
 
-- [ ] `AGI-013` (`P1`) Исправить приоритет вычисления статуса исполнения из
-  нескольких `SETUP-*`.
-  - Основание: независимый matrix review scope `9.3.2` выявил пять строк,
-    где одновременные `needs-test-data` и `candidate-ui-calibration` были
-    сведены к `candidate-ui-calibration`; validator повторил ту же ошибку и
-    выдал `0 blocking`.
-  - Завершено, когда: policy явно определяет первичный статус при нескольких
-    недоступных предпосылках, `needs-test-data` не маскируется UI-калибровкой,
-    а регрессии покрывают все пары availability-status, включая actor/fixture
-    плюс navigation.
-
 - [ ] `AGI-014` (`P2`) Разделить совместимость source package manifest и
   версию запускающего инструмента.
   - Основание: повторная materialization scope `9.3.2` получила единственное
@@ -99,6 +88,15 @@
   рабочий маршрут FT-пакета, а не backlog agent-layer.
 
 ## Завершённые улучшения
+
+- [x] `AGI-013` Исправлен приоритет статуса исполнения из нескольких
+  `SETUP-*`.
+  - Первичный статус выбирается в порядке: `needs-future-clarification`,
+    `blocked-observability`, `needs-test-data`, `candidate-ui-calibration`.
+    Отсутствующие данные больше не маскируются UI-калибровкой.
+  - Регрессии покрывают все пары availability-status и связку actor плюс
+    navigation; повторная проверка scope `9.3.2` находит все пять строк,
+    указанных независимым reviewer-ом.
 
 - [x] `AGI-009` Явные контексты исполнения и атомарные потоки matrix/TC.
   - В `scope-obligations.json` добавлены `execution_contexts` (`CTX-*`) и
