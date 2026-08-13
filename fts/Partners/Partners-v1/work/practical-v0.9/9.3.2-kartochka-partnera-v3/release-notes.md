@@ -26,7 +26,12 @@
 
 ## Статус выпуска
 
-`reviewed-candidate` — кандидат прошёл независимый re-review без findings.
+`traceability-corrected-candidate` — исходный snapshot кандидата прошёл
+независимый re-review без findings. После review в шести TC добавлены
+пропущенные коды `AS.36` и `AS.37` из Таблицы 7; тест-дизайн, шаги, статусы и
+ожидаемые результаты не менялись. Перед promotion потребуется fresh
+independent traceability re-review актуального текста.
+
 UI-поведение ещё не калибровано на стенде. Это не `automation-ready` и не
 замена baseline v2.
 
