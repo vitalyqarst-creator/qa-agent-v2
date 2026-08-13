@@ -18,17 +18,19 @@ from typing import Any, Iterable, Mapping
 
 
 ROUTE_VERSION = "practical-v0.9"
-ROUTE_TOOL_VERSION = "practical-v0.9.20"
+ROUTE_TOOL_VERSION = "practical-v0.9.21"
 WORKFLOW_STATE_SCHEMA_VERSION = 1
 SOURCE_CONTRACT_VERSION = "source-package-v3"
 MATRIX_CONTRACT_VERSION = "practical-matrix-v2"
 LEGACY_MATRIX_CONTRACT_VERSION = "practical-matrix-v1"
 SCENARIO_CONSOLIDATION_CONTRACT_VERSION = "scenario-consolidation-v1"
 CONTROLLER_TRIAGE_CONTRACT_VERSION = "controller-triage-v1"
+CLARIFICATION_OUTCOME_CONTRACT_VERSION = "clarification-outcome-v1"
 REVIEW_MANIFEST_VERSION = "practical-review-manifest-v2"
 VALIDATOR_REPORT_VERSION = "practical-scope-validator-v2"
 SOURCE_MANIFEST_RELATIVE_PATH = "work/practical-v0.9/source-package-manifest.json"
 CLARIFICATION_REQUESTS_FILENAME = "scope-clarification-requests.md"
+NO_BUSINESS_QUESTIONS_MARKER = "Вопросов, требующих ответа БА, не выявлено."
 CLARIFICATION_REQUEST_SECTION_HEADINGS = (
     "Контекст",
     "Как Заполнять",
@@ -429,6 +431,119 @@ def clarification_requests_path(obligations_path: Path) -> Path:
     return obligations_path.with_name(CLARIFICATION_REQUESTS_FILENAME)
 
 
+def business_clarification_entries(payload: Mapping[str, Any]) -> list[dict[str, Any]]:
+    """Return gaps that need a concrete question to the business analyst."""
+    clarifications = payload.get("clarifications", [])
+    if not isinstance(clarifications, list):
+        return []
+    result: list[dict[str, Any]] = []
+    for entry in clarifications:
+        if not isinstance(entry, dict):
+            continue
+        is_open_ba_conflict = (
+            entry.get("gap_type") == "ba-decision-required"
+            and entry.get("status") == "open"
+        )
+        if clarification_requires_business_request(entry) or is_open_ba_conflict:
+            result.append(entry)
+    return result
+
+
+def render_scope_clarification_requests(payload: Mapping[str, Any]) -> str:
+    """Build the initial BA-question outcome for one practical scope.
+
+    The renderer only creates an initial draft.  It is intentionally not used
+    to overwrite a file containing a BA response on a later iteration.
+    """
+    scope = payload.get("scope")
+    if not isinstance(scope, dict) or not str(scope.get("slug") or "").strip():
+        raise PracticalV09Error(
+            "scope-obligations.json: scope.slug is required to create BA questions"
+        )
+    scope_slug = str(scope["slug"]).strip()
+    cards: list[str] = []
+    for entry in business_clarification_entries(payload):
+        gap_id = str(entry.get("id") or "").strip()
+        clarification_id = str(entry.get("clarification_id") or "").strip()
+        question = str(entry.get("question_to_analyst") or "").strip()
+        affected = entry.get("affected_obligation_ids")
+        if not re.fullmatch(r"GAP-[A-Z0-9-]+", gap_id):
+            raise PracticalV09Error(
+                "scope-obligations.json: вопрос БА требует GAP-* id"
+            )
+        if not re.fullmatch(r"CLR-[A-Z0-9-]+", clarification_id):
+            raise PracticalV09Error(
+                f"{gap_id}: вопрос БА требует clarification_id формата CLR-*"
+            )
+        if not question:
+            raise PracticalV09Error(
+                f"{gap_id}: вопрос БА требует точный question_to_analyst"
+            )
+        if (
+            not isinstance(affected, list)
+            or not affected
+            or not all(isinstance(item, str) and item.strip() for item in affected)
+        ):
+            raise PracticalV09Error(
+                f"{gap_id}: вопрос БА требует непустой affected_obligation_ids"
+            )
+        source_anchor = str(entry.get("source_anchor") or "").strip()
+        source_statement = str(entry.get("source_statement") or "").strip()
+        description = str(entry.get("description") or "").strip()
+        if not source_anchor or not source_statement or not description:
+            raise PracticalV09Error(
+                f"{gap_id}: вопрос БА требует source_anchor, source_statement и description"
+            )
+        codes = requirement_codes(f"{source_anchor} {source_statement}")
+        fields = {
+            "clarification_id": clarification_id,
+            "gap_id": gap_id,
+            "request_kind": "ba-business-ambiguity",
+            "scope_slug": scope_slug,
+            "requirement_codes": "; ".join(codes.values()) or "-",
+            "related_ft_reference": source_anchor,
+            "related_obligation_ids": "; ".join(affected),
+            "source_quote": source_statement,
+            "question": question,
+            "needed_for": description,
+            "blocking": "yes" if entry.get("impact") == "blocking" else "no",
+            "requested_from": "analyst",
+            "authority": "analyst",
+            "user_response": "-",
+            "response_status": "unanswered",
+            "response_type": "not-provided",
+            "updated_at": "-",
+        }
+        yaml_body = "\n".join(
+            f"{key}: {json.dumps(value, ensure_ascii=False)}"
+            for key, value in fields.items()
+        )
+        cards.append(
+            f"### {clarification_id} — {gap_id}\n\n```yaml\n{yaml_body}\n```"
+        )
+    questions_section = "\n\n".join(cards) if cards else f"- {NO_BUSINESS_QUESTIONS_MARKER}"
+    no_request_section = (
+        "- Отсутствуют."
+        if cards
+        else "- Нет открытых GAP-*, которые требуют продуктового ответа БА."
+    )
+    return (
+        "# Вопросы к бизнес-аналитику\n\n"
+        "## Контекст\n\n"
+        f"- `scope_slug`: `{scope_slug}`\n"
+        "- Основание: `scope-obligations.json`.\n\n"
+        "## Как Заполнять\n\n"
+        "- Для каждой карточки заполняйте только `user_response`, затем обновляйте статус ответа.\n"
+        "- Не меняйте `CLR-*`, `GAP-*`, source-привязки и формулировку вопроса.\n\n"
+        "## Запросы на уточнение\n\n"
+        f"{questions_section}\n\n"
+        "## Пробелы без запросов\n\n"
+        f"{no_request_section}\n\n"
+        "## Правила Использования Ответов\n\n"
+        "- Подтверждённый ответ связывается с соответствующим `GAP-*`; он не заменяет основной ФТ без явного решения БА.\n"
+    )
+
+
 def missing_clarification_request_sections(text: str) -> list[str]:
     """Return required Russian user-facing headings absent from a BA request file."""
     headings = {
@@ -545,6 +660,7 @@ def load_workflow_state(path: Path, package_root: Path) -> dict[str, Any]:
     workflow_matrix_contract_version(state)
     workflow_scenario_consolidation_enabled(state)
     workflow_controller_triage_enabled(state)
+    workflow_clarification_outcome_enabled(state)
     migration = workflow_contract_migration(state)
     if migration is not None and workflow_matrix_contract_version(state) != MATRIX_CONTRACT_VERSION:
         raise PracticalV09Error(
@@ -670,6 +786,33 @@ def workflow_controller_triage_enabled(state: Mapping[str, Any]) -> bool:
     if not isinstance(state.get("review_triage"), list):
         raise PracticalV09Error(
             "workflow-state.json: review_triage must be an array for controller-triage-v1"
+        )
+    return True
+
+
+def workflow_clarification_outcome_enabled(state: Mapping[str, Any]) -> bool:
+    """Return whether the scope must retain one explicit BA-question outcome."""
+    versions = state.get("contract_versions")
+    if not isinstance(versions, Mapping):
+        raise PracticalV09Error("workflow-state.json: contract_versions must be an object")
+    declared = versions.get("clarification_outcome")
+    if declared is None:
+        return False
+    if declared != CLARIFICATION_OUTCOME_CONTRACT_VERSION:
+        raise PracticalV09Error(
+            "workflow-state.json: contract_versions.clarification_outcome "
+            "has unsupported value"
+        )
+    artifacts = state.get("artifacts")
+    raw_path = artifacts.get("scope_clarification_requests") if isinstance(artifacts, Mapping) else None
+    if not isinstance(raw_path, str) or raw_path.strip() in {
+        "",
+        "not-created",
+        "not-applicable",
+    }:
+        raise PracticalV09Error(
+            "workflow-state.json: scope_clarification_requests is required "
+            "for clarification-outcome-v1"
         )
     return True
 
@@ -1328,6 +1471,7 @@ def validate_scope_clarifications(
     requests_path = clarification_requests_path(obligations_path)
     request_cards: dict[tuple[str, str], dict[str, str]] | None = None
     requests_text: str | None = None
+    business_entries = business_clarification_entries(payload)
 
     if requests_path.is_file():
         try:
@@ -1360,6 +1504,15 @@ def validate_scope_clarifications(
                     "source-integrity",
                     "Карточка вопроса БА не соответствует машиночитаемому YAML-профилю",
                     error,
+                    relative_to_package(package_root, requests_path),
+                    remediation_owner="scope-analyzer",
+                ))
+            if not business_entries and NO_BUSINESS_QUESTIONS_MARKER not in requests_text:
+                findings.append(finding(
+                    "scope-clarification-outcome-none",
+                    "semantic-completeness",
+                    "Файл вопросов к БА не фиксирует отсутствие вопросов",
+                    f"При отсутствии вопросов добавьте точный итог: «{NO_BUSINESS_QUESTIONS_MARKER}».",
                     relative_to_package(package_root, requests_path),
                     remediation_owner="scope-analyzer",
                 ))
@@ -3371,7 +3524,10 @@ def validate_workflow_artifact_links(state: dict[str, Any], package_root: Path) 
     if phase not in required_by_phase:
         findings.append(finding("workflow-phase", "transport", "В workflow указан неизвестный этап", f"phase={phase!r}.", artifact, remediation_owner="controller", severity="warning"))
         return findings
-    for key in required_by_phase[phase]:
+    required_keys = list(required_by_phase[phase])
+    if workflow_clarification_outcome_enabled(state):
+        required_keys.append("scope_clarification_requests")
+    for key in required_keys:
         try:
             path = workflow_artifact_path(state, package_root, key, required=True)
         except PracticalV09Error as exc:
@@ -3832,9 +3988,17 @@ def validate_scope(
             severity="warning",
         ))
 
+    content_input_keys = [
+        "source_package_manifest",
+        "scope_obligations",
+        "test_design_matrix",
+        "canonical_test_cases",
+    ]
+    if workflow_clarification_outcome_enabled(state):
+        content_input_keys.append("scope_clarification_requests")
     content_input_hashes = {
         key: sha256_file(path)
-        for key in ("source_package_manifest", "scope_obligations", "test_design_matrix", "canonical_test_cases")
+        for key in content_input_keys
         for path in [workflow_artifact_path(state, package_root, key)]
         if path is not None and path.is_file()
     }
@@ -3878,6 +4042,8 @@ def review_subject_paths(state: dict[str, Any], package_root: Path, review_mode:
     if review_mode not in {"matrix", "test-cases"}:
         raise PracticalV09Error("review_mode must be matrix or test-cases")
     keys = ["source_package_manifest", "scope_obligations", "test_design_matrix"]
+    if workflow_clarification_outcome_enabled(state):
+        keys.append("scope_clarification_requests")
     if review_mode == "test-cases":
         keys.append("canonical_test_cases")
     paths: dict[str, Path] = {}

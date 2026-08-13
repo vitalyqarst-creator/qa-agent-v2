@@ -14,11 +14,13 @@
     "source_package": "source-package-v3",
     "matrix": "practical-matrix-v2",
     "scenario_consolidation": "scenario-consolidation-v1",
-    "controller_triage": "controller-triage-v1"
+    "controller_triage": "controller-triage-v1",
+    "clarification_outcome": "clarification-outcome-v1"
   },
   "artifacts": {
     "source_package_manifest": "work/practical-v0.9/source-package-manifest.json",
     "scope_obligations": "work/practical-v0.9/<scope>/scope-obligations.json",
+    "scope_clarification_requests": "work/practical-v0.9/<scope>/scope-clarification-requests.md",
     "test_design_matrix": "not-created",
     "canonical_test_cases": "not-created",
     "validator_report": "not-created"
@@ -56,5 +58,9 @@ repair-loop: scope получает честный `blocked` до решения
 решению на content blocking finding. Raw JSON reviewer-а не переписывается.
 Новый scope создаётся с `controller-triage-v1`; legacy scope без версии
 остаётся читаемым без неявной миграции.
+
+`clarification_outcome-v1` означает, что `scope_clarification_requests`
+обязателен: это либо список карточек `CLR-*`, либо явная русскоязычная
+отметка об отсутствии вопросов БА. Файл входит в snapshot независимого review.
 
 `phase`: `scope`, `matrix`, `test-cases`, `review`, `accepted` или `blocked`.

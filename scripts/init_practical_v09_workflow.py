@@ -17,11 +17,15 @@ from test_case_agent.practical_v09 import (
     MATRIX_CONTRACT_VERSION,
     SCENARIO_CONSOLIDATION_CONTRACT_VERSION,
     CONTROLLER_TRIAGE_CONTRACT_VERSION,
+    CLARIFICATION_OUTCOME_CONTRACT_VERSION,
     WORKFLOW_STATE_SCHEMA_VERSION,
     SOURCE_MANIFEST_RELATIVE_PATH,
     PracticalV09Error,
+    clarification_requests_path,
     package_relative_path,
+    read_json,
     relative_to_package,
+    render_scope_clarification_requests,
     write_json,
 )
 
@@ -57,6 +61,26 @@ def main(argv: list[str] | None = None) -> int:
             "source-package-manifest must use the shared package-level path "
             f"{SOURCE_MANIFEST_RELATIVE_PATH}"
         )
+    if output.parent != obligations_path.parent:
+        raise PracticalV09Error(
+            "workflow-state output must be placed beside scope-obligations.json"
+        )
+    obligations_payload = read_json(obligations_path)
+    obligation_scope = obligations_payload.get("scope")
+    if (
+        not isinstance(obligation_scope, dict)
+        or obligation_scope.get("id") != args.scope_id
+        or obligation_scope.get("slug") != args.scope_slug
+    ):
+        raise PracticalV09Error(
+            "scope-id and scope-slug must match scope-obligations.json"
+        )
+    clarification_path = clarification_requests_path(obligations_path)
+    if not clarification_path.is_file():
+        clarification_path.write_text(
+            render_scope_clarification_requests(obligations_payload),
+            encoding="utf-8",
+        )
     payload = {
         "schema_version": WORKFLOW_STATE_SCHEMA_VERSION,
         "route_version": ROUTE_VERSION,
@@ -71,10 +95,12 @@ def main(argv: list[str] | None = None) -> int:
             "matrix": MATRIX_CONTRACT_VERSION,
             "scenario_consolidation": SCENARIO_CONSOLIDATION_CONTRACT_VERSION,
             "controller_triage": CONTROLLER_TRIAGE_CONTRACT_VERSION,
+            "clarification_outcome": CLARIFICATION_OUTCOME_CONTRACT_VERSION,
         },
         "artifacts": {
             "source_package_manifest": relative_to_package(package_root, source_path),
             "scope_obligations": relative_to_package(package_root, obligations_path),
+            "scope_clarification_requests": relative_to_package(package_root, clarification_path),
             "test_design_matrix": "not-created",
             "canonical_test_cases": "not-created",
             "validator_report": "not-created",

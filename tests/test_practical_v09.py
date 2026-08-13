@@ -10,6 +10,7 @@ from pathlib import Path
 from test_case_agent.practical_v09 import (
     COMPACT_REVIEWER_RECEIPT_FORMAT,
     COMPACT_REVIEWER_RECEIPT_MAX_BYTES,
+    CLARIFICATION_OUTCOME_CONTRACT_VERSION,
     CONTROLLER_TRIAGE_CONTRACT_VERSION,
     MATRIX_CONTRACT_VERSION,
     ROUTE_VERSION,
@@ -27,6 +28,8 @@ from test_case_agent.practical_v09 import (
     scenario_consolidation_contract,
     obligation_ids_sha256,
     requirement_codes,
+    relative_to_package,
+    render_scope_clarification_requests,
     sha256_file,
     validate_source_package_manifest,
     validate_scope,
@@ -168,6 +171,12 @@ class PracticalV09Fixture:
                 "clarifications": [],
             },
         )
+        (self.scope_dir / "scope-clarification-requests.md").write_text(
+            render_scope_clarification_requests(
+                json.loads(self.obligations.read_text(encoding="utf-8"))
+            ),
+            encoding="utf-8",
+        )
         self.matrix = self.scope_dir / "test-design-matrix.md"
         self.matrix.write_text(
             "# Матрица тест-дизайна\n\n"
@@ -238,15 +247,14 @@ class PracticalV09Tests(unittest.TestCase):
     def test_initializer_enables_controller_triage_for_new_scope(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             fixture = PracticalV09Fixture(Path(raw))
-            output = fixture.root / "work" / "practical-v0.9" / "new-menu" / "workflow-state.json"
-            output.parent.mkdir()
+            output = fixture.scope_dir / "fresh-workflow-state.json"
             completed = subprocess.run(
                 [
                     sys.executable,
                     str(REPO_ROOT / "scripts" / "init_practical_v09_workflow.py"),
                     "--ft-package-root", str(fixture.root),
-                    "--scope-id", "02",
-                    "--scope-slug", "new-menu",
+                    "--scope-id", "01",
+                    "--scope-slug", "menu",
                     "--source-package-manifest", str(fixture.source_manifest),
                     "--scope-obligations", str(fixture.obligations),
                     "--output", str(output),
@@ -263,6 +271,112 @@ class PracticalV09Tests(unittest.TestCase):
                 state["contract_versions"]["controller_triage"],
             )
             self.assertEqual([], state["review_triage"])
+            self.assertEqual(
+                CLARIFICATION_OUTCOME_CONTRACT_VERSION,
+                state["contract_versions"]["clarification_outcome"],
+            )
+            clarification_path = fixture.scope_dir / "scope-clarification-requests.md"
+            self.assertEqual(
+                str(clarification_path.relative_to(fixture.root)).replace("\\", "/"),
+                state["artifacts"]["scope_clarification_requests"],
+            )
+            self.assertIn(
+                "Вопросов, требующих ответа БА, не выявлено.",
+                clarification_path.read_text(encoding="utf-8"),
+            )
+
+    def test_initializer_creates_ba_cards_and_binds_outcome_to_review_inputs(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            fixture = PracticalV09Fixture(Path(raw))
+            obligations = json.loads(fixture.obligations.read_text(encoding="utf-8"))
+            obligations["clarifications"] = [{
+                "id": "GAP-001",
+                "gap_type": "ba-business-ambiguity",
+                "source_anchor": "XHTML, раздел 9.1, AS.1",
+                "source_statement": "Пункт доступен пользователю.",
+                "description": "Не определено условие доступности.",
+                "impact": "non-blocking",
+                "affected_obligation_ids": ["OBL-001"],
+                "question_to_analyst": "Какое условие доступности применяется?",
+                "requires_business_answer": True,
+                "clarification_id": "CLR-001",
+                "temporary_handling": "Не задавать условие доступа до ответа.",
+                "status": "open",
+            }]
+            write_json(fixture.obligations, obligations)
+            clarification_path = fixture.scope_dir / "scope-clarification-requests.md"
+            clarification_path.unlink()
+            output = fixture.scope_dir / "fresh-workflow-state.json"
+            completed = subprocess.run(
+                [
+                    sys.executable,
+                    str(REPO_ROOT / "scripts" / "init_practical_v09_workflow.py"),
+                    "--ft-package-root", str(fixture.root),
+                    "--scope-id", "01",
+                    "--scope-slug", "menu",
+                    "--source-package-manifest", str(fixture.source_manifest),
+                    "--scope-obligations", str(fixture.obligations),
+                    "--output", str(output),
+                ],
+                text=True,
+                capture_output=True,
+                encoding="utf-8",
+                errors="replace",
+            )
+            self.assertEqual(0, completed.returncode, completed.stderr)
+            rendered = clarification_path.read_text(encoding="utf-8")
+            self.assertIn("### CLR-001 — GAP-001", rendered)
+            self.assertIn("AS.1", rendered)
+            state = json.loads(output.read_text(encoding="utf-8"))
+            state["phase"] = "matrix"
+            state["artifacts"]["test_design_matrix"] = relative_to_package(
+                fixture.root, fixture.matrix
+            )
+            write_json(output, state)
+            context, findings = validate_scope(
+                package_root=fixture.root, workflow_state_path=output
+            )
+            self.assertFalse([item for item in findings if item.blocking])
+            report_path = fixture.scope_dir / "fresh-validator-report.json"
+            write_json(report_path, build_validator_report(context, findings))
+            state = json.loads(output.read_text(encoding="utf-8"))
+            state["artifacts"]["validator_report"] = relative_to_package(
+                fixture.root, report_path
+            )
+            write_json(output, state)
+            manifest = build_review_manifest(
+                package_root=fixture.root,
+                workflow_state_path=output,
+                review_mode="matrix",
+                controller_thread_id="019feebf-3cde-79d2-9f87-ba9c61ff7b13",
+                code_branch="codex/test",
+                code_commit="abc123",
+                contract_digest="contract",
+            )
+            self.assertIn(
+                "scope_clarification_requests",
+                [item["role"] for item in manifest["inputs"]],
+            )
+
+    def test_clarification_outcome_contract_blocks_missing_file(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            fixture = PracticalV09Fixture(Path(raw))
+            state = json.loads(fixture.state.read_text(encoding="utf-8"))
+            state["contract_versions"]["clarification_outcome"] = (
+                CLARIFICATION_OUTCOME_CONTRACT_VERSION
+            )
+            state["artifacts"]["scope_clarification_requests"] = relative_to_package(
+                fixture.root, fixture.scope_dir / "scope-clarification-requests.md"
+            )
+            write_json(fixture.state, state)
+            (fixture.scope_dir / "scope-clarification-requests.md").unlink()
+            _, findings = validate_scope(
+                package_root=fixture.root, workflow_state_path=fixture.state
+            )
+            self.assertIn(
+                "workflow-artifact-missing",
+                [item.id for item in findings if item.blocking],
+            )
 
     def test_scope_validator_is_one_pass_and_ignores_sibling_artifacts(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
@@ -537,6 +651,7 @@ class PracticalV09Tests(unittest.TestCase):
                 }
             ]
             write_json(fixture.obligations, obligations)
+            (fixture.scope_dir / "scope-clarification-requests.md").unlink()
 
             _, findings = validate_scope(package_root=fixture.root, workflow_state_path=fixture.state)
             self.assertIn(
@@ -654,6 +769,7 @@ class PracticalV09Tests(unittest.TestCase):
                 }
             ]
             write_json(fixture.obligations, obligations)
+            (fixture.scope_dir / "scope-clarification-requests.md").unlink()
 
             _, findings = validate_scope(package_root=fixture.root, workflow_state_path=fixture.state)
             finding_ids = [item.id for item in findings if item.blocking]
