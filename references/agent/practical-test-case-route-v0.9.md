@@ -146,7 +146,7 @@ fixture, интеграция или исходное состояние все�
 python scripts/validate_practical_scope.py --ft-package-root <package> --workflow-state <scope-dir>/workflow-state.json --output-profile <scope-dir>/validator-report.json --exclude-output <scope-dir>/validator-report.json --require-clean
 ```
 
-Matrix review обязателен, если в `scope-obligations.json` не менее 8 обязательств, есть `risk_flags`: `status-transition`, `cross-field-rule`, `closed-dictionary`, `integration`, `authorization`, `exception-over-general-rule`, `mapping-table`, `temporal-rule`, `high-fan-out`, `high-risk`, либо заполнен `scenario_consolidation`. В остальных простых scope после чистой валидации writer переходит к TC.
+Matrix review обязателен только если в `scope-obligations.json` не менее 8 обязательств, есть `risk_flags`: `status-transition`, `cross-field-rule`, `closed-dictionary`, `integration`, `authorization`, `exception-over-general-rule`, `mapping-table`, `temporal-rule`, `high-fan-out`, `high-risk`, либо заполнен `scenario_consolidation`. В остальных простых scope после чистой валидации writer переходит к TC.
 
 ### 3. Separate-session review
 

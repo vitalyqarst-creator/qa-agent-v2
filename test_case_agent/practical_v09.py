@@ -18,9 +18,9 @@ from typing import Any, Iterable, Mapping
 
 
 ROUTE_VERSION = "practical-v0.9"
-ROUTE_TOOL_VERSION = "practical-v0.9.21"
+ROUTE_TOOL_VERSION = "practical-v0.9.22"
 WORKFLOW_STATE_SCHEMA_VERSION = 1
-SOURCE_CONTRACT_VERSION = "source-package-v3"
+SOURCE_CONTRACT_VERSION = "source-package-v4"
 MATRIX_CONTRACT_VERSION = "practical-matrix-v2"
 LEGACY_MATRIX_CONTRACT_VERSION = "practical-matrix-v1"
 SCENARIO_CONSOLIDATION_CONTRACT_VERSION = "scenario-consolidation-v1"
@@ -315,7 +315,7 @@ APPROVED_BA_DECISION_REQUIRED_FIELDS = (
 APPROVED_BA_DECISION_ENUMS = {
     "status": {"approved"},
     "authority": {"business-analyst", "product-owner"},
-    "decision_type": {"supersedes-ft"},
+    "decision_type": {"clarifies-ft", "supersedes-ft"},
 }
 OBLIGATION_DISPOSITIONS = {"active", "superseded-by-ba-decision"}
 AGENT_NOTES_VERSION_METADATA_RE = re.compile(
@@ -1172,6 +1172,41 @@ def validate_source_package_manifest(
     return findings, manifest
 
 
+def validate_practical_stage_workspace_hygiene(package_root: Path) -> list[ScopeFinding]:
+    """Reject temporary package files left at a practical stage boundary.
+
+    ``tmp/`` and ``work/debug/`` are deliberately not source or handoff
+    locations. The check reports rather than removes files: a pre-existing
+    user artifact must be resolved by the controller, never deleted by a
+    workflow helper.
+    """
+    findings: list[ScopeFinding] = []
+    for relative_root in (Path("tmp"), Path("work") / "debug"):
+        root = package_root / relative_root
+        if not root.is_dir():
+            continue
+        files = sorted(
+            path for path in root.rglob("*")
+            if path.is_file() and path.name != ".gitkeep"
+        )
+        if not files:
+            continue
+        paths = [relative_to_package(package_root, path) for path in files]
+        findings.append(finding(
+            "practical-stage-temporary-artifacts",
+            "workspace-hygiene",
+            "В пакете остались временные артефакты этапа",
+            "Перед завершением этапа удалите созданные агентом временные файлы или перенесите "
+            "нужное доказательство в именованный work-артефакт. Не удаляйте уже существовавшие "
+            "пользовательские файлы без отдельного решения.",
+            relative_root.as_posix(),
+            evidence=paths,
+            remediation_owner="controller",
+            blocking=True,
+        ))
+    return findings
+
+
 def clarification_requires_business_request(entry: dict[str, Any]) -> bool:
     """Keep only business ambiguities in the BA-facing companion file."""
     if entry.get("requires_business_answer") is True:
@@ -1451,7 +1486,7 @@ def validate_scope_clarifications(
     package_root: Path,
     obligation_ids: set[str],
     obligation_ba_decisions: dict[str, str],
-    approved_ba_decision_ids: set[str],
+    approved_ba_decisions: dict[str, dict[str, str]],
 ) -> list[ScopeFinding]:
     """Validate the compact gap register and its conditional BA companion."""
     artifact = relative_to_package(package_root, obligations_path)
@@ -1768,12 +1803,23 @@ def validate_scope_clarifications(
             resolution = str(entry.get("resolution") or "")
             if resolution.startswith("approved-ba-decision:"):
                 decision_id = resolution.partition(":")[2]
-                if decision_id not in approved_ba_decision_ids:
+                decision = approved_ba_decisions.get(decision_id)
+                if decision is None:
                     findings.append(finding(
                         "scope-ba-decision-missing",
                         "source-integrity",
                         "Закрытый gap ссылается на отсутствующее утверждённое решение БА",
                         f"{gap_id}: не найдено решение {decision_id or '<без ID>'} в package-level реестре.",
+                        artifact,
+                        remediation_owner="scope-analyzer",
+                    ))
+                elif decision.get("decision_type") != "supersedes-ft":
+                    findings.append(finding(
+                        "scope-ba-decision-resolution-type",
+                        "traceability",
+                        "Закрытый gap ссылается на уточнение БА вместо изменения требования",
+                        f"{gap_id}: {decision_id} имеет decision_type={decision.get('decision_type')!r}; "
+                        "для resolution=approved-ba-decision требуется supersedes-ft.",
                         artifact,
                         remediation_owner="scope-analyzer",
                     ))
@@ -2006,12 +2052,23 @@ def validate_scope_obligations(
         if disposition == "superseded-by-ba-decision":
             decision_id = str(obligation.get("ba_decision_id") or "")
             obligation_ba_decisions[obligation_id] = decision_id
-            if decision_id not in approved_ba_decisions:
+            decision = approved_ba_decisions.get(decision_id)
+            if decision is None:
                 findings.append(finding(
                     "scope-obligation-ba-decision",
                     "traceability",
                     "Исключённое обязательство не связано с утверждённым решением БА",
                     f"{obligation_id}: ba_decision_id={decision_id or '<не указан>'} не найден в package-level реестре.",
+                    artifact,
+                    remediation_owner="scope-analyzer",
+                ))
+            elif decision.get("decision_type") != "supersedes-ft":
+                findings.append(finding(
+                    "scope-obligation-ba-decision-type",
+                    "traceability",
+                    "Исключённое обязательство связано с уточнением БА вместо изменения требования",
+                    f"{obligation_id}: {decision_id} имеет decision_type={decision.get('decision_type')!r}; "
+                    "disposition=superseded-by-ba-decision требует supersedes-ft.",
                     artifact,
                     remediation_owner="scope-analyzer",
                 ))
@@ -2178,7 +2235,7 @@ def validate_scope_obligations(
             package_root=package_root,
             obligation_ids=seen,
             obligation_ba_decisions=obligation_ba_decisions,
-            approved_ba_decision_ids=set(approved_ba_decisions),
+            approved_ba_decisions=approved_ba_decisions,
         )
     )
     return findings, payload

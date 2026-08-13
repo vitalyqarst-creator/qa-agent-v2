@@ -20,6 +20,7 @@ if str(REPO_ROOT) not in sys.path:
 from test_case_agent.practical_v09 import (
     PracticalV09Error,
     relative_to_package,
+    validate_practical_stage_workspace_hygiene,
     validate_scope_obligations,
     validate_source_package_manifest,
 )
@@ -69,7 +70,8 @@ def main(argv: list[str] | None = None) -> int:
         package_root,
         manifest_path,
     )
-    findings = [*source_findings, *obligation_findings]
+    hygiene_findings = validate_practical_stage_workspace_hygiene(package_root)
+    findings = [*source_findings, *obligation_findings, *hygiene_findings]
     blocking_count = sum(1 for item in findings if item.blocking)
     scope = payload.get("scope") if isinstance(payload, dict) else {}
     result = {
@@ -81,6 +83,7 @@ def main(argv: list[str] | None = None) -> int:
         "findings_count": len(findings),
         "blocking_count": blocking_count,
         "clean": blocking_count == 0,
+        "findings": [item.as_dict() for item in findings],
         "note": (
             "Это предварительная проверка структуры обязательств; "
             "каноническая scoped validation маршрута ещё не запускалась."

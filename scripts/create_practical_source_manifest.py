@@ -1,4 +1,4 @@
-"""Create a compact v0.9 source-package manifest from explicit package inputs."""
+"""Create a compact v0.9 source-package manifest from package inputs."""
 
 from __future__ import annotations
 
@@ -45,14 +45,17 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         type=Path,
         action="append",
         default=[],
-        help="Visual-only input such as a mockup or Figma index; never a business-rule source.",
+        help=(
+            "Additional visual-only input such as a Figma index; never a business-rule source. "
+            "All files under package mockups/ are discovered automatically."
+        ),
     )
     parser.add_argument(
         "--ba-decisions",
         type=Path,
         help=(
-            "Package-level approved BA decision registry. It may supersede a conflicting FT rule "
-            "only within its explicitly stated applicability."
+            "Package-level approved BA decision registry. A decision may clarify an FT rule or "
+            "supersede a conflicting rule only within its explicitly stated applicability."
         ),
     )
     return parser.parse_args(argv)
@@ -67,6 +70,35 @@ def document(package_root: Path, path: Path, role: str) -> dict[str, str]:
     if not resolved.is_file():
         raise PracticalV09Error(f"{role} does not exist: {resolved}")
     return {"role": role, "path": relative_to_package(package_root, resolved), "sha256": sha256_file(resolved)}
+
+
+def discovered_package_mockups(package_root: Path) -> list[Path]:
+    """Return every local mockup deterministically without treating it as FT text."""
+    mockups_root = package_root / "mockups"
+    if not mockups_root.is_dir():
+        return []
+    return sorted(
+        (
+            path.resolve()
+            for path in mockups_root.rglob("*")
+            if path.is_file() and path.name != ".gitkeep"
+        ),
+        key=lambda path: relative_to_package(package_root, path),
+    )
+
+
+def merged_visual_inputs(package_root: Path, explicit: list[Path]) -> list[Path]:
+    """Merge explicit visual inputs with local mockups, keeping one path once."""
+    merged: list[Path] = []
+    seen: set[str] = set()
+    for path in [*explicit, *discovered_package_mockups(package_root)]:
+        resolved = path.resolve()
+        relative = relative_to_package(package_root, resolved)
+        if relative in seen:
+            continue
+        seen.add(relative)
+        merged.append(resolved)
+    return merged
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -86,8 +118,9 @@ def main(argv: list[str] | None = None) -> int:
         )
     if output.exists():
         raise PracticalV09Error(f"Refusing to overwrite existing manifest: {output}")
+    visual_inputs = merged_visual_inputs(package_root, args.visual)
     input_paths: set[str] = set()
-    for input_kind, paths in (("support", args.support), ("visual", args.visual)):
+    for input_kind, paths in (("support", args.support), ("visual", visual_inputs)):
         for input_path in paths:
             relative = relative_to_package(package_root, input_path.resolve())
             if APPROVED_CLARIFICATION_FILENAME_RE.search(relative):
@@ -125,7 +158,7 @@ def main(argv: list[str] | None = None) -> int:
             document(package_root, args.xhtml, "main-xhtml"),
         ],
         "support_inputs": [document(package_root, path, "support") for path in args.support],
-        "visual_inputs": [document(package_root, path, "visual-only") for path in args.visual],
+        "visual_inputs": [document(package_root, path, "visual-only") for path in visual_inputs],
         "approved_ba_decisions": (
             [document(package_root, args.ba_decisions, "approved-ba-decision-registry")]
             if args.ba_decisions is not None
