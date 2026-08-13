@@ -249,6 +249,41 @@ class PracticalV09Fixture:
             build_validator_report(context, findings),
         )
 
+    def write_verified_dadata_fixture(self, fixture_id: str = "FX-DADATA-PARTNER-001") -> None:
+        fixture_dir = self.scope_dir / "fixtures" / fixture_id
+        fixture_dir.mkdir(parents=True)
+        snapshot = {
+            "suggestions": [
+                {
+                    "value": "ПАО СБЕРБАНК",
+                    "data": {
+                        "inn": "7707083893",
+                        "kpp": "773601001",
+                    },
+                }
+            ]
+        }
+        snapshot_path = fixture_dir / f"{fixture_id}.response.json"
+        write_json(snapshot_path, snapshot)
+        write_json(
+            fixture_dir / f"{fixture_id}.verification.json",
+            {
+                "fixture_id": fixture_id,
+                "provider": "DaData",
+                "status": "verified",
+                "request": {"parameters": {"query": "7707083893"}},
+                "expected_response": {
+                    "exact_suggestion": "ПАО СБЕРБАНК",
+                    "exact_components": {
+                        "inn": "7707083893",
+                        "kpp": "773601001",
+                    },
+                },
+                "response_snapshot": snapshot_path.name,
+                "response_sha256": sha256_file(snapshot_path),
+            },
+        )
+
 
 class PracticalV09Tests(unittest.TestCase):
     def test_initializer_enables_controller_triage_for_new_scope(self) -> None:
@@ -2968,6 +3003,7 @@ class PracticalV09Tests(unittest.TestCase):
                 Path(raw),
                 obligation_statement="По введённому наименованию система показывает подходящие организации DaData.",
             )
+            fixture.write_verified_dadata_fixture()
             fixture.tc.write_text(
                 fixture.tc.read_text(encoding="utf-8")
                 .replace(
@@ -2998,6 +3034,7 @@ class PracticalV09Tests(unittest.TestCase):
                 Path(raw),
                 obligation_statement="По введённому наименованию система показывает подходящие организации DaData.",
             )
+            fixture.write_verified_dadata_fixture()
             fixture.tc.write_text(
                 fixture.tc.read_text(encoding="utf-8")
                 .replace(
@@ -3016,6 +3053,68 @@ class PracticalV09Tests(unittest.TestCase):
                 "test-case-dadata-fixture-literals",
                 [item.id for item in findings if item.blocking],
             )
+
+    def test_validator_rejects_invented_literal_for_verified_dadata_fixture(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            fixture = PracticalV09Fixture(
+                Path(raw),
+                obligation_statement="По введённому наименованию система показывает подходящие организации DaData.",
+            )
+            fixture.write_verified_dadata_fixture()
+            fixture.tc.write_text(
+                fixture.tc.read_text(encoding="utf-8")
+                .replace(
+                    "**Тестовые данные:** Не требуются.",
+                    "**Тестовые данные:** `FX-DADATA-PARTNER-001`; запрос `ООО «Тестовый партнёр»`.",
+                )
+                .replace(
+                    "1. Открыть раздел «Партнеры».",
+                    "1. Ввести `ООО «Тестовый партнёр»` в поле «Наименование партнёра».\n"
+                    "2. Выбрать организацию из подсказки DaData.",
+                ),
+                encoding="utf-8",
+            )
+            _, findings = validate_scope(package_root=fixture.root, workflow_state_path=fixture.state)
+            self.assertIn(
+                "test-case-dadata-fixture-literal-mismatch",
+                [item.id for item in findings if item.blocking],
+            )
+
+    def test_validator_allows_missing_dadata_fixture_without_invented_literal(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            fixture = PracticalV09Fixture(
+                Path(raw),
+                obligation_statement="По введённому наименованию система показывает подходящие организации DaData.",
+            )
+            fixture.tc.write_text(
+                fixture.tc.read_text(encoding="utf-8")
+                .replace("**Статус исполнения:** ready", "**Статус исполнения:** needs-test-data")
+                .replace(
+                    "**Тестовые данные:** Не требуются.",
+                    "**Тестовые данные:** `FX-DADATA-PARTNER-001` не предоставлен. "
+                    "Требуемый профиль: юридическое лицо с заполненными наименованием и ИНН в ответе DaData. "
+                    "Способ подготовки: включить интеграцию DaData в тестовом контуре и сохранить ответ как fixture прогона.",
+                )
+                .replace(
+                    "1. Открыть раздел «Партнеры».",
+                    "1. Ввести поисковую строку из подготовленного профиля в поле «Наименование партнёра».\n"
+                    "2. Выбрать организацию из подсказки DaData.",
+                ),
+                encoding="utf-8",
+            )
+            fixture.matrix.write_text(
+                fixture.matrix.read_text(encoding="utf-8").replace(
+                    "| Positive | High | ready |", "| Positive | High | needs-test-data |"
+                ),
+                encoding="utf-8",
+            )
+            obligations = json.loads(fixture.obligations.read_text(encoding="utf-8"))
+            obligations["execution_setups"][0]["availability"] = "needs-test-data"
+            write_json(fixture.obligations, obligations)
+            _, findings = validate_scope(package_root=fixture.root, workflow_state_path=fixture.state)
+            blocking_ids = [item.id for item in findings if item.blocking]
+            self.assertNotIn("test-case-dadata-unverified-literal", blocking_ids)
+            self.assertNotIn("test-case-dadata-test-data-contract", blocking_ids)
 
     def test_validator_rejects_dadata_precondition_that_repeats_trigger(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
@@ -4144,6 +4243,164 @@ class PracticalV09Tests(unittest.TestCase):
                 "matrix-execution-status-prerequisites",
                 [item.id for item in findings if item.blocking],
             )
+
+    def test_validator_requires_secondary_execution_limitation_in_matrix_and_tc(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            fixture = PracticalV09Fixture(Path(raw))
+            obligations = json.loads(fixture.obligations.read_text(encoding="utf-8"))
+            obligations["execution_setups"][0]["availability"] = "needs-test-data"
+            obligations["execution_setups"].append(
+                {
+                    "id": "SETUP-NAVIGATION-001",
+                    "kind": "navigation",
+                    "availability": "candidate-ui-calibration",
+                    "evidence": "Точное название элемента входа требует UI-калибровки.",
+                }
+            )
+            context = obligations["obligations"][0]["execution_contexts"][0]
+            context["required_setup_kinds"] = ["actor", "navigation"]
+            context["setup_ids"] = ["SETUP-ACTOR-001", "SETUP-NAVIGATION-001"]
+            write_json(fixture.obligations, obligations)
+            fixture.matrix.write_text(
+                fixture.matrix.read_text(encoding="utf-8").replace(
+                    "| Positive | High | ready |", "| Positive | High | needs-test-data |"
+                ),
+                encoding="utf-8",
+            )
+            fixture.tc.write_text(
+                fixture.tc.read_text(encoding="utf-8").replace(
+                    "**Статус исполнения:** ready", "**Статус исполнения:** needs-test-data"
+                ),
+                encoding="utf-8",
+            )
+            _, findings = validate_scope(package_root=fixture.root, workflow_state_path=fixture.state)
+            blocking_ids = [item.id for item in findings if item.blocking]
+            self.assertIn("matrix-execution-limitations-incomplete", blocking_ids)
+            self.assertIn("test-case-execution-limitations-incomplete", blocking_ids)
+
+    def test_validator_accepts_secondary_execution_limitation_without_second_status(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            fixture = PracticalV09Fixture(Path(raw))
+            obligations = json.loads(fixture.obligations.read_text(encoding="utf-8"))
+            obligations["execution_setups"][0]["availability"] = "needs-test-data"
+            obligations["execution_setups"].append(
+                {
+                    "id": "SETUP-NAVIGATION-001",
+                    "kind": "navigation",
+                    "availability": "candidate-ui-calibration",
+                    "evidence": "Точное название элемента входа требует UI-калибровки.",
+                }
+            )
+            context = obligations["obligations"][0]["execution_contexts"][0]
+            context["required_setup_kinds"] = ["actor", "navigation"]
+            context["setup_ids"] = ["SETUP-ACTOR-001", "SETUP-NAVIGATION-001"]
+            write_json(fixture.obligations, obligations)
+            fixture.matrix.write_text(
+                fixture.matrix.read_text(encoding="utf-8")
+                .replace(
+                    "| Нужные предпосылки | Тип |",
+                    "| Нужные предпосылки | Ограничения исполнения | Тип |",
+                )
+                .replace(
+                    "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+                    "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+                )
+                .replace(
+                    "| SETUP-ACTOR-001 — пользователь с доступом к модулю. | Positive | High | ready |",
+                    "| SETUP-ACTOR-001 — пользователь с доступом к модулю; SETUP-NAVIGATION-001 — точный элемент входа. | "
+                    "Требуется UI-калибровка элемента входа: SETUP-NAVIGATION-001. | Positive | High | needs-test-data |",
+                ),
+                encoding="utf-8",
+            )
+            fixture.tc.write_text(
+                fixture.tc.read_text(encoding="utf-8").replace(
+                    "**Статус исполнения:** ready",
+                    "**Статус исполнения:** needs-test-data\n"
+                    "**Ограничения исполнения:** Требуется UI-калибровка элемента входа: SETUP-NAVIGATION-001.",
+                ),
+                encoding="utf-8",
+            )
+            _, findings = validate_scope(package_root=fixture.root, workflow_state_path=fixture.state)
+            blocking_ids = [item.id for item in findings if item.blocking]
+            self.assertNotIn("matrix-execution-limitations-incomplete", blocking_ids)
+            self.assertNotIn("test-case-execution-limitations-incomplete", blocking_ids)
+
+    def test_validator_requires_common_rejection_result_for_every_invalid_class(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            fixture = PracticalV09Fixture(Path(raw))
+            obligations = json.loads(fixture.obligations.read_text(encoding="utf-8"))
+            shared_context = obligations["obligations"][0]["execution_contexts"]
+            obligations["obligations"] = [
+                {
+                    "id": "OBL-FILE-ERROR",
+                    "source_anchor": "AS.35, требование к документу",
+                    "statement": "Для документа, не соответствующего требованиям, система выводит сообщение «Документ не соответствует требованиям». ",
+                    "common_result_for_obligation_ids": ["OBL-FILE-FORMAT", "OBL-FILE-SIZE"],
+                    "risk_flags": [],
+                    "execution_contexts": shared_context,
+                },
+                {
+                    "id": "OBL-FILE-FORMAT",
+                    "source_anchor": "AS.35, допустимый формат",
+                    "statement": "Система не принимает документ недопустимого формата.",
+                    "risk_flags": [],
+                    "execution_contexts": shared_context,
+                },
+                {
+                    "id": "OBL-FILE-SIZE",
+                    "source_anchor": "AS.35, размер файла",
+                    "statement": "Система не принимает документ размером более 40 МБ.",
+                    "risk_flags": [],
+                    "execution_contexts": shared_context,
+                },
+            ]
+            write_json(fixture.obligations, obligations)
+            fixture.matrix.write_text(
+                "# Матрица тест-дизайна\n\n"
+                "| Проверка | Идентификатор сценария | Обязательство ФТ | Контекст исполнения | Проверяемый элемент | Домен проверки | Способ взаимодействия | Проверяемое правило | Исходное состояние | Формирование состояния | Проверяемое действие | Ожидаемый результат | Нужные предпосылки | Тип | Приоритет | Статус исполнения | Планируемый TC-ID |\n"
+                "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |\n"
+                "| MTX-ERROR | SCN-ERROR | OBL-FILE-ERROR | CTX-OPEN-MENU — Открытие раздела из меню | Документ | Ошибка | Загрузка | Общий результат отказа | Экран открыт. | Выбрать неподходящий файл. | Прикрепить файл. | Выводится «Документ не соответствует требованиям». | SETUP-ACTOR-001 — пользователь. | Negative | High | ready | TC-FILE-ERROR |\n"
+                "| MTX-FORMAT | SCN-FORMAT | OBL-FILE-FORMAT | CTX-OPEN-MENU — Открытие раздела из меню | Документ | Формат | Загрузка | Недопустимый формат | Экран открыт. | Выбрать файл `.docx`. | Прикрепить файл. | Файл не прикрепляется. | SETUP-ACTOR-001 — пользователь. | Negative | High | ready | TC-FILE-FORMAT |\n"
+                "| MTX-SIZE | SCN-SIZE | OBL-FILE-SIZE | CTX-OPEN-MENU — Открытие раздела из меню | Документ | Размер | Загрузка | Размер более 40 МБ | Экран открыт. | Выбрать файл размером `41 МБ`. | Прикрепить файл. | Файл не прикрепляется. | SETUP-ACTOR-001 — пользователь. | Negative | High | ready | TC-FILE-SIZE |\n",
+                encoding="utf-8",
+            )
+            fixture.tc.write_text(
+                "## TC-FILE-ERROR\n"
+                "**Название:** Общий результат отказа\n**Тип:** Negative\n**Приоритет:** High\n**package_id:** WP-01\n"
+                "**Статус исполнения:** ready\n**Контекст исполнения:** `CTX-OPEN-MENU` — открытие.\n"
+                "**Трассировка:** `OBL-FILE-ERROR`; `SCN-ERROR`; `AS.35`.\n**Цель:** Проверить сообщение.\n"
+                "**Предусловия:** Экран открыт.\n**Тестовые данные:** Файл `.docx`.\n"
+                "**Шаги:**\n1. Прикрепить файл `.docx`.\n"
+                "**Итоговый ожидаемый результат:** Выводится «Документ не соответствует требованиям».\n\n"
+                "## TC-FILE-FORMAT\n"
+                "**Название:** Отказ для недопустимого формата\n**Тип:** Negative\n**Приоритет:** High\n**package_id:** WP-01\n"
+                "**Статус исполнения:** ready\n**Контекст исполнения:** `CTX-OPEN-MENU` — открытие.\n"
+                "**Трассировка:** `OBL-FILE-FORMAT`; `SCN-FORMAT`; `AS.35`.\n**Цель:** Проверить формат.\n"
+                "**Предусловия:** Экран открыт.\n**Тестовые данные:** Файл `.docx`.\n"
+                "**Шаги:**\n1. Прикрепить файл `.docx`.\n"
+                "**Итоговый ожидаемый результат:** Файл не прикрепляется.\n\n"
+                "## TC-FILE-SIZE\n"
+                "**Название:** Отказ для файла больше лимита\n**Тип:** Negative\n**Приоритет:** High\n**package_id:** WP-01\n"
+                "**Статус исполнения:** ready\n**Контекст исполнения:** `CTX-OPEN-MENU` — открытие.\n"
+                "**Трассировка:** `OBL-FILE-SIZE`; `SCN-SIZE`; `AS.35`.\n**Цель:** Проверить размер.\n"
+                "**Предусловия:** Экран открыт.\n**Тестовые данные:** Файл размером `41 МБ`.\n"
+                "**Шаги:**\n1. Прикрепить файл размером `41 МБ`.\n"
+                "**Итоговый ожидаемый результат:** Файл не прикрепляется.\n",
+                encoding="utf-8",
+            )
+            _, findings = validate_scope(package_root=fixture.root, workflow_state_path=fixture.state)
+            common_matrix = [
+                item.details for item in findings
+                if item.id == "matrix-source-message-literal"
+            ]
+            common_tc = [
+                item.details for item in findings
+                if item.id == "test-case-common-result-literal"
+            ]
+            self.assertTrue(any("MTX-FORMAT" in details for details in common_matrix))
+            self.assertTrue(any("MTX-SIZE" in details for details in common_matrix))
+            self.assertTrue(any("TC-FILE-FORMAT" in details for details in common_tc))
+            self.assertTrue(any("TC-FILE-SIZE" in details for details in common_tc))
 
     def test_review_result_allows_legitimate_russian_source_anchor(self) -> None:
         with tempfile.TemporaryDirectory() as raw:

@@ -18,7 +18,7 @@ from typing import Any, Iterable, Mapping
 
 
 ROUTE_VERSION = "practical-v0.9"
-ROUTE_TOOL_VERSION = "practical-v0.9.25"
+ROUTE_TOOL_VERSION = "practical-v0.9.26"
 WORKFLOW_STATE_SCHEMA_VERSION = 1
 SOURCE_CONTRACT_VERSION = "source-package-v4"
 MATRIX_CONTRACT_VERSION = "practical-matrix-v3"
@@ -1586,6 +1586,39 @@ def derived_execution_status(
     return "ready"
 
 
+def secondary_execution_limitations(
+    context: dict[str, Any],
+    setup_catalog: dict[str, dict[str, Any]],
+) -> list[tuple[str, str]]:
+    """Return unavailable prerequisites that are material but not primary.
+
+    A test case has exactly one primary ``Статус исполнения``.  This helper
+    preserves the other unavailable prerequisite types so that, for example,
+    missing data does not hide a separate unresolved UI interaction.
+    """
+    primary_status = derived_execution_status(context, setup_catalog)
+    setup_ids = context.get("setup_ids", [])
+    if not isinstance(setup_ids, list):
+        return []
+    limitations: list[tuple[str, str]] = []
+    for setup_id in setup_ids:
+        setup = setup_catalog.get(str(setup_id))
+        if not isinstance(setup, dict):
+            continue
+        availability = str(setup.get("availability") or "")
+        if (
+            availability in ALLOWED_EXECUTION_STATUSES
+            and availability != primary_status
+        ):
+            limitations.append((str(setup_id), availability))
+    return limitations
+
+
+def has_russian_prose(value: str) -> bool:
+    """Return whether a user-facing limitation contains an explanation."""
+    return bool(re.search(r"[А-Яа-яЁё]{3,}", value))
+
+
 def context_id_from_cell(value: object) -> str:
     """Extract exactly one CTX-* token from a human-readable matrix/TC field."""
     matches = re.findall(r"\bCTX-[A-Z0-9-]+\b", str(value or ""))
@@ -2195,6 +2228,53 @@ def validate_scope_obligations(
                 remediation_owner="scope-analyzer",
             ))
         if disposition == "active":
+            common_result_for = obligation.get("common_result_for_obligation_ids")
+            if common_result_for is not None:
+                if (
+                    not isinstance(common_result_for, list)
+                    or len(common_result_for) < 2
+                    or len(set(common_result_for)) != len(common_result_for)
+                    or not all(
+                        isinstance(item, str)
+                        and re.fullmatch(r"OBL-[A-Z0-9-]+", item)
+                        for item in common_result_for
+                    )
+                    or obligation_id in common_result_for
+                ):
+                    findings.append(finding(
+                        "scope-obligation-common-result-format",
+                        "semantic-completeness",
+                        "Общий результат отказа связан с классами невалидного ввода некорректно",
+                        f"{obligation_id}: common_result_for_obligation_ids должен содержать два и более разных OBL-* без самого обязательства.",
+                        artifact,
+                        remediation_owner="scope-analyzer",
+                    ))
+                else:
+                    unknown_common_result_ids = sorted(
+                        set(common_result_for) - set(
+                            str(item.get("id") or "")
+                            for item in obligations
+                            if isinstance(item, dict)
+                        )
+                    )
+                    if unknown_common_result_ids:
+                        findings.append(finding(
+                            "scope-obligation-common-result-target-unknown",
+                            "traceability",
+                            "Общий результат отказа ссылается на отсутствующий класс невалидного ввода",
+                            f"{obligation_id}: не найдены " + ", ".join(unknown_common_result_ids) + ".",
+                            artifact,
+                            remediation_owner="scope-analyzer",
+                        ))
+                    if not required_message_literals(statement):
+                        findings.append(finding(
+                            "scope-obligation-common-result-message",
+                            "semantic-completeness",
+                            "Общий результат отказа не содержит точного результата из ФТ",
+                            f"{obligation_id}: common_result_for_obligation_ids допустим только для обязательства с точным текстом сообщения или иным дословным общим результатом.",
+                            artifact,
+                            remediation_owner="scope-analyzer",
+                        ))
             raw_contexts = obligation.get("execution_contexts")
             if not isinstance(raw_contexts, list) or not raw_contexts:
                 findings.append(finding(
@@ -2875,6 +2955,27 @@ def required_message_literals(statement: str) -> list[str]:
     return list(dict.fromkeys(literals))
 
 
+def common_result_literals_by_obligation(
+    obligations: Mapping[str, Any],
+) -> dict[str, set[str]]:
+    """Map each invalid-input OBL to source-prescribed common result text.
+
+    The source analyzer declares this relationship explicitly on the OBL that
+    owns the common result.  It is intentionally not guessed from similar
+    prose: a validator may enforce only a source-backed grouping.
+    """
+    result: dict[str, set[str]] = {}
+    for obligation in active_obligations(dict(obligations)):
+        target_ids = obligation.get("common_result_for_obligation_ids")
+        if not isinstance(target_ids, list):
+            continue
+        literals = required_message_literals(str(obligation.get("statement") or ""))
+        for target_id in target_ids:
+            if isinstance(target_id, str):
+                result.setdefault(target_id, set()).update(literals)
+    return result
+
+
 def is_internal_unobservable_statement(statement: str) -> bool:
     """Identify a source assertion that describes only an internal check.
 
@@ -2925,6 +3026,7 @@ def validate_matrix(
     active_ids = active_obligation_ids(obligations)
     active_entries = {str(item.get("id")): item for item in active_obligations(obligations)}
     setup_catalog = execution_setups(obligations)
+    shared_result_literals = common_result_literals_by_obligation(obligations)
     consolidation_enabled = (
         workflow_state is not None
         and workflow_scenario_consolidation_enabled(workflow_state)
@@ -3054,7 +3156,12 @@ def validate_matrix(
                     artifact,
                     remediation_owner="writer",
                 ))
-            required_literals = required_message_literals(str(obligation.get("statement") or ""))
+            required_literals = list(dict.fromkeys(
+                [
+                    *required_message_literals(str(obligation.get("statement") or "")),
+                    *sorted(shared_result_literals.get(obligation_id, set())),
+                ]
+            ))
             expected_result = row.get("Ожидаемый результат", "")
             for literal in required_literals:
                 if literal not in expected_result:
@@ -3117,6 +3224,31 @@ def validate_matrix(
                         artifact,
                         remediation_owner="writer",
                     ))
+                secondary_limitations = secondary_execution_limitations(
+                    context, setup_catalog
+                )
+                if secondary_limitations:
+                    limitation_cell = row.get("Ограничения исполнения", "").strip()
+                    missing_limitations = [
+                        setup_id
+                        for setup_id, _availability in secondary_limitations
+                        if setup_id not in limitation_cell
+                    ]
+                    if not limitation_cell or missing_limitations or not has_russian_prose(limitation_cell):
+                        details = (
+                            f"Проверка {matrix_id or '<без ID>'}: добавьте отдельную колонку «Ограничения исполнения» "
+                            "с русским пояснением и ссылками на "
+                            + ", ".join(setup_id for setup_id, _ in secondary_limitations)
+                            + ". Первичный статус исполнения не меняйте."
+                        )
+                        findings.append(finding(
+                            "matrix-execution-limitations-incomplete",
+                            "execution-readiness",
+                            "Матрица потеряла существенное вторичное ограничение исполнения",
+                            details,
+                            artifact,
+                            remediation_owner="writer",
+                        ))
     consolidation_findings, consolidation = scenario_consolidation_contract(
         state=workflow_state,
         rows_by_scenario=by_scenario,
@@ -3493,11 +3625,70 @@ def is_dadata_obligation(obligation: Mapping[str, Any] | None) -> bool:
     return "dadata" in str((obligation or {}).get("statement") or "").casefold()
 
 
+def verified_dadata_fixture_literals(
+    *, fixture_root: Path, fixture_id: str
+) -> tuple[set[str], str | None]:
+    """Load exact literals only from an immutable verified DaData receipt."""
+    fixture_dir = fixture_root / fixture_id
+    receipt_path = fixture_dir / f"{fixture_id}.verification.json"
+    try:
+        receipt = read_json(receipt_path)
+    except PracticalV09Error:
+        return set(), "не найден verification receipt"
+    snapshot_name = str(receipt.get("response_snapshot") or "")
+    snapshot_path = fixture_dir / snapshot_name
+    if (
+        receipt.get("fixture_id") != fixture_id
+        or receipt.get("provider") != "DaData"
+        or receipt.get("status") != "verified"
+        or not snapshot_name
+        or not snapshot_path.is_file()
+        or str(receipt.get("response_sha256") or "") != sha256_file(snapshot_path)
+    ):
+        return set(), "verification receipt или snapshot не прошли проверку целостности"
+    request = receipt.get("request")
+    expected_response = receipt.get("expected_response")
+    if not isinstance(request, dict) or not isinstance(expected_response, dict):
+        return set(), "verification receipt не содержит request/expected_response"
+    try:
+        response_payload = read_json(snapshot_path)
+    except PracticalV09Error:
+        return set(), "response snapshot не читается как JSON"
+    suggestions = response_payload.get("suggestions")
+    exact_suggestion = str(expected_response.get("exact_suggestion") or "")
+    components = expected_response.get("exact_components")
+    if not isinstance(suggestions, list) or not isinstance(components, dict):
+        return set(), "response snapshot или receipt не содержит данных для сверки"
+    matching_suggestions = [
+        item for item in suggestions
+        if isinstance(item, dict) and item.get("value") == exact_suggestion
+    ]
+    if len(matching_suggestions) != 1:
+        return set(), "response snapshot не содержит единственную ожидаемую подсказку"
+    response_data = matching_suggestions[0].get("data")
+    if not isinstance(response_data, dict):
+        return set(), "ожидаемая подсказка не содержит data"
+    for dotted_key, expected_value in components.items():
+        value: Any = response_data
+        for part in str(dotted_key).split("."):
+            value = value.get(part) if isinstance(value, dict) else None
+        if value != expected_value:
+            return set(), f"response snapshot не подтверждает компонент {dotted_key}"
+    literals = {
+        str(request.get("parameters", {}).get("query") or "").strip(),
+        exact_suggestion.strip(),
+    }
+    literals.update(str(value).strip() for value in components.values())
+    return {literal for literal in literals if literal and literal != "not_applicable"}, None
+
+
 def validate_dadata_test_data_contract(
     *,
     tc_id: str,
     test_data: str,
     artifact: str,
+    execution_status: str,
+    fixture_root: Path,
 ) -> list[ScopeFinding]:
     """Reject circular DaData inputs while allowing an explicitly missing fixture.
 
@@ -3521,24 +3712,90 @@ def validate_dadata_test_data_contract(
             remediation_owner="writer",
         ))
         return findings
-    if DADATA_FIXTURE_ID_RE.search(test_data):
-        fixture_ids = {
-            literal for literal in backtick_literals(test_data)
-            if DADATA_FIXTURE_ID_RE.fullmatch(literal)
-        }
-        concrete_literals = backtick_literals(test_data) - fixture_ids
-        if concrete_literals:
+    fixture_ids = set(DADATA_FIXTURE_ID_RE.findall(test_data))
+    concrete_literals = backtick_literals(test_data) - fixture_ids
+    if fixture_ids:
+        allowed_literals: set[str] = set()
+        unavailable: list[str] = []
+        for fixture_id in sorted(fixture_ids):
+            values, error = verified_dadata_fixture_literals(
+                fixture_root=fixture_root,
+                fixture_id=fixture_id,
+            )
+            if error is not None:
+                unavailable.append(f"{fixture_id}: {error}")
+            allowed_literals.update(values)
+        if unavailable:
+            if execution_status != "needs-test-data":
+                findings.append(finding(
+                    "test-case-dadata-unverified-fixture-status",
+                    "execution-readiness",
+                    "DaData-fixture не подтверждён, но тест-кейс отмечен как исполнимый",
+                    f"{tc_id}: " + "; ".join(unavailable) + ". До появления verified fixture используйте primary статус needs-test-data.",
+                    artifact,
+                    remediation_owner="writer",
+                ))
+            if concrete_literals:
+                findings.append(finding(
+                    "test-case-dadata-unverified-literal",
+                    "execution-readiness",
+                    "В DaData-тесте использованы значения без подтверждённого fixture",
+                    f"{tc_id}: удалите непроверенные literals «{', '.join(sorted(concrete_literals))}» и укажите свойства требуемого профиля и способ подготовки либо добавьте verified fixture.",
+                    artifact,
+                    remediation_owner="writer",
+                ))
+            if not (
+                DADATA_PREPARATION_RE.search(test_data)
+                and DADATA_PROPERTY_RE.search(test_data)
+            ):
+                findings.append(finding(
+                    "test-case-dadata-test-data-contract",
+                    "execution-readiness",
+                    "Для DaData-сценария без verified fixture не определены требуемые свойства профиля",
+                    f"{tc_id}: укажите точные свойства отсутствующего ответа и строку «Способ подготовки: ...».",
+                    artifact,
+                    remediation_owner="writer",
+                ))
             return findings
+        unknown_literals = concrete_literals - allowed_literals
+        if unknown_literals:
+            findings.append(finding(
+                "test-case-dadata-fixture-literal-mismatch",
+                "execution-readiness",
+                "В DaData-тесте указан literal, которого нет в подтверждённом fixture",
+                f"{tc_id}: значения «{', '.join(sorted(unknown_literals))}» не подтверждены указанным FX-DADATA fixture.",
+                artifact,
+                remediation_owner="writer",
+            ))
+        if not concrete_literals:
+            findings.append(finding(
+                "test-case-dadata-fixture-literals",
+                "execution-readiness",
+                "DaData-fixture указан без конкретного значения для выполнения сценария",
+                f"{tc_id}: рядом с FX-DADATA fixture укажите хотя бы один literal, который используется в шаге или основном ожидаемом результате.",
+                artifact,
+                remediation_owner="writer",
+            ))
+        return findings
+    if concrete_literals:
         findings.append(finding(
-            "test-case-dadata-fixture-literals",
+            "test-case-dadata-unverified-literal",
             "execution-readiness",
-            "DaData-fixture указан без конкретного значения для выполнения сценария",
-            f"{tc_id}: рядом с FX-DADATA fixture укажите хотя бы один literal, "
-            "который используется в шаге или основном ожидаемом результате.",
+            "В DaData-тесте использованы значения без подтверждённого fixture",
+            f"{tc_id}: literals «{', '.join(sorted(concrete_literals))}» допустимы только из сохранённого verified FX-DADATA fixture.",
             artifact,
             remediation_owner="writer",
         ))
         return findings
+    if execution_status != "needs-test-data":
+        findings.append(finding(
+            "test-case-dadata-missing-fixture-status",
+            "execution-readiness",
+            "DaData-тест без сохранённого fixture не помечен как needs-test-data",
+            f"{tc_id}: до появления verified FX-DADATA fixture primary статус должен быть needs-test-data.",
+            artifact,
+            remediation_owner="writer",
+        ))
     if not (
         DADATA_PREPARATION_RE.search(test_data)
         and DADATA_PROPERTY_RE.search(test_data)
@@ -3617,6 +3874,7 @@ def validate_test_cases(
     obligations: dict[str, Any],
     matrix_by_scenario: dict[str, dict[str, str]],
     workflow_state: Mapping[str, Any] | None = None,
+    fixture_root: Path | None = None,
 ) -> list[ScopeFinding]:
     artifact = relative_to_package(package_root, tc_path)
     try:
@@ -3633,6 +3891,9 @@ def validate_test_cases(
         str(item.get("id")): item
         for item in active_obligations(obligations)
     }
+    setup_catalog = execution_setups(obligations)
+    shared_result_literals = common_result_literals_by_obligation(obligations)
+    fixture_root = fixture_root or Path("__missing_dadata_fixture_root__")
     consolidation_enabled = (
         workflow_state is not None
         and workflow_scenario_consolidation_enabled(workflow_state)
@@ -3904,6 +4165,8 @@ def validate_test_cases(
                 tc_id=tc_id,
                 test_data=test_data,
                 artifact=artifact,
+                execution_status=status_match.group(1) if status_match else "",
+                fixture_root=fixture_root,
             ))
         mapped_rows: list[tuple[str, dict[str, str]]] = []
         for scenario_id in scenario_ids:
@@ -3995,6 +4258,48 @@ def validate_test_cases(
                     artifact,
                     remediation_owner="writer",
                 ))
+            mapped_obligation = active_entries.get(mapped_pair[0])
+            for literal in sorted(shared_result_literals.get(mapped_pair[0], set())):
+                if literal not in test_case_field(body, "Итоговый ожидаемый результат"):
+                    findings.append(finding(
+                        "test-case-common-result-literal",
+                        "semantic-completeness",
+                        "Тест-кейс потерял общий результат отказа для самостоятельного класса невалидного ввода",
+                        f"{tc_id}: для {mapped_pair[0]} ожидаемый результат должен содержать «{literal}».",
+                        artifact,
+                        remediation_owner="writer",
+                    ))
+            mapped_contexts = {
+                str(context.get("id")): context
+                for context in execution_contexts(mapped_obligation or {})
+            }
+            mapped_context = mapped_contexts.get(mapped_pair[1])
+            if mapped_context is not None:
+                secondary_limitations = secondary_execution_limitations(
+                    mapped_context, setup_catalog
+                )
+                if secondary_limitations:
+                    limitation_text = test_case_field(body, "Ограничения исполнения")
+                    missing_limitations = [
+                        setup_id
+                        for setup_id, _availability in secondary_limitations
+                        if setup_id not in limitation_text
+                    ]
+                    if (
+                        not limitation_text
+                        or missing_limitations
+                        or not has_russian_prose(limitation_text)
+                    ):
+                        findings.append(finding(
+                            "test-case-execution-limitations-incomplete",
+                            "execution-readiness",
+                            "Тест-кейс потерял существенное вторичное ограничение исполнения",
+                            f"{tc_id}: добавьте поле «Ограничения исполнения» с русским пояснением и ссылками на "
+                            + ", ".join(setup_id for setup_id, _ in secondary_limitations)
+                            + ". Первичный статус исполнения не меняйте.",
+                            artifact,
+                            remediation_owner="writer",
+                        ))
             findings.extend(validate_state_formation_contract(
                 tc_id=tc_id,
                 body=body,
@@ -4584,6 +4889,7 @@ def validate_scope(
                 obligations,
                 matrix_by_scenario,
                 state,
+                obligations_path.parent / "fixtures",
             ))
         else:
             findings.append(finding("test-cases-missing", "source-integrity", "Файл тест-кейсов отсутствует", relative_to_package(package_root, tc_path), "workflow-state.json", remediation_owner="writer"))
