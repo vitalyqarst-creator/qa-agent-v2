@@ -2088,6 +2088,10 @@ class PracticalV09Tests(unittest.TestCase):
             state = json.loads(fixture.state.read_text(encoding="utf-8"))
             self.assertEqual(1, state["tc_revision_count"])
             self.assertEqual(1, len(state["reviews"]))
+            self.assertEqual(
+                "Провести повторное независимое review тест-кейсов после уже выполненной целевой доработки",
+                state["next_action"],
+            )
             self.assertTrue(any("восстановление finalization" in item for item in state["decision_notes"]))
 
     def test_controller_triage_rejects_wrong_status_finding_without_spending_budget(self) -> None:
