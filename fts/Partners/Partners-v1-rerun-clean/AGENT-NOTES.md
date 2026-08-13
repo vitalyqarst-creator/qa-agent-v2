@@ -14,8 +14,8 @@ fts/Partners/Partners-v1-rerun-clean
 
 ## Версия agent-layer
 
-Пакет использует commit `14fbe4dc0b4a7b33f96ce7dfe9563982928c69cb`
-(`Scope duplicate save trigger to save flows`) ветки
+Пакет использует commit `45a0b9deffe4387b3b3a133d31d55c6b86a916ac`
+(`Require DaData selection only when sourced`) ветки
 `codex/partners-v1-rerun-9-3-2`.
 
 ## Исходники ФТ
