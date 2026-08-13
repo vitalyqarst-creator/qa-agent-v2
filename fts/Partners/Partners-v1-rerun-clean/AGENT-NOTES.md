@@ -12,6 +12,12 @@ fts/Partners/Partners-v1-rerun-clean
 партнёра». Не используй work-артефакты, matrix, test-cases или выводы
 предыдущих прогонов как входные требования либо результат review.
 
+## Версия agent-layer
+
+Пакет создан на commit `716a3f470f86323fdfaf75db77e64dd4ea55ecd4`
+(`Harden executable test data contracts`) ветки
+`codex/partners-v1-rerun-9-3-2`.
+
 ## Исходники ФТ
 
 - `source/Final-FR-9-Partners.docx` — источник смысла требований;
