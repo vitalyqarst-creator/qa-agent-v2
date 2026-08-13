@@ -85,7 +85,23 @@ Reviewer сам проверяет `scenario_consolidation`, а не довер�
 `blocking: true`; блокирующим остаётся только отсутствие представимого
 source-backed покрытия или противоречие источников.
 
-`findings` содержит `id`, русскоязычное описание, `source_anchor`, `artifact_anchor`, `category`, `severity`, `blocking`, `blocking_reason` и `remediation_owner`.
+`findings` содержит объекты с полями `id`, `title`, `details`,
+`source_anchor`, `artifact_anchor`, `category`, `severity`,
+`blocking` и `remediation_owner`; у blocking finding обязательно
+`blocking_reason`. Все содержательные поля формулируются по-русски.
+Если finding требует изменить статус исполнения, он дополнительно содержит
+`status_assertion`:
+
+```json
+{
+  "scenario_ids": ["SCN-..."],
+  "required_status": "needs-test-data"
+}
+```
+
+Эта структура нужна только для проверяемого controller triage: controller
+сверяет `required_status` с фактической полной цепочкой `SETUP-*`.
+Не используй её для общих замечаний о качестве текста или покрытии.
 
 Reviewer возвращает этот объект как один raw JSON submission. Controller не
 исправляет и не переформулирует его поля, в том числе source anchors, а
@@ -98,3 +114,7 @@ manifest (по умолчанию не более 24 KiB). Если первый
 контракт, controller не просит reviewer-а «сжать» уже вынесенный verdict и не
 переписывает receipt: он фиксирует невалидный dispatch и при необходимости
 запускает новый независимый review по тому же immutable snapshot.
+
+После `changes-required` controller сам выполняет triage raw findings до
+перехода workflow. Reviewer не определяет расход revision budget, не меняет
+`workflow-state.json` и не помечает свой verdict как effective approval.

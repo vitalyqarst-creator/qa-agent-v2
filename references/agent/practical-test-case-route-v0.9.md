@@ -185,11 +185,23 @@ python scripts/capture_practical_review_result.py --submission <raw-reviewer-jso
 
 Результат review содержит `review_manifest_sha256`, `reviewer_thread_id`, `execution_surface: codex-thread`, `review_mode`, `independent_obligations` либо digest-bound `independent_obligation_set`, `verdict` и findings. Перед созданием manifest controller обязан иметь свежий чистый `validator-report.json`, чьи content hashes совпадают с текущими входами scope. Controller проверяет неизменность snapshot и обновляет только `workflow-state.json` командой `finalize_practical_review.py`, которая сохраняет SHA-256 raw receipt в history review.
 
+Если raw verdict равен `changes-required` и в нём есть content blocking
+findings, controller до finalization выполняет triage каждого finding. Raw
+verdict остаётся неизменным, а правила triage и формат решения загружаются из
+`practical-v0.9-review-result-format.md`.
+
+```text
+python scripts/triage_practical_review.py --ft-package-root <package> --workflow-state <scope-dir>/workflow-state.json --review-manifest <scope-dir>/<mode>-review-manifest.json --review-result <scope-dir>/<mode>-review-result.json --decisions-file <temporary-utf8-json>
+```
+
+Только принятые content findings могут расходовать budget writer revision;
+без triage finalization запрещена.
+
 ### 4. TC, final review и revision
 
 После matrix acceptance либо пропуска matrix review writer создаёт canonical TC и повторно запускает scoped validator один раз для нового замороженного набора входов. Затем переводит `workflow-state.json` в `phase: review`, устанавливает следующее действие «Провести независимое final TC review» и сохраняет `final_verdict: not-finalized`. Затем всегда запускается отдельный final TC review. `final_verdict` относится только к final TC review; matrix verdict хранится в `reviews`.
 
-При `changes-required` для каждой фазы разрешена ровно одна целевая writer revision: одна целевая writer revision матрицы и один свежий matrix re-review, а также отдельно одна целевая writer revision canonical TC и один свежий final independent TC review. `matrix_revision_count` и `tc_revision_count` в `workflow-state.json` расходуются только для blocking content finding своей фазы; второй такой вердикт той же фазы переводит scope в `blocked`, а не запускает repair-loop. Process/transport/validator finding с `remediation_owner: controller` или `validator` исправляется без расходования writer revision. Наблюдаемое требование с неизвестным UI-признаком получает `blocked-observability`; это допустимый статус matrix/TC и не является external blocker само по себе. Противоречие источников или непредставимое требование — честный `blocked-input`.
+При `changes-required` для каждой фазы разрешена ровно одна целевая writer revision: одна целевая writer revision матрицы и один свежий matrix re-review, а также отдельно одна целевая writer revision canonical TC и один свежий final independent TC review. До расходования любого budget обязателен controller triage каждого content blocking finding. `matrix_revision_count` и `tc_revision_count` в `workflow-state.json` расходуются только для принятых content findings своей фазы; второй такой вердикт той же фазы переводит scope в `blocked`, а не запускает repair-loop. Process/transport/validator finding с `remediation_owner: controller` или `validator` исправляется без расходования writer revision. Наблюдаемое требование с неизвестным UI-признаком получает `blocked-observability`; это допустимый статус matrix/TC и не является external blocker само по себе. Противоречие источников или непредставимое требование — честный `blocked-input`.
 
 В canonical TC тестовые данные — это либо конкретные значения/файлы, либо
 точные свойства действительно недостающего набора и способ его подготовки.

@@ -7,7 +7,7 @@ description: Compact default route for producing source-traceable, executable te
 
 Use this skill for a normal request to write test cases from a selected FT scope. It replaces v0.8 as the default. Use v0.8 only to resume an already existing v0.8 run or when the user explicitly requests it.
 
-Read [../../references/agent/practical-test-case-route-v0.9.md](../../references/agent/practical-test-case-route-v0.9.md) and the matching format reference before work.
+Read [../../references/agent/practical-test-case-route-v0.9.md](../../references/agent/practical-test-case-route-v0.9.md) before work. Before creating obligations or workflow state, additionally read their v0.9 format references; before dispatching, validating or triaging independent review, read [../../references/agent/practical-v0.9-review-result-format.md](../../references/agent/practical-v0.9-review-result-format.md).
 
 ## Входы
 
@@ -28,7 +28,7 @@ Read [../../references/agent/practical-test-case-route-v0.9.md](../../references
 3. Create `workflow-state.json`, then write one Russian `test-design-matrix.md`.
 4. Run `validate_practical_scope.py` exactly once for the frozen stage. After any permitted revision, run it again for the new frozen inputs before the next review manifest.
 5. Run independent matrix review only when the deterministic v0.9 complexity rule requires it.
-6. Write canonical TC after accepted/skipped matrix review; run one fresh scoped validation; then set `phase: review`, `final_verdict: not-finalized` and next action to the independent final TC review.
+6. При `changes-required` с content blocking findings controller до любого writer revision выполняет обязательный triage через `triage_practical_review.py`: raw verdict не меняется, а в workflow фиксируются `accepted`/`rejected` решения с anchors и rationale. Только принятые findings расходуют budget. Затем write canonical TC after accepted/skipped matrix review; run one fresh scoped validation; then set `phase: review`, `final_verdict: not-finalized` and next action to the independent final TC review.
 7. Run final independent TC review in a separate top-level Codex session. One targeted revision plus one fresh final review is the maximum.
 
 ## Do not create
@@ -56,4 +56,4 @@ Read [../../references/agent/practical-test-case-route-v0.9.md](../../references
 
 ## Independent review
 
-The reviewer is a separate top-level `codex-thread`, read-only for reviewed matrix/TC. If the thread mechanism is available, dispatch it directly without searching external documentation. Before dispatch, prove every manifest input exists with the same SHA-256 in the target checkout; otherwise create and verify one immutable review-input snapshot and give only that snapshot to the reviewer. It must independently reconstruct obligations before comparing author artefacts. For a large scope, use the manifest’s compact digest-bound receipt contract and return it in the first raw JSON response; do not ask the reviewer to compress a completed verdict. Reviewer JSON is captured byte-for-byte by the controller; a subagent does not satisfy this requirement.
+The reviewer is a separate top-level `codex-thread`, read-only for reviewed matrix/TC. If the thread mechanism is available, dispatch it directly without searching external documentation. Before dispatch, prove every manifest input exists with the same SHA-256 in the target checkout; otherwise create and verify one immutable review-input snapshot and give only that snapshot to the reviewer. It must independently reconstruct obligations before comparing author artefacts. For a large scope, use the manifest’s compact digest-bound receipt contract and return it in the first raw JSON response; do not ask the reviewer to compress a completed verdict. Reviewer JSON is captured byte-for-byte by the controller; a subagent does not satisfy this requirement. Каждый finding нового triage-enabled scope возвращай в structured формате из `practical-v0.9-review-result-format.md`; при статусном finding укажи `status_assertion` с `SCN-*` и требуемым статусом.

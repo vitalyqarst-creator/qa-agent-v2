@@ -18,12 +18,13 @@ from typing import Any, Iterable, Mapping
 
 
 ROUTE_VERSION = "practical-v0.9"
-ROUTE_TOOL_VERSION = "practical-v0.9.19"
+ROUTE_TOOL_VERSION = "practical-v0.9.20"
 WORKFLOW_STATE_SCHEMA_VERSION = 1
 SOURCE_CONTRACT_VERSION = "source-package-v3"
 MATRIX_CONTRACT_VERSION = "practical-matrix-v2"
 LEGACY_MATRIX_CONTRACT_VERSION = "practical-matrix-v1"
 SCENARIO_CONSOLIDATION_CONTRACT_VERSION = "scenario-consolidation-v1"
+CONTROLLER_TRIAGE_CONTRACT_VERSION = "controller-triage-v1"
 REVIEW_MANIFEST_VERSION = "practical-review-manifest-v2"
 VALIDATOR_REPORT_VERSION = "practical-scope-validator-v2"
 SOURCE_MANIFEST_RELATIVE_PATH = "work/practical-v0.9/source-package-manifest.json"
@@ -151,6 +152,23 @@ LEGACY_MATRIX_REQUIRED_COLUMNS = (
     "Планируемый TC-ID",
 )
 ALLOWED_FINAL_VERDICTS = {"not-finalized", "approved", "changes-required", "blocked-input"}
+ALLOWED_TRIAGE_DISPOSITIONS = {"accepted", "rejected"}
+ALLOWED_TRIAGE_REJECTION_BASES = {
+    "execution-status-precedence",
+    "source-not-supported",
+    "duplicate-finding",
+}
+REVIEW_FINDING_REQUIRED_FIELDS = (
+    "id",
+    "title",
+    "details",
+    "source_anchor",
+    "artifact_anchor",
+    "category",
+    "severity",
+    "blocking",
+    "remediation_owner",
+)
 TEST_DATA_TAUTOLOGY_PATTERNS = (
     re.compile(r"\bданные,?\s+предусмотренные\s+проверяемым\s+правилом\b", re.IGNORECASE),
     re.compile(r"\bвалидные\s+данные\b", re.IGNORECASE),
@@ -526,6 +544,7 @@ def load_workflow_state(path: Path, package_root: Path) -> dict[str, Any]:
                 contract_versions["matrix"] = MATRIX_CONTRACT_VERSION
     workflow_matrix_contract_version(state)
     workflow_scenario_consolidation_enabled(state)
+    workflow_controller_triage_enabled(state)
     migration = workflow_contract_migration(state)
     if migration is not None and workflow_matrix_contract_version(state) != MATRIX_CONTRACT_VERSION:
         raise PracticalV09Error(
@@ -629,6 +648,71 @@ def workflow_scenario_consolidation_enabled(state: Mapping[str, Any]) -> bool:
             "workflow-state.json: scenario_consolidation must be an array for scenario-consolidation-v1"
         )
     return True
+
+
+def workflow_controller_triage_enabled(state: Mapping[str, Any]) -> bool:
+    """Return whether changes-required results require controller triage.
+
+    The triage contract is intentionally opt-in for existing scopes.  New
+    scopes must record a decision for every content blocker before a reviewer
+    result can consume a revision budget or move the workflow forward.
+    """
+    versions = state.get("contract_versions")
+    if not isinstance(versions, Mapping):
+        raise PracticalV09Error("workflow-state.json: contract_versions must be an object")
+    declared = versions.get("controller_triage")
+    if declared is None:
+        return False
+    if declared != CONTROLLER_TRIAGE_CONTRACT_VERSION:
+        raise PracticalV09Error(
+            "workflow-state.json: contract_versions.controller_triage has unsupported value"
+        )
+    if not isinstance(state.get("review_triage"), list):
+        raise PracticalV09Error(
+            "workflow-state.json: review_triage must be an array for controller-triage-v1"
+        )
+    return True
+
+
+def review_content_findings(result: Mapping[str, Any]) -> list[dict[str, Any]]:
+    """Return blocking reviewer findings that can trigger a writer revision."""
+    raw_findings = result.get("findings")
+    if not isinstance(raw_findings, list):
+        return []
+    return [
+        item
+        for item in raw_findings
+        if isinstance(item, dict)
+        and item.get("blocking") is True
+        and item.get("remediation_owner") not in {"controller", "validator"}
+    ]
+
+
+def triage_record_for_review(
+    state: Mapping[str, Any],
+    *,
+    review_mode: str,
+    review_result_path: Path,
+) -> dict[str, Any] | None:
+    """Return the one controller decision bound to an immutable review result."""
+    if not workflow_controller_triage_enabled(state):
+        return None
+    review_triage = state.get("review_triage")
+    assert isinstance(review_triage, list)
+    expected_hash = sha256_file(review_result_path)
+    matches = [
+        item
+        for item in review_triage
+        if isinstance(item, dict)
+        and item.get("review_mode") == review_mode
+        and item.get("review_result_sha256") == expected_hash
+    ]
+    if len(matches) != 1:
+        raise PracticalV09Error(
+            "workflow-state.json: changes-required result requires exactly one "
+            "controller triage bound to its raw review SHA-256"
+        )
+    return matches[0]
 
 
 def workflow_contract_migration(state: Mapping[str, Any]) -> dict[str, Any] | None:
@@ -3365,12 +3449,218 @@ def validate_review_history_integrity(
     return findings
 
 
+def validate_review_triage_integrity(
+    state: dict[str, Any], package_root: Path
+) -> list[ScopeFinding]:
+    """Validate controller decisions without changing immutable reviewer JSON."""
+    if not workflow_controller_triage_enabled(state):
+        return []
+    findings: list[ScopeFinding] = []
+    raw_triage = state.get("review_triage")
+    assert isinstance(raw_triage, list)
+    seen: set[tuple[str, str]] = set()
+    valid_records: dict[tuple[str, str], dict[str, Any]] = {}
+    for index, record in enumerate(raw_triage, start=1):
+        artifact = "workflow-state.json"
+        if not isinstance(record, dict):
+            findings.append(finding(
+                "workflow-review-triage-format",
+                "review-integrity",
+                "Запись controller triage имеет неверный формат",
+                f"review_triage[{index}] должен быть объектом.",
+                artifact,
+                remediation_owner="controller",
+            ))
+            continue
+        review_mode = record.get("review_mode")
+        result_hash = record.get("review_result_sha256")
+        raw_result_path = record.get("review_result")
+        key = (str(review_mode), str(result_hash))
+        if (
+            review_mode not in {"matrix", "test-cases"}
+            or not isinstance(result_hash, str)
+            or not re.fullmatch(r"[0-9a-f]{64}", result_hash)
+            or not isinstance(raw_result_path, str)
+            or not raw_result_path
+            or key in seen
+        ):
+            findings.append(finding(
+                "workflow-review-triage-reference",
+                "review-integrity",
+                "Запись controller triage не связана однозначно с raw результатом review",
+                f"review_triage[{index}] требует уникальные review_mode, review_result и review_result_sha256.",
+                artifact,
+                remediation_owner="controller",
+            ))
+            continue
+        seen.add(key)
+        try:
+            result_path = package_relative_path(
+                package_root, raw_result_path, artifact=artifact
+            )
+        except PracticalV09Error as exc:
+            findings.append(finding(
+                "workflow-review-triage-reference",
+                "review-integrity",
+                "У controller triage указан некорректный путь raw результата review",
+                str(exc),
+                artifact,
+                remediation_owner="controller",
+            ))
+            continue
+        if not result_path.is_file() or sha256_file(result_path) != result_hash:
+            findings.append(finding(
+                "workflow-review-triage-result-drift",
+                "artifact-tampering",
+                "Controller triage не связан с неизменённым raw результатом review",
+                f"Не совпадает SHA-256 {raw_result_path}.",
+                artifact,
+                remediation_owner="controller",
+            ))
+            continue
+        result = read_json(result_path)
+        if result.get("review_mode") != review_mode or result.get("verdict") != "changes-required":
+            findings.append(finding(
+                "workflow-review-triage-result-mode",
+                "review-integrity",
+                "Controller triage допустим только для changes-required соответствующего режима review",
+                f"review_triage[{index}] не соответствует raw результату.",
+                artifact,
+                remediation_owner="controller",
+            ))
+            continue
+        content = review_content_findings(result)
+        expected_ids = {str(item.get("id")) for item in content}
+        findings_by_id = {str(item.get("id")): item for item in content}
+        decisions = record.get("decisions")
+        if not isinstance(decisions, list):
+            findings.append(finding(
+                "workflow-review-triage-decisions",
+                "review-integrity",
+                "Controller triage не содержит решений по blocking findings",
+                f"review_triage[{index}].decisions должен быть массивом.",
+                artifact,
+                remediation_owner="controller",
+            ))
+            continue
+        decision_by_id: dict[str, dict[str, Any]] = {}
+        for decision in decisions:
+            if not isinstance(decision, dict):
+                continue
+            identifier = decision.get("finding_id")
+            if isinstance(identifier, str) and identifier not in decision_by_id:
+                decision_by_id[identifier] = decision
+        if set(decision_by_id) != expected_ids or len(decision_by_id) != len(decisions):
+            findings.append(finding(
+                "workflow-review-triage-coverage",
+                "review-integrity",
+                "Controller triage должен разобрать каждый и только каждый content blocking finding",
+                f"Ожидались: {', '.join(sorted(expected_ids)) or 'нет'}; получены: {', '.join(sorted(decision_by_id)) or 'нет'}.",
+                artifact,
+                remediation_owner="controller",
+            ))
+            continue
+        invalid = False
+        for finding_id, decision in decision_by_id.items():
+            anchors = decision.get("checked_anchors")
+            if (
+                decision.get("disposition") not in ALLOWED_TRIAGE_DISPOSITIONS
+                or not isinstance(decision.get("rationale"), str)
+                or len(decision["rationale"].strip()) < 16
+                or not isinstance(anchors, list)
+                or not anchors
+                or not all(isinstance(anchor, str) and anchor.strip() for anchor in anchors)
+            ):
+                invalid = True
+                break
+            if decision["disposition"] == "rejected":
+                rejection = decision.get("rejection")
+                if (
+                    not isinstance(rejection, dict)
+                    or rejection.get("basis") not in ALLOWED_TRIAGE_REJECTION_BASES
+                ):
+                    invalid = True
+                    break
+                basis = rejection["basis"]
+                if basis == "source-not-supported":
+                    evidence = rejection.get("counter_evidence")
+                    if (
+                        not isinstance(evidence, list)
+                        or not evidence
+                        or not all(isinstance(item, str) and item.strip() for item in evidence)
+                    ):
+                        invalid = True
+                        break
+                elif basis == "duplicate-finding":
+                    duplicate_of = rejection.get("duplicate_of")
+                    if not isinstance(duplicate_of, str) or not duplicate_of.strip():
+                        invalid = True
+                        break
+                else:
+                    assertion = findings_by_id[finding_id].get("status_assertion")
+                    if (
+                        not isinstance(assertion, dict)
+                        or assertion.get("required_status") not in ALLOWED_EXECUTION_STATUSES
+                        or not isinstance(assertion.get("scenario_ids"), list)
+                        or not assertion["scenario_ids"]
+                    ):
+                        invalid = True
+                        break
+        if invalid:
+            findings.append(finding(
+                "workflow-review-triage-decision",
+                "review-integrity",
+                "Решение controller triage неполно",
+                "Каждое решение требует disposition, развёрнутый rationale и checked_anchors; отклонение также требует допустимый rejection.basis.",
+                artifact,
+                remediation_owner="controller",
+            ))
+            continue
+        valid_records[key] = record
+
+    for review in state.get("reviews", []):
+        if not isinstance(review, dict) or review.get("effective_verdict") is None:
+            continue
+        if review.get("verdict") != "changes-required" or review.get("effective_verdict") != "approved":
+            findings.append(finding(
+                "workflow-review-triage-effective-verdict",
+                "review-integrity",
+                "Effective verdict controller triage указан недопустимо",
+                "Только changes-required может получить effective_verdict=approved после отклонения всех content blocking findings.",
+                "workflow-state.json",
+                remediation_owner="controller",
+            ))
+            continue
+        key = (str(review.get("mode")), str(review.get("result_sha256")))
+        record = valid_records.get(key)
+        if record is None or any(
+            decision.get("disposition") != "rejected"
+            for decision in record.get("decisions", [])
+            if isinstance(decision, dict)
+        ):
+            findings.append(finding(
+                "workflow-review-triage-effective-verdict",
+                "review-integrity",
+                "Effective verdict не подтверждён controller triage",
+                "Для перехода по effective_verdict=approved все content blocking findings должны быть документированно отклонены.",
+                "workflow-state.json",
+                remediation_owner="controller",
+            ))
+    return findings
+
+
 def approved_review_exists(state: dict[str, Any], review_mode: str) -> bool:
-    """Return whether the single workflow state records a valid accepted review mode."""
+    """Return whether the state records raw or triaged acceptance for a mode."""
     return any(
         isinstance(entry, dict)
         and entry.get("mode") == review_mode
-        and entry.get("verdict") == "approved"
+        and (
+            entry.get("verdict") == "approved"
+            or (
+                entry.get("verdict") == "changes-required"
+                and entry.get("effective_verdict") == "approved"
+            )
+        )
         for entry in state.get("reviews", [])
     )
 
@@ -3382,6 +3672,7 @@ def validate_scope(
     state = load_workflow_state(workflow_state_path, package_root)
     findings = validate_workflow_artifact_links(state, package_root)
     findings.extend(validate_review_history_integrity(state, package_root))
+    findings.extend(validate_review_triage_integrity(state, package_root))
     source_path = workflow_artifact_path(state, package_root, "source_package_manifest", required=True)
     obligations_path = workflow_artifact_path(state, package_root, "scope_obligations", required=True)
     assert source_path is not None and obligations_path is not None
@@ -3699,6 +3990,12 @@ def build_review_manifest(
         manifest["reviewer_order"].append(
             "Самостоятельно проверить решения scenario_consolidation и неучтённые кандидаты на объединение."
         )
+    if workflow_controller_triage_enabled(state):
+        manifest["controller_triage_contract"] = {
+            "version": CONTROLLER_TRIAGE_CONTRACT_VERSION,
+            "finding_schema": "practical-review-finding-v1",
+            "required_for": "changes-required-with-content-blockers",
+        }
     obligations_path = paths["scope_obligations"]
     active_ids = active_obligation_ids(read_json(obligations_path))
     if len(active_ids) > COMPACT_REVIEWER_RECEIPT_OBLIGATION_THRESHOLD:
@@ -3837,6 +4134,70 @@ def verify_review_result(
             artifact,
             remediation_owner="reviewer",
         ))
+    triage_contract = manifest.get("controller_triage_contract")
+    if triage_contract is not None:
+        if (
+            not isinstance(triage_contract, dict)
+            or triage_contract.get("version") != CONTROLLER_TRIAGE_CONTRACT_VERSION
+            or triage_contract.get("finding_schema") != "practical-review-finding-v1"
+            or triage_contract.get("required_for")
+            != "changes-required-with-content-blockers"
+        ):
+            findings.append(finding(
+                "review-manifest-controller-triage-contract",
+                "review-integrity",
+                "Manifest review содержит неверный контракт controller triage",
+                "Нужен controller-triage-v1 с форматом practical-review-finding-v1.",
+                artifact,
+                remediation_owner="controller",
+            ))
+        elif isinstance(raw_review_findings, list):
+            finding_ids: set[str] = set()
+            for index, review_finding in enumerate(raw_review_findings, start=1):
+                if not isinstance(review_finding, dict):
+                    findings.append(finding(
+                        "review-result-finding-schema",
+                        "review-integrity",
+                        "Finding reviewer-а имеет неверный формат",
+                        f"findings[{index}] должен быть объектом practical-review-finding-v1.",
+                        artifact,
+                        remediation_owner="reviewer",
+                    ))
+                    continue
+                missing = [
+                    key for key in REVIEW_FINDING_REQUIRED_FIELDS
+                    if key not in review_finding
+                    or (isinstance(review_finding.get(key), str) and not review_finding[key].strip())
+                ]
+                identifier = review_finding.get("id")
+                if (
+                    missing
+                    or not isinstance(identifier, str)
+                    or identifier in finding_ids
+                    or not isinstance(review_finding.get("blocking"), bool)
+                    or not isinstance(review_finding.get("remediation_owner"), str)
+                ):
+                    findings.append(finding(
+                        "review-result-finding-schema",
+                        "review-integrity",
+                        "Finding reviewer-а неполон или не имеет уникального идентификатора",
+                        f"findings[{index}] требует поля: {', '.join(REVIEW_FINDING_REQUIRED_FIELDS)}.",
+                        artifact,
+                        remediation_owner="reviewer",
+                    ))
+                    continue
+                finding_ids.add(identifier)
+                if review_finding["blocking"] is True and not str(
+                    review_finding.get("blocking_reason") or ""
+                ).strip():
+                    findings.append(finding(
+                        "review-result-finding-blocking-reason",
+                        "review-integrity",
+                        "Для блокирующего finding reviewer-а не указана причина блокировки",
+                        f"findings[{index}].blocking_reason обязателен при blocking=true.",
+                        artifact,
+                        remediation_owner="reviewer",
+                    ))
     for entry in manifest.get("inputs", []):
         if not isinstance(entry, dict):
             continue

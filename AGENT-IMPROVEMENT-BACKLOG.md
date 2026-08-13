@@ -249,7 +249,7 @@
     Добавлены три регрессии: приоритет над отсутствующим fixture, отсутствие
     обоснования и сохранение `needs-test-data` для наблюдаемой проверки.
 
-- [ ] `AGI-025` (`P1`) Ввести обязательную controller-triage проверку
+- [x] `AGI-025` (`P1`) Ввести обязательную controller-triage проверку
   findings независимого review до расходования revision budget или блокировки
   scope.
   - Основание: independent matrix review scope `9.3.2` корректно выявил
@@ -266,6 +266,13 @@
     finding receipt остаётся неизменяемым, а scope не переводится в
     `blocked` только из-за него. Регрессии покрывают mixed verdict с
     неправильным статусом и полностью корректный verdict.
+  - Выполнено: новые workflow используют `controller-triage-v1`; immutable
+    manifest требует structured finding, а `finalize_practical_review.py`
+    отказывается расходовать budget без triage. `triage_practical_review.py`
+    записывает в workflow решения по каждому content blocker, проверяет
+    статусные отклонения через `SCN-*` и `SETUP-*` и не меняет raw receipt.
+    Регрессии покрывают отсутствие triage, принятие content finding и
+    обоснованное отклонение неверного status finding без расходования budget.
 
 - [x] `AGI-026` (`P1`) Сделать переход `complete-tc-sync` атомарным и
   проверяемо завершать migration gate.
@@ -308,12 +315,17 @@
     отдельным immutable запуском. Finalizer сохраняет SHA-256 результата, а
     scoped validator выявляет последующее изменение raw reviewer JSON.
 
-- [ ] `AGI-001` (`P2`) Сохранить безопасный запас контекста для
+- [x] `AGI-001` (`P2`) Сохранить безопасный запас контекста для
   `source_locator.discovery`.
   - Основание: architecture audit, 129.8 KiB из 132 KiB; запас 2.2 KiB при
     минимально допустимых 15 KiB.
   - Завершено, когда: редко используемые references перенесены в conditional
     loading либо предел повышен с обоснованием, а audit не выдаёт warning.
+  - Выполнено: package notes template, alias manifest и policy UI-exception
+    вынесены из default `source_locator.discovery` в conditional loading.
+    Одновременно state/review formats вынесены из initial `practical.v0_9`
+    context в переходные группы. Audit: source locator 116.7/132.0 KiB,
+    запас 15.3 KiB; practical v0.9 97.7/120.0 KiB, запас 22.3 KiB.
 
 - [ ] `AGI-002` (`P2`) Принять переносимую политику UI evidence.
   - Основание: `instruction-contract-index.md`, Current Cleanup Priorities;

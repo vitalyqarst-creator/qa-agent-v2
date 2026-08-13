@@ -68,11 +68,21 @@ Resolver должен читать JSON-блок ниже как канонич�
       "paths": [
         "skills/ft-practical-route/SKILL.md",
         "references/agent/practical-test-case-route-v0.9.md",
-        "references/agent/practical-v0.9-workflow-state-format.md",
-        "references/agent/practical-v0.9-scope-obligations-format.md",
-        "references/agent/practical-v0.9-review-result-format.md",
         "references/qa/test-case-runtime-format.md",
         "references/qa/coverage-runtime-checklist.md"
+      ]
+    },
+    "practical_v09_scope_state_details": {
+      "rationale": "Load only while creating or changing normalized obligations and workflow state.",
+      "paths": [
+        "references/agent/practical-v0.9-scope-obligations-format.md",
+        "references/agent/practical-v0.9-workflow-state-format.md"
+      ]
+    },
+    "practical_v09_review_details": {
+      "rationale": "Load only before dispatching, validating or triaging a practical v0.9 independent review.",
+      "paths": [
+        "references/agent/practical-v0.9-review-result-format.md"
       ]
     },
     "scope_practical_core": {
@@ -234,12 +244,17 @@ Resolver должен читать JSON-блок ниже как канонич�
       "paths": [
         "skills/ft-source-locator/SKILL.md",
         "references/agent/source-selection-format.md",
-        "references/agent/artifact-manifest-format.md",
-        "references/agent/ft-package-agent-notes-template.md",
         "references/agent/stage-handoff-model.md",
         "references/agent/workflow-state-format.md",
         "references/agent/session-log-format.md",
-        "references/agent/agent-decision-log-format.md",
+        "references/agent/agent-decision-log-format.md"
+      ]
+    },
+    "source_locator_rare_artifacts": {
+      "rationale": "Load only when source locator creates a package notes file, records an alias or handles a UI-calibration exception.",
+      "paths": [
+        "references/agent/artifact-manifest-format.md",
+        "references/agent/ft-package-agent-notes-template.md",
         "references/agent/negative-ui-calibration-policy.md"
       ]
     },
@@ -553,7 +568,7 @@ Resolver должен читать JSON-блок ниже как канонич�
       "mode": "v0_9",
       "scope_profile": "any",
       "required_groups": ["global_core", "practical_v09_core"],
-      "conditional_groups": [],
+      "conditional_groups": ["practical_v09_scope_state_details", "practical_v09_review_details"],
       "audit_only_groups": ["audit_only_history", "governance_audit_only"],
       "budget_limit_kib": 120,
       "rationale": "Default compact practical route. It has no legacy state summaries, self-checks, WQG or dispatch receipts."
@@ -564,7 +579,7 @@ Resolver должен читать JSON-блок ниже как канонич�
       "mode": "discovery",
       "scope_profile": "any",
       "required_groups": ["global_core", "source_locator_core"],
-      "conditional_groups": ["scope_practical_core", "scope_manual_core", "scope_agent_proposed_core", "scope_table_artifacts", "scope_ui_artifacts"],
+      "conditional_groups": ["source_locator_rare_artifacts", "scope_practical_core", "scope_manual_core", "scope_agent_proposed_core", "scope_table_artifacts", "scope_ui_artifacts"],
       "audit_only_groups": ["audit_only_history", "governance_audit_only"],
       "budget_limit_kib": 132,
       "rationale": "FT package and source discovery before scope or test-case work."

@@ -10,6 +10,7 @@ from pathlib import Path
 from test_case_agent.practical_v09 import (
     COMPACT_REVIEWER_RECEIPT_FORMAT,
     COMPACT_REVIEWER_RECEIPT_MAX_BYTES,
+    CONTROLLER_TRIAGE_CONTRACT_VERSION,
     MATRIX_CONTRACT_VERSION,
     ROUTE_VERSION,
     SCENARIO_CONSOLIDATION_CONTRACT_VERSION,
@@ -234,6 +235,35 @@ class PracticalV09Fixture:
 
 
 class PracticalV09Tests(unittest.TestCase):
+    def test_initializer_enables_controller_triage_for_new_scope(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            fixture = PracticalV09Fixture(Path(raw))
+            output = fixture.root / "work" / "practical-v0.9" / "new-menu" / "workflow-state.json"
+            output.parent.mkdir()
+            completed = subprocess.run(
+                [
+                    sys.executable,
+                    str(REPO_ROOT / "scripts" / "init_practical_v09_workflow.py"),
+                    "--ft-package-root", str(fixture.root),
+                    "--scope-id", "02",
+                    "--scope-slug", "new-menu",
+                    "--source-package-manifest", str(fixture.source_manifest),
+                    "--scope-obligations", str(fixture.obligations),
+                    "--output", str(output),
+                ],
+                text=True,
+                capture_output=True,
+                encoding="utf-8",
+                errors="replace",
+            )
+            self.assertEqual(0, completed.returncode, completed.stderr)
+            state = json.loads(output.read_text(encoding="utf-8"))
+            self.assertEqual(
+                CONTROLLER_TRIAGE_CONTRACT_VERSION,
+                state["contract_versions"]["controller_triage"],
+            )
+            self.assertEqual([], state["review_triage"])
+
     def test_scope_validator_is_one_pass_and_ignores_sibling_artifacts(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             fixture = PracticalV09Fixture(Path(raw))
@@ -1545,6 +1575,222 @@ class PracticalV09Tests(unittest.TestCase):
             self.assertEqual(1, state["tc_revision_count"])
             self.assertEqual("changes-required", state["final_verdict"])
             self.assertEqual("test-cases", state["phase"])
+
+    def test_controller_triage_is_required_before_new_scope_spends_revision_budget(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            fixture = PracticalV09Fixture(Path(raw))
+            state = json.loads(fixture.state.read_text(encoding="utf-8"))
+            state["contract_versions"]["controller_triage"] = (
+                CONTROLLER_TRIAGE_CONTRACT_VERSION
+            )
+            state["review_triage"] = []
+            write_json(fixture.state, state)
+            manifest = build_review_manifest(
+                package_root=fixture.root,
+                workflow_state_path=fixture.state,
+                review_mode="test-cases",
+                controller_thread_id="019feebf-3cde-79d2-9f87-ba9c61ff7b13",
+                code_branch="codex/test",
+                code_commit="abc123",
+                contract_digest="contract",
+            )
+            self.assertIn("controller_triage_contract", manifest)
+            manifest_path = fixture.scope_dir / "test-cases-review-manifest.json"
+            write_json(manifest_path, manifest)
+            result_path = fixture.scope_dir / "test-cases-review-result.json"
+            write_json(
+                result_path,
+                {
+                    "review_manifest_sha256": sha256_file(manifest_path),
+                    "scope_id": "01",
+                    "scope_slug": "menu",
+                    "review_mode": "test-cases",
+                    "execution_surface": "codex-thread",
+                    "reviewer_thread_id": "019feebf-3cde-79d2-9f87-ba9c61ff7b14",
+                    "independent_obligations": independently_derived_obligation(),
+                    "verdict": "changes-required",
+                    "findings": [{
+                        "id": "RV-001",
+                        "title": "Не хватает сценария",
+                        "details": "Матрица и ТК не покрывают отдельный наблюдаемый результат.",
+                        "source_anchor": "Раздел 9.1, строка «Партнеры».",
+                        "artifact_anchor": "test-cases/9.1-menu.md",
+                        "category": "semantic-completeness",
+                        "severity": "High",
+                        "blocking": True,
+                        "blocking_reason": "Без исправления нет source-backed покрытия.",
+                        "remediation_owner": "writer",
+                    }],
+                },
+            )
+            finalize = [
+                sys.executable, str(REPO_ROOT / "scripts" / "finalize_practical_review.py"),
+                "--ft-package-root", str(fixture.root),
+                "--workflow-state", str(fixture.state),
+                "--review-manifest", str(manifest_path),
+                "--review-result", str(result_path),
+            ]
+            blocked = subprocess.run(
+                finalize, text=True, capture_output=True, encoding="utf-8", errors="replace"
+            )
+            self.assertNotEqual(0, blocked.returncode)
+            state = json.loads(fixture.state.read_text(encoding="utf-8"))
+            self.assertEqual(0, state["tc_revision_count"])
+            self.assertEqual([], state["reviews"])
+
+            decisions_path = fixture.scope_dir / "controller-triage-input.json"
+            write_json(
+                decisions_path,
+                {
+                    "review_result_sha256": sha256_file(result_path),
+                    "decisions": [{
+                        "finding_id": "RV-001",
+                        "disposition": "accepted",
+                        "rationale": "Проверены ФТ и тестовый артефакт: отдельная проверка действительно отсутствует.",
+                        "checked_anchors": [
+                            "Раздел 9.1, строка «Партнеры».",
+                            "test-cases/9.1-menu.md",
+                        ],
+                    }],
+                },
+            )
+            triaged = subprocess.run(
+                [
+                    sys.executable, str(REPO_ROOT / "scripts" / "triage_practical_review.py"),
+                    "--ft-package-root", str(fixture.root),
+                    "--workflow-state", str(fixture.state),
+                    "--review-manifest", str(manifest_path),
+                    "--review-result", str(result_path),
+                    "--decisions-file", str(decisions_path),
+                ],
+                text=True, capture_output=True, encoding="utf-8", errors="replace",
+            )
+            self.assertEqual(0, triaged.returncode, triaged.stderr)
+            completed = subprocess.run(
+                finalize, text=True, capture_output=True, encoding="utf-8", errors="replace"
+            )
+            self.assertEqual(0, completed.returncode, completed.stderr)
+            state = json.loads(fixture.state.read_text(encoding="utf-8"))
+            self.assertEqual(1, state["tc_revision_count"])
+            self.assertEqual("test-cases", state["phase"])
+
+    def test_controller_triage_rejects_wrong_status_finding_without_spending_budget(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            fixture = PracticalV09Fixture(Path(raw))
+            obligations = json.loads(fixture.obligations.read_text(encoding="utf-8"))
+            obligations["execution_setups"][0]["availability"] = "needs-test-data"
+            write_json(fixture.obligations, obligations)
+            fixture.matrix.write_text(
+                fixture.matrix.read_text(encoding="utf-8").replace(
+                    "| Positive | High | ready |",
+                    "| Positive | High | needs-test-data |",
+                ),
+                encoding="utf-8",
+            )
+            state = json.loads(fixture.state.read_text(encoding="utf-8"))
+            state["phase"] = "matrix"
+            state["artifacts"]["canonical_test_cases"] = "not-created"
+            state["contract_versions"]["controller_triage"] = (
+                CONTROLLER_TRIAGE_CONTRACT_VERSION
+            )
+            state["review_triage"] = []
+            write_json(fixture.state, state)
+            context, validation_findings = validate_scope(
+                package_root=fixture.root, workflow_state_path=fixture.state
+            )
+            write_json(
+                fixture.scope_dir / "validator-report.json",
+                build_validator_report(context, validation_findings),
+            )
+            manifest = build_review_manifest(
+                package_root=fixture.root,
+                workflow_state_path=fixture.state,
+                review_mode="matrix",
+                controller_thread_id="019feebf-3cde-79d2-9f87-ba9c61ff7b13",
+                code_branch="codex/test",
+                code_commit="abc123",
+                contract_digest="contract",
+            )
+            manifest_path = fixture.scope_dir / "matrix-review-manifest.json"
+            write_json(manifest_path, manifest)
+            result_path = fixture.scope_dir / "matrix-review-result.json"
+            write_json(
+                result_path,
+                {
+                    "review_manifest_sha256": sha256_file(manifest_path),
+                    "scope_id": "01",
+                    "scope_slug": "menu",
+                    "review_mode": "matrix",
+                    "execution_surface": "codex-thread",
+                    "reviewer_thread_id": "019feebf-3cde-79d2-9f87-ba9c61ff7b14",
+                    "independent_obligations": independently_derived_obligation(),
+                    "verdict": "changes-required",
+                    "findings": [{
+                        "id": "RV-STATUS-001",
+                        "title": "Неверный статус",
+                        "details": "Для проверки требуется UI-калибровка.",
+                        "source_anchor": "Раздел 9.1, строка «Партнеры».",
+                        "artifact_anchor": "test-design-matrix.md, SCN-001",
+                        "category": "execution-readiness",
+                        "severity": "Medium",
+                        "blocking": True,
+                        "blocking_reason": "Статус необходимо изменить.",
+                        "remediation_owner": "writer",
+                        "status_assertion": {
+                            "scenario_ids": ["SCN-001"],
+                            "required_status": "candidate-ui-calibration",
+                        },
+                    }],
+                },
+            )
+            decisions_path = fixture.scope_dir / "controller-triage-input.json"
+            write_json(
+                decisions_path,
+                {
+                    "review_result_sha256": sha256_file(result_path),
+                    "decisions": [{
+                        "finding_id": "RV-STATUS-001",
+                        "disposition": "rejected",
+                        "rationale": "Полная цепочка SETUP содержит отсутствующего актора, поэтому приоритет имеет needs-test-data.",
+                        "checked_anchors": [
+                            "practical route: порядок статусов исполнения.",
+                            "SCN-001; SETUP-ACTOR-001.",
+                        ],
+                        "rejection": {
+                            "basis": "execution-status-precedence",
+                        },
+                    }],
+                },
+            )
+            triaged = subprocess.run(
+                [
+                    sys.executable, str(REPO_ROOT / "scripts" / "triage_practical_review.py"),
+                    "--ft-package-root", str(fixture.root),
+                    "--workflow-state", str(fixture.state),
+                    "--review-manifest", str(manifest_path),
+                    "--review-result", str(result_path),
+                    "--decisions-file", str(decisions_path),
+                ],
+                text=True, capture_output=True, encoding="utf-8", errors="replace",
+            )
+            self.assertEqual(0, triaged.returncode, triaged.stderr)
+            completed = subprocess.run(
+                [
+                    sys.executable, str(REPO_ROOT / "scripts" / "finalize_practical_review.py"),
+                    "--ft-package-root", str(fixture.root),
+                    "--workflow-state", str(fixture.state),
+                    "--review-manifest", str(manifest_path),
+                    "--review-result", str(result_path),
+                ],
+                text=True, capture_output=True, encoding="utf-8", errors="replace",
+            )
+            self.assertEqual(0, completed.returncode, completed.stderr)
+            state = json.loads(fixture.state.read_text(encoding="utf-8"))
+            self.assertEqual(0, state["matrix_revision_count"])
+            self.assertEqual("test-cases", state["phase"])
+            self.assertEqual(
+                "approved", state["reviews"][-1]["effective_verdict"]
+            )
 
     def test_matrix_approval_during_contract_migration_requires_tc_sync(self) -> None:
         with tempfile.TemporaryDirectory() as raw:

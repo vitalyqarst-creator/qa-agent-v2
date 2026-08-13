@@ -15,29 +15,14 @@ from test_case_agent.practical_v09 import (
     PracticalV09Error,
     load_workflow_state,
     relative_to_package,
+    review_content_findings,
     sha256_file,
+    triage_record_for_review,
+    validate_review_triage_integrity,
     verify_review_result,
+    workflow_controller_triage_enabled,
     write_json,
 )
-
-
-def has_blocking_content_finding(result: dict[str, object]) -> bool:
-    """Return whether a review requires a bounded content revision.
-
-    A supported execution status such as `blocked-observability` is not an
-    external scope blocker.  A reviewer may ask to correct such a status, but
-    that administrative correction must not consume the one permitted
-    substantive writer revision.
-    """
-    raw_findings = result.get("findings")
-    if not isinstance(raw_findings, list):
-        return False
-    return any(
-        isinstance(item, dict)
-        and item.get("blocking") is True
-        and item.get("remediation_owner") not in {"controller", "validator"}
-        for item in raw_findings
-    )
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -66,6 +51,38 @@ def main(argv: list[str] | None = None) -> int:
     review_mode = str(result.get("review_mode") or "")
     if review_mode not in {"matrix", "test-cases"}:
         raise PracticalV09Error("review-result.json has unsupported review_mode")
+    effective_verdict = str(result["verdict"])
+    content_findings = review_content_findings(result)
+    if result["verdict"] == "changes-required" and content_findings:
+        if workflow_controller_triage_enabled(state):
+            triage_issues = [
+                item.id
+                for item in validate_review_triage_integrity(state, package_root)
+                if item.blocking
+            ]
+            if triage_issues:
+                raise PracticalV09Error(
+                    "Controller triage is invalid: " + ", ".join(triage_issues)
+                )
+            triage = triage_record_for_review(
+                state,
+                review_mode=review_mode,
+                review_result_path=args.review_result.resolve(),
+            )
+            assert triage is not None
+            decisions = {
+                str(item.get("finding_id")): item
+                for item in triage["decisions"]
+                if isinstance(item, dict)
+            }
+            accepted_content = [
+                item for item in content_findings
+                if decisions[str(item.get("id"))].get("disposition") == "accepted"
+            ]
+            if not accepted_content:
+                effective_verdict = "approved"
+            else:
+                content_findings = accepted_content
     review_entry = {
         "mode": review_mode,
         "verdict": result["verdict"],
@@ -73,11 +90,13 @@ def main(argv: list[str] | None = None) -> int:
         "result": relative_to_package(package_root, args.review_result.resolve()),
         "result_sha256": sha256_file(args.review_result.resolve()),
     }
+    if effective_verdict != result["verdict"]:
+        review_entry["effective_verdict"] = effective_verdict
     reviews = state.setdefault("reviews", [])
     if not isinstance(reviews, list):
         raise PracticalV09Error("workflow-state.json: reviews must be an array")
     reviews.append(review_entry)
-    if result["verdict"] == "approved":
+    if effective_verdict == "approved":
         migration = state.get("contract_migration")
         if (
             review_mode == "matrix"
@@ -97,7 +116,7 @@ def main(argv: list[str] | None = None) -> int:
     elif result["verdict"] == "changes-required":
         if review_mode == "test-cases":
             state["final_verdict"] = "changes-required"
-        if not has_blocking_content_finding(result):
+        if not content_findings:
             state["phase"] = "matrix" if review_mode == "matrix" else "test-cases"
             state["next_action"] = (
                 "Исправить неблокирующие замечания review без расходования "

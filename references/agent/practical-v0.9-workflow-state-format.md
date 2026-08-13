@@ -13,7 +13,8 @@
     "route": "practical-v0.9",
     "source_package": "source-package-v3",
     "matrix": "practical-matrix-v2",
-    "scenario_consolidation": "scenario-consolidation-v1"
+    "scenario_consolidation": "scenario-consolidation-v1",
+    "controller_triage": "controller-triage-v1"
   },
   "artifacts": {
     "source_package_manifest": "work/practical-v0.9/source-package-manifest.json",
@@ -26,7 +27,8 @@
   "revision_count": 0,
   "final_verdict": "not-finalized",
   "decision_notes": [],
-  "scenario_consolidation": []
+  "scenario_consolidation": [],
+  "review_triage": []
 }
 ```
 
@@ -36,9 +38,10 @@ findings reviewer-а в него не дублируются. Если прав�
 с вердиктом `approved`. Scope не может перейти в `accepted`, пока не появится
 запись `test-cases` с вердиктом `approved`.
 
-`revision_count` — число уже разрешённых содержательных доработок после review;
-для v0.9 допустимы только `0` и `1`. Второй `changes-required` не запускает
-новый repair-loop: scope получает честный `blocked` до решения пользователя.
+`matrix_revision_count` и `tc_revision_count` — числа уже разрешённых
+содержательных доработок соответствующей фазы; для каждого допустимы только
+`0` и `1`. Второй принятый `changes-required` не запускает новый
+repair-loop: scope получает честный `blocked` до решения пользователя.
 `final_verdict`: `not-finalized`, `approved`, `changes-required` или
 `blocked-input`.
 
@@ -47,5 +50,11 @@ findings reviewer-а в него не дублируются. Если прав�
 `scenario_consolidation` хранит только `CON-*` решения по кандидатам, а не
 новый рабочий артефакт. Старый scope без его версии остаётся читаемым, новые
 создаются с `scenario-consolidation-v1`.
+
+`review_triage` хранит только controller-решения по immutable raw
+`changes-required` verdict: SHA-256 результата, режим review и по одному
+решению на content blocking finding. Raw JSON reviewer-а не переписывается.
+Новый scope создаётся с `controller-triage-v1`; legacy scope без версии
+остаётся читаемым без неявной миграции.
 
 `phase`: `scope`, `matrix`, `test-cases`, `review`, `accepted` или `blocked`.
