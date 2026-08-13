@@ -18,11 +18,12 @@ from typing import Any, Iterable, Mapping
 
 
 ROUTE_VERSION = "practical-v0.9"
-ROUTE_TOOL_VERSION = "practical-v0.9.18"
+ROUTE_TOOL_VERSION = "practical-v0.9.19"
 WORKFLOW_STATE_SCHEMA_VERSION = 1
 SOURCE_CONTRACT_VERSION = "source-package-v3"
 MATRIX_CONTRACT_VERSION = "practical-matrix-v2"
 LEGACY_MATRIX_CONTRACT_VERSION = "practical-matrix-v1"
+SCENARIO_CONSOLIDATION_CONTRACT_VERSION = "scenario-consolidation-v1"
 REVIEW_MANIFEST_VERSION = "practical-review-manifest-v2"
 VALIDATOR_REPORT_VERSION = "practical-scope-validator-v2"
 SOURCE_MANIFEST_RELATIVE_PATH = "work/practical-v0.9/source-package-manifest.json"
@@ -163,12 +164,6 @@ MATRIX_META_STATE_PATTERNS = (
     re.compile(r"\bподготовлена?\s+строка\s+запроса\b", re.IGNORECASE),
     re.compile(r"\bподготовить\s+данные\s+для\s+проверяемого\s+правила\b", re.IGNORECASE),
     re.compile(r"\bвнести\s+только\s+изменение\s*,?\s+требуем\w*\s+проверяемым\s+правилом\b", re.IGNORECASE),
-)
-MATRIX_FIELD_EDIT_ACTION_RE = re.compile(
-    r"\b(?:ввест|измен|замен|редактир)\w*\b", re.IGNORECASE
-)
-MATRIX_FIELD_EDIT_ORACLE_RE = re.compile(
-    r"\b(?:принима|отобража|содерж)\w*\b", re.IGNORECASE
 )
 META_STATE_STEP_PATTERNS = (
     re.compile(r"\bсформировать\s+исходное\s+состояние\b", re.IGNORECASE),
@@ -530,6 +525,7 @@ def load_workflow_state(path: Path, package_root: Path) -> dict[str, Any]:
             if matrix_contract_version_from_path(matrix_path) == MATRIX_CONTRACT_VERSION:
                 contract_versions["matrix"] = MATRIX_CONTRACT_VERSION
     workflow_matrix_contract_version(state)
+    workflow_scenario_consolidation_enabled(state)
     migration = workflow_contract_migration(state)
     if migration is not None and workflow_matrix_contract_version(state) != MATRIX_CONTRACT_VERSION:
         raise PracticalV09Error(
@@ -609,6 +605,30 @@ def workflow_matrix_contract_version(state: Mapping[str, Any]) -> str:
             "workflow-state.json: contract_versions.matrix has unsupported value"
         )
     return str(declared)
+
+
+def workflow_scenario_consolidation_enabled(state: Mapping[str, Any]) -> bool:
+    """Return whether a scope uses the explicit consolidation contract.
+
+    Existing scopes remain readable without a migration.  New scopes are
+    initialized with this contract, which makes every shared planned TC a
+    deliberate, reviewable decision rather than the result of a heuristic.
+    """
+    versions = state.get("contract_versions")
+    if not isinstance(versions, Mapping):
+        raise PracticalV09Error("workflow-state.json: contract_versions must be an object")
+    declared = versions.get("scenario_consolidation")
+    if declared is None:
+        return False
+    if declared != SCENARIO_CONSOLIDATION_CONTRACT_VERSION:
+        raise PracticalV09Error(
+            "workflow-state.json: contract_versions.scenario_consolidation has unsupported value"
+        )
+    if not isinstance(state.get("scenario_consolidation"), list):
+        raise PracticalV09Error(
+            "workflow-state.json: scenario_consolidation must be an array for scenario-consolidation-v1"
+        )
+    return True
 
 
 def workflow_contract_migration(state: Mapping[str, Any]) -> dict[str, Any] | None:
@@ -1991,37 +2011,15 @@ def normalized_matrix_phrase(value: str) -> str:
     return " ".join(re.findall(r"[\w-]+", value.casefold()))
 
 
-def shared_quoted_matrix_subject(row: Mapping[str, str]) -> str | None:
-    """Return a field label explicitly repeated in rule, action and oracle.
-
-    The duplicate gate must not invent semantic equivalence from arbitrary
-    prose.  A repeated quoted subject is a compact, source-visible signal that
-    two rows address the same UI control.
-    """
-    subjects: list[set[str]] = []
-    for column in ("Проверяемое правило", "Проверяемое действие", "Ожидаемый результат"):
-        values = {
-            value.strip().casefold()
-            for value in re.findall(r"«([^»\n]{1,120})»", row.get(column, ""))
-            if value.strip()
-        }
-        if not values:
-            return None
-        subjects.append(values)
-    common = set.intersection(*subjects)
-    return min(common) if common else None
-
-
-def matrix_semantic_duplicate_signatures(
+def matrix_exact_duplicate_signatures(
     row: Mapping[str, str],
 ) -> list[tuple[str, ...]]:
-    """Return deliberately narrow signatures for probable duplicate scenarios.
+    """Return only exact duplicate matrix candidates.
 
-    This is a warning-level candidate detector, not a semantic oracle.  It
-    recognizes exact duplicate rows and the common form-control smell where
-    separate source clauses both prove manual field editing in the same state.
-    The independent reviewer decides whether the source clauses are truly one
-    executable check.
+    Natural-language similarity is not evidence that two source assertions
+    are one test.  In particular, editability and manual input of the same
+    field are independent properties.  Broader consolidation remains an
+    explicit writer/reviewer decision in workflow-state.json.
     """
     context_id = context_id_from_cell(row.get("Контекст исполнения", ""))
     required = (
@@ -2041,39 +2039,16 @@ def matrix_semantic_duplicate_signatures(
         context_id,
         *(normalized_matrix_phrase(row[column]) for column in required),
     )
-    signatures = [exact]
-    field = shared_quoted_matrix_subject(row)
-    action = row["Проверяемое действие"]
-    expected = row["Ожидаемый результат"]
-    if (
-        row["Тип"].strip() == "Positive"
-        and field is not None
-        and MATRIX_FIELD_EDIT_ACTION_RE.search(action)
-        and MATRIX_FIELD_EDIT_ORACLE_RE.search(expected)
-    ):
-        signatures.append((
-            "field-edit",
-            context_id,
-            field,
-            normalized_matrix_phrase(row["Исходное состояние"]),
-            normalized_matrix_phrase(row["Формирование состояния"]),
-            normalized_matrix_phrase(row["Нужные предпосылки"]),
-            normalized_matrix_phrase(row["Статус исполнения"]),
-        ))
-    return signatures
+    return [exact]
 
 
-def matrix_semantic_duplicate_groups(
+def matrix_exact_duplicate_groups(
     rows: Iterable[dict[str, str]],
 ) -> list[tuple[tuple[str, ...], list[dict[str, str]]]]:
-    """Group only matrix rows that may share one executable scenario.
-
-    A group needs at least two *different* OBLs.  Multiple boundary rows of a
-    single obligation are deliberately outside this check.
-    """
+    """Group only exact duplicate rows from different source assertions."""
     grouped: dict[tuple[str, ...], list[dict[str, str]]] = {}
     for row in rows:
-        for signature in matrix_semantic_duplicate_signatures(row):
+        for signature in matrix_exact_duplicate_signatures(row):
             grouped.setdefault(signature, []).append(row)
     candidates: list[tuple[tuple[str, ...], list[dict[str, str]], frozenset[str]]] = []
     for signature, group in grouped.items():
@@ -2100,6 +2075,225 @@ def matrix_semantic_duplicate_groups(
         covered_scenarios.update(scenario_ids)
         result.append((signature, group))
     return result
+
+
+def scenario_consolidation_contract(
+    *,
+    state: Mapping[str, Any] | None,
+    rows_by_scenario: Mapping[str, dict[str, str]],
+    artifact: str,
+) -> tuple[list[ScopeFinding], dict[str, Any]]:
+    """Validate explicit, bounded decisions to merge or retain scenarios.
+
+    The contract deliberately records decisions only for candidate groups. It
+    does not create a second coverage artefact and never auto-merges prose
+    that merely looks similar.
+    """
+    enabled = state is not None and workflow_scenario_consolidation_enabled(state)
+    result: dict[str, Any] = {
+        "enabled": enabled,
+        "decisions": [],
+        "shared_scenarios_by_tc": {},
+        "covered_internal_scenarios": {},
+    }
+    if not enabled:
+        return [], result
+
+    findings: list[ScopeFinding] = []
+    raw_decisions = state.get("scenario_consolidation", [])
+    seen_ids: set[str] = set()
+    scenario_to_decision: dict[str, str] = {}
+    allowed = {"merge-parameterized", "covered-by-observable-result", "separate"}
+    for index, raw in enumerate(raw_decisions, start=1):
+        label = f"scenario_consolidation[{index}]"
+        if not isinstance(raw, dict):
+            findings.append(finding(
+                "scenario-consolidation-format",
+                "traceability",
+                "Решение о консолидации сценариев имеет неверный формат",
+                f"{label} должен быть объектом.",
+                artifact,
+                remediation_owner="writer",
+                blocking=True,
+            ))
+            continue
+        decision_id = str(raw.get("id") or "")
+        decision = str(raw.get("decision") or "")
+        raw_scenarios = raw.get("scenario_ids")
+        source_anchor = str(raw.get("source_anchor") or "").strip()
+        rationale = str(raw.get("rationale") or "").strip()
+        valid = True
+        if not re.fullmatch(r"CON-[A-Z0-9-]+", decision_id) or decision_id in seen_ids:
+            findings.append(finding(
+                "scenario-consolidation-id",
+                "traceability",
+                "У решения о консолидации нет уникального идентификатора CON-*",
+                f"{label}: id={decision_id!r}.",
+                artifact,
+                remediation_owner="writer",
+                blocking=True,
+            ))
+            valid = False
+        seen_ids.add(decision_id)
+        if decision not in allowed:
+            findings.append(finding(
+                "scenario-consolidation-decision",
+                "semantic-completeness",
+                "У решения о консолидации указан неизвестный вид",
+                f"{label}: допустимы merge-parameterized, covered-by-observable-result, separate.",
+                artifact,
+                remediation_owner="writer",
+                blocking=True,
+            ))
+            valid = False
+        scenario_ids = [item for item in raw_scenarios if isinstance(item, str)] if isinstance(raw_scenarios, list) else []
+        if len(scenario_ids) < 2 or len(set(scenario_ids)) != len(scenario_ids) or not all(
+            SCENARIO_ID_RE.fullmatch(item) for item in scenario_ids
+        ):
+            findings.append(finding(
+                "scenario-consolidation-scenarios",
+                "traceability",
+                "Решение о консолидации должно содержать два и более разных SCN-*",
+                f"{label}: scenario_ids={raw_scenarios!r}.",
+                artifact,
+                remediation_owner="writer",
+                blocking=True,
+            ))
+            valid = False
+        missing = [item for item in scenario_ids if item not in rows_by_scenario]
+        if missing:
+            findings.append(finding(
+                "scenario-consolidation-scenario-unknown",
+                "traceability",
+                "Решение о консолидации ссылается на отсутствующий сценарий матрицы",
+                f"{label}: не найдены {', '.join(missing)}.",
+                artifact,
+                remediation_owner="writer",
+                blocking=True,
+            ))
+            valid = False
+        if not source_anchor or not rationale:
+            findings.append(finding(
+                "scenario-consolidation-rationale",
+                "semantic-completeness",
+                "Решение о консолидации не обосновано источником",
+                f"{label}: заполните source_anchor и русскоязычное rationale.",
+                artifact,
+                remediation_owner="writer",
+            ))
+            valid = False
+        known_rows = [rows_by_scenario[item] for item in scenario_ids if item in rows_by_scenario]
+        contexts = {
+            context_id_from_cell(row.get("Контекст исполнения", ""))
+            for row in known_rows
+        }
+        if known_rows and (len(contexts) != 1 or "" in contexts):
+            findings.append(finding(
+                "scenario-consolidation-context",
+                "test-design",
+                "Консолидируемые сценарии относятся к разным контекстам исполнения",
+                f"{label}: объединять можно только сценарии одного CTX-*.",
+                artifact,
+                remediation_owner="writer",
+            ))
+            valid = False
+        overlap = [item for item in scenario_ids if item in scenario_to_decision]
+        if overlap:
+            findings.append(finding(
+                "scenario-consolidation-overlap",
+                "traceability",
+                "Сценарий включён в несколько решений о консолидации",
+                f"{label}: {', '.join(overlap)} уже относится к {scenario_to_decision[overlap[0]]}.",
+                artifact,
+                remediation_owner="writer",
+            ))
+            valid = False
+        for item in scenario_ids:
+            scenario_to_decision[item] = decision_id
+
+        planned_tc_id = str(raw.get("planned_tc_id") or "")
+        observable_scenario_id = str(raw.get("observable_scenario_id") or "")
+        if decision in {"merge-parameterized", "covered-by-observable-result"}:
+            if not re.fullmatch(r"TC-[A-Z0-9-]+", planned_tc_id):
+                findings.append(finding(
+                    "scenario-consolidation-planned-tc",
+                    "traceability",
+                    "Для объединения сценариев не указан общий planned TC-ID",
+                    f"{label}: planned_tc_id должен иметь вид TC-*.",
+                    artifact,
+                    remediation_owner="writer",
+                ))
+                valid = False
+            matrix_tc_ids = {row.get("Планируемый TC-ID", "") for row in known_rows}
+            if planned_tc_id and matrix_tc_ids != {planned_tc_id}:
+                findings.append(finding(
+                    "scenario-consolidation-plan-mismatch",
+                    "traceability",
+                    "Общий planned TC-ID не совпадает со строками матрицы",
+                    f"{label}: в решении {planned_tc_id}, в matrix {', '.join(sorted(matrix_tc_ids))}.",
+                    artifact,
+                    remediation_owner="writer",
+                ))
+                valid = False
+        if decision == "covered-by-observable-result":
+            if observable_scenario_id not in scenario_ids:
+                findings.append(finding(
+                    "scenario-consolidation-observable-scenario",
+                    "semantic-completeness",
+                    "Для ненаблюдаемого внутреннего действия не указан сценарий наблюдаемого результата",
+                    f"{label}: observable_scenario_id должен входить в scenario_ids.",
+                    artifact,
+                    remediation_owner="writer",
+                ))
+                valid = False
+        if decision == "separate":
+            matrix_tc_ids = {row.get("Планируемый TC-ID", "") for row in known_rows}
+            if len(matrix_tc_ids) != len(known_rows):
+                findings.append(finding(
+                    "scenario-consolidation-separate-plan",
+                    "test-design",
+                    "Решение оставить сценарии раздельными противоречит общему planned TC-ID",
+                    f"{label}: у всех связанных строк должны быть разные planned TC-ID.",
+                    artifact,
+                    remediation_owner="writer",
+                ))
+                valid = False
+        if not valid:
+            continue
+        normalized = {
+            "id": decision_id,
+            "decision": decision,
+            "scenario_ids": tuple(scenario_ids),
+            "planned_tc_id": planned_tc_id,
+            "observable_scenario_id": observable_scenario_id,
+        }
+        result["decisions"].append(normalized)
+        if decision in {"merge-parameterized", "covered-by-observable-result"}:
+            result["shared_scenarios_by_tc"][planned_tc_id] = frozenset(scenario_ids)
+        if decision == "covered-by-observable-result":
+            for scenario_id in scenario_ids:
+                result["covered_internal_scenarios"][scenario_id] = normalized
+
+    shared_by_matrix_tc: dict[str, set[str]] = {}
+    for scenario_id, row in rows_by_scenario.items():
+        planned_tc_id = row.get("Планируемый TC-ID", "").strip()
+        if re.fullmatch(r"TC-[A-Z0-9-]+", planned_tc_id):
+            shared_by_matrix_tc.setdefault(planned_tc_id, set()).add(scenario_id)
+    for planned_tc_id, scenario_ids in sorted(shared_by_matrix_tc.items()):
+        if len(scenario_ids) < 2:
+            continue
+        authorized = result["shared_scenarios_by_tc"].get(planned_tc_id)
+        if authorized != frozenset(scenario_ids):
+            findings.append(finding(
+                "scenario-consolidation-shared-tc-without-decision",
+                "test-design",
+                "Несколько сценариев назначены одному TC без подтверждённого решения о консолидации",
+                f"{planned_tc_id}: {', '.join(sorted(scenario_ids))}. Добавьте одно решение scenario_consolidation с общим source_anchor и rationale либо разнесите planned TC-ID.",
+                artifact,
+                remediation_owner="writer",
+                blocking=True,
+            ))
+    return findings, result
 
 
 def required_message_literals(statement: str) -> list[str]:
@@ -2140,12 +2334,15 @@ def is_internal_unobservable_statement(statement: str) -> bool:
 
 
 def has_internal_unobservability_justification(expected_result: str) -> bool:
-    """Require an explicit source-backed reason for an unobservable oracle."""
+    """Compatibility check for pre-consolidation scopes only."""
     return bool(INTERNAL_UNOBSERVABILITY_JUSTIFICATION_RE.search(expected_result))
 
 
 def validate_matrix(
-    matrix_path: Path, package_root: Path, obligations: dict[str, Any]
+    matrix_path: Path,
+    package_root: Path,
+    obligations: dict[str, Any],
+    workflow_state: Mapping[str, Any] | None = None,
 ) -> tuple[
     list[ScopeFinding],
     dict[str, dict[str, str]],
@@ -2165,6 +2362,10 @@ def validate_matrix(
     active_ids = active_obligation_ids(obligations)
     active_entries = {str(item.get("id")): item for item in active_obligations(obligations)}
     setup_catalog = execution_setups(obligations)
+    consolidation_enabled = (
+        workflow_state is not None
+        and workflow_scenario_consolidation_enabled(workflow_state)
+    )
     all_ids = {
         str(item.get("id"))
         for item in obligations.get("obligations", [])
@@ -2291,7 +2492,7 @@ def validate_matrix(
             source_requires_blocked_observability = is_internal_unobservable_statement(
                 str(obligation.get("statement") or "")
             )
-            if source_requires_blocked_observability:
+            if source_requires_blocked_observability and not consolidation_enabled:
                 if execution_status != "blocked-observability":
                     findings.append(finding(
                         "matrix-internal-oracle-status",
@@ -2313,7 +2514,7 @@ def validate_matrix(
             if context is not None:
                 expected_status = (
                     "blocked-observability"
-                    if source_requires_blocked_observability
+                    if source_requires_blocked_observability and not consolidation_enabled
                     else derived_execution_status(context, setup_catalog)
                 )
                 if execution_status and execution_status != expected_status:
@@ -2339,37 +2540,93 @@ def validate_matrix(
                         artifact,
                         remediation_owner="writer",
                     ))
-    for group_index, (signature, group) in enumerate(
-        matrix_semantic_duplicate_groups(rows), start=1
-    ):
-        group_key = f"semantic-duplicate-{group_index}"
-        for row in group:
-            row["_shared_test_case_group"] = group_key
-        planned_tc_ids = {
-            row.get("Планируемый TC-ID", "").strip() for row in group
+    consolidation_findings, consolidation = scenario_consolidation_contract(
+        state=workflow_state,
+        rows_by_scenario=by_scenario,
+        artifact="workflow-state.json",
+    )
+    findings.extend(consolidation_findings)
+    if consolidation["enabled"]:
+        declared_groups = {
+            frozenset(decision["scenario_ids"])
+            for decision in consolidation["decisions"]
         }
-        if len(planned_tc_ids) != 1:
-            matrix_ids = ", ".join(
-                row.get("Проверка", "<без ID>") for row in group
+        for _signature, group in matrix_exact_duplicate_groups(rows):
+            scenario_ids = frozenset(
+                row.get("Идентификатор сценария", "") for row in group
             )
-            scenario_ids = ", ".join(
-                row.get("Идентификатор сценария", "<без SCN>") for row in group
+            if scenario_ids not in declared_groups:
+                findings.append(finding(
+                    "scenario-consolidation-exact-candidate-undecided",
+                    "test-design",
+                    "Для точного кандидата на дублирование не принято решение о консолидации",
+                    "Сценарии " + ", ".join(sorted(scenario_ids))
+                    + " имеют один контекст, действие и результат. В scenario_consolidation "
+                    "зафиксируйте merge-parameterized или separate с source_anchor и rationale.",
+                    "workflow-state.json",
+                    remediation_owner="writer",
+                    blocking=True,
+                ))
+        for scenario_id, row in by_scenario.items():
+            obligation = active_entries.get(row.get("Обязательство ФТ", ""))
+            if obligation is None or not is_internal_unobservable_statement(
+                str(obligation.get("statement") or "")
+            ):
+                continue
+            decision = consolidation["covered_internal_scenarios"].get(scenario_id)
+            if decision is None or decision.get("decision") != "covered-by-observable-result":
+                findings.append(finding(
+                    "matrix-internal-oracle-needs-observable-coverage",
+                    "test-design",
+                    "Внутреннее действие ФТ без наблюдаемого oracle запланировано как самостоятельная проверка",
+                    f"{scenario_id}: свяжите его с наблюдаемым результатом отдельным решением scenario_consolidation "
+                    "или зафиксируйте source contradiction; standalone TC не создавайте.",
+                    artifact,
+                    remediation_owner="writer",
+                    blocking=True,
+                ))
+                continue
+            observable_scenario_id = str(decision.get("observable_scenario_id") or "")
+            observable_row = by_scenario.get(observable_scenario_id)
+            observable_obligation = active_entries.get(
+                observable_row.get("Обязательство ФТ", "") if observable_row else ""
             )
-            subject = signature[2] if signature[0] == "field-edit" else "один и тот же сценарий"
-            findings.append(finding(
-                "matrix-probable-semantic-duplicate",
-                "test-design",
-                "Строки матрицы вероятно дублируют одну исполнимую проверку",
-                f"{matrix_ids}: контекст и основной результат совпадают для «{subject}» "
-                f"({scenario_ids}). Разные OBL сами по себе не обосновывают отдельные TC. "
-                "Независимый reviewer должен либо подтвердить самостоятельные различия "
-                "в состоянии, действии или oracle, либо назначить один Планируемый TC-ID "
-                "и потребовать общую трассировку всех OBL/SCN.",
-                artifact,
-                remediation_owner="reviewer",
-                severity="warning",
-                evidence=["duplicate_group=" + group_key],
-            ))
+            if observable_row is None or observable_obligation is None or is_internal_unobservable_statement(
+                str(observable_obligation.get("statement") or "")
+            ):
+                findings.append(finding(
+                    "matrix-internal-oracle-observable-target",
+                    "test-design",
+                    "Для внутреннего действия не указан самостоятельный наблюдаемый результат",
+                    f"{scenario_id}: observable_scenario_id={observable_scenario_id or '<пусто>'} должен ссылаться на SCN с source-backed результатом.",
+                    artifact,
+                    remediation_owner="writer",
+                    blocking=True,
+                ))
+    else:
+        # Compatibility for scopes initiated before scenario-consolidation-v1.
+        # They retain the former warning-only detector until explicitly migrated.
+        for group_index, (_signature, group) in enumerate(
+            matrix_exact_duplicate_groups(rows), start=1
+        ):
+            group_key = f"exact-duplicate-{group_index}"
+            for row in group:
+                row["_shared_test_case_group"] = group_key
+            planned_tc_ids = {row.get("Планируемый TC-ID", "").strip() for row in group}
+            if len(planned_tc_ids) != 1:
+                matrix_ids = ", ".join(row.get("Проверка", "<без ID>") for row in group)
+                scenario_ids = ", ".join(row.get("Идентификатор сценария", "<без SCN>") for row in group)
+                findings.append(finding(
+                    "matrix-probable-semantic-duplicate",
+                    "test-design",
+                    "Строки матрицы вероятно дублируют одну исполнимую проверку",
+                    f"{matrix_ids}: совпадают контекст, действие и основной результат ({scenario_ids}). "
+                    "Независимый reviewer должен подтвердить раздельность или назначить общий planned TC-ID.",
+                    artifact,
+                    remediation_owner="reviewer",
+                    severity="warning",
+                    evidence=["duplicate_group=" + group_key],
+                ))
     expected_pairs = {
         (str(obligation.get("id")), str(context.get("id")))
         for obligation in active_entries.values()
@@ -2626,6 +2883,7 @@ def validate_test_cases(
     package_root: Path,
     obligations: dict[str, Any],
     matrix_by_scenario: dict[str, dict[str, str]],
+    workflow_state: Mapping[str, Any] | None = None,
 ) -> list[ScopeFinding]:
     artifact = relative_to_package(package_root, tc_path)
     try:
@@ -2642,6 +2900,18 @@ def validate_test_cases(
         str(item.get("id")): item
         for item in active_obligations(obligations)
     }
+    consolidation_enabled = (
+        workflow_state is not None
+        and workflow_scenario_consolidation_enabled(workflow_state)
+    )
+    shared_scenarios_by_tc: dict[str, frozenset[str]] = {}
+    if consolidation_enabled:
+        _consolidation_findings, consolidation = scenario_consolidation_contract(
+            state=workflow_state,
+            rows_by_scenario=matrix_by_scenario,
+            artifact="workflow-state.json",
+        )
+        shared_scenarios_by_tc = consolidation["shared_scenarios_by_tc"]
     for block in blocks:
         tc_id = block["id"]
         body = block["body"]
@@ -2803,7 +3073,16 @@ def validate_test_cases(
                 artifact,
                 remediation_owner="writer",
             ))
-        if obligation_ids and scenario_ids and len(obligation_ids) != len(scenario_ids):
+        authorized_shared = (
+            consolidation_enabled
+            and shared_scenarios_by_tc.get(tc_id) == frozenset(scenario_ids)
+        )
+        if (
+            obligation_ids
+            and scenario_ids
+            and len(obligation_ids) != len(scenario_ids)
+            and not authorized_shared
+        ):
             findings.append(finding(
                 "test-case-obligation-scenario-count",
                 "traceability",
@@ -2877,7 +3156,17 @@ def validate_test_cases(
                 artifact,
                 remediation_owner="writer",
             ))
-        if len(scenario_ids) > 1:
+        if len(scenario_ids) > 1 and consolidation_enabled:
+            if not authorized_shared:
+                findings.append(finding(
+                    "test-case-shared-scenario-not-authorized",
+                    "traceability",
+                    "Один тест-кейс объединяет сценарии без решения о консолидации",
+                    f"{tc_id}: scenario_consolidation должен в точности содержать {', '.join(sorted(scenario_ids))} и этот planned TC-ID.",
+                    artifact,
+                    remediation_owner="writer",
+                ))
+        elif len(scenario_ids) > 1:
             group_keys = {
                 str(row.get("_shared_test_case_group") or "")
                 for _, row in mapped_rows
@@ -3159,7 +3448,7 @@ def validate_scope(
                 ))
             else:
                 matrix_findings, matrix_by_scenario, _matrix_by_obligation_context = validate_matrix(
-                    matrix_path, package_root, obligations
+                    matrix_path, package_root, obligations, state
                 )
                 findings.extend(matrix_findings)
         else:
@@ -3193,11 +3482,21 @@ def validate_scope(
                 package_root,
                 obligations,
                 matrix_by_scenario,
+                state,
             ))
         else:
             findings.append(finding("test-cases-missing", "source-integrity", "Файл тест-кейсов отсутствует", relative_to_package(package_root, tc_path), "workflow-state.json", remediation_owner="writer"))
 
     matrix_required, matrix_reasons = matrix_review_required(obligations)
+    if (
+        workflow_scenario_consolidation_enabled(state)
+        and state.get("scenario_consolidation")
+    ):
+        matrix_required = True
+        matrix_reasons = [
+            *matrix_reasons,
+            "в matrix есть решение scenario_consolidation, требующее независимой проверки",
+        ]
     declared = state.get("matrix_review_required")
     if declared is not None and bool(declared) != matrix_required:
         findings.append(finding("matrix-review-decision-stale", "transport", "Workflow содержит устаревшее решение о matrix review", "; ".join(matrix_reasons) or "Scope не достигает порога обязательного matrix review.", "workflow-state.json", remediation_owner="controller", severity="warning"))
@@ -3392,6 +3691,14 @@ def build_review_manifest(
             "Проверить тест-кейсы, если review_mode=test-cases.",
         ],
     }
+    if review_mode == "matrix" and workflow_scenario_consolidation_enabled(state):
+        manifest["scenario_consolidation_contract"] = {
+            "version": SCENARIO_CONSOLIDATION_CONTRACT_VERSION,
+            "decisions": state.get("scenario_consolidation", []),
+        }
+        manifest["reviewer_order"].append(
+            "Самостоятельно проверить решения scenario_consolidation и неучтённые кандидаты на объединение."
+        )
     obligations_path = paths["scope_obligations"]
     active_ids = active_obligation_ids(read_json(obligations_path))
     if len(active_ids) > COMPACT_REVIEWER_RECEIPT_OBLIGATION_THRESHOLD:
@@ -3460,6 +3767,66 @@ def verify_review_result(
             findings.append(finding("review-result-scope", "review-integrity", "Результат review относится к другому scope", f"Поле {key} должно совпадать с review-manifest.json.", artifact, remediation_owner="reviewer"))
     if result.get("verdict") not in {"approved", "changes-required", "blocked-input"}:
         findings.append(finding("review-result-verdict", "review-integrity", "У результата review неизвестный verdict", "Допустимы approved, changes-required или blocked-input.", artifact, remediation_owner="reviewer"))
+    consolidation_contract = manifest.get("scenario_consolidation_contract")
+    if consolidation_contract is not None:
+        if (
+            not isinstance(consolidation_contract, dict)
+            or consolidation_contract.get("version")
+            != SCENARIO_CONSOLIDATION_CONTRACT_VERSION
+        ):
+            findings.append(finding(
+                "review-manifest-scenario-consolidation-contract",
+                "review-integrity",
+                "Manifest matrix review содержит неверный контракт консолидации сценариев",
+                f"Ожидается version={SCENARIO_CONSOLIDATION_CONTRACT_VERSION}.",
+                artifact,
+                remediation_owner="controller",
+            ))
+        else:
+            raw_review = result.get("scenario_consolidation_review")
+            expected_ids = [
+                str(item.get("id"))
+                for item in consolidation_contract.get("decisions", [])
+                if isinstance(item, dict)
+            ]
+            if not isinstance(raw_review, dict):
+                findings.append(finding(
+                    "review-result-scenario-consolidation",
+                    "review-integrity",
+                    "Reviewer не подтвердил проверку решений о консолидации сценариев",
+                    "Matrix review должен содержать scenario_consolidation_review из immutable manifest.",
+                    artifact,
+                    remediation_owner="reviewer",
+                ))
+            else:
+                actual_ids = raw_review.get("decision_ids")
+                candidate_count = raw_review.get("uncategorized_candidate_count")
+                if (
+                    raw_review.get("checked") is not True
+                    or not isinstance(actual_ids, list)
+                    or actual_ids != expected_ids
+                    or not isinstance(candidate_count, int)
+                    or candidate_count < 0
+                    or not isinstance(raw_review.get("method"), str)
+                    or not raw_review["method"].strip()
+                ):
+                    findings.append(finding(
+                        "review-result-scenario-consolidation-format",
+                        "review-integrity",
+                        "Подтверждение reviewer-а о консолидации сценариев неполно",
+                        "Нужны checked=true, decision_ids из manifest, неотрицательный uncategorized_candidate_count и непустой method.",
+                        artifact,
+                        remediation_owner="reviewer",
+                    ))
+                elif result.get("verdict") == "approved" and candidate_count != 0:
+                    findings.append(finding(
+                        "review-result-scenario-consolidation-approved-with-gaps",
+                        "review-integrity",
+                        "Reviewer одобрил матрицу с неучтёнными кандидатами на консолидацию",
+                        "При approved значение uncategorized_candidate_count должно быть равно нулю.",
+                        artifact,
+                        remediation_owner="reviewer",
+                    ))
     raw_review_findings = result.get("findings")
     if not isinstance(raw_review_findings, list):
         findings.append(finding(

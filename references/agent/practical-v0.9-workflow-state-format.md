@@ -11,7 +11,9 @@
   "matrix_review_required": false,
   "contract_versions": {
     "route": "practical-v0.9",
-    "source_package": "source-package-v3"
+    "source_package": "source-package-v3",
+    "matrix": "practical-matrix-v2",
+    "scenario_consolidation": "scenario-consolidation-v1"
   },
   "artifacts": {
     "source_package_manifest": "work/practical-v0.9/source-package-manifest.json",
@@ -23,7 +25,8 @@
   "reviews": [],
   "revision_count": 0,
   "final_verdict": "not-finalized",
-  "decision_notes": []
+  "decision_notes": [],
+  "scenario_consolidation": []
 }
 ```
 
@@ -40,5 +43,9 @@ findings reviewer-а в него не дублируются. Если прав�
 `blocked-input`.
 
 `workflow-state.json` — единственный mutable control-plane artifact v0.9. Не копируй его поля в отдельный summary. Человекочитаемый статус формируется из него и `validator-report.json` в ответе агенту.
+
+`scenario_consolidation` хранит только `CON-*` решения по кандидатам, а не
+новый рабочий артефакт. Старый scope без его версии остаётся читаемым, новые
+создаются с `scenario-consolidation-v1`.
 
 `phase`: `scope`, `matrix`, `test-cases`, `review`, `accepted` или `blocked`.

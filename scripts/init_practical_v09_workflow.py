@@ -15,6 +15,7 @@ from test_case_agent.practical_v09 import (
     ROUTE_VERSION,
     SOURCE_CONTRACT_VERSION,
     MATRIX_CONTRACT_VERSION,
+    SCENARIO_CONSOLIDATION_CONTRACT_VERSION,
     WORKFLOW_STATE_SCHEMA_VERSION,
     SOURCE_MANIFEST_RELATIVE_PATH,
     PracticalV09Error,
@@ -67,6 +68,7 @@ def main(argv: list[str] | None = None) -> int:
             "route": ROUTE_VERSION,
             "source_package": SOURCE_CONTRACT_VERSION,
             "matrix": MATRIX_CONTRACT_VERSION,
+            "scenario_consolidation": SCENARIO_CONSOLIDATION_CONTRACT_VERSION,
         },
         "artifacts": {
             "source_package_manifest": relative_to_package(package_root, source_path),
@@ -80,6 +82,7 @@ def main(argv: list[str] | None = None) -> int:
         "tc_revision_count": 0,
         "final_verdict": "not-finalized",
         "decision_notes": [],
+        "scenario_consolidation": [],
     }
     write_json(output, payload)
     print(relative_to_package(package_root, output))

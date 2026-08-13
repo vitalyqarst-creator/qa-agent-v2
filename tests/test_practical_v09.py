@@ -12,6 +12,7 @@ from test_case_agent.practical_v09 import (
     COMPACT_REVIEWER_RECEIPT_MAX_BYTES,
     MATRIX_CONTRACT_VERSION,
     ROUTE_VERSION,
+    SCENARIO_CONSOLIDATION_CONTRACT_VERSION,
     SOURCE_CONTRACT_VERSION,
     PracticalV09Error,
     build_review_manifest,
@@ -20,6 +21,9 @@ from test_case_agent.practical_v09 import (
     finding,
     load_workflow_state,
     matrix_review_required,
+    matrix_exact_duplicate_groups,
+    parse_matrix_rows,
+    scenario_consolidation_contract,
     obligation_ids_sha256,
     requirement_codes,
     sha256_file,
@@ -1348,6 +1352,67 @@ class PracticalV09Tests(unittest.TestCase):
                 [item.id for item in findings if item.blocking],
             )
 
+    def test_matrix_reviewer_must_confirm_scenario_consolidation_scan(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            fixture = PracticalV09Fixture(Path(raw))
+            state = json.loads(fixture.state.read_text(encoding="utf-8"))
+            state["contract_versions"]["scenario_consolidation"] = (
+                SCENARIO_CONSOLIDATION_CONTRACT_VERSION
+            )
+            state["scenario_consolidation"] = []
+            write_json(fixture.state, state)
+            manifest = build_review_manifest(
+                package_root=fixture.root,
+                workflow_state_path=fixture.state,
+                review_mode="matrix",
+                controller_thread_id="019feebf-3cde-79d2-9f87-ba9c61ff7b13",
+                code_branch="codex/test",
+                code_commit="abc123",
+                contract_digest="contract",
+            )
+            self.assertIn("scenario_consolidation_contract", manifest)
+            manifest_path = fixture.scope_dir / "matrix-review-manifest.json"
+            write_json(manifest_path, manifest)
+            result_path = fixture.scope_dir / "matrix-review-result.json"
+            result = {
+                "review_manifest_sha256": sha256_file(manifest_path),
+                "scope_id": "01",
+                "scope_slug": "menu",
+                "review_mode": "matrix",
+                "execution_surface": "codex-thread",
+                "reviewer_thread_id": "019feebf-3cde-79d2-9f87-ba9c61ff7b14",
+                "independent_obligations": independently_derived_obligation(),
+                "verdict": "approved",
+                "findings": [],
+            }
+            write_json(result_path, result)
+            _, findings = verify_review_result(
+                package_root=fixture.root,
+                manifest_path=manifest_path,
+                result_path=result_path,
+            )
+            self.assertIn(
+                "review-result-scenario-consolidation",
+                [item.id for item in findings if item.blocking],
+            )
+
+            result["scenario_consolidation_review"] = {
+                "checked": True,
+                "decision_ids": [],
+                "uncategorized_candidate_count": 0,
+                "method": "Проверены группы с общими объектом, контекстом и пользовательским действием.",
+            }
+            write_json(result_path, result)
+            _, findings = verify_review_result(
+                package_root=fixture.root,
+                manifest_path=manifest_path,
+                result_path=result_path,
+            )
+            self.assertNotIn(
+                "review-result-scenario-consolidation",
+                [item.id for item in findings if item.blocking],
+            )
+
     def test_finalizer_records_review_and_allows_accepted_only_after_approval(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             fixture = PracticalV09Fixture(Path(raw))
@@ -2076,7 +2141,7 @@ class PracticalV09Tests(unittest.TestCase):
             self.assertNotIn("test-case-scenario-uncovered", finding_ids)
             self.assertNotIn("test-case-scenario-duplicated", finding_ids)
 
-    def test_validator_allows_shared_tc_only_for_probable_semantic_duplicate_rows(self) -> None:
+    def test_validator_requires_explicit_scenario_consolidation_for_shared_tc(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             fixture = PracticalV09Fixture(Path(raw))
             obligations = json.loads(fixture.obligations.read_text(encoding="utf-8"))
@@ -2103,6 +2168,12 @@ class PracticalV09Tests(unittest.TestCase):
                 },
             ]
             write_json(fixture.obligations, obligations)
+            state = json.loads(fixture.state.read_text(encoding="utf-8"))
+            state["contract_versions"]["scenario_consolidation"] = (
+                SCENARIO_CONSOLIDATION_CONTRACT_VERSION
+            )
+            state["scenario_consolidation"] = []
+            write_json(fixture.state, state)
             header = (
                 "# Матрица тест-дизайна\n\n"
                 "| Проверка | Идентификатор сценария | Обязательство ФТ | Контекст исполнения | Проверяемое правило | Исходное состояние | Формирование состояния | Проверяемое действие | Ожидаемый результат | Нужные предпосылки | Тип | Приоритет | Статус исполнения | Планируемый TC-ID |\n"
@@ -2114,25 +2185,61 @@ class PracticalV09Tests(unittest.TestCase):
             )
             fixture.matrix.write_text(header + rows, encoding="utf-8")
             _, findings = validate_scope(package_root=fixture.root, workflow_state_path=fixture.state)
-            self.assertIn(
-                "matrix-probable-semantic-duplicate",
+            self.assertNotIn(
+                "scenario-consolidation-exact-candidate-undecided",
                 [item.id for item in findings],
             )
 
-            fixture.matrix.write_text(
-                (header + rows).replace("TC-CARD-002", "TC-CARD-001"),
-                encoding="utf-8",
+            exact_rows = (header + rows).replace(
+                "Поле «КПП» допускает ручной ввод.",
+                "Поле «КПП» доступно для редактирования.",
+            ).replace(
+                "Вручную ввести значение в поле «КПП».",
+                "Ввести значение в поле «КПП», затем заменить его.",
+            ).replace(
+                "Поле «КПП» принимает значение, введенное вручную.",
+                "Поле «КПП» принимает измененное значение.",
             )
+            fixture.matrix.write_text(exact_rows, encoding="utf-8")
+            parsed_rows, parsed_errors = parse_matrix_rows(fixture.matrix)
+            self.assertFalse(parsed_errors)
+            self.assertEqual(1, len(matrix_exact_duplicate_groups(parsed_rows)))
+            loaded_state = load_workflow_state(fixture.state, fixture.root)
+            direct_findings, direct_consolidation = scenario_consolidation_contract(
+                state=loaded_state,
+                rows_by_scenario={row["Идентификатор сценария"]: row for row in parsed_rows},
+                artifact="workflow-state.json",
+            )
+            self.assertTrue(direct_consolidation["enabled"])
+            self.assertFalse(direct_findings)
+            _, findings = validate_scope(package_root=fixture.root, workflow_state_path=fixture.state)
+            self.assertIn(
+                "scenario-consolidation-exact-candidate-undecided",
+                [item.id for item in findings if item.blocking],
+            )
+
+            merged_rows = exact_rows.replace("TC-CARD-002", "TC-CARD-001")
+            fixture.matrix.write_text(merged_rows, encoding="utf-8")
+            state = json.loads(fixture.state.read_text(encoding="utf-8"))
+            state["scenario_consolidation"] = [{
+                "id": "CON-001",
+                "decision": "merge-parameterized",
+                "scenario_ids": ["SCN-001", "SCN-002"],
+                "planned_tc_id": "TC-CARD-001",
+                "source_anchor": "Таблица 6, строка «КПП».",
+                "rationale": "Обе строки описывают одно и то же действие и результат.",
+            }]
+            write_json(fixture.state, state)
             fixture.tc.write_text(
                 "## TC-CARD-001\n"
-                "**Название:** Поле «КПП» допускает ручной ввод и изменение при создании карточки партнера\n"
+                "**Название:** Изменение КПП при создании карточки партнера\n"
                 "**Тип:** Positive\n"
                 "**Приоритет:** Medium\n"
                 "**package_id:** WP-01\n"
                 "**Статус исполнения:** ready\n"
                 "**Контекст исполнения:** `CTX-CREATE` — создание карточки партнера.\n"
                 "**Трассировка:** `OBL-001`; `OBL-002`; `SCN-001`; `SCN-002`; Таблица 6.\n"
-                "**Цель:** Проверить ручной ввод и изменение КПП.\n"
+                "**Цель:** Проверить изменение КПП.\n"
                 "**Предусловия:** Открыта новая карточка партнера.\n"
                 "**Тестовые данные:** Первое значение КПП: `773601001`; новое значение КПП: `773601002`.\n"
                 "**Шаги:**\n"
@@ -2144,21 +2251,70 @@ class PracticalV09Tests(unittest.TestCase):
             _, findings = validate_scope(package_root=fixture.root, workflow_state_path=fixture.state)
             finding_ids = [item.id for item in findings if item.blocking]
             self.assertNotIn("test-case-obligation-scenario-count", finding_ids)
-            self.assertNotIn("test-case-shared-scenario-not-allowed", finding_ids)
+            self.assertNotIn("test-case-shared-scenario-not-authorized", finding_ids)
             self.assertNotIn("test-case-scenario-uncovered", finding_ids)
             self.assertNotIn("test-case-scenario-duplicated", finding_ids)
 
-            ineligible_rows = (header + rows).replace(
-                "TC-CARD-002", "TC-CARD-001"
-            ).replace(
-                "Вручную ввести значение в поле «КПП».",
-                "Выбрать значение для поля «КПП» из списка.",
+    def test_validator_maps_internal_check_to_observable_result(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            fixture = PracticalV09Fixture(Path(raw))
+            obligations = json.loads(fixture.obligations.read_text(encoding="utf-8"))
+            shared_context = obligations["obligations"][0]["execution_contexts"][0]
+            obligations["obligations"] = [
+                {
+                    "id": "OBL-001",
+                    "source_anchor": "Таблица 7, AS.36.",
+                    "statement": "При сохранении система проверяет уникальность партнера.",
+                    "risk_flags": [],
+                    "execution_contexts": [shared_context],
+                },
+                {
+                    "id": "OBL-002",
+                    "source_anchor": "Таблица 7, AS.37.",
+                    "statement": "При неуспешной проверке система выводит сообщение «Ошибка уникальности».",
+                    "risk_flags": [],
+                    "execution_contexts": [shared_context],
+                },
+            ]
+            write_json(fixture.obligations, obligations)
+            header = (
+                "# Матрица тест-дизайна\n\n"
+                "| Проверка | Идентификатор сценария | Обязательство ФТ | Контекст исполнения | Проверяемое правило | Исходное состояние | Формирование состояния | Проверяемое действие | Ожидаемый результат | Нужные предпосылки | Тип | Приоритет | Статус исполнения | Планируемый TC-ID |\n"
+                "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |\n"
             )
-            fixture.matrix.write_text(ineligible_rows, encoding="utf-8")
+            rows = (
+                "| MTX-001 | SCN-001 | OBL-001 | CTX-OPEN-MENU — Открытие раздела из меню | Перед сохранением проверяется уникальность. | Открыта новая карточка с дублирующими данными. | Ввести дублирующее наименование. | Нажать «Сохранить». | Внутренняя проверка не имеет самостоятельного наблюдаемого результата. | SETUP-ACTOR-001 — пользователь с доступом к модулю. | Negative | High | ready | TC-MENU-001 |\n"
+                "| MTX-002 | SCN-002 | OBL-002 | CTX-OPEN-MENU — Открытие раздела из меню | При неуспешной проверке выводится сообщение. | Открыта новая карточка с дублирующими данными. | Ввести дублирующее наименование. | Нажать «Сохранить». | Отображается сообщение «Ошибка уникальности». | SETUP-ACTOR-001 — пользователь с доступом к модулю. | Negative | High | ready | TC-MENU-001 |\n"
+            )
+            fixture.matrix.write_text(header + rows, encoding="utf-8")
+            state = json.loads(fixture.state.read_text(encoding="utf-8"))
+            state["contract_versions"]["scenario_consolidation"] = (
+                SCENARIO_CONSOLIDATION_CONTRACT_VERSION
+            )
+            state["scenario_consolidation"] = []
+            write_json(fixture.state, state)
             _, findings = validate_scope(package_root=fixture.root, workflow_state_path=fixture.state)
+            finding_ids = [item.id for item in findings if item.blocking]
+            self.assertIn("matrix-internal-oracle-needs-observable-coverage", finding_ids)
+            self.assertIn("scenario-consolidation-shared-tc-without-decision", finding_ids)
+
+            state["scenario_consolidation"] = [{
+                "id": "CON-001",
+                "decision": "covered-by-observable-result",
+                "scenario_ids": ["SCN-001", "SCN-002"],
+                "planned_tc_id": "TC-MENU-001",
+                "observable_scenario_id": "SCN-002",
+                "source_anchor": "Таблица 7, AS.36–AS.37.",
+                "rationale": "Внутренняя проверка подтверждается наблюдаемым сообщением об ошибке.",
+            }]
+            write_json(fixture.state, state)
+            _, findings = validate_scope(package_root=fixture.root, workflow_state_path=fixture.state)
+            finding_ids = [item.id for item in findings if item.blocking]
+            self.assertNotIn("matrix-internal-oracle-needs-observable-coverage", finding_ids)
+            self.assertNotIn("scenario-consolidation-shared-tc-without-decision", finding_ids)
             self.assertIn(
-                "test-case-shared-scenario-not-allowed",
-                [item.id for item in findings if item.blocking],
+                "matrix-review-required-before-test-cases",
+                finding_ids,
             )
 
     def test_validator_requires_source_message_literal_in_matrix_and_tc(self) -> None:

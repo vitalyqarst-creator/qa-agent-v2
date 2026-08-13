@@ -72,11 +72,12 @@ fixture или DaData-профиля в однотипных проверках.
 разные контексты или классы входных данных дают самостоятельные проверяемые
 потоки, они должны быть разложены на разные `OBL-*`/matrix rows/TC.
 
-Reviewer проверяет `matrix-probable-semantic-duplicate`: разные `OBL-*` не
-достаточны для двух TC при одинаковых объекте, контексте, действии и oracle.
-Без самостоятельного различия он требует общий planned TC-ID и трассировку
-всех связанных `OBL-*`/`SCN-*`; create/edit-потоки, состояния, классы и
-результаты не склеиваются.
+Reviewer сам проверяет `scenario_consolidation`, а не доверяет prose writer-а:
+одна операция и реакция — параметры одного TC; editability и ручной ввод —
+разные свойства. Если manifest содержит этот contract, result включает
+`scenario_consolidation_review` с `checked=true`, `decision_ids` из manifest,
+`uncategorized_candidate_count` и `method`. При `approved` счётчик равен нулю;
+неучтённая группа — отдельный finding, без изменения workflow reviewer-ом.
 
 `blocked-observability` — допустимый статус исполнения для представимого
 утверждения ФТ. Finding о том, что matrix/TC должен использовать этот статус,
