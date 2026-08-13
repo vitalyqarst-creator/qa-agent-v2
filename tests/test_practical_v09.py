@@ -2762,6 +2762,46 @@ class PracticalV09Tests(unittest.TestCase):
             _, findings = validate_scope(package_root=fixture.root, workflow_state_path=fixture.state)
             self.assertIn("test-case-test-data-tautology", [item.id for item in findings if item.blocking])
 
+    def test_validator_rejects_generic_completion_data_and_actions(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            fixture = PracticalV09Fixture(Path(raw))
+            fixture.tc.write_text(
+                fixture.tc.read_text(encoding="utf-8").replace(
+                    "**Тестовые данные:** Не требуются.",
+                    "**Тестовые данные:**\n"
+                    "- Остальные обязательные поля заполнить допустимыми значениями.\n"
+                    "- Уникальный набор обязательных значений.\n"
+                    "- Заполнить карточку партнёра.\n"
+                    "- Подготовить файл формата PDF размером 1 МБ.\n"
+                    "- Строка длиной 2000 символов.",
+                ),
+                encoding="utf-8",
+            )
+            _, findings = validate_scope(package_root=fixture.root, workflow_state_path=fixture.state)
+            finding_ids = {item.id for item in findings if item.blocking}
+            self.assertIn("test-case-test-data-generic-completion", finding_ids)
+            self.assertIn("test-case-test-data-action-leak", finding_ids)
+            self.assertIn("test-case-test-data-preparation-missing", finding_ids)
+
+    def test_validator_allows_prepared_boundary_or_file_data(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            fixture = PracticalV09Fixture(Path(raw))
+            fixture.tc.write_text(
+                fixture.tc.read_text(encoding="utf-8").replace(
+                    "**Тестовые данные:** Не требуются.",
+                    "**Тестовые данные:**\n"
+                    "- Строка длиной 2000 символов `А`.\n"
+                    "- Файл `document.pdf`, формат PDF, размер 1 МБ.\n"
+                    "- Способ подготовки: локально создать строку повторением `А` "
+                    "2000 раз и файл `document.pdf` фиксированного размера 1 МБ.",
+                ),
+                encoding="utf-8",
+            )
+            _, findings = validate_scope(package_root=fixture.root, workflow_state_path=fixture.state)
+            finding_ids = {item.id for item in findings if item.blocking}
+            self.assertNotIn("test-case-test-data-preparation-missing", finding_ids)
+            self.assertNotIn("test-case-test-data-action-leak", finding_ids)
+
     def test_validator_warns_about_unused_copied_test_data_profile(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             fixture = PracticalV09Fixture(Path(raw))
