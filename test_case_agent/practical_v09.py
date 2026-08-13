@@ -18,7 +18,7 @@ from typing import Any, Iterable, Mapping
 
 
 ROUTE_VERSION = "practical-v0.9"
-ROUTE_TOOL_VERSION = "practical-v0.9.28"
+ROUTE_TOOL_VERSION = "practical-v0.9.29"
 WORKFLOW_STATE_SCHEMA_VERSION = 1
 SOURCE_CONTRACT_VERSION = "source-package-v4"
 MATRIX_CONTRACT_VERSION = "practical-matrix-v3"
@@ -32,6 +32,8 @@ SCENARIO_CONSOLIDATION_CONTRACT_VERSION = "scenario-consolidation-v2"
 LEGACY_SCENARIO_CONSOLIDATION_CONTRACT_VERSION = "scenario-consolidation-v1"
 CONTROLLER_TRIAGE_CONTRACT_VERSION = "controller-triage-v1"
 CLARIFICATION_OUTCOME_CONTRACT_VERSION = "clarification-outcome-v1"
+SOURCE_PARITY_CONTRACT_VERSION = "source-parity-v1"
+EXCEPTION_SNAPSHOT_CONTRACT_VERSION = "exception-snapshot-v1"
 REVIEW_MANIFEST_VERSION = "practical-review-manifest-v2"
 VALIDATOR_REPORT_VERSION = "practical-scope-validator-v2"
 SOURCE_MANIFEST_RELATIVE_PATH = "work/practical-v0.9/source-package-manifest.json"
@@ -922,6 +924,41 @@ def workflow_clarification_outcome_enabled(state: Mapping[str, Any]) -> bool:
         raise PracticalV09Error(
             "workflow-state.json: scope_clarification_requests is required "
             "for clarification-outcome-v1"
+        )
+    return True
+
+
+def workflow_source_parity_enabled(state: Mapping[str, Any]) -> bool:
+    """Return whether a scope must retain DOCX/PDF parity evidence when PDF exists.
+
+    The contract is opt-in for scopes created before v0.9.29.  New scopes
+    declare it from initialization, so an available PDF is not merely bound to
+    a reviewer manifest but is explicitly cross-checked before matrix/TC work.
+    """
+    versions = state.get("contract_versions")
+    if not isinstance(versions, Mapping):
+        raise PracticalV09Error("workflow-state.json: contract_versions must be an object")
+    declared = versions.get("source_parity")
+    if declared is None:
+        return False
+    if declared != SOURCE_PARITY_CONTRACT_VERSION:
+        raise PracticalV09Error(
+            "workflow-state.json: contract_versions.source_parity has unsupported value"
+        )
+    return True
+
+
+def workflow_exception_snapshot_enabled(state: Mapping[str, Any]) -> bool:
+    """Return whether exceptions must bind an immutable pre-change snapshot."""
+    versions = state.get("contract_versions")
+    if not isinstance(versions, Mapping):
+        raise PracticalV09Error("workflow-state.json: contract_versions must be an object")
+    declared = versions.get("exception_snapshot")
+    if declared is None:
+        return False
+    if declared != EXCEPTION_SNAPSHOT_CONTRACT_VERSION:
+        raise PracticalV09Error(
+            "workflow-state.json: contract_versions.exception_snapshot has unsupported value"
         )
     return True
 
@@ -3501,6 +3538,71 @@ def numbered_steps(value: str) -> list[str]:
     ]
 
 
+def is_edit_execution_context(context_id: str) -> bool:
+    """Return whether a compact CTX identifier explicitly denotes editing."""
+    return bool(re.search(r"(?:^|-)EDIT(?:-|$)", context_id))
+
+
+def opens_new_card(step: str) -> bool:
+    """Detect the narrow, unambiguous create-flow phrase inside an edit TC.
+
+    This is intentionally not a general natural-language classifier.  It only
+    blocks an explicit instruction to open/create a *new* or empty card, which
+    cannot exercise a matrix row whose declared context is editing an existing
+    object.  Any less explicit navigation remains reviewer territory.
+    """
+    return bool(re.search(
+        r"\b(?:открыть|создать|добавить)\w*\b[^.\n]{0,100}"
+        r"\b(?:нов\w*|пуст\w*)\b[^.\n]{0,100}\bкарточк\w*\b",
+        step,
+        re.IGNORECASE,
+    ))
+
+
+def matrix_field_labels(value: str) -> set[str]:
+    """Return explicit UI labels from a matrix element cell.
+
+    Only quoted labels are suitable for an automatic TC binding gate.  Generic
+    elements such as ``Карточка партнёра`` deliberately remain a reviewer
+    concern, while ``Поле «Дата аккредитации»`` has a stable literal that must
+    be preserved by writer templates and revisions.
+    """
+    return {
+        normalized_matrix_phrase(label)
+        for label in re.findall(r"[«\"]([^»\"]+)[»\"]", value)
+        if normalized_matrix_phrase(label)
+    }
+
+
+def tc_explicit_ui_labels(body: str) -> set[str]:
+    """Return only literal field/control labels that the TC declares explicitly."""
+    return {
+        normalized_matrix_phrase(label)
+        for label in re.findall(r"[«\"]([^»\"]+)[»\"]", body)
+        if normalized_matrix_phrase(label)
+    }
+
+
+def conflicts_with_matrix_field(*, expected_label: str, declared_labels: set[str]) -> bool:
+    """Detect a declared replacement of a matrix field, not mere omission.
+
+    An executable TC may legitimately refer to a field through its purpose or
+    an upload action without restating a long label. A static gate may not
+    invent that label. It can, however, reject an explicit *different* field
+    from the same field family, such as ``Дата начала сотрудничества`` instead
+    of matrix field ``Дата аккредитации``.
+    """
+    expected = expected_label.replace("ё", "е")
+    actual = {label.replace("ё", "е") for label in declared_labels}
+    if expected in actual:
+        return False
+    expected_words = expected.split()
+    if not expected_words:
+        return False
+    primary_word = expected_words[0]
+    return any(label.split()[:1] == [primary_word] for label in actual)
+
+
 def attachment_identity(step: str) -> str | None:
     """Return a stable attached-file identity when the step declares one."""
     quoted = re.findall(r"`([^`]+)`", step)
@@ -4111,6 +4213,18 @@ def validate_test_cases(
                 artifact,
                 remediation_owner="writer",
             ))
+        elif is_edit_execution_context(context_id):
+            create_steps = [step for step in numbered_steps(steps_value) if opens_new_card(step)]
+            if create_steps:
+                findings.append(finding(
+                    "test-case-edit-context-new-card",
+                    "execution-readiness",
+                    "Тест-кейс редактирования открывает новую или пустую карточку",
+                    f"{tc_id}: контекст {context_id} требует работу с сохранённым объектом; "
+                    f"создание новой карточки в шаге «{create_steps[0]}» подменяет edit-поток.",
+                    artifact,
+                    remediation_owner="writer",
+                ))
         title = test_case_field(body, "Название").casefold()
         if context_id.endswith("CREATE") and MIXED_CREATE_EDIT_TITLE_RE.search(title):
             findings.append(finding(
@@ -4315,6 +4429,8 @@ def validate_test_cases(
                     artifact,
                     remediation_owner="writer",
                 ))
+        checked_matrix_field_labels: set[str] = set()
+        tc_labels = tc_explicit_ui_labels(body)
         for scenario_id, mapped_row in mapped_rows:
             mapped_pair = (
                 mapped_row.get("Обязательство ФТ", ""),
@@ -4339,6 +4455,25 @@ def validate_test_cases(
                     artifact,
                     remediation_owner="writer",
                 ))
+            for field_label in sorted(
+                matrix_field_labels(mapped_row.get("Проверяемый элемент", ""))
+                - checked_matrix_field_labels
+            ):
+                checked_matrix_field_labels.add(field_label)
+                if conflicts_with_matrix_field(
+                    expected_label=field_label,
+                    declared_labels=tc_labels,
+                ):
+                    findings.append(finding(
+                        "test-case-matrix-element-binding",
+                        "traceability",
+                        "Тест-кейс подменяет проверяемый элемент из матрицы",
+                        f"{tc_id}: {scenario_id} требует элемент «{field_label}», "
+                        "но TC явно называет другое поле того же типа. Проверьте, что writer "
+                        "не подменил поле шаблонным или однотипным полем.",
+                        artifact,
+                        remediation_owner="writer",
+                    ))
             if status_match and status_match.group(1) != mapped_row.get("Статус исполнения"):
                 findings.append(finding(
                     "test-case-execution-status-matrix",
@@ -4483,6 +4618,22 @@ def validate_workflow_artifact_links(state: dict[str, Any], package_root: Path) 
         obligations = {}
     if dictionary_inventory_required(obligations):
         required_keys.append("dictionary_inventory")
+    if workflow_source_parity_enabled(state):
+        try:
+            manifest_path = workflow_artifact_path(
+                state, package_root, "source_package_manifest", required=True
+            )
+            assert manifest_path is not None
+            manifest = read_json(manifest_path)
+        except PracticalV09Error:
+            manifest = {}
+        documents = manifest.get("documents") if isinstance(manifest, Mapping) else []
+        has_pdf = isinstance(documents, list) and any(
+            isinstance(item, Mapping) and item.get("role") == "pdf-cross-check"
+            for item in documents
+        )
+        if has_pdf and phase in {"matrix", "matrix-migration", "test-cases", "review", "accepted", "blocked"}:
+            required_keys.append("source_parity_check")
     for key in required_keys:
         try:
             path = workflow_artifact_path(state, package_root, key, required=True)
@@ -4505,6 +4656,153 @@ def validate_workflow_artifact_links(state: dict[str, Any], package_root: Path) 
                     "Добавьте извлечённый DICT-* и полный состав значений или зафиксируйте source gap.",
                     relative_to_package(package_root, inventory_path),
                     remediation_owner="scope-analyzer",
+                ))
+    if "source_parity_check" in required_keys:
+        parity_path = workflow_artifact_path(
+            state, package_root, "source_parity_check", required=False
+        )
+        if parity_path is not None and parity_path.is_file():
+            parity_text = parity_path.read_text(encoding="utf-8")
+            if (
+                "Source Parity Check" not in parity_text
+                or not parity_text.strip()
+                or ("## Решение" not in parity_text and "## Decision" not in parity_text)
+            ):
+                findings.append(finding(
+                    "source-parity-check-invalid",
+                    "source-integrity",
+                    "Source parity check не содержит проверяемого результата",
+                    "Файл source-parity-check.md должен содержать заголовок Source Parity Check и раздел Решение с результатом сверки DOCX/PDF.",
+                    relative_to_package(package_root, parity_path),
+                    remediation_owner="scope-analyzer",
+                ))
+    findings.extend(validate_exception_snapshot_links(state, package_root))
+    return findings
+
+
+def validate_exception_snapshot_links(
+    state: dict[str, Any], package_root: Path
+) -> list[ScopeFinding]:
+    """Validate snapshot evidence for every active narrow exception.
+
+    A snapshot cannot retrospectively prove when a historical edit happened.
+    It does, however, gives every new exception a fixed baseline for the
+    reviewer, controller and later diff.  This guard deliberately applies only
+    to new workflows that declare ``exception-snapshot-v1``.
+    """
+    if not workflow_exception_snapshot_enabled(state):
+        return []
+
+    findings: list[ScopeFinding] = []
+    artifact = "workflow-state.json"
+    artifacts = state.get("artifacts")
+    if not isinstance(artifacts, Mapping):
+        return findings
+    for key, raw_path in artifacts.items():
+        if not key.endswith("_exception") or raw_path in (None, "", "not-created", "not-applicable"):
+            continue
+        try:
+            exception_path = package_relative_path(
+                package_root, raw_path, artifact=f"artifacts.{key}"
+            )
+            payload = read_json(exception_path)
+        except PracticalV09Error as exc:
+            findings.append(finding(
+                "exception-snapshot-reference-invalid",
+                "review-integrity",
+                "Исключение не связано с читаемым контрактом",
+                str(exc), artifact, remediation_owner="controller",
+            ))
+            continue
+        snapshot = payload.get("pre_change_snapshot") if isinstance(payload, Mapping) else None
+        allowed = payload.get("allowed_artifacts") if isinstance(payload, Mapping) else None
+        if not isinstance(snapshot, Mapping) or not isinstance(allowed, list) or not allowed:
+            findings.append(finding(
+                "exception-pre-change-snapshot-missing",
+                "review-integrity",
+                "Исключение не содержит immutable снимок до изменения",
+                f"{relative_to_package(package_root, exception_path)} должен содержать pre_change_snapshot и непустой allowed_artifacts.",
+                artifact, remediation_owner="controller",
+            ))
+            continue
+        raw_snapshot_path = snapshot.get("path")
+        expected_manifest_hash = snapshot.get("manifest_sha256")
+        if not isinstance(raw_snapshot_path, str) or not isinstance(expected_manifest_hash, str):
+            findings.append(finding(
+                "exception-pre-change-snapshot-format",
+                "review-integrity",
+                "У snapshot исключения отсутствует путь или контрольная сумма",
+                f"{relative_to_package(package_root, exception_path)}: нужны pre_change_snapshot.path и manifest_sha256.",
+                artifact, remediation_owner="controller",
+            ))
+            continue
+        try:
+            snapshot_dir = package_relative_path(
+                package_root, raw_snapshot_path, artifact=f"{key}.pre_change_snapshot"
+            )
+            manifest_path = snapshot_dir / "snapshot-manifest.yaml"
+            snapshot_manifest = read_json(manifest_path)
+        except PracticalV09Error as exc:
+            findings.append(finding(
+                "exception-pre-change-snapshot-invalid",
+                "review-integrity",
+                "Immutable снимок исключения отсутствует или повреждён",
+                str(exc), artifact, remediation_owner="controller",
+            ))
+            continue
+        if sha256_file(manifest_path) != expected_manifest_hash or snapshot_manifest.get("snapshot_role") != "pre_write_baseline":
+            findings.append(finding(
+                "exception-pre-change-snapshot-invalid",
+                "review-integrity",
+                "Immutable снимок исключения не подтверждает исходную версию",
+                f"{relative_to_package(package_root, manifest_path)} должен иметь корректный SHA-256 и snapshot_role=pre_write_baseline.",
+                artifact, remediation_owner="controller",
+            ))
+            continue
+        records = [
+            item
+            for item in snapshot_manifest.get("source_files", [])
+            if isinstance(item, Mapping)
+        ]
+        recorded = {item.get("source_path") for item in records if isinstance(item.get("source_path"), str)}
+        invalid_allowed = [
+            item for item in allowed
+            if not isinstance(item, str) or item not in recorded
+        ]
+        if invalid_allowed:
+            findings.append(finding(
+                "exception-pre-change-snapshot-coverage",
+                "review-integrity",
+                "Immutable снимок исключения не покрывает разрешённые изменения",
+                "В snapshot отсутствуют исходные версии: " + ", ".join(map(str, invalid_allowed)),
+                artifact, remediation_owner="controller",
+            ))
+        for record in records:
+            source_path = record.get("source_path")
+            snapshot_path = record.get("snapshot_path")
+            source_hash = record.get("source_sha256_before_write")
+            snapshot_hash = record.get("snapshot_sha256")
+            if not all(isinstance(value, str) and value for value in (source_path, snapshot_path, source_hash, snapshot_hash)):
+                findings.append(finding(
+                    "exception-pre-change-snapshot-invalid",
+                    "review-integrity",
+                    "Immutable снимок исключения содержит неполную запись файла",
+                    f"{relative_to_package(package_root, manifest_path)}: у source_files отсутствуют путь или SHA-256.",
+                    artifact, remediation_owner="controller",
+                ))
+                continue
+            copied_path = (snapshot_dir / snapshot_path).resolve()
+            if (
+                not copied_path.is_file()
+                or sha256_file(copied_path) != source_hash
+                or sha256_file(copied_path) != snapshot_hash
+            ):
+                findings.append(finding(
+                    "exception-pre-change-snapshot-invalid",
+                    "review-integrity",
+                    "Immutable снимок исключения не совпадает с зафиксированной исходной версией",
+                    f"{relative_to_package(package_root, manifest_path)}: повреждён или отсутствует snapshot файла {source_path}.",
+                    artifact, remediation_owner="controller",
                 ))
     return findings
 
@@ -5177,6 +5475,26 @@ def review_subject_paths(state: dict[str, Any], package_root: Path, review_mode:
     keys = ["source_package_manifest", "scope_obligations", "test_design_matrix"]
     if workflow_clarification_outcome_enabled(state):
         keys.append("scope_clarification_requests")
+    if workflow_source_parity_enabled(state):
+        manifest_path = workflow_artifact_path(
+            state, package_root, "source_package_manifest", required=True
+        )
+        assert manifest_path is not None
+        manifest = read_json(manifest_path)
+        documents = manifest.get("documents") if isinstance(manifest, Mapping) else []
+        if isinstance(documents, list) and any(
+            isinstance(item, Mapping) and item.get("role") == "pdf-cross-check"
+            for item in documents
+        ):
+            keys.append("source_parity_check")
+    if workflow_exception_snapshot_enabled(state):
+        artifacts = state.get("artifacts")
+        if isinstance(artifacts, Mapping):
+            keys.extend(
+                key
+                for key, value in artifacts.items()
+                if key.endswith("_exception") and value not in (None, "", "not-created", "not-applicable")
+            )
     obligations_path = workflow_artifact_path(
         state, package_root, "scope_obligations", required=True
     )
@@ -5193,6 +5511,54 @@ def review_subject_paths(state: dict[str, Any], package_root: Path, review_mode:
             raise PracticalV09Error(f"Review input is missing: {relative_to_package(package_root, path)}")
         paths[key] = path
     return paths
+
+
+def exception_snapshot_review_inputs(
+    state: dict[str, Any], package_root: Path
+) -> list[tuple[str, Path]]:
+    """Return exception evidence a reviewer needs to verify a bounded edit.
+
+    Binding only the exception JSON would force the reviewer to trust its
+    ``pre_change_snapshot`` claim.  The manifest and copied pre-change bytes
+    are therefore explicit immutable review inputs.  Validation has already
+    checked their hashes before this helper is called.
+    """
+    if not workflow_exception_snapshot_enabled(state):
+        return []
+    artifacts = state.get("artifacts")
+    if not isinstance(artifacts, Mapping):
+        return []
+    bound: list[tuple[str, Path]] = []
+    for key, raw_path in artifacts.items():
+        if not key.endswith("_exception") or raw_path in (None, "", "not-created", "not-applicable"):
+            continue
+        exception_path = package_relative_path(
+            package_root, raw_path, artifact=f"artifacts.{key}"
+        )
+        payload = read_json(exception_path)
+        snapshot = payload.get("pre_change_snapshot") if isinstance(payload, Mapping) else None
+        if not isinstance(snapshot, Mapping):
+            continue
+        snapshot_dir = package_relative_path(
+            package_root,
+            snapshot.get("path"),
+            artifact=f"{key}.pre_change_snapshot",
+        )
+        snapshot_manifest = snapshot_dir / "snapshot-manifest.yaml"
+        if not snapshot_manifest.is_file():
+            continue
+        bound.append((f"{key}-snapshot-manifest", snapshot_manifest))
+        manifest = read_json(snapshot_manifest)
+        for index, record in enumerate(manifest.get("source_files", []), start=1):
+            if not isinstance(record, Mapping):
+                continue
+            raw_snapshot_path = record.get("snapshot_path")
+            if not isinstance(raw_snapshot_path, str) or not raw_snapshot_path:
+                continue
+            copied = (snapshot_dir / raw_snapshot_path).resolve()
+            if copied.is_file() and copied.is_relative_to(snapshot_dir.resolve()):
+                bound.append((f"{key}-snapshot-file-{index}", copied))
+    return bound
 
 
 def source_bound_review_inputs(
@@ -5337,6 +5703,7 @@ def build_review_manifest(
     provided_inputs = provided_setup_artifacts(
         read_json(paths["scope_obligations"]), package_root
     )
+    exception_inputs = exception_snapshot_review_inputs(state, package_root)
     manifest_inputs: list[dict[str, str]] = []
     bound_paths: set[str] = set()
 
@@ -5354,6 +5721,8 @@ def build_review_manifest(
     for role, path in source_inputs:
         bind(role, path)
     for role, path in provided_inputs:
+        bind(role, path)
+    for role, path in exception_inputs:
         bind(role, path)
     manifest = {
         "schema_version": 1,

@@ -15,10 +15,27 @@ Use this skill only when these are already defined:
 
 If the package, source, or scope is not selected yet, use `ft-source-locator` and `ft-scope-analyzer` first.
 
-## Default practical mode
+## Default practical mode: v0.9
 
-For ordinary user work “write test cases for this FT/scope”, use
-`practical_v0_8` from
+For ordinary user work “write test cases for this FT/scope”, use the compact
+`ft-practical-route` v0.9 from
+[../../references/agent/practical-test-case-route-v0.9.md](../../references/agent/practical-test-case-route-v0.9.md).
+The mutable process state is `work/practical-v0.9/<scope>/workflow-state.json`.
+Create canonical TC only after the current matrix has been accepted or
+conditionally skipped under the v0.9 complexity rule and that result has been
+finalized in this state. Final TC review always uses a fresh immutable v0.9
+review manifest and a separate top-level Codex session.
+
+Do not use `practical_review_preflight.py`, stage-handoff YAML, stage summary,
+dispatch receipts, or v0.8 writer modes for a v0.9 scope. They belong to the
+legacy route and cannot authorize a v0.9 review.
+
+## Legacy practical v0.8 continuation
+
+Use the following route only when resuming an existing v0.8 scope or when the
+user explicitly requests v0.8.
+
+For this legacy work, use `practical_v0_8` from
 [../../references/agent/practical-test-case-route-v0.8.md](../../references/agent/practical-test-case-route-v0.8.md).
 
 The practical route is fixed: matrix only → separate-session matrix review →

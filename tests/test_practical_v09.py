@@ -12,11 +12,13 @@ from test_case_agent.practical_v09 import (
     COMPACT_REVIEWER_RECEIPT_MAX_BYTES,
     CLARIFICATION_OUTCOME_CONTRACT_VERSION,
     CONTROLLER_TRIAGE_CONTRACT_VERSION,
+    EXCEPTION_SNAPSHOT_CONTRACT_VERSION,
     MATRIX_CONTRACT_VERSION,
     LEGACY_SCENARIO_CONSOLIDATION_CONTRACT_VERSION,
     PREVIOUS_MATRIX_CONTRACT_VERSION,
     ROUTE_VERSION,
     SCENARIO_CONSOLIDATION_CONTRACT_VERSION,
+    SOURCE_PARITY_CONTRACT_VERSION,
     SOURCE_CONTRACT_VERSION,
     PracticalV09Error,
     build_review_manifest,
@@ -42,6 +44,7 @@ from test_case_agent.practical_v09 import (
     write_json,
 )
 from test_case_agent.practical_review_input_snapshot import create_snapshot
+from scripts.practical_snapshot_preflight import create_snapshot as create_pre_write_snapshot
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -212,6 +215,11 @@ class PracticalV09Fixture:
             encoding="utf-8",
         )
         self.state = self.scope_dir / "workflow-state.json"
+        self.source_parity = self.scope_dir / "source-parity-check.md"
+        self.source_parity.write_text(
+            "## Source Parity Check\n\n- DOCX/PDF parity: match.\n\n## Решение\n\n- Расхождений нет.\n",
+            encoding="utf-8",
+        )
         write_json(
             self.state,
             {
@@ -226,6 +234,8 @@ class PracticalV09Fixture:
                     "route": ROUTE_VERSION,
                     "source_package": SOURCE_CONTRACT_VERSION,
                     "matrix": MATRIX_CONTRACT_VERSION,
+                    "source_parity": SOURCE_PARITY_CONTRACT_VERSION,
+                    "exception_snapshot": EXCEPTION_SNAPSHOT_CONTRACT_VERSION,
                 },
                 "artifacts": {
                     "source_package_manifest": "work/practical-v0.9/source-package-manifest.json",
@@ -233,6 +243,7 @@ class PracticalV09Fixture:
                     "test_design_matrix": "work/practical-v0.9/menu/test-design-matrix.md",
                     "canonical_test_cases": "test-cases/9.1-menu.md",
                     "validator_report": "work/practical-v0.9/menu/validator-report.json",
+                    "source_parity_check": "work/practical-v0.9/menu/source-parity-check.md",
                 },
                 "reviews": [],
                 "matrix_revision_count": 0,
@@ -287,6 +298,26 @@ class PracticalV09Fixture:
 
 
 class PracticalV09Tests(unittest.TestCase):
+    def test_writer_skill_routes_new_practical_work_to_v09(self) -> None:
+        writer = (REPO_ROOT / "skills" / "ft-test-case-writer" / "SKILL.md").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn("Default practical mode: v0.9", writer)
+        self.assertIn("`ft-practical-route` v0.9", writer)
+        self.assertIn("work/practical-v0.9/<scope>/workflow-state.json", writer)
+        self.assertIn("Do not use `practical_review_preflight.py`", writer)
+        self.assertIn("Legacy practical v0.8 continuation", writer)
+
+    def test_v09_route_requires_final_review_transition_after_writer_revision(self) -> None:
+        route = (REPO_ROOT / "skills" / "ft-practical-route" / "SKILL.md").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn("`phase: review`", route)
+        self.assertIn("`final_verdict: not-finalized`", route)
+        self.assertIn("Провести финальное независимое TC review", route)
+
     def test_initializer_enables_controller_triage_for_new_scope(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             fixture = PracticalV09Fixture(Path(raw))
@@ -374,6 +405,9 @@ class PracticalV09Tests(unittest.TestCase):
             state["phase"] = "matrix"
             state["artifacts"]["test_design_matrix"] = relative_to_package(
                 fixture.root, fixture.matrix
+            )
+            state["artifacts"]["source_parity_check"] = relative_to_package(
+                fixture.root, fixture.source_parity
             )
             write_json(output, state)
             context, findings = validate_scope(
@@ -4490,6 +4524,176 @@ class PracticalV09Tests(unittest.TestCase):
             blocking_ids = [item.id for item in findings if item.blocking]
             self.assertIn("matrix-execution-limitations-incomplete", blocking_ids)
             self.assertIn("test-case-execution-limitations-incomplete", blocking_ids)
+
+    def test_validator_blocks_new_card_inside_edit_context(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            fixture = PracticalV09Fixture(Path(raw))
+            obligations = json.loads(fixture.obligations.read_text(encoding="utf-8"))
+            obligations["obligations"][0]["execution_contexts"][0]["id"] = "CTX-CARD-EDIT"
+            write_json(fixture.obligations, obligations)
+            fixture.matrix.write_text(
+                fixture.matrix.read_text(encoding="utf-8").replace(
+                    "CTX-OPEN-MENU — Открытие раздела из меню",
+                    "CTX-CARD-EDIT — Редактирование сохранённой карточки",
+                ),
+                encoding="utf-8",
+            )
+            fixture.tc.write_text(
+                fixture.tc.read_text(encoding="utf-8").replace(
+                    "CTX-OPEN-MENU` — открытие раздела из меню.",
+                    "CTX-CARD-EDIT` — редактирование сохранённой карточки.",
+                ).replace(
+                    "1. Открыть раздел «Партнеры».",
+                    "1. Открыть новую карточку партнёра.",
+                ),
+                encoding="utf-8",
+            )
+            _, findings = validate_scope(package_root=fixture.root, workflow_state_path=fixture.state)
+            self.assertIn(
+                "test-case-edit-context-new-card",
+                [item.id for item in findings if item.blocking],
+            )
+
+    def test_validator_blocks_explicit_matrix_field_substitution(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            fixture = PracticalV09Fixture(Path(raw))
+            fixture.matrix.write_text(
+                fixture.matrix.read_text(encoding="utf-8").replace(
+                    "Пункт меню «Партнеры» | Доступность пункта меню",
+                    "Поле «Дата аккредитации» | Формат даты",
+                ),
+                encoding="utf-8",
+            )
+            fixture.tc.write_text(
+                fixture.tc.read_text(encoding="utf-8").replace(
+                    "1. Открыть раздел «Партнеры».",
+                    "1. Ввести дату в поле «Дата начала сотрудничества».",
+                ),
+                encoding="utf-8",
+            )
+            _, findings = validate_scope(package_root=fixture.root, workflow_state_path=fixture.state)
+            self.assertIn(
+                "test-case-matrix-element-binding",
+                [item.id for item in findings if item.blocking],
+            )
+
+    def test_validator_accepts_explicit_matrix_field_label_in_tc(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            fixture = PracticalV09Fixture(Path(raw))
+            fixture.matrix.write_text(
+                fixture.matrix.read_text(encoding="utf-8").replace(
+                    "Пункт меню «Партнеры» | Доступность пункта меню",
+                    "Поле «Дата аккредитации» | Формат даты",
+                ),
+                encoding="utf-8",
+            )
+            fixture.tc.write_text(
+                fixture.tc.read_text(encoding="utf-8").replace(
+                    "1. Открыть раздел «Партнеры».",
+                    "1. Ввести дату в поле «Дата аккредитации».",
+                ),
+                encoding="utf-8",
+            )
+            _, findings = validate_scope(package_root=fixture.root, workflow_state_path=fixture.state)
+            self.assertNotIn(
+                "test-case-matrix-element-binding",
+                [item.id for item in findings if item.blocking],
+            )
+
+    def test_validator_requires_source_parity_when_pdf_is_bound(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            fixture = PracticalV09Fixture(Path(raw))
+            state = json.loads(fixture.state.read_text(encoding="utf-8"))
+            state["artifacts"]["source_parity_check"] = "not-created"
+            write_json(fixture.state, state)
+
+            _, findings = validate_scope(
+                package_root=fixture.root, workflow_state_path=fixture.state
+            )
+            self.assertIn(
+                "workflow-artifact-reference",
+                [item.id for item in findings if item.blocking],
+            )
+
+    def test_exception_requires_immutable_pre_change_snapshot(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            fixture = PracticalV09Fixture(Path(raw))
+            exception = fixture.scope_dir / "EXC-001.json"
+            write_json(
+                exception,
+                {
+                    "exception_id": "EXC-001",
+                    "scope_slug": "menu",
+                    "allowed_artifacts": ["test-cases/9.1-menu.md"],
+                },
+            )
+            state = json.loads(fixture.state.read_text(encoding="utf-8"))
+            state["artifacts"]["tc_exception"] = relative_to_package(
+                fixture.root, exception
+            )
+            write_json(fixture.state, state)
+
+            _, findings = validate_scope(
+                package_root=fixture.root, workflow_state_path=fixture.state
+            )
+            self.assertIn(
+                "exception-pre-change-snapshot-missing",
+                [item.id for item in findings if item.blocking],
+            )
+
+    def test_exception_snapshot_is_bound_to_review_manifest(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            fixture = PracticalV09Fixture(Path(raw))
+            snapshot = create_pre_write_snapshot(
+                ft_package_root=fixture.root,
+                scope_slug="menu",
+                snapshot_id="before-exception",
+                sources=[fixture.tc],
+                reason="Проверка контракта исключения до целевой доработки.",
+            )
+            snapshot_dir = Path(str(snapshot["snapshot_dir"]))
+            snapshot_manifest = snapshot_dir / "snapshot-manifest.yaml"
+            exception = fixture.scope_dir / "EXC-001.json"
+            write_json(
+                exception,
+                {
+                    "exception_id": "EXC-001",
+                    "scope_slug": "menu",
+                    "allowed_artifacts": ["test-cases/9.1-menu.md"],
+                    "pre_change_snapshot": {
+                        "path": relative_to_package(fixture.root, snapshot_dir),
+                        "manifest_sha256": sha256_file(snapshot_manifest),
+                    },
+                },
+            )
+            state = json.loads(fixture.state.read_text(encoding="utf-8"))
+            state["artifacts"]["tc_exception"] = relative_to_package(
+                fixture.root, exception
+            )
+            write_json(fixture.state, state)
+            context, findings = validate_scope(
+                package_root=fixture.root, workflow_state_path=fixture.state
+            )
+            self.assertFalse(
+                [item for item in findings if item.id.startswith("exception-pre-change-snapshot")]
+            )
+            write_json(fixture.scope_dir / "validator-report.json", build_validator_report(context, findings))
+            manifest = build_review_manifest(
+                package_root=fixture.root,
+                workflow_state_path=fixture.state,
+                review_mode="test-cases",
+                controller_thread_id="019feebf-3cde-79d2-9f87-ba9c61ff7b13",
+                code_branch="codex/test",
+                code_commit="abc123",
+                contract_digest="contract",
+            )
+            input_paths = {item["path"] for item in manifest["inputs"]}
+            self.assertIn(relative_to_package(fixture.root, fixture.source_parity), input_paths)
+            self.assertIn(relative_to_package(fixture.root, exception), input_paths)
+            self.assertIn(relative_to_package(fixture.root, snapshot_manifest), input_paths)
+            self.assertTrue(
+                any(path.endswith("files/test-cases/9.1-menu.md") for path in input_paths)
+            )
 
     def test_validator_accepts_secondary_execution_limitation_without_second_status(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
