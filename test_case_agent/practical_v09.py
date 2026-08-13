@@ -3985,6 +3985,108 @@ def validate_review_triage_integrity(
     return findings
 
 
+def validate_pending_triage_finalization(
+    state: dict[str, Any], package_root: Path
+) -> list[ScopeFinding]:
+    """Block a writer revision that races ahead of raw-review finalization.
+
+    A controller triage is a decision about one immutable review result, not a
+    permission to change the reviewed matrix or TC. The raw verdict must be
+    recorded in ``reviews`` before its accepted finding consumes a revision
+    budget. Review history itself may legitimately describe an older snapshot
+    after the permitted writer revision, so only unfinished triage is checked.
+    """
+    if not workflow_controller_triage_enabled(state):
+        return []
+    finalized = {
+        (str(item.get("mode")), str(item.get("result_sha256")))
+        for item in state.get("reviews", [])
+        if isinstance(item, dict)
+    }
+    findings: list[ScopeFinding] = []
+    raw_triage = state.get("review_triage")
+    assert isinstance(raw_triage, list)
+    for index, record in enumerate(raw_triage, start=1):
+        if not isinstance(record, dict):
+            continue
+        key = (str(record.get("review_mode")), str(record.get("review_result_sha256")))
+        if key in finalized:
+            continue
+        artifact = "workflow-state.json"
+        manifest_ref = record.get("review_manifest")
+        if not isinstance(manifest_ref, str) or not manifest_ref.strip():
+            findings.append(finding(
+                "workflow-triage-finalization-reference",
+                "review-integrity",
+                "После triage отсутствует ссылка на immutable manifest до финализации review",
+                f"review_triage[{index}] не содержит review_manifest; нельзя доказать неизменность review-входов до расходования revision budget.",
+                artifact,
+                remediation_owner="controller",
+                blocking=True,
+                blocking_reason="triage-finalization-reference-missing",
+            ))
+            continue
+        try:
+            manifest_path = package_relative_path(
+                package_root, manifest_ref, artifact=artifact
+            )
+        except PracticalV09Error as exc:
+            findings.append(finding(
+                "workflow-triage-finalization-reference",
+                "review-integrity",
+                "После triage указана некорректная ссылка на immutable manifest",
+                str(exc),
+                artifact,
+                remediation_owner="controller",
+                blocking=True,
+                blocking_reason="triage-finalization-reference-invalid",
+            ))
+            continue
+        if (
+            not manifest_path.is_file()
+            or sha256_file(manifest_path) != record.get("review_manifest_sha256")
+        ):
+            findings.append(finding(
+                "workflow-triage-finalization-manifest-drift",
+                "artifact-tampering",
+                "Immutable manifest triage был изменён или отсутствует до финализации review",
+                f"review_triage[{index}].review_manifest не совпадает с review_manifest_sha256.",
+                artifact,
+                remediation_owner="controller",
+                blocking=True,
+                blocking_reason="triage-finalization-manifest-drift",
+            ))
+            continue
+        manifest = read_json(manifest_path)
+        changed: list[str] = []
+        for entry in manifest.get("inputs", []):
+            if not isinstance(entry, dict):
+                continue
+            try:
+                path = package_relative_path(
+                    package_root, entry.get("path"), artifact=manifest_ref
+                )
+            except PracticalV09Error:
+                changed.append(str(entry.get("path") or "<некорректный путь>"))
+                continue
+            if not path.is_file() or sha256_file(path) != entry.get("sha256"):
+                changed.append(str(entry.get("path") or "<неизвестный вход>"))
+        if changed:
+            findings.append(finding(
+                "workflow-triage-finalization-required",
+                "review-integrity",
+                "После controller triage изменены входы review до его финализации",
+                "Сначала финализируйте raw verdict неизменённого review через finalize_practical_review.py; "
+                "writer revision допускается только после записи verdict и расходования принятого budget. "
+                f"Изменены входы: {', '.join(changed)}.",
+                artifact,
+                remediation_owner="controller",
+                blocking=True,
+                blocking_reason="triage-finalization-required",
+            ))
+    return findings
+
+
 def approved_review_exists(state: dict[str, Any], review_mode: str) -> bool:
     """Return whether the state records raw or triaged acceptance for a mode."""
     return any(
@@ -4009,6 +4111,7 @@ def validate_scope(
     findings = validate_workflow_artifact_links(state, package_root)
     findings.extend(validate_review_history_integrity(state, package_root))
     findings.extend(validate_review_triage_integrity(state, package_root))
+    findings.extend(validate_pending_triage_finalization(state, package_root))
     source_path = workflow_artifact_path(state, package_root, "source_package_manifest", required=True)
     obligations_path = workflow_artifact_path(state, package_root, "scope_obligations", required=True)
     assert source_path is not None and obligations_path is not None

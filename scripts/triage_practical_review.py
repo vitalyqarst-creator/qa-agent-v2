@@ -265,6 +265,9 @@ def main(argv: list[str] | None = None) -> int:
         {
             "contract_version": CONTROLLER_TRIAGE_CONTRACT_VERSION,
             "review_mode": result["review_mode"],
+            "review_manifest": relative_to_package(
+                package_root, args.review_manifest.resolve()
+            ),
             "review_manifest_sha256": sha256_file(args.review_manifest.resolve()),
             "review_result": relative_to_package(package_root, result_path),
             "review_result_sha256": expected_hash,

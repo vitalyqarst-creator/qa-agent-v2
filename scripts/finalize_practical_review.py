@@ -23,6 +23,7 @@ from test_case_agent.practical_v09 import (
     workflow_controller_triage_enabled,
     write_json,
 )
+from test_case_agent.practical_review_input_snapshot import verify_snapshot
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -31,6 +32,23 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--workflow-state", type=Path, required=True)
     parser.add_argument("--review-manifest", type=Path, required=True)
     parser.add_argument("--review-result", type=Path, required=True)
+    parser.add_argument(
+        "--allow-post-triage-recovery",
+        action="store_true",
+        help=(
+            "Explicitly recover one already-authorized legacy ordering failure: "
+            "review inputs changed after triage but before finalization."
+        ),
+    )
+    parser.add_argument(
+        "--review-input-snapshot",
+        type=Path,
+        help="Immutable verified review-input snapshot required for recovery.",
+    )
+    parser.add_argument(
+        "--recovery-reason",
+        help="Russian reason recorded in workflow-state.json for an explicit recovery.",
+    )
     return parser.parse_args(argv)
 
 
@@ -39,13 +57,40 @@ def main(argv: list[str] | None = None) -> int:
     package_root = args.ft_package_root.resolve()
     state_path = args.workflow_state.resolve()
     state = load_workflow_state(state_path, package_root)
+    recovery_requested = bool(args.allow_post_triage_recovery)
+    if recovery_requested != (args.review_input_snapshot is not None):
+        raise PracticalV09Error(
+            "Post-triage recovery requires both --allow-post-triage-recovery "
+            "and --review-input-snapshot"
+        )
+    if recovery_requested and len(str(args.recovery_reason or "").strip()) < 24:
+        raise PracticalV09Error(
+            "Post-triage recovery requires a specific --recovery-reason of at least 24 characters"
+        )
     result, findings = verify_review_result(
         package_root=package_root,
         manifest_path=args.review_manifest.resolve(),
         result_path=args.review_result.resolve(),
     )
     blocking = [item for item in findings if item.blocking]
-    if blocking:
+    recovered_snapshot_drift = False
+    if blocking and recovery_requested:
+        if any(item.id != "review-result-snapshot-changed" for item in blocking):
+            rendered = ", ".join(item.id for item in blocking)
+            raise PracticalV09Error(
+                "Post-triage recovery only permits immutable-input drift: " + rendered
+            )
+        snapshot = verify_snapshot(
+            manifest_path=args.review_manifest.resolve(),
+            snapshot_dir=args.review_input_snapshot.resolve(),
+        )
+        if not snapshot.get("allowed"):
+            issues = "; ".join(str(item) for item in snapshot.get("issues", []))
+            raise PracticalV09Error(
+                "Post-triage recovery snapshot is invalid: " + issues
+            )
+        recovered_snapshot_drift = True
+    elif blocking:
         rendered = ", ".join(item.id for item in blocking)
         raise PracticalV09Error("Review result cannot be finalized: " + rendered)
     review_mode = str(result.get("review_mode") or "")
@@ -96,6 +141,15 @@ def main(argv: list[str] | None = None) -> int:
     if not isinstance(reviews, list):
         raise PracticalV09Error("workflow-state.json: reviews must be an array")
     reviews.append(review_entry)
+    if recovered_snapshot_drift:
+        notes = state.setdefault("decision_notes", [])
+        if not isinstance(notes, list):
+            raise PracticalV09Error("workflow-state.json: decision_notes must be an array")
+        notes.append(
+            "Явное восстановление finalization после triage: входы review были "
+            "изменены до штатной финализации; неизменяемый snapshot проверен. "
+            f"Причина: {str(args.recovery_reason).strip()}"
+        )
     if effective_verdict == "approved":
         migration = state.get("contract_migration")
         if (
