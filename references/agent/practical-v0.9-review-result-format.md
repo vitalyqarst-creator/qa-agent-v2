@@ -73,8 +73,10 @@ fixture или DaData-профиля в однотипных проверках.
 потоки, они должны быть разложены на разные `OBL-*`/matrix rows/TC.
 
 Reviewer сам проверяет `scenario_consolidation`, а не доверяет prose writer-а:
-одна операция и реакция — параметры одного TC; editability и ручной ввод —
-разные свойства. Если manifest содержит этот contract, result включает
+у параметризованной группы совпадают проверяемый элемент, домен проверки,
+способ взаимодействия, контекст, тип и статус исполнения; `parameterization_basis`
+описывает только допустимый вид параметра. Разные поля, формат и размер файла,
+editability и ручной ввод — разные проверки. Если manifest содержит этот contract, result включает
 `scenario_consolidation_review` с `checked=true`, `decision_ids` из manifest,
 `uncategorized_candidate_count` и `method`. При `approved` счётчик равен нулю;
 неучтённая группа — отдельный finding, без изменения workflow reviewer-ом.

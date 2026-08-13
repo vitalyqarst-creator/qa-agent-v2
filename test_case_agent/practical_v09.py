@@ -18,12 +18,18 @@ from typing import Any, Iterable, Mapping
 
 
 ROUTE_VERSION = "practical-v0.9"
-ROUTE_TOOL_VERSION = "practical-v0.9.22"
+ROUTE_TOOL_VERSION = "practical-v0.9.23"
 WORKFLOW_STATE_SCHEMA_VERSION = 1
 SOURCE_CONTRACT_VERSION = "source-package-v4"
-MATRIX_CONTRACT_VERSION = "practical-matrix-v2"
+MATRIX_CONTRACT_VERSION = "practical-matrix-v3"
+PREVIOUS_MATRIX_CONTRACT_VERSION = "practical-matrix-v2"
 LEGACY_MATRIX_CONTRACT_VERSION = "practical-matrix-v1"
-SCENARIO_CONSOLIDATION_CONTRACT_VERSION = "scenario-consolidation-v1"
+MIGRATABLE_MATRIX_CONTRACT_VERSIONS = {
+    LEGACY_MATRIX_CONTRACT_VERSION,
+    PREVIOUS_MATRIX_CONTRACT_VERSION,
+}
+SCENARIO_CONSOLIDATION_CONTRACT_VERSION = "scenario-consolidation-v2"
+LEGACY_SCENARIO_CONSOLIDATION_CONTRACT_VERSION = "scenario-consolidation-v1"
 CONTROLLER_TRIAGE_CONTRACT_VERSION = "controller-triage-v1"
 CLARIFICATION_OUTCOME_CONTRACT_VERSION = "clarification-outcome-v1"
 REVIEW_MANIFEST_VERSION = "practical-review-manifest-v2"
@@ -118,6 +124,11 @@ ALLOWED_EXECUTION_SETUP_KINDS = {
     "navigation",
 }
 ALLOWED_EXECUTION_SETUP_AVAILABILITY = {"provided", *ALLOWED_EXECUTION_STATUSES}
+ALLOWED_PARAMETERIZATION_BASES = {
+    "значения одного закрытого справочника",
+    "эквивалентные значения одного класса",
+    "границы одного правила",
+}
 EXECUTION_STATUS_PRECEDENCE = (
     "needs-future-clarification",
     "blocked-observability",
@@ -125,6 +136,25 @@ EXECUTION_STATUS_PRECEDENCE = (
     "candidate-ui-calibration",
 )
 MATRIX_REQUIRED_COLUMNS = (
+    "Проверка",
+    "Идентификатор сценария",
+    "Обязательство ФТ",
+    "Контекст исполнения",
+    "Проверяемый элемент",
+    "Домен проверки",
+    "Способ взаимодействия",
+    "Проверяемое правило",
+    "Исходное состояние",
+    "Формирование состояния",
+    "Проверяемое действие",
+    "Ожидаемый результат",
+    "Нужные предпосылки",
+    "Тип",
+    "Приоритет",
+    "Статус исполнения",
+    "Планируемый TC-ID",
+)
+PREVIOUS_MATRIX_REQUIRED_COLUMNS = (
     "Проверка",
     "Идентификатор сценария",
     "Обязательство ФТ",
@@ -664,7 +694,7 @@ def load_workflow_state(path: Path, package_root: Path) -> dict[str, Any]:
     migration = workflow_contract_migration(state)
     if migration is not None and workflow_matrix_contract_version(state) != MATRIX_CONTRACT_VERSION:
         raise PracticalV09Error(
-            "workflow-state.json: active contract migration must declare practical-matrix-v2"
+            "workflow-state.json: active contract migration must declare the current matrix contract"
         )
     return state
 
@@ -726,8 +756,8 @@ def workflow_matrix_contract_version(state: Mapping[str, Any]) -> str:
     """Return the declared matrix contract without silently persisting a migration.
 
     Workflows created before ``practical-matrix-v2`` did not record a matrix
-    contract.  They remain readable as v1, but a controller must explicitly
-    run the contract-migration command before it can use v2-only rules.
+    contract. They remain readable as v1. A controller must explicitly run
+    the contract-migration command before it can use the current matrix rules.
     """
     versions = state.get("contract_versions")
     if not isinstance(versions, Mapping):
@@ -735,7 +765,11 @@ def workflow_matrix_contract_version(state: Mapping[str, Any]) -> str:
     declared = versions.get("matrix")
     if declared is None:
         return LEGACY_MATRIX_CONTRACT_VERSION
-    if declared not in {LEGACY_MATRIX_CONTRACT_VERSION, MATRIX_CONTRACT_VERSION}:
+    if declared not in {
+        LEGACY_MATRIX_CONTRACT_VERSION,
+        PREVIOUS_MATRIX_CONTRACT_VERSION,
+        MATRIX_CONTRACT_VERSION,
+    }:
         raise PracticalV09Error(
             "workflow-state.json: contract_versions.matrix has unsupported value"
         )
@@ -755,13 +789,16 @@ def workflow_scenario_consolidation_enabled(state: Mapping[str, Any]) -> bool:
     declared = versions.get("scenario_consolidation")
     if declared is None:
         return False
-    if declared != SCENARIO_CONSOLIDATION_CONTRACT_VERSION:
+    if declared not in {
+        LEGACY_SCENARIO_CONSOLIDATION_CONTRACT_VERSION,
+        SCENARIO_CONSOLIDATION_CONTRACT_VERSION,
+    }:
         raise PracticalV09Error(
             "workflow-state.json: contract_versions.scenario_consolidation has unsupported value"
         )
     if not isinstance(state.get("scenario_consolidation"), list):
         raise PracticalV09Error(
-            "workflow-state.json: scenario_consolidation must be an array for scenario-consolidation-v1"
+            "workflow-state.json: scenario_consolidation must be an array for the declared scenario consolidation contract"
         )
     return True
 
@@ -868,10 +905,14 @@ def workflow_contract_migration(state: Mapping[str, Any]) -> dict[str, Any] | No
     status = raw.get("status")
     if status not in {"active", "matrix-ready", "matrix-accepted", "completed"}:
         raise PracticalV09Error("workflow-state.json: contract_migration.status has unsupported value")
-    if raw.get("from_matrix_contract") != LEGACY_MATRIX_CONTRACT_VERSION:
-        raise PracticalV09Error("workflow-state.json: contract_migration.from_matrix_contract must be practical-matrix-v1")
+    if raw.get("from_matrix_contract") not in MIGRATABLE_MATRIX_CONTRACT_VERSIONS:
+        raise PracticalV09Error(
+            "workflow-state.json: contract_migration.from_matrix_contract must be a supported legacy matrix contract"
+        )
     if raw.get("to_matrix_contract") != MATRIX_CONTRACT_VERSION:
-        raise PracticalV09Error("workflow-state.json: contract_migration.to_matrix_contract must be practical-matrix-v2")
+        raise PracticalV09Error(
+            "workflow-state.json: contract_migration.to_matrix_contract must be practical-matrix-v3"
+        )
     if raw.get("authorization") != "explicit-user":
         raise PracticalV09Error("workflow-state.json: contract migration requires explicit-user authorization")
     if not isinstance(raw.get("snapshot_manifest"), str) or not raw["snapshot_manifest"]:
@@ -2264,6 +2305,8 @@ def matrix_contract_version_from_path(path: Path) -> str | None:
         return None
     if all(column in header for column in MATRIX_REQUIRED_COLUMNS):
         return MATRIX_CONTRACT_VERSION
+    if all(column in header for column in PREVIOUS_MATRIX_REQUIRED_COLUMNS):
+        return PREVIOUS_MATRIX_CONTRACT_VERSION
     if all(column in header for column in LEGACY_MATRIX_REQUIRED_COLUMNS):
         return LEGACY_MATRIX_CONTRACT_VERSION
     return None
@@ -2394,6 +2437,27 @@ def scenario_consolidation_contract(
         return [], result
 
     findings: list[ScopeFinding] = []
+    declared_versions = state.get("contract_versions") if state is not None else None
+    declared_version = (
+        declared_versions.get("scenario_consolidation")
+        if isinstance(declared_versions, Mapping)
+        else None
+    )
+    if declared_version != SCENARIO_CONSOLIDATION_CONTRACT_VERSION:
+        findings.append(finding(
+            "scenario-consolidation-contract-migration-required",
+            "transport",
+            "Активный scope использует устаревший контракт консолидации сценариев",
+            "Перед matrix review обновите matrix до practical-matrix-v3 и "
+            "scenario_consolidation до scenario-consolidation-v2. Новый контракт "
+            "требует совпадения элемента, домена проверки и способа взаимодействия "
+            "для параметризованного объединения.",
+            artifact,
+            remediation_owner="controller",
+            blocking=True,
+            blocking_reason="scenario-consolidation-contract-migration-required",
+        ))
+        return findings, result
     raw_decisions = state.get("scenario_consolidation", [])
     seen_ids: set[str] = set()
     scenario_to_decision: dict[str, str] = {}
@@ -2491,6 +2555,61 @@ def scenario_consolidation_contract(
                 remediation_owner="writer",
             ))
             valid = False
+        if decision == "merge-parameterized" and known_rows:
+            parameterization_basis = str(raw.get("parameterization_basis") or "").strip()
+            if parameterization_basis not in ALLOWED_PARAMETERIZATION_BASES:
+                findings.append(finding(
+                    "scenario-consolidation-parameterization-basis",
+                    "test-design",
+                    "Не указан допустимый тип параметризации сценариев",
+                    f"{label}: parameterization_basis должен быть одним из: "
+                    + ", ".join(sorted(ALLOWED_PARAMETERIZATION_BASES)) + ".",
+                    artifact,
+                    remediation_owner="writer",
+                    blocking=True,
+                ))
+                valid = False
+            for column, finding_id, title in (
+                (
+                    "Проверяемый элемент",
+                    "scenario-consolidation-element",
+                    "Параметризованное объединение смешивает разные проверяемые элементы",
+                ),
+                (
+                    "Домен проверки",
+                    "scenario-consolidation-domain",
+                    "Параметризованное объединение смешивает разные домены проверки",
+                ),
+                (
+                    "Способ взаимодействия",
+                    "scenario-consolidation-interaction",
+                    "Параметризованное объединение смешивает разные способы взаимодействия",
+                ),
+                (
+                    "Тип",
+                    "scenario-consolidation-type",
+                    "Параметризованное объединение смешивает позитивную и негативную проверку",
+                ),
+                (
+                    "Статус исполнения",
+                    "scenario-consolidation-status",
+                    "Параметризованное объединение смешивает разные статусы исполнения",
+                ),
+            ):
+                values = {row.get(column, "").strip() for row in known_rows}
+                if len(values) != 1 or "" in values:
+                    findings.append(finding(
+                        finding_id,
+                        "test-design",
+                        title,
+                        f"{label}: для merge-parameterized все SCN-* должны иметь "
+                        f"одно значение в колонке «{column}»; получено: "
+                        + ", ".join(sorted(value or "<пусто>" for value in values)) + ".",
+                        artifact,
+                        remediation_owner="writer",
+                        blocking=True,
+                    ))
+                    valid = False
         overlap = [item for item in scenario_ids if item in scenario_to_decision]
         if overlap:
             findings.append(finding(
@@ -2560,6 +2679,7 @@ def scenario_consolidation_contract(
             "scenario_ids": tuple(scenario_ids),
             "planned_tc_id": planned_tc_id,
             "observable_scenario_id": observable_scenario_id,
+            "parameterization_basis": str(raw.get("parameterization_basis") or "").strip(),
         }
         result["decisions"].append(normalized)
         if decision in {"merge-parameterized", "covered-by-observable-result"}:
@@ -2722,6 +2842,9 @@ def validate_matrix(
                     remediation_owner="writer",
                 ))
         for required_column in (
+            "Проверяемый элемент",
+            "Домен проверки",
+            "Способ взаимодействия",
             "Проверяемое правило",
             "Исходное состояние",
             "Формирование состояния",
@@ -3911,7 +4034,7 @@ def validate_scope(
             "contract-migration-active",
             "transport",
             "Scope ожидает завершения явной миграции контракта матрицы",
-            "До создания матрицы в новом контракте practical-matrix-v2 нельзя валидировать или ревьюить прежние matrix/TC. "
+            f"До создания матрицы в новом контракте {MATRIX_CONTRACT_VERSION} нельзя валидировать или ревьюить прежние matrix/TC. "
             "Бюджеты matrix_revision_count и tc_revision_count при миграции не сбрасываются.",
             "workflow-state.json",
             remediation_owner="controller",
@@ -3939,7 +4062,7 @@ def validate_scope(
                     blocking=True,
                     blocking_reason="matrix-contract-schema-mismatch",
                 ))
-            elif expected_matrix_contract == LEGACY_MATRIX_CONTRACT_VERSION:
+            elif expected_matrix_contract != MATRIX_CONTRACT_VERSION:
                 findings.append(finding(
                     "matrix-contract-migration-required",
                     "transport",

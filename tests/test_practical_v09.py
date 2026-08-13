@@ -13,6 +13,8 @@ from test_case_agent.practical_v09 import (
     CLARIFICATION_OUTCOME_CONTRACT_VERSION,
     CONTROLLER_TRIAGE_CONTRACT_VERSION,
     MATRIX_CONTRACT_VERSION,
+    LEGACY_SCENARIO_CONSOLIDATION_CONTRACT_VERSION,
+    PREVIOUS_MATRIX_CONTRACT_VERSION,
     ROUTE_VERSION,
     SCENARIO_CONSOLIDATION_CONTRACT_VERSION,
     SOURCE_CONTRACT_VERSION,
@@ -183,9 +185,9 @@ class PracticalV09Fixture:
         self.matrix = self.scope_dir / "test-design-matrix.md"
         self.matrix.write_text(
             "# Матрица тест-дизайна\n\n"
-            "| Проверка | Идентификатор сценария | Обязательство ФТ | Контекст исполнения | Проверяемое правило | Исходное состояние | Формирование состояния | Проверяемое действие | Ожидаемый результат | Нужные предпосылки | Тип | Приоритет | Статус исполнения | Планируемый TC-ID |\n"
-            "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |\n"
-            "| MTX-001 | SCN-001 | OBL-001 | CTX-OPEN-MENU — Открытие раздела из меню | Пункт меню «Партнеры» доступен пользователю. | Пользователь вошёл в систему. | Не требуется: состояние задано предусловием. | Открыть пункт меню «Партнеры». | Открывается раздел «Партнеры». | SETUP-ACTOR-001 — пользователь с доступом к модулю. | Positive | High | ready | TC-MENU-001 |\n",
+            "| Проверка | Идентификатор сценария | Обязательство ФТ | Контекст исполнения | Проверяемый элемент | Домен проверки | Способ взаимодействия | Проверяемое правило | Исходное состояние | Формирование состояния | Проверяемое действие | Ожидаемый результат | Нужные предпосылки | Тип | Приоритет | Статус исполнения | Планируемый TC-ID |\n"
+            "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |\n"
+            "| MTX-001 | SCN-001 | OBL-001 | CTX-OPEN-MENU — Открытие раздела из меню | Пункт меню «Партнеры» | Доступность пункта меню | Нажатие пункта меню | Пункт меню «Партнеры» доступен пользователю. | Пользователь вошёл в систему. | Не требуется: состояние задано предусловием. | Открыть пункт меню «Партнеры». | Открывается раздел «Партнеры». | SETUP-ACTOR-001 — пользователь с доступом к модулю. | Positive | High | ready | TC-MENU-001 |\n",
             encoding="utf-8",
         )
         self.tc = root / "test-cases" / "9.1-menu.md"
@@ -852,8 +854,8 @@ class PracticalV09Tests(unittest.TestCase):
             write_json(fixture.obligations, obligations)
             fixture.matrix.write_text(
                 "# Матрица тест-дизайна\n\n"
-                "| Проверка | Идентификатор сценария | Обязательство ФТ | Контекст исполнения | Проверяемое правило | Исходное состояние | Формирование состояния | Проверяемое действие | Ожидаемый результат | Нужные предпосылки | Тип | Приоритет | Статус исполнения | Планируемый TC-ID |\n"
-                "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |\n",
+                "| Проверка | Идентификатор сценария | Обязательство ФТ | Контекст исполнения | Проверяемый элемент | Домен проверки | Способ взаимодействия | Проверяемое правило | Исходное состояние | Формирование состояния | Проверяемое действие | Ожидаемый результат | Нужные предпосылки | Тип | Приоритет | Статус исполнения | Планируемый TC-ID |\n"
+                "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |\n",
                 encoding="utf-8",
             )
             state = json.loads(fixture.state.read_text(encoding="utf-8"))
@@ -866,7 +868,7 @@ class PracticalV09Tests(unittest.TestCase):
 
             fixture.matrix.write_text(
                 fixture.matrix.read_text(encoding="utf-8")
-                + "| MTX-001 | SCN-001 | OBL-001 | CTX-OPEN-MENU | Проверка поля | Форма открыта. | Не требуется: состояние задано предусловием. | Проверить поле. | Поле доступно. | SETUP-ACTOR-001 | Positive | High | ready | TC-MENU-001 |\n",
+                + "| MTX-001 | SCN-001 | OBL-001 | CTX-OPEN-MENU | Поле карточки | Доступность поля | Проверка отображения | Проверка поля | Форма открыта. | Не требуется: состояние задано предусловием. | Проверить поле. | Поле доступно. | SETUP-ACTOR-001 | Positive | High | ready | TC-MENU-001 |\n",
                 encoding="utf-8",
             )
             _, findings = validate_scope(package_root=fixture.root, workflow_state_path=fixture.state)
@@ -2253,6 +2255,50 @@ class PracticalV09Tests(unittest.TestCase):
             )
             self.assertIn("contract-migration-active", [item.id for item in findings if item.blocking])
 
+    def test_contract_migration_accepts_v2_matrix_as_legacy_input(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            fixture = PracticalV09Fixture(Path(raw))
+            fixture.matrix.write_text(
+                "# Матрица тест-дизайна\n\n"
+                "| Проверка | Идентификатор сценария | Обязательство ФТ | Контекст исполнения | Проверяемое правило | Исходное состояние | Формирование состояния | Проверяемое действие | Ожидаемый результат | Нужные предпосылки | Тип | Приоритет | Статус исполнения | Планируемый TC-ID |\n"
+                "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |\n"
+                "| MTX-001 | SCN-001 | OBL-001 | CTX-OPEN-MENU — Открытие раздела из меню | Пункт меню доступен. | Пользователь вошёл. | Не требуется: состояние задано предусловием. | Открыть раздел. | Раздел открыт. | SETUP-ACTOR-001. | Positive | High | ready | TC-MENU-001 |\n",
+                encoding="utf-8",
+            )
+            state = json.loads(fixture.state.read_text(encoding="utf-8"))
+            state["contract_versions"]["matrix"] = PREVIOUS_MATRIX_CONTRACT_VERSION
+            state["contract_versions"]["scenario_consolidation"] = (
+                LEGACY_SCENARIO_CONSOLIDATION_CONTRACT_VERSION
+            )
+            state["scenario_consolidation"] = []
+            write_json(fixture.state, state)
+            snapshot_dir = fixture.scope_dir / "contract-migration-v2-to-v3-snapshot"
+            completed = subprocess.run(
+                [
+                    sys.executable,
+                    str(REPO_ROOT / "scripts" / "migrate_practical_matrix_contract.py"),
+                    "--ft-package-root", str(fixture.root),
+                    "--workflow-state", str(fixture.state),
+                    "--action", "start", "--snapshot-dir", str(snapshot_dir),
+                    "--explicit-user-authorization",
+                ],
+                text=True,
+                capture_output=True,
+                encoding="utf-8",
+                errors="replace",
+            )
+            self.assertEqual(0, completed.returncode, completed.stderr)
+            migrated = json.loads(fixture.state.read_text(encoding="utf-8"))
+            self.assertEqual(MATRIX_CONTRACT_VERSION, migrated["contract_versions"]["matrix"])
+            self.assertEqual(
+                PREVIOUS_MATRIX_CONTRACT_VERSION,
+                migrated["contract_migration"]["from_matrix_contract"],
+            )
+            self.assertEqual(
+                SCENARIO_CONSOLIDATION_CONTRACT_VERSION,
+                migrated["contract_versions"]["scenario_consolidation"],
+            )
+
     def test_contract_migration_marks_matrix_then_tc_sync_in_order(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             fixture = PracticalV09Fixture(Path(raw))
@@ -2282,8 +2328,8 @@ class PracticalV09Tests(unittest.TestCase):
             # Restore a valid v2 table without touching the preserved TC.
             fixture.matrix.write_text(
                 "# Матрица тест-дизайна\n\n"
-                "| Проверка | Идентификатор сценария | Обязательство ФТ | Контекст исполнения | Проверяемое правило | Исходное состояние | Формирование состояния | Проверяемое действие | Ожидаемый результат | Нужные предпосылки | Тип | Приоритет | Статус исполнения | Планируемый TC-ID |\n"
-                "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |\n"
+                "| Проверка | Идентификатор сценария | Обязательство ФТ | Контекст исполнения | Проверяемый элемент | Домен проверки | Способ взаимодействия | Проверяемое правило | Исходное состояние | Формирование состояния | Проверяемое действие | Ожидаемый результат | Нужные предпосылки | Тип | Приоритет | Статус исполнения | Планируемый TC-ID |\n"
+                "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |\n"
                 "| MTX-001 | SCN-001 | OBL-001 | CTX-OPEN-MENU — Открытие раздела из меню | Пункт меню доступен. | Пользователь вошёл. | Не требуется: состояние задано предусловием. | Открыть раздел. | Раздел открыт. | SETUP-ACTOR-001. | Positive | High | ready | TC-MENU-001 |\n",
                 encoding="utf-8",
             )
@@ -2587,7 +2633,7 @@ class PracticalV09Tests(unittest.TestCase):
             fixture = PracticalV09Fixture(Path(raw))
             fixture.matrix.write_text(
                 fixture.matrix.read_text(encoding="utf-8")
-                + "| MTX-002 | SCN-002 | OBL-001 | CTX-OPEN-MENU — Открытие раздела из меню | Пункт меню «Партнеры» доступен пользователю. | Пользователь вошёл в систему. | Не требуется: состояние задано предусловием. | Открыть пункт меню «Партнеры» с граничным значением. | Открывается раздел «Партнеры» для граничного значения. | SETUP-ACTOR-001 — пользователь с доступом к модулю. | Positive | High | ready | TC-MENU-002 |\n",
+                + "| MTX-002 | SCN-002 | OBL-001 | CTX-OPEN-MENU — Открытие раздела из меню | Пункт меню «Партнеры» | Доступность пункта меню | Нажатие пункта меню | Пункт меню «Партнеры» доступен пользователю. | Пользователь вошёл в систему. | Не требуется: состояние задано предусловием. | Открыть пункт меню «Партнеры» с граничным значением. | Открывается раздел «Партнеры» для граничного значения. | SETUP-ACTOR-001 — пользователь с доступом к модулю. | Positive | High | ready | TC-MENU-002 |\n",
                 encoding="utf-8",
             )
             fixture.tc.write_text(
@@ -2647,12 +2693,12 @@ class PracticalV09Tests(unittest.TestCase):
             write_json(fixture.state, state)
             header = (
                 "# Матрица тест-дизайна\n\n"
-                "| Проверка | Идентификатор сценария | Обязательство ФТ | Контекст исполнения | Проверяемое правило | Исходное состояние | Формирование состояния | Проверяемое действие | Ожидаемый результат | Нужные предпосылки | Тип | Приоритет | Статус исполнения | Планируемый TC-ID |\n"
-                "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |\n"
+                "| Проверка | Идентификатор сценария | Обязательство ФТ | Контекст исполнения | Проверяемый элемент | Домен проверки | Способ взаимодействия | Проверяемое правило | Исходное состояние | Формирование состояния | Проверяемое действие | Ожидаемый результат | Нужные предпосылки | Тип | Приоритет | Статус исполнения | Планируемый TC-ID |\n"
+                "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |\n"
             )
             rows = (
-                "| MTX-001 | SCN-001 | OBL-001 | CTX-CREATE — Создание карточки партнера | Поле «КПП» доступно для редактирования. | Открыта новая карточка партнера. | Не требуется: карточка открыта в предусловии. | Ввести значение в поле «КПП», затем заменить его. | Поле «КПП» принимает измененное значение. | SETUP-ACTOR-001 — пользователь с доступом. | Positive | Medium | ready | TC-CARD-001 |\n"
-                "| MTX-002 | SCN-002 | OBL-002 | CTX-CREATE — Создание карточки партнера | Поле «КПП» допускает ручной ввод. | Открыта новая карточка партнера. | Не требуется: карточка открыта в предусловии. | Вручную ввести значение в поле «КПП». | Поле «КПП» принимает значение, введенное вручную. | SETUP-ACTOR-001 — пользователь с доступом. | Positive | Medium | ready | TC-CARD-002 |\n"
+                "| MTX-001 | SCN-001 | OBL-001 | CTX-CREATE — Создание карточки партнера | Поле «КПП» | Редактируемость | Текстовый ввод | Поле «КПП» доступно для редактирования. | Открыта новая карточка партнера. | Не требуется: карточка открыта в предусловии. | Ввести значение в поле «КПП», затем заменить его. | Поле «КПП» принимает измененное значение. | SETUP-ACTOR-001 — пользователь с доступом. | Positive | Medium | ready | TC-CARD-001 |\n"
+                "| MTX-002 | SCN-002 | OBL-002 | CTX-CREATE — Создание карточки партнера | Поле «КПП» | Ручной ввод | Текстовый ввод | Поле «КПП» допускает ручной ввод. | Открыта новая карточка партнера. | Не требуется: карточка открыта в предусловии. | Вручную ввести значение в поле «КПП». | Поле «КПП» принимает значение, введенное вручную. | SETUP-ACTOR-001 — пользователь с доступом. | Positive | Medium | ready | TC-CARD-002 |\n"
             )
             fixture.matrix.write_text(header + rows, encoding="utf-8")
             _, findings = validate_scope(package_root=fixture.root, workflow_state_path=fixture.state)
@@ -2699,6 +2745,7 @@ class PracticalV09Tests(unittest.TestCase):
                 "planned_tc_id": "TC-CARD-001",
                 "source_anchor": "Таблица 6, строка «КПП».",
                 "rationale": "Обе строки описывают одно и то же действие и результат.",
+                "parameterization_basis": "эквивалентные значения одного класса",
             }]
             write_json(fixture.state, state)
             fixture.tc.write_text(
@@ -2721,10 +2768,75 @@ class PracticalV09Tests(unittest.TestCase):
             )
             _, findings = validate_scope(package_root=fixture.root, workflow_state_path=fixture.state)
             finding_ids = [item.id for item in findings if item.blocking]
-            self.assertNotIn("test-case-obligation-scenario-count", finding_ids)
-            self.assertNotIn("test-case-shared-scenario-not-authorized", finding_ids)
-            self.assertNotIn("test-case-scenario-uncovered", finding_ids)
-            self.assertNotIn("test-case-scenario-duplicated", finding_ids)
+            self.assertIn("scenario-consolidation-domain", finding_ids)
+
+    def test_parameterized_consolidation_requires_one_element_domain_and_interaction(self) -> None:
+        def state_for(scenario_ids: list[str]) -> dict[str, object]:
+            return {
+                "contract_versions": {
+                    "scenario_consolidation": SCENARIO_CONSOLIDATION_CONTRACT_VERSION,
+                },
+                "scenario_consolidation": [{
+                    "id": "CON-001",
+                    "decision": "merge-parameterized",
+                    "scenario_ids": scenario_ids,
+                    "planned_tc_id": "TC-CARD-001",
+                    "source_anchor": "Таблица 6, строка «КПП».",
+                    "rationale": "Параметры относятся к одной проверке.",
+                    "parameterization_basis": "границы одного правила",
+                }],
+            }
+
+        common = {
+            "Контекст исполнения": "CTX-CREATE — Создание карточки партнера",
+            "Проверяемый элемент": "Поле «КПП»",
+            "Домен проверки": "Границы длины",
+            "Способ взаимодействия": "Текстовый ввод",
+            "Тип": "Negative",
+            "Статус исполнения": "ready",
+            "Планируемый TC-ID": "TC-CARD-001",
+        }
+        same_rule_rows = {
+            "SCN-001": {**common, "Идентификатор сценария": "SCN-001"},
+            "SCN-002": {**common, "Идентификатор сценария": "SCN-002"},
+        }
+        findings, _ = scenario_consolidation_contract(
+            state=state_for(["SCN-001", "SCN-002"]),
+            rows_by_scenario=same_rule_rows,
+            artifact="workflow-state.json",
+        )
+        self.assertEqual([], [item.id for item in findings])
+
+        different_field_rows = {
+            **same_rule_rows,
+            "SCN-002": {
+                **same_rule_rows["SCN-002"],
+                "Проверяемый элемент": "Поле «ИНН»",
+            },
+        }
+        findings, _ = scenario_consolidation_contract(
+            state=state_for(["SCN-001", "SCN-002"]),
+            rows_by_scenario=different_field_rows,
+            artifact="workflow-state.json",
+        )
+        self.assertIn("scenario-consolidation-element", [item.id for item in findings])
+
+        different_domain_rows = {
+            **same_rule_rows,
+            "SCN-002": {
+                **same_rule_rows["SCN-002"],
+                "Домен проверки": "Размер файла",
+                "Способ взаимодействия": "Выбор файла",
+            },
+        }
+        findings, _ = scenario_consolidation_contract(
+            state=state_for(["SCN-001", "SCN-002"]),
+            rows_by_scenario=different_domain_rows,
+            artifact="workflow-state.json",
+        )
+        finding_ids = [item.id for item in findings]
+        self.assertIn("scenario-consolidation-domain", finding_ids)
+        self.assertIn("scenario-consolidation-interaction", finding_ids)
 
     def test_validator_maps_internal_check_to_observable_result(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
@@ -2750,12 +2862,12 @@ class PracticalV09Tests(unittest.TestCase):
             write_json(fixture.obligations, obligations)
             header = (
                 "# Матрица тест-дизайна\n\n"
-                "| Проверка | Идентификатор сценария | Обязательство ФТ | Контекст исполнения | Проверяемое правило | Исходное состояние | Формирование состояния | Проверяемое действие | Ожидаемый результат | Нужные предпосылки | Тип | Приоритет | Статус исполнения | Планируемый TC-ID |\n"
-                "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |\n"
+                "| Проверка | Идентификатор сценария | Обязательство ФТ | Контекст исполнения | Проверяемый элемент | Домен проверки | Способ взаимодействия | Проверяемое правило | Исходное состояние | Формирование состояния | Проверяемое действие | Ожидаемый результат | Нужные предпосылки | Тип | Приоритет | Статус исполнения | Планируемый TC-ID |\n"
+                "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |\n"
             )
             rows = (
-                "| MTX-001 | SCN-001 | OBL-001 | CTX-OPEN-MENU — Открытие раздела из меню | Перед сохранением проверяется уникальность. | Открыта новая карточка с дублирующими данными. | Ввести дублирующее наименование. | Нажать «Сохранить». | Внутренняя проверка не имеет самостоятельного наблюдаемого результата. | SETUP-ACTOR-001 — пользователь с доступом к модулю. | Negative | High | ready | TC-MENU-001 |\n"
-                "| MTX-002 | SCN-002 | OBL-002 | CTX-OPEN-MENU — Открытие раздела из меню | При неуспешной проверке выводится сообщение. | Открыта новая карточка с дублирующими данными. | Ввести дублирующее наименование. | Нажать «Сохранить». | Отображается сообщение «Ошибка уникальности». | SETUP-ACTOR-001 — пользователь с доступом к модулю. | Negative | High | ready | TC-MENU-001 |\n"
+                "| MTX-001 | SCN-001 | OBL-001 | CTX-OPEN-MENU — Открытие раздела из меню | Карточка партнера | Проверка уникальности | Нажатие «Сохранить» | Перед сохранением проверяется уникальность. | Открыта новая карточка с дублирующими данными. | Ввести дублирующее наименование. | Нажать «Сохранить». | Внутренняя проверка не имеет самостоятельного наблюдаемого результата. | SETUP-ACTOR-001 — пользователь с доступом к модулю. | Negative | High | ready | TC-MENU-001 |\n"
+                "| MTX-002 | SCN-002 | OBL-002 | CTX-OPEN-MENU — Открытие раздела из меню | Карточка партнера | Проверка уникальности | Нажатие «Сохранить» | При неуспешной проверке выводится сообщение. | Открыта новая карточка с дублирующими данными. | Ввести дублирующее наименование. | Нажать «Сохранить». | Отображается сообщение «Ошибка уникальности». | SETUP-ACTOR-001 — пользователь с доступом к модулю. | Negative | High | ready | TC-MENU-001 |\n"
             )
             fixture.matrix.write_text(header + rows, encoding="utf-8")
             state = json.loads(fixture.state.read_text(encoding="utf-8"))

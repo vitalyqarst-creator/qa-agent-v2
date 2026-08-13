@@ -19,9 +19,10 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from test_case_agent.practical_v09 import (
-    LEGACY_MATRIX_CONTRACT_VERSION,
+    MIGRATABLE_MATRIX_CONTRACT_VERSIONS,
     MATRIX_CONTRACT_VERSION,
     PracticalV09Error,
+    SCENARIO_CONSOLIDATION_CONTRACT_VERSION,
     load_workflow_state,
     matrix_contract_version_from_path,
     relative_to_package,
@@ -101,14 +102,19 @@ def render_plan(
 def require_legacy_matrix(state: dict[str, object], package_root: Path) -> Path:
     if workflow_contract_migration(state) is not None:
         raise PracticalV09Error("workflow-state.json: contract migration already exists")
-    if workflow_matrix_contract_version(state) != LEGACY_MATRIX_CONTRACT_VERSION:
-        raise PracticalV09Error("Contract migration can start only from practical-matrix-v1")
+    declared_contract = workflow_matrix_contract_version(state)
+    if declared_contract not in MIGRATABLE_MATRIX_CONTRACT_VERSIONS:
+        raise PracticalV09Error(
+            "Contract migration can start only from a supported legacy matrix contract"
+        )
     matrix_path = workflow_artifact_path(state, package_root, "test_design_matrix", required=True)
     assert matrix_path is not None
     if not matrix_path.is_file():
         raise PracticalV09Error("Contract migration requires an existing legacy matrix")
-    if matrix_contract_version_from_path(matrix_path) != LEGACY_MATRIX_CONTRACT_VERSION:
-        raise PracticalV09Error("Contract migration requires a recognizable practical-matrix-v1 table")
+    if matrix_contract_version_from_path(matrix_path) != declared_contract:
+        raise PracticalV09Error(
+            "Contract migration requires a matrix whose schema matches the declared legacy contract"
+        )
     if state["phase"] in {"accepted", "blocked"}:
         raise PracticalV09Error("Contract migration is allowed only for an active non-terminal scope")
     return matrix_path
@@ -118,6 +124,7 @@ def start_migration(
     *, state: dict[str, object], package_root: Path, state_path: Path, snapshot_dir: Path
 ) -> None:
     matrix_path = require_legacy_matrix(state, package_root)
+    from_matrix_contract = workflow_matrix_contract_version(state)
     if snapshot_dir.exists():
         raise PracticalV09Error(f"Snapshot destination already exists: {snapshot_dir}")
     try:
@@ -147,8 +154,16 @@ def start_migration(
             "schema_version": 1,
             "scope_id": state["scope_id"],
             "scope_slug": state["scope_slug"],
-            "from_matrix_contract": LEGACY_MATRIX_CONTRACT_VERSION,
+            "from_matrix_contract": from_matrix_contract,
             "to_matrix_contract": MATRIX_CONTRACT_VERSION,
+            "from_scenario_consolidation_contract": state["contract_versions"].get(
+                "scenario_consolidation"
+            ),
+            "to_scenario_consolidation_contract": (
+                SCENARIO_CONSOLIDATION_CONTRACT_VERSION
+                if state["contract_versions"].get("scenario_consolidation") is not None
+                else None
+            ),
             "authorization": "explicit-user",
             "review_budgets_before_migration": {
                 "matrix_revision_count": state["matrix_revision_count"],
@@ -160,9 +175,12 @@ def start_migration(
     versions = state["contract_versions"]
     assert isinstance(versions, dict)
     versions["matrix"] = MATRIX_CONTRACT_VERSION
+    previous_consolidation_contract = versions.get("scenario_consolidation")
+    if previous_consolidation_contract is not None:
+        versions["scenario_consolidation"] = SCENARIO_CONSOLIDATION_CONTRACT_VERSION
     state["contract_migration"] = {
         "status": "active",
-        "from_matrix_contract": LEGACY_MATRIX_CONTRACT_VERSION,
+        "from_matrix_contract": from_matrix_contract,
         "to_matrix_contract": MATRIX_CONTRACT_VERSION,
         "authorization": "explicit-user",
         "snapshot_manifest": relative_to_package(package_root, manifest_path),
@@ -172,12 +190,21 @@ def start_migration(
             "tc_revision_count": state["tc_revision_count"],
         },
     }
+    if previous_consolidation_contract is not None:
+        state["contract_migration"]["from_scenario_consolidation_contract"] = (
+            previous_consolidation_contract
+        )
+        state["contract_migration"]["to_scenario_consolidation_contract"] = (
+            SCENARIO_CONSOLIDATION_CONTRACT_VERSION
+        )
     state["phase"] = "matrix-migration"
     state["next_action"] = (
-        "Перевести test-design-matrix.md в practical-matrix-v2; не изменять canonical TC до matrix review."
+        f"Перевести test-design-matrix.md из {from_matrix_contract} в {MATRIX_CONTRACT_VERSION}; "
+        "не изменять canonical TC до matrix review."
     )
     state.setdefault("decision_notes", []).append(
-        "Явная contract migration v1→v2: старые matrix/TC сохранены в snapshot; бюджеты review не сброшены."
+        f"Явная contract migration {from_matrix_contract}→{MATRIX_CONTRACT_VERSION}: "
+        "старые matrix/TC сохранены в snapshot; бюджеты review не сброшены."
     )
     write_json(state_path, state)
 
@@ -189,7 +216,9 @@ def mark_matrix_ready(*, state: dict[str, object], package_root: Path, state_pat
     matrix_path = workflow_artifact_path(state, package_root, "test_design_matrix", required=True)
     assert matrix_path is not None
     if matrix_contract_version_from_path(matrix_path) != MATRIX_CONTRACT_VERSION:
-        raise PracticalV09Error("Matrix is not yet materialized in practical-matrix-v2 schema")
+        raise PracticalV09Error(
+            f"Matrix is not yet materialized in {MATRIX_CONTRACT_VERSION} schema"
+        )
     migration["status"] = "matrix-ready"
     state["phase"] = "matrix"
     state["next_action"] = "Провести scoped validation migrated matrix и обязательное независимое matrix review"
