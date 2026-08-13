@@ -14,8 +14,8 @@ fts/Partners/Partners-v1-rerun-clean
 
 ## Версия agent-layer
 
-Пакет использует commit `357bcde12018496f0a8126754503d16b0c2a6aeb`
-(`Guard source contradiction classification`) ветки
+Пакет использует commit `14fbe4dc0b4a7b33f96ce7dfe9563982928c69cb`
+(`Scope duplicate save trigger to save flows`) ветки
 `codex/partners-v1-rerun-9-3-2`.
 
 ## Исходники ФТ
