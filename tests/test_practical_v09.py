@@ -24,6 +24,7 @@ from test_case_agent.practical_v09 import (
     derived_execution_status,
     finding,
     load_workflow_state,
+    has_composite_result_table,
     matrix_review_required,
     matrix_exact_duplicate_groups,
     parse_matrix_rows,
@@ -3358,6 +3359,132 @@ class PracticalV09Tests(unittest.TestCase):
         finding_ids = [item.id for item in findings]
         self.assertIn("scenario-consolidation-domain", finding_ids)
         self.assertIn("scenario-consolidation-interaction", finding_ids)
+
+    def test_composite_result_consolidation_allows_fields_of_one_autofill(self) -> None:
+        rows = {
+            "SCN-001": {
+                "Идентификатор сценария": "SCN-001",
+                "Контекст исполнения": "CTX-CREATE — Создание карточки партнера",
+                "Проверяемый элемент": "Поле «Наименование партнера»",
+                "Домен проверки": "Автозаполнение после выбора подсказки",
+                "Способ взаимодействия": "Выбор подсказки DaData",
+                "Исходное состояние": "Открыта новая карточка партнера.",
+                "Формирование состояния": "Ввести запрос `СБЕРБАНК`.",
+                "Проверяемое действие": "Выбрать подсказку `ПАО СБЕРБАНК`.",
+                "Тип": "Positive",
+                "Статус исполнения": "needs-test-data",
+                "Планируемый TC-ID": "TC-CARD-AUTOFILL-001",
+            },
+            "SCN-002": {
+                "Идентификатор сценария": "SCN-002",
+                "Контекст исполнения": "CTX-CREATE — Создание карточки партнера",
+                "Проверяемый элемент": "Поле «ИНН»",
+                "Домен проверки": "Автозаполнение после выбора подсказки",
+                "Способ взаимодействия": "Выбор подсказки DaData",
+                "Исходное состояние": "Открыта новая карточка партнера.",
+                "Формирование состояния": "Ввести запрос `СБЕРБАНК`.",
+                "Проверяемое действие": "Выбрать подсказку `ПАО СБЕРБАНК`.",
+                "Тип": "Positive",
+                "Статус исполнения": "needs-test-data",
+                "Планируемый TC-ID": "TC-CARD-AUTOFILL-001",
+            },
+        }
+        state = {
+            "contract_versions": {
+                "scenario_consolidation": SCENARIO_CONSOLIDATION_CONTRACT_VERSION,
+            },
+            "scenario_consolidation": [{
+                "id": "CON-AUTOFILL-001",
+                "decision": "merge-parameterized",
+                "scenario_ids": ["SCN-001", "SCN-002"],
+                "planned_tc_id": "TC-CARD-AUTOFILL-001",
+                "source_anchor": "Таблица 6, автозаполнение карточки партнера.",
+                "rationale": "Одно действие выбора подсказки создаёт один составной результат автозаполнения карточки.",
+                "parameterization_basis": "поля одного составного результата",
+                "composite_result": "Карточка заполнена данными выбранной организации.",
+                "field_inventory": ["Поле «Наименование партнера»", "Поле «ИНН»"],
+            }],
+        }
+        findings, consolidation = scenario_consolidation_contract(
+            state=state,
+            rows_by_scenario=rows,
+            artifact="workflow-state.json",
+        )
+        self.assertEqual([], [item.id for item in findings])
+        self.assertEqual(
+            "поля одного составного результата",
+            consolidation["consolidation_by_tc"]["TC-CARD-AUTOFILL-001"]["parameterization_basis"],
+        )
+        tc_body = (
+            "**Итоговый ожидаемый результат:** Карточка заполнена данными выбранной организации.\n\n"
+            "| Поле | Ожидаемое значение |\n"
+            "| --- | --- |\n"
+            "| Наименование партнера | `ПАО СБЕРБАНК` |\n"
+            "| ИНН | `7707083893` |"
+        )
+        self.assertTrue(has_composite_result_table(
+            tc_body,
+            consolidation["consolidation_by_tc"]["TC-CARD-AUTOFILL-001"]["field_inventory"],
+        ))
+
+    def test_composite_result_consolidation_requires_full_field_inventory_and_table(self) -> None:
+        rows = {
+            "SCN-001": {
+                "Идентификатор сценария": "SCN-001",
+                "Контекст исполнения": "CTX-CREATE — Создание карточки партнера",
+                "Проверяемый элемент": "Поле «Наименование партнера»",
+                "Домен проверки": "Автозаполнение после выбора подсказки",
+                "Способ взаимодействия": "Выбор подсказки DaData",
+                "Исходное состояние": "Открыта новая карточка партнера.",
+                "Формирование состояния": "Ввести запрос `СБЕРБАНК`.",
+                "Проверяемое действие": "Выбрать подсказку `ПАО СБЕРБАНК`.",
+                "Тип": "Positive",
+                "Статус исполнения": "needs-test-data",
+                "Планируемый TC-ID": "TC-CARD-AUTOFILL-001",
+            },
+            "SCN-002": {
+                "Идентификатор сценария": "SCN-002",
+                "Контекст исполнения": "CTX-CREATE — Создание карточки партнера",
+                "Проверяемый элемент": "Поле «ИНН»",
+                "Домен проверки": "Автозаполнение после выбора подсказки",
+                "Способ взаимодействия": "Выбор подсказки DaData",
+                "Исходное состояние": "Открыта новая карточка партнера.",
+                "Формирование состояния": "Ввести запрос `СБЕРБАНК`.",
+                "Проверяемое действие": "Выбрать подсказку `ПАО СБЕРБАНК`.",
+                "Тип": "Positive",
+                "Статус исполнения": "needs-test-data",
+                "Планируемый TC-ID": "TC-CARD-AUTOFILL-001",
+            },
+        }
+        state = {
+            "contract_versions": {
+                "scenario_consolidation": SCENARIO_CONSOLIDATION_CONTRACT_VERSION,
+            },
+            "scenario_consolidation": [{
+                "id": "CON-AUTOFILL-001",
+                "decision": "merge-parameterized",
+                "scenario_ids": ["SCN-001", "SCN-002"],
+                "planned_tc_id": "TC-CARD-AUTOFILL-001",
+                "source_anchor": "Таблица 6, автозаполнение карточки партнера.",
+                "rationale": "Одно действие выбора подсказки создаёт один составной результат автозаполнения карточки.",
+                "parameterization_basis": "поля одного составного результата",
+                "composite_result": "Карточка заполнена данными выбранной организации.",
+                "field_inventory": ["Поле «Наименование партнера»"],
+            }],
+        }
+        findings, _ = scenario_consolidation_contract(
+            state=state,
+            rows_by_scenario=rows,
+            artifact="workflow-state.json",
+        )
+        self.assertIn(
+            "scenario-consolidation-composite-result-contract",
+            [item.id for item in findings if item.blocking],
+        )
+        self.assertFalse(has_composite_result_table(
+            "| Поле | Ожидаемое значение |\n| --- | --- |\n| Наименование партнера | `ПАО СБЕРБАНК` |",
+            ["Поле «Наименование партнера»", "Поле «ИНН»"],
+        ))
 
     def test_validator_maps_internal_check_to_observable_result(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
