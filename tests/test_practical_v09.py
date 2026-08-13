@@ -524,6 +524,81 @@ class PracticalV09Tests(unittest.TestCase):
                 [item.id for item in findings],
             )
 
+    def test_ui_calibration_requires_visual_evidence_check(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            fixture = PracticalV09Fixture(Path(raw))
+            obligations = json.loads(fixture.obligations.read_text(encoding="utf-8"))
+            obligations["clarifications"] = [{
+                "id": "GAP-UI-001",
+                "gap_type": "ui-calibration",
+                "source_anchor": "XHTML, раздел 9.1, строка «Партнеры»",
+                "source_statement": "Пункт доступен пользователю.",
+                "description": "Неизвестна фактическая реакция UI.",
+                "impact": "non-blocking",
+                "affected_obligation_ids": ["OBL-001"],
+                "temporary_handling": "Проверить реакцию на стенде.",
+                "status": "open",
+            }]
+            write_json(fixture.obligations, obligations)
+
+            _, findings = validate_scope(package_root=fixture.root, workflow_state_path=fixture.state)
+            finding_ids = [item.id for item in findings if item.blocking]
+            self.assertIn("scope-ui-calibration-visual-check", finding_ids)
+
+            obligations["clarifications"][0]["visual_evidence_check"] = {
+                "outcome": "runtime-only",
+                "checked_sources": [
+                    "DOCX/XHTML/PDF: рисунок экрана не определяет фактическую реакцию UI."
+                ],
+                "remaining_uncertainty": "Реакция UI после нажатия требует прогона.",
+            }
+            obligations["obligations"][0]["visual_binding"] = {
+                "source_anchor": "Рисунок экрана, правый верхний угол",
+                "element": "кнопка закрытия",
+                "location": "правый верхний угол окна",
+            }
+            write_json(fixture.obligations, obligations)
+
+            _, findings = validate_scope(package_root=fixture.root, workflow_state_path=fixture.state)
+            finding_ids = [item.id for item in findings if item.blocking]
+            self.assertNotIn("scope-ui-calibration-visual-check", finding_ids)
+            self.assertNotIn("scope-ui-calibration-visual-sources", finding_ids)
+            self.assertNotIn("scope-ui-calibration-visual-residual", finding_ids)
+            self.assertNotIn("scope-obligation-visual-binding-incomplete", finding_ids)
+
+    def test_ui_calibration_rejects_incomplete_visual_evidence_or_binding(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            fixture = PracticalV09Fixture(Path(raw))
+            obligations = json.loads(fixture.obligations.read_text(encoding="utf-8"))
+            obligations["clarifications"] = [{
+                "id": "GAP-UI-001",
+                "gap_type": "ui-calibration",
+                "source_anchor": "XHTML, раздел 9.1, строка «Партнеры»",
+                "source_statement": "Пункт доступен пользователю.",
+                "description": "Неизвестна фактическая реакция UI.",
+                "impact": "non-blocking",
+                "affected_obligation_ids": ["OBL-001"],
+                "temporary_handling": "Проверить реакцию на стенде.",
+                "status": "open",
+                "visual_evidence_check": {
+                    "outcome": "resolved",
+                    "checked_sources": [],
+                    "remaining_uncertainty": "",
+                },
+            }]
+            obligations["obligations"][0]["visual_binding"] = {
+                "source_anchor": "Рисунок экрана",
+                "element": "",
+            }
+            write_json(fixture.obligations, obligations)
+
+            _, findings = validate_scope(package_root=fixture.root, workflow_state_path=fixture.state)
+            finding_ids = [item.id for item in findings if item.blocking]
+            self.assertIn("scope-ui-calibration-visual-outcome", finding_ids)
+            self.assertIn("scope-ui-calibration-visual-sources", finding_ids)
+            self.assertIn("scope-ui-calibration-visual-residual", finding_ids)
+            self.assertIn("scope-obligation-visual-binding-incomplete", finding_ids)
+
     def test_unresolved_ft_conflict_always_requires_ba_question(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             fixture = PracticalV09Fixture(Path(raw))
@@ -822,6 +897,9 @@ class PracticalV09Tests(unittest.TestCase):
         route = (REPO_ROOT / "references" / "agent" / "practical-test-case-route-v0.9.md").read_text(
             encoding="utf-8"
         )
+        review_format = (REPO_ROOT / "references" / "agent" / "practical-v0.9-review-result-format.md").read_text(
+            encoding="utf-8"
+        )
         scope_format = (REPO_ROOT / "references" / "agent" / "practical-v0.9-scope-obligations-format.md").read_text(
             encoding="utf-8"
         )
@@ -836,6 +914,10 @@ class PracticalV09Tests(unittest.TestCase):
         self.assertIn("v0.8 instructions below are legacy-only", analyzer)
         self.assertIn("автозаполняет несколько полей", scope_format)
         self.assertIn("Не создавай `CLR-*` только из-за различия заголовка", scope_format)
+        self.assertIn("visual_evidence_check", route)
+        self.assertIn("visual_binding", scope_format)
+        self.assertIn("visual_evidence_check", analyzer)
+        self.assertIn("visual_binding", review_format)
 
     def test_style_warning_is_visible_but_not_blocking(self) -> None:
         with tempfile.TemporaryDirectory() as raw:

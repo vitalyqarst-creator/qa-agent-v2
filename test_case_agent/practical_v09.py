@@ -18,7 +18,7 @@ from typing import Any, Iterable, Mapping
 
 
 ROUTE_VERSION = "practical-v0.9"
-ROUTE_TOOL_VERSION = "practical-v0.9.15"
+ROUTE_TOOL_VERSION = "practical-v0.9.16"
 WORKFLOW_STATE_SCHEMA_VERSION = 1
 SOURCE_CONTRACT_VERSION = "source-package-v3"
 MATRIX_CONTRACT_VERSION = "practical-matrix-v2"
@@ -53,6 +53,12 @@ ALLOWED_GAP_TYPES = {
     "ambiguity",
 }
 ALLOWED_GAP_STATUSES = {"open", "resolved"}
+ALLOWED_VISUAL_EVIDENCE_OUTCOMES = {
+    "no-visual-source",
+    "insufficient",
+    "conflict",
+    "runtime-only",
+}
 REQUIRED_TC_FIELDS = (
     "Название",
     "Тип",
@@ -1320,6 +1326,58 @@ def validate_scope_clarifications(
                 artifact,
                 remediation_owner="scope-analyzer",
             ))
+        if gap_type == "ui-calibration":
+            visual_check = entry.get("visual_evidence_check")
+            if not isinstance(visual_check, dict):
+                findings.append(finding(
+                    "scope-ui-calibration-visual-check",
+                    "semantic-completeness",
+                    "Перед UI-калибровкой не зафиксирована проверка визуальных источников",
+                    f"{gap_id or f'строка {index}'}: добавьте visual_evidence_check с проверенными "
+                    "изображениями ФТ/макетами и остаточной runtime-неопределённостью.",
+                    artifact,
+                    remediation_owner="scope-analyzer",
+                ))
+            else:
+                outcome = str(visual_check.get("outcome") or "")
+                checked_sources = visual_check.get("checked_sources")
+                remaining_uncertainty = str(
+                    visual_check.get("remaining_uncertainty") or ""
+                ).strip()
+                if outcome not in ALLOWED_VISUAL_EVIDENCE_OUTCOMES:
+                    findings.append(finding(
+                        "scope-ui-calibration-visual-outcome",
+                        "semantic-completeness",
+                        "У проверки визуальных источников неизвестный результат",
+                        f"{gap_id}: outcome={outcome!r}; допустимы: "
+                        + ", ".join(sorted(ALLOWED_VISUAL_EVIDENCE_OUTCOMES)) + ".",
+                        artifact,
+                        remediation_owner="scope-analyzer",
+                    ))
+                if (
+                    not isinstance(checked_sources, list)
+                    or not checked_sources
+                    or not all(isinstance(source, str) and source.strip() for source in checked_sources)
+                ):
+                    findings.append(finding(
+                        "scope-ui-calibration-visual-sources",
+                        "semantic-completeness",
+                        "Проверка UI-калибровки не перечисляет проверенные визуальные источники",
+                        f"{gap_id}: checked_sources должен быть непустым списком изображений ФТ, "
+                        "макетов либо явной фиксации отсутствия такого изображения.",
+                        artifact,
+                        remediation_owner="scope-analyzer",
+                    ))
+                if not remaining_uncertainty:
+                    findings.append(finding(
+                        "scope-ui-calibration-visual-residual",
+                        "semantic-completeness",
+                        "Для UI-калибровки не указана остаточная runtime-неопределённость",
+                        f"{gap_id}: опишите только то, что нельзя установить по проверенным "
+                        "визуальным материалам.",
+                        artifact,
+                        remediation_owner="scope-analyzer",
+                    ))
         affected = entry.get("affected_obligation_ids", [])
         if not isinstance(affected, list) or not affected or not all(isinstance(item, str) for item in affected):
             findings.append(finding(
@@ -1646,6 +1704,32 @@ def validate_scope_obligations(
         seen.add(obligation_id)
         if not statement or not source_anchor:
             findings.append(finding("scope-obligation-incomplete", "unresolved-requirement", "Обязательство не содержит формулировку или привязку к ФТ", f"{obligation_id or f'строка {index}'} требует statement и source_anchor.", artifact, remediation_owner="scope-analyzer"))
+        visual_binding = obligation.get("visual_binding")
+        if visual_binding is not None:
+            if not isinstance(visual_binding, dict):
+                findings.append(finding(
+                    "scope-obligation-visual-binding-format",
+                    "semantic-completeness",
+                    "Визуальная привязка обязательства имеет неверный формат",
+                    f"{obligation_id}: visual_binding должен содержать source_anchor, element и location.",
+                    artifact,
+                    remediation_owner="scope-analyzer",
+                ))
+            else:
+                missing_binding_fields = [
+                    field
+                    for field in ("source_anchor", "element", "location")
+                    if not str(visual_binding.get(field) or "").strip()
+                ]
+                if missing_binding_fields:
+                    findings.append(finding(
+                        "scope-obligation-visual-binding-incomplete",
+                        "semantic-completeness",
+                        "Визуальная привязка обязательства неполна",
+                        f"{obligation_id}: отсутствуют " + ", ".join(missing_binding_fields) + ".",
+                        artifact,
+                        remediation_owner="scope-analyzer",
+                    ))
         disposition = obligation_disposition(obligation)
         if disposition not in OBLIGATION_DISPOSITIONS:
             findings.append(finding(
