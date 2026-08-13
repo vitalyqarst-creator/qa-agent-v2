@@ -243,6 +243,7 @@ DADATA_PROPERTY_RE = re.compile(
     r"\b(?:наименован\w*|инн|кпп|огрн|юр\.?\s*адрес\w*|адрес\w*)\b",
     re.IGNORECASE,
 )
+FROZEN_PROFILE_PROCESS_LANGUAGE_RE = re.compile(r"\bfrozen\s+profile\b", re.IGNORECASE)
 MIXED_CREATE_EDIT_TITLE_RE = re.compile(
     r"\bсоздани\w*\b[^.]{0,48}\b(?:и|или)\b[^.]{0,48}\bредактир\w*\b",
     re.IGNORECASE,
@@ -3259,6 +3260,22 @@ def validate_state_formation_contract(
                 remediation_owner="writer",
             ))
     lowered_statement = statement.casefold()
+    preconditions = test_case_field(body, "Предусловия")
+    if (
+        "dadata" in lowered_statement
+        and re.search(r"\bполучен\w*\s+список\s+dadata\b", preconditions, re.IGNORECASE)
+        and any(INPUT_OR_SELECTION_RE.search(step) for step in steps)
+    ):
+        findings.append(finding(
+            "test-case-dadata-precondition-duplicates-trigger",
+            "execution-readiness",
+            "Предусловие DaData повторяет состояние, формируемое шагами теста",
+            f"{tc_id}: не указывайте полученный список DaData в предусловиях, "
+            "если тест сам вводит запрос или выбирает подсказку. Оставьте в "
+            "предусловиях открытый экран и подготовленный набор данных.",
+            artifact,
+            remediation_owner="writer",
+        ))
     if "dadata" in lowered_statement and re.search(r"\b(?:выбор|выбран|автоматическ)\w*\b", lowered_statement):
         selection_indexes = [
             index for index, step in enumerate(steps)
@@ -3761,6 +3778,17 @@ def validate_test_cases(
                 artifact=artifact,
             ))
         body_without_metadata = re.sub(r"(?m)^\*\*(Тип|Приоритет|Статус исполнения):\*\*.*$", "", body)
+        if FROZEN_PROFILE_PROCESS_LANGUAGE_RE.search(body_without_metadata):
+            findings.append(finding(
+                "test-case-process-language-frozen-profile",
+                "style",
+                "В пользовательском поле тест-кейса остался английский служебный термин",
+                f"{tc_id}: замените «frozen profile» русской формулировкой "
+                "«зафиксированный профиль» или «сохранённый профиль». ",
+                artifact,
+                remediation_owner="writer",
+                blocking=True,
+            ))
         if re.search(r"\b(source-backed|residual|fixture|blocked-observability)\b", body_without_metadata, flags=re.IGNORECASE):
             findings.append(finding("test-case-process-language", "style", "В тест-кейсе остался служебный английский текст", f"Проверьте пользовательские поля {tc_id}.", artifact, remediation_owner="writer", severity="warning"))
     for scenario_id, row in sorted(matrix_by_scenario.items()):
