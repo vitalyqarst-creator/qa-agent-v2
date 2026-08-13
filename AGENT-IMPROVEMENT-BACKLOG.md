@@ -16,6 +16,15 @@
 
 ## Незакрытые улучшения practical v0.9
 
+- [x] `AGI-041` (`P1`) Сделать source-qualified snapshot независимого review
+  транзитивно полным.
+  - Основание: первый final TC review scope `9.3.2` получил только
+    `source-package-manifest.json`, без перечисленных в нём DOCX/XHTML/PDF,
+    support и visual inputs, поэтому не мог независимо восстановить OBL.
+  - Выполнено: `build_review_manifest` добавляет в hash-bound `inputs` все
+    документы и package inputs, связанные source manifest; snapshot и
+    регрессия доказывают их доставку reviewer-у.
+
 - [x] `AGI-040` (`P1`) Сделать исполнимыми навигацию и данные интеграционного
   сценария в canonical TC practical v0.9.
   - Основание: writer-проход scope `9.3.2` создал 66 TC, и каждый начал шаги

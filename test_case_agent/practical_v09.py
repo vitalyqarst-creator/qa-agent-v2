@@ -4485,6 +4485,74 @@ def review_subject_paths(state: dict[str, Any], package_root: Path, review_mode:
     return paths
 
 
+def source_bound_review_inputs(
+    *, source_manifest_path: Path, package_root: Path
+) -> list[tuple[str, Path]]:
+    """Return all source-package inputs required for a source-qualified review.
+
+    The source-package manifest is itself an audit record, not a substitute for
+    its DOCX/XHTML/PDF, support and visual inputs.  A separate reviewer must
+    receive those files in the immutable snapshot to reconstruct obligations
+    independently.  The source manifest has already passed validation before
+    this function is called; the defensive path checks below make an invalid
+    transport fail closed rather than producing a partial review snapshot.
+    """
+    manifest = read_json(source_manifest_path)
+    bound: list[tuple[str, Path]] = []
+    seen_paths: set[str] = set()
+
+    def add(role: str, raw_path: object) -> None:
+        if not isinstance(raw_path, str) or not raw_path.strip():
+            raise PracticalV09Error(
+                f"source-package manifest review input {role} has no path"
+            )
+        path = package_relative_path(
+            package_root, raw_path, artifact="source-package manifest"
+        )
+        if not path.is_file():
+            raise PracticalV09Error(
+                "Source-qualified review input is missing: "
+                + relative_to_package(package_root, path)
+            )
+        relative = relative_to_package(package_root, path)
+        if relative in seen_paths:
+            return
+        seen_paths.add(relative)
+        bound.append((role, path))
+
+    documents = manifest.get("documents")
+    if not isinstance(documents, list):
+        raise PracticalV09Error("source-package manifest documents must be an array")
+    for index, entry in enumerate(documents, start=1):
+        if not isinstance(entry, dict):
+            raise PracticalV09Error(
+                f"source-package manifest documents[{index}] must be an object"
+            )
+        add(f"source-document-{entry.get('role') or index}", entry.get("path"))
+
+    for field, role_prefix in (
+        ("support_inputs", "source-support"),
+        ("visual_inputs", "source-visual"),
+        ("approved_ba_decisions", "source-ba-decision"),
+    ):
+        entries = manifest.get(field, [])
+        if not isinstance(entries, list):
+            raise PracticalV09Error(
+                f"source-package manifest {field} must be an array"
+            )
+        for index, entry in enumerate(entries, start=1):
+            if not isinstance(entry, dict):
+                raise PracticalV09Error(
+                    f"source-package manifest {field}[{index}] must be an object"
+                )
+            add(f"{role_prefix}-{entry.get('role') or index}", entry.get("path"))
+
+    notes = manifest.get("agent_notes")
+    if isinstance(notes, dict):
+        add("source-agent-notes", notes.get("path"))
+    return bound
+
+
 def require_current_validator_report(
     *,
     state: dict[str, Any],
@@ -4552,6 +4620,26 @@ def build_review_manifest(
         context=context,
     )
     paths = review_subject_paths(state, package_root, review_mode)
+    source_inputs = source_bound_review_inputs(
+        source_manifest_path=paths["source_package_manifest"],
+        package_root=package_root,
+    )
+    manifest_inputs = [
+        {
+            "role": key,
+            "path": relative_to_package(package_root, path),
+            "sha256": sha256_file(path),
+        }
+        for key, path in paths.items()
+    ]
+    manifest_inputs.extend(
+        {
+            "role": role,
+            "path": relative_to_package(package_root, path),
+            "sha256": sha256_file(path),
+        }
+        for role, path in source_inputs
+    )
     manifest = {
         "schema_version": 1,
         "manifest_version": REVIEW_MANIFEST_VERSION,
@@ -4567,10 +4655,7 @@ def build_review_manifest(
         "contract_digest": contract_digest,
         "validator_report_sha256": sha256_file(validator_report_path),
         "validator_report_digest": sha256_json(validator_report),
-        "inputs": [
-            {"role": key, "path": relative_to_package(package_root, path), "sha256": sha256_file(path)}
-            for key, path in paths.items()
-        ],
+        "inputs": manifest_inputs,
         "reviewer_order": [
             "Самостоятельно восстановить обязательства из исходных материалов.",
             "Сопоставить обязательства с матрицей тест-дизайна.",
