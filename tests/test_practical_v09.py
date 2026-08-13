@@ -878,6 +878,45 @@ class PracticalV09Tests(unittest.TestCase):
             self.assertIn("scope-ui-calibration-visual-residual", finding_ids)
             self.assertIn("scope-obligation-visual-binding-incomplete", finding_ids)
 
+    def test_visual_label_mapping_requires_actual_ui_label_in_matrix_and_test_case(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            fixture = PracticalV09Fixture(Path(raw))
+            obligations = json.loads(fixture.obligations.read_text(encoding="utf-8"))
+            obligations["obligations"][0]["visual_binding"] = {
+                "source_anchor": "Рисунок экрана, верхняя навигация",
+                "element": "пункт меню «Группы компаний»",
+                "location": "верхняя часть экрана",
+                "label_mappings": [{
+                    "source_label": "Группы компаний (ГК)",
+                    "ui_label": "Группы компаний",
+                }],
+            }
+            write_json(fixture.obligations, obligations)
+
+            _, findings = validate_scope(package_root=fixture.root, workflow_state_path=fixture.state)
+            finding_ids = [item.id for item in findings if item.blocking]
+            self.assertIn("matrix-visual-label-binding", finding_ids)
+            self.assertIn("test-case-visual-label-binding", finding_ids)
+
+            fixture.matrix.write_text(
+                fixture.matrix.read_text(encoding="utf-8").replace(
+                    "Пункт меню «Партнеры»",
+                    "Пункт меню «Группы компаний»",
+                ),
+                encoding="utf-8",
+            )
+            fixture.tc.write_text(
+                fixture.tc.read_text(encoding="utf-8").replace(
+                    "«Партнеры»",
+                    "«Группы компаний»",
+                ),
+                encoding="utf-8",
+            )
+            _, findings = validate_scope(package_root=fixture.root, workflow_state_path=fixture.state)
+            finding_ids = [item.id for item in findings if item.blocking]
+            self.assertNotIn("matrix-visual-label-binding", finding_ids)
+            self.assertNotIn("test-case-visual-label-binding", finding_ids)
+
     def test_unresolved_ft_conflict_always_requires_ba_question(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             fixture = PracticalV09Fixture(Path(raw))

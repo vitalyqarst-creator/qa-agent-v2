@@ -2354,6 +2354,11 @@ def validate_scope_obligations(
                 artifact,
                 remediation_owner="scope-analyzer",
             ))
+        findings.extend(validate_visual_label_mappings(
+            obligation_id=obligation_id,
+            obligation=obligation,
+            artifact=artifact,
+        ))
         if disposition == "active":
             common_result_for = obligation.get("common_result_for_obligation_ids")
             if common_result_for is not None:
@@ -3269,6 +3274,20 @@ def validate_matrix(
             ))
         obligation = active_entries.get(obligation_id)
         if obligation is not None and context_id:
+            row_visible_text = normalized_matrix_phrase(matrix_row_text(row))
+            for source_label, ui_label in visual_label_mappings(obligation, context_id):
+                if normalized_matrix_phrase(ui_label) not in row_visible_text:
+                    findings.append(finding(
+                        "matrix-visual-label-binding",
+                        "semantic-completeness",
+                        "Матрица не использует подтверждённую подпись UI",
+                        f"Проверка {matrix_id or '<без ID>'}: для термина ФТ «{source_label}» "
+                        f"в visual_binding зафиксирована подпись UI «{ui_label}». Укажите её в "
+                        "проверяемом элементе, действии, правиле или ожидаемом результате; термин ФТ "
+                        "сохраняйте в трассировке и формулировке требования.",
+                        artifact,
+                        remediation_owner="writer",
+                    ))
             contexts = {
                 str(item.get("id")): item
                 for item in execution_contexts(obligation)
@@ -3572,6 +3591,148 @@ def matrix_field_labels(value: str) -> set[str]:
         for label in re.findall(r"[«\"]([^»\"]+)[»\"]", value)
         if normalized_matrix_phrase(label)
     }
+
+
+def visual_label_mappings(
+    obligation: Mapping[str, Any] | None,
+    context_id: str | None = None,
+) -> list[tuple[str, str]]:
+    """Return declared FT-term to visible-UI-label mappings for an obligation.
+
+    The validator never guesses that two similar labels identify the same
+    control.  A mapping exists only when the scope analyst explicitly records
+    a visual binding and says that its source term and UI label differ.
+    """
+    binding = (obligation or {}).get("visual_binding")
+    if not isinstance(binding, Mapping):
+        return []
+    mappings = binding.get("label_mappings")
+    if not isinstance(mappings, list):
+        return []
+    result: list[tuple[str, str]] = []
+    for item in mappings:
+        if not isinstance(item, Mapping):
+            continue
+        context_ids = item.get("context_ids")
+        if (
+            context_id is not None
+            and isinstance(context_ids, list)
+            and context_id not in context_ids
+        ):
+            continue
+        source_label = str(item.get("source_label") or "").strip()
+        ui_label = str(item.get("ui_label") or "").strip()
+        if source_label and ui_label:
+            result.append((source_label, ui_label))
+    return result
+
+
+def validate_visual_label_mappings(
+    *,
+    obligation_id: str,
+    obligation: Mapping[str, Any],
+    artifact: str,
+) -> list[ScopeFinding]:
+    """Validate explicit FT-term to UI-label mappings without guessing them."""
+    binding = obligation.get("visual_binding")
+    if not isinstance(binding, Mapping):
+        return []
+    mappings = binding.get("label_mappings")
+    if mappings is None:
+        return []
+    if not isinstance(mappings, list) or not mappings:
+        return [finding(
+            "scope-obligation-visual-label-mappings-format",
+            "semantic-completeness",
+            "Сопоставление терминов ФТ и подписей UI имеет неверный формат",
+            f"{obligation_id}: visual_binding.label_mappings должен быть непустым списком объектов source_label/ui_label.",
+            artifact,
+            remediation_owner="scope-analyzer",
+        )]
+    known_context_ids = {
+        str(context.get("id") or "")
+        for context in execution_contexts(obligation)
+        if isinstance(context, Mapping)
+    }
+    seen: set[tuple[str, str]] = set()
+    findings: list[ScopeFinding] = []
+    for mapping_index, item in enumerate(mappings, start=1):
+        if not isinstance(item, Mapping):
+            findings.append(finding(
+                "scope-obligation-visual-label-mapping-format",
+                "semantic-completeness",
+                "Строка сопоставления терминов ФТ и подписей UI имеет неверный формат",
+                f"{obligation_id}: label_mappings[{mapping_index}] должен быть объектом source_label/ui_label.",
+                artifact,
+                remediation_owner="scope-analyzer",
+            ))
+            continue
+        source_label = str(item.get("source_label") or "").strip()
+        ui_label = str(item.get("ui_label") or "").strip()
+        if not source_label or not ui_label:
+            findings.append(finding(
+                "scope-obligation-visual-label-mapping-incomplete",
+                "semantic-completeness",
+                "Сопоставление терминов ФТ и подписей UI неполно",
+                f"{obligation_id}: label_mappings[{mapping_index}] требует source_label и ui_label.",
+                artifact,
+                remediation_owner="scope-analyzer",
+            ))
+            continue
+        mapping = (
+            normalized_matrix_phrase(source_label),
+            normalized_matrix_phrase(ui_label),
+        )
+        if mapping[0] == mapping[1]:
+            findings.append(finding(
+                "scope-obligation-visual-label-mapping-same",
+                "semantic-completeness",
+                "Сопоставление терминов ФТ и подписей UI не описывает различие",
+                f"{obligation_id}: source_label и ui_label в label_mappings[{mapping_index}] совпадают; сопоставление нужно только для различающихся подписей.",
+                artifact,
+                remediation_owner="scope-analyzer",
+            ))
+        if mapping in seen:
+            findings.append(finding(
+                "scope-obligation-visual-label-mapping-duplicate",
+                "semantic-completeness",
+                "Сопоставление терминов ФТ и подписей UI повторяется",
+                f"{obligation_id}: повторяется label_mappings[{mapping_index}].",
+                artifact,
+                remediation_owner="scope-analyzer",
+            ))
+        seen.add(mapping)
+        context_ids = item.get("context_ids")
+        if context_ids is not None and (
+            not isinstance(context_ids, list)
+            or not context_ids
+            or not all(
+                isinstance(value, str) and value in known_context_ids
+                for value in context_ids
+            )
+        ):
+            findings.append(finding(
+                "scope-obligation-visual-label-mapping-contexts",
+                "semantic-completeness",
+                "Сопоставление подписей UI ссылается на неизвестный контекст",
+                f"{obligation_id}: context_ids в label_mappings[{mapping_index}] должен содержать один или несколько CTX-* этого обязательства.",
+                artifact,
+                remediation_owner="scope-analyzer",
+            ))
+    return findings
+
+
+def matrix_row_text(row: Mapping[str, str]) -> str:
+    """Return the visible design fields of one matrix row as normalized text."""
+    return " ".join(
+        str(row.get(column) or "")
+        for column in (
+            "Проверяемый элемент",
+            "Проверяемое правило",
+            "Проверяемое действие",
+            "Ожидаемый результат",
+        )
+    )
 
 
 def tc_explicit_ui_labels(body: str) -> set[str]:
@@ -4484,6 +4645,19 @@ def validate_test_cases(
                     remediation_owner="writer",
                 ))
             mapped_obligation = active_entries.get(mapped_pair[0])
+            for source_label, ui_label in visual_label_mappings(mapped_obligation, mapped_pair[1]):
+                normalized_ui_label = normalized_matrix_phrase(ui_label)
+                if normalized_ui_label not in tc_labels:
+                    findings.append(finding(
+                        "test-case-visual-label-binding",
+                        "execution-readiness",
+                        "Тест-кейс не использует подтверждённую подпись UI",
+                        f"{tc_id}: для термина ФТ «{source_label}» в visual_binding зафиксирована "
+                        f"подпись UI «{ui_label}». Назовите её явно в шаге или в ожидаемом "
+                        "наблюдаемом результате; не подменяйте подпись UI термином ФТ.",
+                        artifact,
+                        remediation_owner="writer",
+                    ))
             for literal in sorted(shared_result_literals.get(mapped_pair[0], set())):
                 if literal not in test_case_field(body, "Итоговый ожидаемый результат"):
                     findings.append(finding(
