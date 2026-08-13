@@ -1360,6 +1360,35 @@ class PracticalV09Tests(unittest.TestCase):
             )
             self.assertIn("review-result-snapshot-changed", [item.id for item in findings])
 
+    def test_review_manifest_binds_all_source_package_inputs(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            fixture = PracticalV09Fixture(Path(raw))
+            manifest = build_review_manifest(
+                package_root=fixture.root,
+                workflow_state_path=fixture.state,
+                review_mode="test-cases",
+                controller_thread_id="019feebf-3cde-79d2-9f87-ba9c61ff7b13",
+                code_branch="codex/test",
+                code_commit="abc123",
+                contract_digest="contract",
+            )
+            manifest_path = fixture.scope_dir / "test-cases-review-manifest.json"
+            write_json(manifest_path, manifest)
+            bound = {(entry["role"], entry["path"]) for entry in manifest["inputs"]}
+            self.assertTrue({
+                ("source-document-main-docx", "source/main.docx"),
+                ("source-document-main-xhtml", "source/main.xhtml"),
+                ("source-document-pdf-cross-check", "source/main.pdf"),
+                ("source-agent-notes", "AGENT-NOTES.md"),
+            }.issubset(bound))
+            snapshot_path = fixture.scope_dir / "test-cases-review-input-snapshot"
+            snapshot = create_snapshot(
+                manifest_path=manifest_path,
+                package_root=fixture.root,
+                destination=snapshot_path,
+            )
+            self.assertTrue(snapshot["allowed"])
+
     def test_review_manifest_requires_a_fresh_persisted_validator_report(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             fixture = PracticalV09Fixture(Path(raw))
