@@ -14,8 +14,8 @@ fts/Partners/Partners-v1-rerun-clean
 
 ## Версия agent-layer
 
-Пакет использует commit `7be072bc0ff2d6960317de8a028e231a6e8b4f45`
-(`Allow composite card result coverage`) ветки
+Пакет использует commit `357bcde12018496f0a8126754503d16b0c2a6aeb`
+(`Guard source contradiction classification`) ветки
 `codex/partners-v1-rerun-9-3-2`.
 
 ## Исходники ФТ
