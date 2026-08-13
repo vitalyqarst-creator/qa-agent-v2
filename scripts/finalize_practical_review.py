@@ -188,7 +188,14 @@ def main(argv: list[str] | None = None) -> int:
             else:
                 state[revision_key] += 1
                 state["phase"] = "matrix" if review_mode == "matrix" else "test-cases"
-                state["next_action"] = "Выполнить одну целевую доработку по findings reviewer"
+                if recovered_snapshot_drift:
+                    stage_label = "matrix" if review_mode == "matrix" else "тест-кейсов"
+                    state["next_action"] = (
+                        "Провести повторное независимое review "
+                        f"{stage_label} после уже выполненной целевой доработки"
+                    )
+                else:
+                    state["next_action"] = "Выполнить одну целевую доработку по findings reviewer"
     else:
         state["phase"] = "blocked"
         state["next_action"] = "Получить внешнее уточнение по blocker reviewer"
