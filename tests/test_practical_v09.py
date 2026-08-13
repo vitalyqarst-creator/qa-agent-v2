@@ -3682,7 +3682,7 @@ class PracticalV09Tests(unittest.TestCase):
             self.assertNotIn("test-case-state-formation-step", finding_ids)
             self.assertNotIn("test-case-no-save-observation", finding_ids)
 
-    def test_validator_requires_search_and_duplicate_trigger_steps(self) -> None:
+    def test_validator_requires_search_and_duplicate_save_trigger_steps(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             fixture = PracticalV09Fixture(
                 Path(raw),
@@ -3754,6 +3754,37 @@ class PracticalV09Tests(unittest.TestCase):
                 encoding="utf-8",
             )
             _, findings = validate_scope(package_root=fixture.root, workflow_state_path=fixture.state)
+            self.assertNotIn("test-case-duplicate-trigger", [item.id for item in findings if item.blocking])
+
+            pre_save_hint = PracticalV09Fixture(
+                Path(raw) / "duplicate-hint",
+                obligation_statement=(
+                    "При создании нового партнёра с уже существующим названием "
+                    "система выдаёт подсказку о существовании партнёра с таким названием."
+                ),
+            )
+            pre_save_hint.matrix.write_text(
+                pre_save_hint.matrix.read_text(encoding="utf-8").replace(
+                    "Не требуется: состояние задано предусловием.",
+                    "Создать новую карточку партнёра.",
+                ).replace(
+                    "Открыть пункт меню «Партнеры».",
+                    "Ввести название уже существующего партнёра.",
+                ),
+                encoding="utf-8",
+            )
+            pre_save_hint.tc.write_text(
+                pre_save_hint.tc.read_text(encoding="utf-8").replace(
+                    "1. Открыть раздел «Партнеры».",
+                    "1. Создать новую карточку партнёра.\n"
+                    "2. Ввести в поле «Наименование» название уже существующего партнёра.",
+                ),
+                encoding="utf-8",
+            )
+            _, findings = validate_scope(
+                package_root=pre_save_hint.root,
+                workflow_state_path=pre_save_hint.state,
+            )
             self.assertNotIn("test-case-duplicate-trigger", [item.id for item in findings if item.blocking])
 
     def test_validator_requires_empty_value_before_required_field_validation(self) -> None:
