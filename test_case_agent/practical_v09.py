@@ -18,7 +18,7 @@ from typing import Any, Iterable, Mapping
 
 
 ROUTE_VERSION = "practical-v0.9"
-ROUTE_TOOL_VERSION = "practical-v0.9.14"
+ROUTE_TOOL_VERSION = "practical-v0.9.15"
 WORKFLOW_STATE_SCHEMA_VERSION = 1
 SOURCE_CONTRACT_VERSION = "source-package-v3"
 MATRIX_CONTRACT_VERSION = "practical-matrix-v2"
@@ -193,6 +193,10 @@ SOURCE_MESSAGE_CUE_RE = re.compile(
     r"\b(?:вывод|отображ|показыв|сообщени|текст|уведомлен|ошибк)\w*\b",
     re.IGNORECASE,
 )
+REQUIREMENT_CODE_RE = re.compile(
+    r"\b(?P<prefix>AS|BSR|GSR|DIT)\s*\.?\s*(?P<number>\d+)\b",
+    re.IGNORECASE,
+)
 INTERNAL_UNOBSERVABILITY_JUSTIFICATION_RE = re.compile(
     r"(?:\b(?:источник|фт|требовани\w*)\b.{0,120}"
     r"\b(?:не\s+(?:зада\w*|содерж\w*|определ\w*)|отсутств\w*)\b.{0,120}"
@@ -330,6 +334,24 @@ def sha256_json(value: Any) -> str:
 
 def is_durable_codex_thread_id(value: object) -> bool:
     return isinstance(value, str) and bool(CODEX_THREAD_ID_RE.fullmatch(value))
+
+
+def requirement_codes(value: object) -> dict[str, str]:
+    """Return normalized FT requirement codes and their canonical display form.
+
+    ``source_anchor`` and a TC trace may use a dot or whitespace between a
+    prefix and a number.  The comparison therefore normalizes only that
+    separator; the numeric part is preserved exactly so that, for example,
+    ``DIT 007`` is not silently rewritten to a different code.
+    """
+    codes: dict[str, str] = {}
+    for match in REQUIREMENT_CODE_RE.finditer(str(value or "")):
+        prefix = match.group("prefix").upper()
+        number = match.group("number")
+        key = f"{prefix}:{number}"
+        separator = "." if prefix == "AS" else " "
+        codes.setdefault(key, f"{prefix}{separator}{number}")
+    return codes
 
 
 def read_json(path: Path) -> dict[str, Any]:
@@ -2476,6 +2498,30 @@ def validate_test_cases(
                     artifact,
                     remediation_owner="writer",
                 ))
+            obligation = active_entries.get(obligation_ids[0])
+            if obligation is not None:
+                source_anchor = str(obligation.get("source_anchor") or "")
+                source_codes = requirement_codes(source_anchor)
+                trace_codes = requirement_codes(trace)
+                missing_source_codes = [
+                    source_codes[key]
+                    for key in sorted(source_codes)
+                    if key not in trace_codes
+                ]
+                if missing_source_codes:
+                    findings.append(finding(
+                        "test-case-source-code-trace",
+                        "traceability",
+                        "В трассировке тест-кейса потерян код требования ФТ",
+                        f"{tc_id}: для {obligation_ids[0]} добавьте в «Трассировка» коды из source_anchor: "
+                        + ", ".join(missing_source_codes) + ".",
+                        artifact,
+                        evidence=[
+                            f"source_anchor={source_anchor}",
+                            f"trace={trace}",
+                        ],
+                        remediation_owner="writer",
+                    ))
             if len(scenario_ids) != 1:
                 findings.append(finding(
                     "test-case-scenario-trace",

@@ -21,6 +21,7 @@ from test_case_agent.practical_v09 import (
     load_workflow_state,
     matrix_review_required,
     obligation_ids_sha256,
+    requirement_codes,
     sha256_file,
     validate_source_package_manifest,
     validate_scope,
@@ -1974,6 +1975,65 @@ class PracticalV09Tests(unittest.TestCase):
             finding_ids = [item.id for item in findings if item.blocking]
             self.assertNotIn("matrix-source-message-literal", finding_ids)
             self.assertNotIn("test-case-source-message-literal", finding_ids)
+
+    def test_validator_requires_all_requirement_codes_from_obligation_in_tc_trace(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            fixture = PracticalV09Fixture(Path(raw))
+            obligations = json.loads(fixture.obligations.read_text(encoding="utf-8"))
+            obligations["obligations"][0]["source_anchor"] = (
+                "XHTML, Таблица 7, AS.36; раздел 9.3, AS.5."
+            )
+            write_json(fixture.obligations, obligations)
+
+            _, findings = validate_scope(package_root=fixture.root, workflow_state_path=fixture.state)
+            finding_ids = [item.id for item in findings if item.blocking]
+            self.assertIn("test-case-source-code-trace", finding_ids)
+
+            fixture.tc.write_text(
+                fixture.tc.read_text(encoding="utf-8").replace(
+                    "`OBL-001`; `SCN-001`; Раздел 9.1.",
+                    "`OBL-001`; `SCN-001`; AS 36; Раздел 9.1.",
+                ),
+                encoding="utf-8",
+            )
+            _, findings = validate_scope(package_root=fixture.root, workflow_state_path=fixture.state)
+            source_code_findings = [
+                item for item in findings if item.id == "test-case-source-code-trace"
+            ]
+            self.assertEqual(1, len(source_code_findings))
+            self.assertIn("AS.5", source_code_findings[0].details)
+
+            fixture.tc.write_text(
+                fixture.tc.read_text(encoding="utf-8").replace(
+                    "AS 36; Раздел 9.1.", "AS 36; AS.5; Раздел 9.1."
+                ),
+                encoding="utf-8",
+            )
+            _, findings = validate_scope(package_root=fixture.root, workflow_state_path=fixture.state)
+            self.assertNotIn(
+                "test-case-source-code-trace",
+                [item.id for item in findings if item.blocking],
+            )
+
+    def test_validator_allows_trace_without_requirement_code_when_anchor_has_none(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            fixture = PracticalV09Fixture(Path(raw))
+            _, findings = validate_scope(package_root=fixture.root, workflow_state_path=fixture.state)
+            self.assertNotIn(
+                "test-case-source-code-trace",
+                [item.id for item in findings if item.blocking],
+            )
+
+    def test_requirement_code_parser_supports_known_ft_code_forms(self) -> None:
+        self.assertEqual(
+            {
+                "AS:36": "AS.36",
+                "BSR:128": "BSR 128",
+                "GSR:22": "GSR 22",
+                "DIT:007": "DIT 007",
+            },
+            requirement_codes("AS.36; BSR 128; GSR.22; DIT 007"),
+        )
 
     def test_validator_requires_state_formation_and_follow_up_observation(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
