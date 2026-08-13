@@ -85,8 +85,11 @@ runtime-полей и отклоняй английские служебные �
 Reviewer сам проверяет `scenario_consolidation`, а не доверяет prose writer-а:
 у параметризованной группы совпадают проверяемый элемент, домен проверки,
 способ взаимодействия, контекст, тип и статус исполнения; `parameterization_basis`
-описывает только допустимый вид параметра. Разные поля, формат и размер файла,
-editability и ручной ввод — разные проверки. Если manifest содержит этот contract, result включает
+описывает только допустимый вид параметра. Для `поля одного составного
+результата` разные поля допустимы лишь при одном механизме, action и primary
+oracle, полном `field_inventory`, `composite_result` и таблице всех полей в
+TC. Разные validation, UI-уровни, сохранение, editability и ручной ввод как
+самостоятельные механики не объединяются. Если manifest содержит этот contract, result включает
 `scenario_consolidation_review` с `checked=true`, `decision_ids` из manifest,
 `uncategorized_candidate_count` и `method`. При `approved` счётчик равен нулю;
 неучтённая группа — отдельный finding, без изменения workflow reviewer-ом.

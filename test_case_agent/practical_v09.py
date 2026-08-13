@@ -128,7 +128,18 @@ ALLOWED_PARAMETERIZATION_BASES = {
     "значения одного закрытого справочника",
     "эквивалентные значения одного класса",
     "границы одного правила",
+    "поля одного составного результата",
 }
+COMPOSITE_RESULT_PARAMETERIZATION_BASIS = "поля одного составного результата"
+COMPOSITE_RESULT_SHARED_COLUMNS = (
+    "Домен проверки",
+    "Способ взаимодействия",
+    "Тип",
+    "Статус исполнения",
+    "Исходное состояние",
+    "Формирование состояния",
+    "Проверяемое действие",
+)
 EXECUTION_STATUS_PRECEDENCE = (
     "needs-future-clarification",
     "blocked-observability",
@@ -2409,6 +2420,55 @@ def normalized_matrix_phrase(value: str) -> str:
     return " ".join(re.findall(r"[\w-]+", value.casefold()))
 
 
+def normalized_field_label(value: str) -> str:
+    """Normalize a UI-field label for a composite-result table comparison."""
+    normalized = normalized_matrix_phrase(value)
+    normalized = re.sub(r"^поле\s+", "", normalized)
+    return normalized.strip(" «»\"'`.,:;")
+
+
+def markdown_table_rows(value: str) -> list[list[list[str]]]:
+    """Return simple Markdown tables, excluding separator rows."""
+    tables: list[list[list[str]]] = []
+    current: list[list[str]] = []
+    for line in value.splitlines():
+        if line.lstrip().startswith("|"):
+            cells = [cell.strip() for cell in line.strip().strip("|").split("|")]
+            if cells and all(re.fullmatch(r":?-{3,}:?", cell) for cell in cells):
+                continue
+            current.append(cells)
+            continue
+        if current:
+            tables.append(current)
+            current = []
+    if current:
+        tables.append(current)
+    return tables
+
+
+def has_composite_result_table(body: str, field_inventory: Iterable[str]) -> bool:
+    """Check that one visible result table covers every fan-out field."""
+    expected_fields = {normalized_field_label(field) for field in field_inventory}
+    if not expected_fields:
+        return False
+    for table in markdown_table_rows(body):
+        if len(table) < 2 or len(table[0]) < 2:
+            continue
+        header = [normalized_matrix_phrase(cell) for cell in table[0]]
+        if not any("поле" in cell for cell in header):
+            continue
+        if not any("ожидаем" in cell or "значен" in cell or "результат" in cell for cell in header):
+            continue
+        listed_fields = {
+            normalized_field_label(row[0])
+            for row in table[1:]
+            if row and row[0].strip()
+        }
+        if expected_fields <= listed_fields:
+            return True
+    return False
+
+
 def matrix_exact_duplicate_signatures(
     row: Mapping[str, str],
 ) -> list[tuple[str, ...]]:
@@ -2492,6 +2552,7 @@ def scenario_consolidation_contract(
         "enabled": enabled,
         "decisions": [],
         "shared_scenarios_by_tc": {},
+        "consolidation_by_tc": {},
         "covered_internal_scenarios": {},
     }
     if not enabled:
@@ -2630,33 +2691,55 @@ def scenario_consolidation_contract(
                     blocking=True,
                 ))
                 valid = False
-            for column, finding_id, title in (
-                (
+            if parameterization_basis == COMPOSITE_RESULT_PARAMETERIZATION_BASIS:
+                field_inventory = raw.get("field_inventory")
+                composite_result = str(raw.get("composite_result") or "").strip()
+                expected_inventory = {
+                    normalized_field_label(row.get("Проверяемый элемент", ""))
+                    for row in known_rows
+                }
+                declared_inventory = (
+                    {normalized_field_label(str(item)) for item in field_inventory}
+                    if isinstance(field_inventory, list)
+                    and all(isinstance(item, str) and item.strip() for item in field_inventory)
+                    else set()
+                )
+                if not composite_result or not declared_inventory or declared_inventory != expected_inventory:
+                    findings.append(finding(
+                        "scenario-consolidation-composite-result-contract",
+                        "test-design",
+                        "Для объединения полей не зафиксирован полный составной результат",
+                        f"{label}: укажите непустой composite_result и field_inventory, "
+                        "точно совпадающий с «Проверяемым элементом» всех связанных SCN-*.",
+                        artifact,
+                        remediation_owner="writer",
+                        blocking=True,
+                    ))
+                    valid = False
+                required_columns = COMPOSITE_RESULT_SHARED_COLUMNS
+            else:
+                required_columns = (
                     "Проверяемый элемент",
-                    "scenario-consolidation-element",
-                    "Параметризованное объединение смешивает разные проверяемые элементы",
-                ),
-                (
                     "Домен проверки",
-                    "scenario-consolidation-domain",
-                    "Параметризованное объединение смешивает разные домены проверки",
-                ),
-                (
                     "Способ взаимодействия",
-                    "scenario-consolidation-interaction",
-                    "Параметризованное объединение смешивает разные способы взаимодействия",
-                ),
-                (
                     "Тип",
-                    "scenario-consolidation-type",
-                    "Параметризованное объединение смешивает позитивную и негативную проверку",
-                ),
-                (
                     "Статус исполнения",
-                    "scenario-consolidation-status",
-                    "Параметризованное объединение смешивает разные статусы исполнения",
-                ),
-            ):
+                )
+            for column in required_columns:
+                finding_id = {
+                    "Проверяемый элемент": "scenario-consolidation-element",
+                    "Домен проверки": "scenario-consolidation-domain",
+                    "Способ взаимодействия": "scenario-consolidation-interaction",
+                    "Тип": "scenario-consolidation-type",
+                    "Статус исполнения": "scenario-consolidation-status",
+                }.get(column, "scenario-consolidation-composite-mismatch")
+                title = {
+                    "Проверяемый элемент": "Параметризованное объединение смешивает разные проверяемые элементы",
+                    "Домен проверки": "Параметризованное объединение смешивает разные домены проверки",
+                    "Способ взаимодействия": "Параметризованное объединение смешивает разные способы взаимодействия",
+                    "Тип": "Параметризованное объединение смешивает позитивную и негативную проверку",
+                    "Статус исполнения": "Параметризованное объединение смешивает разные статусы исполнения",
+                }.get(column, "Параметризованное объединение не описывает один общий составной результат")
                 values = {row.get(column, "").strip() for row in known_rows}
                 if len(values) != 1 or "" in values:
                     findings.append(finding(
@@ -2741,10 +2824,15 @@ def scenario_consolidation_contract(
             "planned_tc_id": planned_tc_id,
             "observable_scenario_id": observable_scenario_id,
             "parameterization_basis": str(raw.get("parameterization_basis") or "").strip(),
+            "field_inventory": tuple(
+                str(item) for item in raw.get("field_inventory", []) if isinstance(item, str)
+            ),
+            "composite_result": str(raw.get("composite_result") or "").strip(),
         }
         result["decisions"].append(normalized)
         if decision in {"merge-parameterized", "covered-by-observable-result"}:
             result["shared_scenarios_by_tc"][planned_tc_id] = frozenset(scenario_ids)
+            result["consolidation_by_tc"][planned_tc_id] = normalized
         if decision == "covered-by-observable-result":
             for scenario_id in scenario_ids:
                 result["covered_internal_scenarios"][scenario_id] = normalized
@@ -3533,6 +3621,7 @@ def validate_test_cases(
         and workflow_scenario_consolidation_enabled(workflow_state)
     )
     shared_scenarios_by_tc: dict[str, frozenset[str]] = {}
+    consolidation_by_tc: dict[str, dict[str, Any]] = {}
     if consolidation_enabled:
         _consolidation_findings, consolidation = scenario_consolidation_contract(
             state=workflow_state,
@@ -3540,6 +3629,7 @@ def validate_test_cases(
             artifact="workflow-state.json",
         )
         shared_scenarios_by_tc = consolidation["shared_scenarios_by_tc"]
+        consolidation_by_tc = consolidation["consolidation_by_tc"]
     for block in blocks:
         tc_id = block["id"]
         body = block["body"]
@@ -3721,6 +3811,26 @@ def validate_test_cases(
             consolidation_enabled
             and shared_scenarios_by_tc.get(tc_id) == frozenset(scenario_ids)
         )
+        consolidation_decision = consolidation_by_tc.get(tc_id, {})
+        if (
+            consolidation_decision.get("parameterization_basis")
+            == COMPOSITE_RESULT_PARAMETERIZATION_BASIS
+            and not has_composite_result_table(
+                body,
+                consolidation_decision.get("field_inventory", ()),
+            )
+        ):
+            findings.append(finding(
+                "test-case-composite-result-table",
+                "test-design",
+                "Составной результат по нескольким полям не раскрыт таблицей",
+                f"{tc_id}: для объединения «поля одного составного результата» "
+                "добавьте таблицу «Поле | Ожидаемое значение/результат» со всеми "
+                "полями из field_inventory.",
+                artifact,
+                remediation_owner="writer",
+                blocking=True,
+            ))
         if (
             obligation_ids
             and scenario_ids
