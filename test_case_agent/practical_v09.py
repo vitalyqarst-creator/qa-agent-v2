@@ -215,6 +215,38 @@ TEST_DATA_TAUTOLOGY_PATTERNS = (
     re.compile(r"\bпараметр\w*\s*,?\s+указанн\w*\s+в\s+тестовых\s+данных\b", re.IGNORECASE),
     re.compile(r"\bподготовить\s+данные\s+для\s+проверяемого\s+правила\b", re.IGNORECASE),
 )
+TEST_DATA_GENERIC_COMPLETION_PATTERNS = (
+    re.compile(
+        r"\bостальн\w*\s+обязательн\w*\s+пол\w*\b[^.\n]{0,80}"
+        r"\b(?:допустим\w*|валидн\w*)\s+значен\w*\b",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b(?:допустим\w*|валидн\w*)\s+значен\w*\b[^.\n]{0,80}"
+        r"\bостальн\w*\s+обязательн\w*\s+пол\w*\b",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\bуникальн\w*\s+набор\w*\b[^.\n]{0,80}"
+        r"\bобязательн\w*\s+значен\w*\b",
+        re.IGNORECASE,
+    ),
+)
+TEST_DATA_ACTION_LEAK_RE = re.compile(
+    r"(?im)^\s*[-*]\s*(?:заполнить|открыть|выбрать|изменить|перейти|"
+    r"нажать|прикрепить|загрузить)\w*\b",
+    re.IGNORECASE,
+)
+TEST_DATA_PREPARATION_RE = re.compile(r"\bспособ\s+подготовк\w*\s*:", re.IGNORECASE)
+TEST_DATA_BOUNDARY_RE = re.compile(
+    r"\b(?:строк\w*|текст\w*)\b[^.\n]{0,48}"
+    r"\b(?:длин\w*|из)\s*\d{3,}\s+символ\w*\b",
+    re.IGNORECASE,
+)
+TEST_DATA_FILE_PREPARATION_RE = re.compile(
+    r"\bподготовить\w*\b[^.\n]{0,120}\bфайл\w*\b",
+    re.IGNORECASE,
+)
 MATRIX_META_STATE_PATTERNS = (
     re.compile(r"\bдоступны\s+указанные\s+предпосылки\b", re.IGNORECASE),
     re.compile(r"\bподготовлена?\s+строка\s+запроса\b", re.IGNORECASE),
@@ -3419,6 +3451,61 @@ def validate_dadata_test_data_contract(
     return findings
 
 
+def validate_test_data_executability(
+    *,
+    tc_id: str,
+    test_data: str,
+    artifact: str,
+) -> list[ScopeFinding]:
+    """Reject test-data placeholders that cannot be reproduced by a tester.
+
+    This is deliberately narrower than a semantic review: it catches the
+    recurring forms of circular completion data and setup actions disguised as
+    test data.  A reviewer still decides whether a particular literal is fit
+    for a requirement.
+    """
+    findings: list[ScopeFinding] = []
+    if any(pattern.search(test_data) for pattern in TEST_DATA_GENERIC_COMPLETION_PATTERNS):
+        findings.append(finding(
+            "test-case-test-data-generic-completion",
+            "execution-readiness",
+            "Тестовые данные не определяют значения для сохранения или перехода",
+            f"{tc_id}: не заменяйте значения формулировкой «остальные обязательные "
+            "поля заполнить допустимо» или «уникальный набор обязательных "
+            "значений». Укажите literals либо точные свойства каждого нужного "
+            "значения и способ подготовки.",
+            artifact,
+            remediation_owner="writer",
+        ))
+    if TEST_DATA_ACTION_LEAK_RE.search(test_data):
+        findings.append(finding(
+            "test-case-test-data-action-leak",
+            "execution-readiness",
+            "В разделе «Тестовые данные» записано действие вместо входного значения",
+            f"{tc_id}: перенесите пользовательское действие в «Шаги», а в "
+            "«Тестовые данные» оставьте конкретное значение, файл или точные "
+            "свойства с воспроизводимым способом подготовки.",
+            artifact,
+            remediation_owner="writer",
+        ))
+    requires_preparation = (
+        TEST_DATA_BOUNDARY_RE.search(test_data) is not None
+        or TEST_DATA_FILE_PREPARATION_RE.search(test_data) is not None
+    )
+    if requires_preparation and TEST_DATA_PREPARATION_RE.search(test_data) is None:
+        findings.append(finding(
+            "test-case-test-data-preparation-missing",
+            "execution-readiness",
+            "Тестовые данные требуют подготовки, но её способ не указан",
+            f"{tc_id}: для граничной строки или подготовленного файла укажите "
+            "точные свойства и строку «Способ подготовки: ...», достаточную для "
+            "повторного ручного и автоматизированного прогона.",
+            artifact,
+            remediation_owner="writer",
+        ))
+    return findings
+
+
 def validate_test_cases(
     tc_path: Path,
     package_root: Path,
@@ -3482,6 +3569,11 @@ def validate_test_cases(
                 artifact,
                 remediation_owner="writer",
             ))
+        findings.extend(validate_test_data_executability(
+            tc_id=tc_id,
+            test_data=test_data,
+            artifact=artifact,
+        ))
         steps_value = test_case_field(body, "Шаги")
         declared_literals = backtick_literals(test_data)
         runtime_literals = backtick_literals(
