@@ -2076,6 +2076,91 @@ class PracticalV09Tests(unittest.TestCase):
             self.assertNotIn("test-case-scenario-uncovered", finding_ids)
             self.assertNotIn("test-case-scenario-duplicated", finding_ids)
 
+    def test_validator_allows_shared_tc_only_for_probable_semantic_duplicate_rows(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            fixture = PracticalV09Fixture(Path(raw))
+            obligations = json.loads(fixture.obligations.read_text(encoding="utf-8"))
+            shared_context = {
+                "id": "CTX-CREATE",
+                "label": "Создание карточки партнера",
+                "required_setup_kinds": ["actor"],
+                "setup_ids": ["SETUP-ACTOR-001"],
+            }
+            obligations["obligations"] = [
+                {
+                    "id": "OBL-001",
+                    "source_anchor": "Таблица 6, строка «КПП».",
+                    "statement": "Поле «КПП» доступно для редактирования.",
+                    "risk_flags": [],
+                    "execution_contexts": [shared_context],
+                },
+                {
+                    "id": "OBL-002",
+                    "source_anchor": "Таблица 6, строка «КПП», тип значения.",
+                    "statement": "Поле «КПП» допускает ручной ввод.",
+                    "risk_flags": [],
+                    "execution_contexts": [shared_context],
+                },
+            ]
+            write_json(fixture.obligations, obligations)
+            header = (
+                "# Матрица тест-дизайна\n\n"
+                "| Проверка | Идентификатор сценария | Обязательство ФТ | Контекст исполнения | Проверяемое правило | Исходное состояние | Формирование состояния | Проверяемое действие | Ожидаемый результат | Нужные предпосылки | Тип | Приоритет | Статус исполнения | Планируемый TC-ID |\n"
+                "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |\n"
+            )
+            rows = (
+                "| MTX-001 | SCN-001 | OBL-001 | CTX-CREATE — Создание карточки партнера | Поле «КПП» доступно для редактирования. | Открыта новая карточка партнера. | Не требуется: карточка открыта в предусловии. | Ввести значение в поле «КПП», затем заменить его. | Поле «КПП» принимает измененное значение. | SETUP-ACTOR-001 — пользователь с доступом. | Positive | Medium | ready | TC-CARD-001 |\n"
+                "| MTX-002 | SCN-002 | OBL-002 | CTX-CREATE — Создание карточки партнера | Поле «КПП» допускает ручной ввод. | Открыта новая карточка партнера. | Не требуется: карточка открыта в предусловии. | Вручную ввести значение в поле «КПП». | Поле «КПП» принимает значение, введенное вручную. | SETUP-ACTOR-001 — пользователь с доступом. | Positive | Medium | ready | TC-CARD-002 |\n"
+            )
+            fixture.matrix.write_text(header + rows, encoding="utf-8")
+            _, findings = validate_scope(package_root=fixture.root, workflow_state_path=fixture.state)
+            self.assertIn(
+                "matrix-probable-semantic-duplicate",
+                [item.id for item in findings],
+            )
+
+            fixture.matrix.write_text(
+                (header + rows).replace("TC-CARD-002", "TC-CARD-001"),
+                encoding="utf-8",
+            )
+            fixture.tc.write_text(
+                "## TC-CARD-001\n"
+                "**Название:** Поле «КПП» допускает ручной ввод и изменение при создании карточки партнера\n"
+                "**Тип:** Positive\n"
+                "**Приоритет:** Medium\n"
+                "**package_id:** WP-01\n"
+                "**Статус исполнения:** ready\n"
+                "**Контекст исполнения:** `CTX-CREATE` — создание карточки партнера.\n"
+                "**Трассировка:** `OBL-001`; `OBL-002`; `SCN-001`; `SCN-002`; Таблица 6.\n"
+                "**Цель:** Проверить ручной ввод и изменение КПП.\n"
+                "**Предусловия:** Открыта новая карточка партнера.\n"
+                "**Тестовые данные:** Первое значение КПП: `773601001`; новое значение КПП: `773601002`.\n"
+                "**Шаги:**\n"
+                "1. Ввести в поле «КПП» `773601001`.\n"
+                "2. Заменить значение поля «КПП» на `773601002`.\n"
+                "**Итоговый ожидаемый результат:** В поле «КПП» отображается `773601002`.\n",
+                encoding="utf-8",
+            )
+            _, findings = validate_scope(package_root=fixture.root, workflow_state_path=fixture.state)
+            finding_ids = [item.id for item in findings if item.blocking]
+            self.assertNotIn("test-case-obligation-scenario-count", finding_ids)
+            self.assertNotIn("test-case-shared-scenario-not-allowed", finding_ids)
+            self.assertNotIn("test-case-scenario-uncovered", finding_ids)
+            self.assertNotIn("test-case-scenario-duplicated", finding_ids)
+
+            ineligible_rows = (header + rows).replace(
+                "TC-CARD-002", "TC-CARD-001"
+            ).replace(
+                "Вручную ввести значение в поле «КПП».",
+                "Выбрать значение для поля «КПП» из списка.",
+            )
+            fixture.matrix.write_text(ineligible_rows, encoding="utf-8")
+            _, findings = validate_scope(package_root=fixture.root, workflow_state_path=fixture.state)
+            self.assertIn(
+                "test-case-shared-scenario-not-allowed",
+                [item.id for item in findings if item.blocking],
+            )
+
     def test_validator_requires_source_message_literal_in_matrix_and_tc(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             fixture = PracticalV09Fixture(
