@@ -2735,6 +2735,136 @@ class PracticalV09Tests(unittest.TestCase):
             self.assertIn("test-case-test-data-tautology", finding_ids)
             self.assertIn("test-case-meta-state-step", finding_ids)
 
+    def test_validator_rejects_context_label_substituted_for_navigation(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            fixture = PracticalV09Fixture(Path(raw))
+            fixture.matrix.write_text(
+                fixture.matrix.read_text(encoding="utf-8").replace(
+                    "Открыть пункт меню «Партнеры».",
+                    "Открыть раздел «Партнеры» в контексте «Открытие раздела из меню».",
+                ),
+                encoding="utf-8",
+            )
+            fixture.tc.write_text(
+                fixture.tc.read_text(encoding="utf-8").replace(
+                    "1. Открыть раздел «Партнеры».",
+                    "1. Открыть раздел «Партнеры» в контексте «Открытие раздела из меню».",
+                ),
+                encoding="utf-8",
+            )
+            _, findings = validate_scope(package_root=fixture.root, workflow_state_path=fixture.state)
+            finding_ids = [item.id for item in findings if item.blocking]
+            self.assertIn("matrix-context-label-as-action", finding_ids)
+            self.assertIn("test-case-context-label-as-action", finding_ids)
+
+    def test_validator_rejects_generic_dadata_test_data(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            fixture = PracticalV09Fixture(
+                Path(raw),
+                obligation_statement="По введённому наименованию система показывает подходящие организации DaData.",
+            )
+            fixture.tc.write_text(
+                fixture.tc.read_text(encoding="utf-8")
+                .replace(
+                    "**Тестовые данные:** Не требуются.",
+                    "**Тестовые данные:** Подготовить организацию с известным наименованием и доступной подсказкой DaData.",
+                )
+                .replace(
+                    "1. Открыть раздел «Партнеры».",
+                    "1. Ввести фрагмент наименования в поле «Наименование партнёра».\n"
+                    "2. Выбрать организацию из подсказки DaData.",
+                ),
+                encoding="utf-8",
+            )
+            _, findings = validate_scope(package_root=fixture.root, workflow_state_path=fixture.state)
+            self.assertIn(
+                "test-case-dadata-generic-data",
+                [item.id for item in findings if item.blocking],
+            )
+
+    def test_validator_allows_explicit_missing_dadata_fixture_contract(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            fixture = PracticalV09Fixture(
+                Path(raw),
+                obligation_statement="По введённому наименованию система показывает подходящие организации DaData.",
+            )
+            fixture.tc.write_text(
+                fixture.tc.read_text(encoding="utf-8")
+                .replace(
+                    "**Тестовые данные:** Не требуются.",
+                    "**Тестовые данные:** Требуемый профиль: юридическое лицо с заполненными "
+                    "наименованием и ИНН в ответе DaData. Способ подготовки: включить "
+                    "интеграцию DaData в тестовом контуре и сохранить выбранную подсказку "
+                    "как fixture прогона.",
+                )
+                .replace(
+                    "1. Открыть раздел «Партнеры».",
+                    "1. Ввести фрагмент наименования в поле «Наименование партнёра».\n"
+                    "2. Выбрать организацию из подсказки DaData.",
+                ),
+                encoding="utf-8",
+            )
+            _, findings = validate_scope(package_root=fixture.root, workflow_state_path=fixture.state)
+            self.assertNotIn(
+                "test-case-dadata-test-data-contract",
+                [item.id for item in findings],
+            )
+
+    def test_validator_allows_dadata_fixture_with_used_literal(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            fixture = PracticalV09Fixture(
+                Path(raw),
+                obligation_statement="По введённому наименованию система показывает подходящие организации DaData.",
+            )
+            fixture.tc.write_text(
+                fixture.tc.read_text(encoding="utf-8")
+                .replace(
+                    "**Тестовые данные:** Не требуются.",
+                    "**Тестовые данные:** `FX-DADATA-PARTNER-001`; запрос и ожидаемая "
+                    "подсказка `ПАО СБЕРБАНК`.",
+                )
+                .replace(
+                    "1. Открыть раздел «Партнеры».",
+                    "1. Ввести `ПАО СБЕРБАНК` в поле «Наименование партнёра».\n"
+                    "2. Выбрать организацию из подсказки DaData.",
+                ),
+                encoding="utf-8",
+            )
+            _, findings = validate_scope(package_root=fixture.root, workflow_state_path=fixture.state)
+            self.assertNotIn(
+                "test-case-dadata-test-data-contract",
+                [item.id for item in findings],
+            )
+            self.assertNotIn(
+                "test-case-dadata-fixture-literals",
+                [item.id for item in findings],
+            )
+
+    def test_validator_requires_literal_alongside_dadata_fixture(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            fixture = PracticalV09Fixture(
+                Path(raw),
+                obligation_statement="По введённому наименованию система показывает подходящие организации DaData.",
+            )
+            fixture.tc.write_text(
+                fixture.tc.read_text(encoding="utf-8")
+                .replace(
+                    "**Тестовые данные:** Не требуются.",
+                    "**Тестовые данные:** Сохранённый fixture `FX-DADATA-PARTNER-001`.",
+                )
+                .replace(
+                    "1. Открыть раздел «Партнеры».",
+                    "1. Ввести фрагмент наименования в поле «Наименование партнёра».\n"
+                    "2. Выбрать организацию из подсказки DaData.",
+                ),
+                encoding="utf-8",
+            )
+            _, findings = validate_scope(package_root=fixture.root, workflow_state_path=fixture.state)
+            self.assertIn(
+                "test-case-dadata-fixture-literals",
+                [item.id for item in findings if item.blocking],
+            )
+
     def test_validator_requires_valid_package_id(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             fixture = PracticalV09Fixture(Path(raw))

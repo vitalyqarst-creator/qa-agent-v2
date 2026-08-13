@@ -221,6 +221,28 @@ META_STATE_STEP_PATTERNS = (
     re.compile(r"\bподготовить\s+данные\s+для\s+проверяемого\s+правила\b", re.IGNORECASE),
     re.compile(r"\bвнести\s+только\s+изменение\s*,?\s+требуем\w*\s+проверяемым\s+правилом\b", re.IGNORECASE),
 )
+CONTEXT_LABEL_AS_ACTION_RE = re.compile(
+    r"\b(?:откр|перейт)\w*\b[^.\n]{0,120}\bв\s+контекст\w*\b",
+    re.IGNORECASE,
+)
+DADATA_GENERIC_DATA_PATTERNS = (
+    re.compile(
+        r"\b(?:подготовить|использовать|ввести)\w*\b[^.\n]{0,80}"
+        r"\bорганизац\w*\s+с\s+(?:известн\w*|доступн\w*)",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b(?:нужн\w*|требу\w*)\b[^.\n]{0,48}"
+        r"\bорганизац\w*\s+с\s+(?:устойчив\w*|доступн\w*|известн\w*)",
+        re.IGNORECASE,
+    ),
+)
+DADATA_FIXTURE_ID_RE = re.compile(r"\bFX-DADATA-[A-Z0-9-]+\b", re.IGNORECASE)
+DADATA_PREPARATION_RE = re.compile(r"\bспособ\s+подготовк\w*\s*:", re.IGNORECASE)
+DADATA_PROPERTY_RE = re.compile(
+    r"\b(?:наименован\w*|инн|кпп|огрн|юр\.?\s*адрес\w*|адрес\w*)\b",
+    re.IGNORECASE,
+)
 MIXED_CREATE_EDIT_TITLE_RE = re.compile(
     r"\bсоздани\w*\b[^.]{0,48}\b(?:и|или)\b[^.]{0,48}\bредактир\w*\b",
     re.IGNORECASE,
@@ -2868,6 +2890,17 @@ def validate_matrix(
                     artifact,
                     remediation_owner="writer",
                 ))
+            if CONTEXT_LABEL_AS_ACTION_RE.search(value):
+                findings.append(finding(
+                    "matrix-context-label-as-action",
+                    "execution-readiness",
+                    "Матрица подменяет действие пользователя названием контекста",
+                    f"Проверка {matrix_id or '<без ID>'}: в колонке «{column}» "
+                    "укажите конкретный вход на экран или перенесите уже открытый "
+                    "экран в предусловие; CTX-* служит только для трассировки потока.",
+                    artifact,
+                    remediation_owner="writer",
+                ))
         execution_status = row.get("Статус исполнения", "").strip()
         if execution_status and execution_status not in ALLOWED_EXECUTION_STATUSES:
             findings.append(finding(
@@ -3295,6 +3328,74 @@ def validate_state_formation_contract(
     return findings
 
 
+def is_dadata_obligation(obligation: Mapping[str, Any] | None) -> bool:
+    """Whether an obligation requires an actual DaData-backed interaction."""
+    return "dadata" in str((obligation or {}).get("statement") or "").casefold()
+
+
+def validate_dadata_test_data_contract(
+    *,
+    tc_id: str,
+    test_data: str,
+    artifact: str,
+) -> list[ScopeFinding]:
+    """Reject circular DaData inputs while allowing an explicitly missing fixture.
+
+    A stable integration fixture is the preferred way to make a case executable.
+    When it is genuinely unavailable, a ``needs-test-data`` case may instead
+    specify the required profile and a reproducible preparation method.  The
+    validator intentionally does not infer whether a live DaData response is
+    stable; the separate reviewer must still examine the selected profile.
+    """
+    findings: list[ScopeFinding] = []
+    if any(pattern.search(test_data) for pattern in DADATA_GENERIC_DATA_PATTERNS):
+        findings.append(finding(
+            "test-case-dadata-generic-data",
+            "execution-readiness",
+            "DaData-данные описаны круговой общей формулировкой",
+            f"{tc_id}: не используйте «организация с известными реквизитами» "
+            "или «подготовить организацию» как тестовые данные. Укажите "
+            "сохранённый FX-DADATA fixture с literals либо свойства реально "
+            "недостающего набора и строку «Способ подготовки: ...».",
+            artifact,
+            remediation_owner="writer",
+        ))
+        return findings
+    if DADATA_FIXTURE_ID_RE.search(test_data):
+        fixture_ids = {
+            literal for literal in backtick_literals(test_data)
+            if DADATA_FIXTURE_ID_RE.fullmatch(literal)
+        }
+        concrete_literals = backtick_literals(test_data) - fixture_ids
+        if concrete_literals:
+            return findings
+        findings.append(finding(
+            "test-case-dadata-fixture-literals",
+            "execution-readiness",
+            "DaData-fixture указан без конкретного значения для выполнения сценария",
+            f"{tc_id}: рядом с FX-DADATA fixture укажите хотя бы один literal, "
+            "который используется в шаге или основном ожидаемом результате.",
+            artifact,
+            remediation_owner="writer",
+        ))
+        return findings
+    if not (
+        DADATA_PREPARATION_RE.search(test_data)
+        and DADATA_PROPERTY_RE.search(test_data)
+    ):
+        findings.append(finding(
+            "test-case-dadata-test-data-contract",
+            "execution-readiness",
+            "Для DaData-сценария не определены воспроизводимые тестовые данные",
+            f"{tc_id}: укажите сохранённый FX-DADATA fixture с literals либо "
+            "точные требуемые свойства отсутствующего профиля и строку "
+            "«Способ подготовки: ...».",
+            artifact,
+            remediation_owner="writer",
+        ))
+    return findings
+
+
 def validate_test_cases(
     tc_path: Path,
     package_root: Path,
@@ -3388,6 +3489,17 @@ def validate_test_cases(
                     "execution-readiness",
                     "Шаг тест-кейса описывает служебную подготовку вместо действия пользователя",
                     f"{tc_id}: замените «{step}» конкретным действием с экраном, полем и значением либо перенесите недоступный fixture в предпосылки.",
+                    artifact,
+                    remediation_owner="writer",
+                ))
+            if CONTEXT_LABEL_AS_ACTION_RE.search(step):
+                findings.append(finding(
+                    "test-case-context-label-as-action",
+                    "execution-readiness",
+                    "Шаг тест-кейса подменяет действие пользователя названием контекста",
+                    f"{tc_id}: замените «{step}» конкретным действием входа на экран "
+                    "либо укажите уже открытый экран в предусловиях. CTX-* не является "
+                    "пользовательским действием.",
                     artifact,
                     remediation_owner="writer",
                 ))
@@ -3545,6 +3657,12 @@ def validate_test_cases(
                         ],
                         remediation_owner="writer",
                     ))
+        if any(is_dadata_obligation(active_entries.get(obligation_id)) for obligation_id in obligation_ids):
+            findings.extend(validate_dadata_test_data_contract(
+                tc_id=tc_id,
+                test_data=test_data,
+                artifact=artifact,
+            ))
         mapped_rows: list[tuple[str, dict[str, str]]] = []
         for scenario_id in scenario_ids:
             covered_scenarios.setdefault(scenario_id, []).append(tc_id)
