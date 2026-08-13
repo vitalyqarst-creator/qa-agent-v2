@@ -18,7 +18,7 @@ from typing import Any, Iterable, Mapping
 
 
 ROUTE_VERSION = "practical-v0.9"
-ROUTE_TOOL_VERSION = "practical-v0.9.23"
+ROUTE_TOOL_VERSION = "practical-v0.9.24"
 WORKFLOW_STATE_SCHEMA_VERSION = 1
 SOURCE_CONTRACT_VERSION = "source-package-v4"
 MATRIX_CONTRACT_VERSION = "practical-matrix-v3"
@@ -3429,7 +3429,16 @@ def validate_state_formation_contract(
                 artifact,
                 remediation_owner="writer",
             ))
-    if re.search(r"\b(?:одинаков|существующ).*\b(?:наименован|назван)|такой\s+партнер", lowered_statement):
+    # A duplicate may be detected before saving (for example, a hint while the
+    # user enters a name) or during the save flow.  The source-backed matrix
+    # action, rather than a generic word such as "существующий" in the
+    # obligation, determines whether a save trigger is required.
+    matrix_action = row.get("Проверяемое действие", "")
+    duplicate_save_flow = (
+        re.search(r"\b(?:одинаков|существующ).*\b(?:наименован|назван)|такой\s+партнер", lowered_statement)
+        and re.search(r"\bсохран\w*\b", matrix_action, re.IGNORECASE)
+    )
+    if duplicate_save_flow:
         save_indexes = [index for index, step in enumerate(steps) if re.search(r"\bсохран\w*\b", step, re.IGNORECASE)]
         if not save_indexes or not any(
             INPUT_OR_SELECTION_RE.search(step) and NAME_FIELD_RE.search(step)
