@@ -16,6 +16,19 @@
 
 ## Незакрытые улучшения practical v0.9
 
+- [x] `AGI-039` (`P1`) Запретить writer-доработку между controller triage и
+  finalization immutable review.
+  - Основание: pilot scope `9.3.2` корректно получил raw matrix review и
+    triage `FND-001`, но writer изменил матрицу до `finalize_practical_review.py`.
+    Штатная finalization справедливо отказалась из-за изменённого snapshot, а
+    revision budget остался незафиксированным.
+  - Выполнено: triage хранит hash-bound ссылку на manifest; scoped validator
+    блокирует изменённые review-входы, пока raw verdict не записан в `reviews`.
+    Route требует последовательность `triage → finalization → writer`.
+    Для единственного уже возникшего случая добавлен explicit recovery только
+    с разрешением пользователя, проверенным immutable input snapshot и
+    записанной причиной; обычный finalizer остаётся строгим.
+
 - [x] `AGI-038` (`P1`) Запретить ложную параметризацию разных проверок в
   matrix.
   - Основание: в пилотной matrix scope `9.3.2` были объединены проверки

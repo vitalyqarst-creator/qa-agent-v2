@@ -117,6 +117,7 @@ manifest (по умолчанию не более 24 KiB). Если первый
 переписывает receipt: он фиксирует невалидный dispatch и при необходимости
 запускает новый независимый review по тому же immutable snapshot.
 
-После `changes-required` controller сам выполняет triage raw findings до
-перехода workflow. Reviewer не определяет расход revision budget, не меняет
+После `changes-required` controller сам выполняет triage raw findings, затем
+немедленно финализирует этот же неизменённый raw verdict до любой writer-
+доработки. Reviewer не определяет расход revision budget, не меняет
 `workflow-state.json` и не помечает свой verdict как effective approval.

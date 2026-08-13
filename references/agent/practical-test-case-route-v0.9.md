@@ -200,14 +200,22 @@ python scripts/capture_practical_review_result.py --submission <raw-reviewer-jso
 Если raw verdict равен `changes-required` и в нём есть content blocking
 findings, controller до finalization выполняет triage каждого finding. Raw
 verdict остаётся неизменным, а правила triage и формат решения загружаются из
-`practical-v0.9-review-result-format.md`.
+`practical-v0.9-review-result-format.md`. Сразу после успешного triage и до
+изменения любого входа immutable review controller обязан вызвать
+`finalize_practical_review.py`. Только эта команда переносит raw verdict в
+`reviews` и расходует budget принятых findings; writer может менять matrix/TC
+только после её успешного завершения.
 
 ```text
 python scripts/triage_practical_review.py --ft-package-root <package> --workflow-state <scope-dir>/workflow-state.json --review-manifest <scope-dir>/<mode>-review-manifest.json --review-result <scope-dir>/<mode>-review-result.json --decisions-file <temporary-utf8-json>
 ```
 
 Только принятые content findings могут расходовать budget writer revision;
-без triage finalization запрещена.
+без triage finalization запрещена. Изменение matrix/TC между triage и
+finalization блокируется scoped validator. Исключение для уже случившейся
+ошибки порядка допускается только после явного решения пользователя и через
+`finalize_practical_review.py --allow-post-triage-recovery` с hash-bound
+immutable input snapshot и сохранённой причиной; это не обычный маршрут.
 
 ### 4. TC, final review и revision
 
