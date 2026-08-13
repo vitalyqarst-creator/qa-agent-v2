@@ -1876,6 +1876,57 @@ class PracticalV09Tests(unittest.TestCase):
             _, findings = validate_scope(package_root=fixture.root, workflow_state_path=fixture.state)
             self.assertIn("test-case-test-data-tautology", [item.id for item in findings if item.blocking])
 
+    def test_validator_warns_about_unused_copied_test_data_profile(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            fixture = PracticalV09Fixture(Path(raw))
+            fixture.tc.write_text(
+                fixture.tc.read_text(encoding="utf-8")
+                .replace(
+                    "**Тестовые данные:** Не требуются.",
+                    "**Тестовые данные:** Запрос `АЛЬФА`; подсказка `ООО АЛЬФА`; "
+                    "ИНН `7700000000`; КПП `770001001`; ОГРН `1027700000000`; "
+                    "адрес `г Москва, ул Тестовая, д 1`.",
+                )
+                .replace(
+                    "1. Открыть раздел «Партнеры».",
+                    "1. Ввести в поле поиска `АЛЬФА`.",
+                )
+                .replace(
+                    "Открывается раздел «Партнеры».",
+                    "Отображается подсказка `ООО АЛЬФА`.",
+                ),
+                encoding="utf-8",
+            )
+            _, findings = validate_scope(package_root=fixture.root, workflow_state_path=fixture.state)
+            matching = [
+                item for item in findings
+                if item.id == "test-case-test-data-profile-overfull"
+            ]
+            self.assertEqual(1, len(matching))
+            self.assertFalse(matching[0].blocking)
+
+    def test_validator_allows_reused_profile_when_literals_are_used_for_save(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            fixture = PracticalV09Fixture(Path(raw))
+            fixture.tc.write_text(
+                fixture.tc.read_text(encoding="utf-8")
+                .replace(
+                    "**Тестовые данные:** Не требуются.",
+                    "**Тестовые данные:** Наименование `ООО АЛЬФА`; ИНН `7700000000`; "
+                    "КПП `770001001`; адрес `г Москва, ул Тестовая, д 1`.",
+                )
+                .replace(
+                    "1. Открыть раздел «Партнеры».",
+                    "1. Заполнить обязательные поля указанными значениями и сохранить карточку.",
+                ),
+                encoding="utf-8",
+            )
+            _, findings = validate_scope(package_root=fixture.root, workflow_state_path=fixture.state)
+            self.assertNotIn(
+                "test-case-test-data-profile-overfull",
+                [item.id for item in findings],
+            )
+
     def test_validator_rejects_circular_data_and_meta_state_steps(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             fixture = PracticalV09Fixture(Path(raw))

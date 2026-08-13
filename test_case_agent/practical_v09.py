@@ -18,7 +18,7 @@ from typing import Any, Iterable, Mapping
 
 
 ROUTE_VERSION = "practical-v0.9"
-ROUTE_TOOL_VERSION = "practical-v0.9.16"
+ROUTE_TOOL_VERSION = "practical-v0.9.17"
 WORKFLOW_STATE_SCHEMA_VERSION = 1
 SOURCE_CONTRACT_VERSION = "source-package-v3"
 MATRIX_CONTRACT_VERSION = "practical-matrix-v2"
@@ -2263,6 +2263,28 @@ def test_case_field(body: str, field: str) -> str:
     return match.group(1).strip() if match else ""
 
 
+def backtick_literals(value: str) -> set[str]:
+    """Return explicitly marked literals for advisory test-data review.
+
+    The helper deliberately does not infer that equivalent scenarios need
+    distinct real-world values. It only detects likely copied profile fields.
+    """
+    return {
+        literal.strip()
+        for literal in re.findall(r"`([^`]+)`", value)
+        if len(literal.strip()) >= 2
+    }
+
+
+def has_test_data_completion_action(steps: str) -> bool:
+    """Whether the TC can need a full profile to complete a save flow."""
+    return bool(re.search(
+        r"\b(?:заполн\w*\s+(?:остальн\w*|все|обязательн\w*)|сохран\w*)\b",
+        steps,
+        re.IGNORECASE,
+    ))
+
+
 def numbered_steps(value: str) -> list[str]:
     return [
         match.group(1).strip()
@@ -2497,6 +2519,28 @@ def validate_test_cases(
                 remediation_owner="writer",
             ))
         steps_value = test_case_field(body, "Шаги")
+        declared_literals = backtick_literals(test_data)
+        runtime_literals = backtick_literals(
+            "\n".join((steps_value, test_case_field(body, "Итоговый ожидаемый результат")))
+        )
+        unused_literals = sorted(declared_literals - runtime_literals)
+        if (
+            len(declared_literals) >= 4
+            and len(unused_literals) >= 3
+            and not has_test_data_completion_action(steps_value)
+        ):
+            findings.append(finding(
+                "test-case-test-data-profile-overfull",
+                "style",
+                "Тестовые данные содержат вероятно неиспользуемую часть профиля",
+                f"{tc_id}: повторно проверьте literals «{', '.join(unused_literals)}». "
+                "Оставьте только значения, нужные для шагов, ожидаемого результата или "
+                "сохранения/перехода. Повторное использование одного проверенного профиля "
+                "само по себе допустимо.",
+                artifact,
+                remediation_owner="writer",
+                severity="warning",
+            ))
         for step in numbered_steps(steps_value):
             if any(pattern.search(step) for pattern in META_STATE_STEP_PATTERNS):
                 findings.append(finding(
