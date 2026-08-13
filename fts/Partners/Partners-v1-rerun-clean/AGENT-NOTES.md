@@ -14,8 +14,8 @@ fts/Partners/Partners-v1-rerun-clean
 
 ## Версия agent-layer
 
-Пакет создан на commit `716a3f470f86323fdfaf75db77e64dd4ea55ecd4`
-(`Harden executable test data contracts`) ветки
+Пакет использует commit `7be072bc0ff2d6960317de8a028e231a6e8b4f45`
+(`Allow composite card result coverage`) ветки
 `codex/partners-v1-rerun-9-3-2`.
 
 ## Исходники ФТ
