@@ -1,5 +1,13 @@
 # Backlog улучшений агента
 
+- [x] `AGI-051` (`P1`) Включать предоставленные fixture в неизменяемый review snapshot.
+  - Основание: независимое matrix review чистого control-run scope `9.3.2` обнаружило, что `FX-DADATA-PARTNER-001` использовался в matrix, но его response snapshot и verification receipt не были hash-bound входами `matrix-review-manifest.json`. Поэтому reviewer не мог проверить происхождение конкретных DaData-literals.
+  - Выполнено: у `SETUP-*` с `kind: fixture`, `availability: provided` обязательны `artifacts` с файлами snapshot/verification/catalog. Validator проверяет пути и включает их SHA-256 в content closure; review manifest транзитивно связывает их как immutable inputs. Добавлены регрессии для отсутствующих artifacts и для их присутствия в manifest.
+
+- [x] `AGI-052` (`P1`) Не допускать неканонический verdict отдельного practical reviewer-а.
+  - Основание: первый отдельный reviewer чистого control-run scope `9.3.2` вернул `rejected` вместе с корректными содержательными findings, хотя v0.9 допускает только `approved`, `changes-required`, `blocked-input`. Такой результат нельзя финализировать и нельзя использовать для расходования revision budget.
+  - Выполнено: contract и practical reviewer instruction прямо фиксируют допустимый enum; при содержательных findings без внешнего blocker требуется `changes-required`. Validator отклоняет другой verdict; добавлена regression для `rejected`.
+
 - [x] `AGI-046` (`P1`) Связывать обязательность сохранения в сценарии дубля с действием matrix, а не с наличием слова «существующий» в требовании.
   - Основание: writer scope `9.3.2` был остановлен двумя ложными блокерами validator-а для AS.5: ФТ требует подсказку и переход сразу после ввода существующего названия, но validator требовал «СОХРАНИТЬ».
   - Выполнено: правило `test-case-duplicate-trigger` применяется только если у связанной строки matrix проверяемое действие — сохранение; сценарии подсказки/перехода при вводе остаются без искусственного шага сохранения. Добавлена регрессия для обоих потоков.
@@ -562,6 +570,17 @@
     типов/форматов/справочников вне локальной строки поля и переносить все
     явные подправила в OBL и matrix. Это предотвращает ложное покрытие
     ограничений типа «Дата» одним валидным примером.
+
+- [x] `AGI-053` (`P1`) Полный inventory как обязательный input для закрытого
+  справочника practical v0.9.
+  - Основание: в первом matrix scope `9.3.2` список городов был лишь
+    упомянут в support, а проверка опиралась на отдельное значение. Это не
+    доказывает ни полноту, ни отсутствие лишних значений.
+  - Выполнено: активный `OBL-*` с `risk_flags: closed-dictionary` требует
+    `artifacts.dictionary_inventory`; validator и review manifest включают
+    этот файл в неизменяемое замыкание. Маршрут и skill требуют полного
+    русскоязычного `DICT-*` inventory до matrix review. Контрольный scope
+    содержит `DICT-932-PARTNER-TYPE` и все 296 городов.
 
 - [x] `AGI-013` Исправлен приоритет статуса исполнения из нескольких
   `SETUP-*`.

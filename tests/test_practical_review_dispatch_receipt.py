@@ -48,6 +48,56 @@ class PracticalReviewDispatchReceiptTests(unittest.TestCase):
         self.assertEqual(TASK_ID, result["reviewer_task_or_session"])
         self.assertEqual(CONTROLLER_ID, result["controller_task_or_session"])
 
+    def test_binds_current_practical_v09_manifest_to_controller_session(self) -> None:
+        helper = self.load_helper()
+        with tempfile.TemporaryDirectory() as tmp:
+            launch = self.launch_receipt(Path(tmp))
+            launch.write_text(
+                json.dumps(
+                    {
+                        "manifest_version": "practical-review-manifest-v2",
+                        "controller_thread_id": CONTROLLER_ID,
+                        "execution_surface_required": "codex-thread",
+                        "inputs": [{"role": "test_design_matrix", "sha256": "a" * 64}],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            result = helper.build_dispatch_receipt(
+                launch_receipt=launch,
+                reviewer_task_id=TASK_ID,
+                reviewer_execution_surface="codex-thread",
+                controller_task_id=CONTROLLER_ID,
+            )
+
+        self.assertTrue(result["allowed"], result["blocking_reasons"])
+        self.assertEqual("dispatched", result["status"])
+
+    def test_rejects_practical_v09_manifest_from_another_controller(self) -> None:
+        helper = self.load_helper()
+        with tempfile.TemporaryDirectory() as tmp:
+            launch = self.launch_receipt(Path(tmp))
+            launch.write_text(
+                json.dumps(
+                    {
+                        "manifest_version": "practical-review-manifest-v2",
+                        "controller_thread_id": TASK_ID,
+                        "execution_surface_required": "codex-thread",
+                        "inputs": [{"role": "test_design_matrix", "sha256": "a" * 64}],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            result = helper.build_dispatch_receipt(
+                launch_receipt=launch,
+                reviewer_task_id="019fda6b-f604-7130-80a5-8e0d1d7f5c7e",
+                reviewer_execution_surface="codex-thread",
+                controller_task_id=CONTROLLER_ID,
+            )
+
+        self.assertFalse(result["allowed"])
+        self.assertIn("differs from CODEX_THREAD_ID", "\n".join(result["blocking_reasons"]))
+
     def test_rejects_invalid_task_id_or_blocked_launch(self) -> None:
         helper = self.load_helper()
         with tempfile.TemporaryDirectory() as tmp:

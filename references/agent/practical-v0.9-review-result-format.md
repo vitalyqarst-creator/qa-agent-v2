@@ -133,6 +133,12 @@ Reviewer возвращает этот объект как один raw JSON sub
 кодировки исправляется только новым submission reviewer-а или исправлением
 validator-а; она не даёт controller-у права нормализовать evidence.
 
+Поле `verdict` допускает только `approved`, `changes-required` или
+`blocked-input`. Значения `rejected`, `failed`, `blocked` и локальные синонимы
+недопустимы: такой raw response не финализируется и не расходует revision
+budget. При содержательных замечаниях без внешнего blocker reviewer выбирает
+`changes-required`.
+
 Raw submission ограничен размером, указанным в `reviewer_receipt_contract`
 manifest (по умолчанию не более 24 KiB). Если первый ответ не проходит этот
 контракт, controller не просит reviewer-а «сжать» уже вынесенный verdict и не

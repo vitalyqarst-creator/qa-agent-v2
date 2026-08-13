@@ -22,6 +22,7 @@ from test_case_agent.practical_v09 import (
     build_review_manifest,
     build_validator_report,
     derived_execution_status,
+    dictionary_inventory_required,
     finding,
     load_workflow_state,
     has_composite_result_table,
@@ -466,6 +467,31 @@ class PracticalV09Tests(unittest.TestCase):
                 errors="replace",
             )
             self.assertEqual(0, rerun.returncode, rerun.stderr)
+
+    def test_scope_validator_rejects_an_input_artifact_as_output(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            fixture = PracticalV09Fixture(Path(raw))
+            command = [
+                sys.executable,
+                str(REPO_ROOT / "scripts" / "validate_practical_scope.py"),
+                "--ft-package-root",
+                str(fixture.root),
+                "--workflow-state",
+                str(fixture.state),
+                "--output-profile",
+                str(fixture.obligations),
+                "--exclude-output",
+                str(fixture.obligations),
+            ]
+            completed = subprocess.run(
+                command,
+                text=True,
+                capture_output=True,
+                encoding="utf-8",
+                errors="replace",
+            )
+            self.assertEqual(2, completed.returncode, completed.stderr)
+            self.assertIn("not an input artifact", completed.stderr)
 
     def test_scope_rejects_a_scope_local_source_manifest(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
@@ -1480,6 +1506,193 @@ class PracticalV09Tests(unittest.TestCase):
                 destination=snapshot_path,
             )
             self.assertTrue(snapshot["allowed"])
+
+    def test_provided_fixture_files_are_required_and_bound_to_review_manifest(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            fixture = PracticalV09Fixture(Path(raw))
+            fixture.write_verified_dadata_fixture()
+            obligations = json.loads(fixture.obligations.read_text(encoding="utf-8"))
+            fixture_root = "work/practical-v0.9/menu/fixtures/FX-DADATA-PARTNER-001"
+            obligations["execution_setups"].append(
+                {
+                    "id": "SETUP-FIXTURE-001",
+                    "kind": "fixture",
+                    "availability": "provided",
+                    "evidence": "Сохранен проверенный профиль DaData.",
+                    "artifacts": [
+                        f"{fixture_root}/FX-DADATA-PARTNER-001.response.json",
+                        f"{fixture_root}/FX-DADATA-PARTNER-001.verification.json",
+                    ],
+                }
+            )
+            write_json(fixture.obligations, obligations)
+            context, findings = validate_scope(
+                package_root=fixture.root, workflow_state_path=fixture.state
+            )
+            self.assertFalse([item for item in findings if item.blocking])
+            write_json(
+                fixture.scope_dir / "validator-report.json",
+                build_validator_report(context, findings),
+            )
+            manifest = build_review_manifest(
+                package_root=fixture.root,
+                workflow_state_path=fixture.state,
+                review_mode="test-cases",
+                controller_thread_id="019feebf-3cde-79d2-9f87-ba9c61ff7b13",
+                code_branch="codex/test",
+                code_commit="abc123",
+                contract_digest="contract",
+            )
+            bound = {(entry["role"], entry["path"]) for entry in manifest["inputs"]}
+            self.assertTrue(
+                {
+                    (
+                        "provided-setup-SETUP-FIXTURE-001-1",
+                        f"{fixture_root}/FX-DADATA-PARTNER-001.response.json",
+                    ),
+                    (
+                        "provided-setup-SETUP-FIXTURE-001-2",
+                        f"{fixture_root}/FX-DADATA-PARTNER-001.verification.json",
+                    ),
+                }.issubset(bound)
+            )
+
+    def test_provided_fixture_without_artifacts_blocks_scope(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            fixture = PracticalV09Fixture(Path(raw))
+            obligations = json.loads(fixture.obligations.read_text(encoding="utf-8"))
+            obligations["execution_setups"].append(
+                {
+                    "id": "SETUP-FIXTURE-001",
+                    "kind": "fixture",
+                    "availability": "provided",
+                    "evidence": "Сохранен проверенный профиль DaData.",
+                }
+            )
+            write_json(fixture.obligations, obligations)
+            _, findings = validate_scope(
+                package_root=fixture.root, workflow_state_path=fixture.state
+            )
+            self.assertIn(
+                "scope-execution-provided-fixture-artifacts",
+                [item.id for item in findings if item.blocking],
+            )
+
+    def test_closed_dictionary_requires_bound_inventory(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            fixture = PracticalV09Fixture(Path(raw))
+            obligations = json.loads(fixture.obligations.read_text(encoding="utf-8"))
+            obligations["obligations"][0]["risk_flags"] = ["closed-dictionary"]
+            write_json(fixture.obligations, obligations)
+            self.assertTrue(dictionary_inventory_required(obligations))
+            _, findings = validate_scope(
+                package_root=fixture.root, workflow_state_path=fixture.state
+            )
+            self.assertIn(
+                "dictionary-inventory-reference-missing",
+                [item.id for item in findings if item.blocking],
+            )
+
+    def test_closed_dictionary_inventory_is_bound_to_review_manifest(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            fixture = PracticalV09Fixture(Path(raw))
+            obligations = json.loads(fixture.obligations.read_text(encoding="utf-8"))
+            obligations["obligations"][0]["risk_flags"] = ["closed-dictionary"]
+            write_json(fixture.obligations, obligations)
+            inventory = fixture.scope_dir / "dictionary-inventory.md"
+            inventory.write_text(
+                "# Состав справочника\n\n"
+                "| Идентификатор | Значения |\n| --- | --- |\n"
+                "| `DICT-001` | `Первое`; `Второе` |\n",
+                encoding="utf-8",
+            )
+            state = json.loads(fixture.state.read_text(encoding="utf-8"))
+            state["artifacts"]["dictionary_inventory"] = (
+                "work/practical-v0.9/menu/dictionary-inventory.md"
+            )
+            state["phase"] = "matrix"
+            write_json(fixture.state, state)
+            context, findings = validate_scope(
+                package_root=fixture.root, workflow_state_path=fixture.state
+            )
+            self.assertFalse([item for item in findings if item.blocking])
+            write_json(
+                fixture.scope_dir / "validator-report.json",
+                build_validator_report(context, findings),
+            )
+            manifest = build_review_manifest(
+                package_root=fixture.root,
+                workflow_state_path=fixture.state,
+                review_mode="matrix",
+                controller_thread_id="019feebf-3cde-79d2-9f87-ba9c61ff7b13",
+                code_branch="codex/test",
+                code_commit="abc123",
+                contract_digest="contract",
+            )
+            self.assertIn(
+                ("dictionary_inventory", "work/practical-v0.9/menu/dictionary-inventory.md"),
+                {(entry["role"], entry["path"]) for entry in manifest["inputs"]},
+            )
+
+    def test_closed_dictionary_rejects_empty_inventory(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            fixture = PracticalV09Fixture(Path(raw))
+            obligations = json.loads(fixture.obligations.read_text(encoding="utf-8"))
+            obligations["obligations"][0]["risk_flags"] = ["closed-dictionary"]
+            write_json(fixture.obligations, obligations)
+            inventory = fixture.scope_dir / "dictionary-inventory.md"
+            inventory.write_text("\n", encoding="utf-8")
+            state = json.loads(fixture.state.read_text(encoding="utf-8"))
+            state["artifacts"]["dictionary_inventory"] = (
+                "work/practical-v0.9/menu/dictionary-inventory.md"
+            )
+            write_json(fixture.state, state)
+            _, findings = validate_scope(
+                package_root=fixture.root, workflow_state_path=fixture.state
+            )
+            self.assertIn(
+                "dictionary-inventory-empty",
+                [item.id for item in findings if item.blocking],
+            )
+
+    def test_review_result_rejects_unsupported_verdict_enum(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            fixture = PracticalV09Fixture(Path(raw))
+            manifest = build_review_manifest(
+                package_root=fixture.root,
+                workflow_state_path=fixture.state,
+                review_mode="test-cases",
+                controller_thread_id="019feebf-3cde-79d2-9f87-ba9c61ff7b13",
+                code_branch="codex/test",
+                code_commit="abc123",
+                contract_digest="contract",
+            )
+            manifest_path = fixture.scope_dir / "test-cases-review-manifest.json"
+            result_path = fixture.scope_dir / "test-cases-review-result.json"
+            write_json(manifest_path, manifest)
+            write_json(
+                result_path,
+                {
+                    "review_manifest_sha256": sha256_file(manifest_path),
+                    "scope_id": "01",
+                    "scope_slug": "menu",
+                    "review_mode": "test-cases",
+                    "execution_surface": "codex-thread",
+                    "reviewer_thread_id": "019feebf-3cde-79d2-9f87-ba9c61ff7b14",
+                    "independent_obligations": independently_derived_obligation(),
+                    "verdict": "rejected",
+                    "findings": [],
+                },
+            )
+            _, findings = verify_review_result(
+                package_root=fixture.root,
+                manifest_path=manifest_path,
+                result_path=result_path,
+            )
+            self.assertIn(
+                "review-result-verdict",
+                [item.id for item in findings if item.blocking],
+            )
 
     def test_review_manifest_requires_a_fresh_persisted_validator_report(self) -> None:
         with tempfile.TemporaryDirectory() as raw:

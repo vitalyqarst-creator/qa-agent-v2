@@ -18,7 +18,7 @@ from typing import Any, Iterable, Mapping
 
 
 ROUTE_VERSION = "practical-v0.9"
-ROUTE_TOOL_VERSION = "practical-v0.9.26"
+ROUTE_TOOL_VERSION = "practical-v0.9.28"
 WORKFLOW_STATE_SCHEMA_VERSION = 1
 SOURCE_CONTRACT_VERSION = "source-package-v4"
 MATRIX_CONTRACT_VERSION = "practical-matrix-v3"
@@ -1550,6 +1550,48 @@ def execution_setups(obligations: dict[str, Any]) -> dict[str, dict[str, Any]]:
     }
 
 
+def provided_setup_artifacts(
+    obligations: dict[str, Any],
+    package_root: Path,
+) -> list[tuple[str, Path]]:
+    """Resolve immutable files cited by ``provided`` execution setups.
+
+    A fixture may be created after the package-level source manifest.  It is
+    still evidence for literals in a matrix/TC and must therefore be bound in
+    the independent-review manifest.  The setup's ``artifacts`` field is
+    deliberately explicit: prose in ``evidence`` is not a stable file
+    reference and must not be parsed heuristically.
+    """
+    bound: list[tuple[str, Path]] = []
+    seen_paths: set[str] = set()
+    for setup in execution_setups(obligations).values():
+        if str(setup.get("availability") or "") != "provided":
+            continue
+        setup_id = str(setup.get("id") or "")
+        artifacts = setup.get("artifacts")
+        if not isinstance(artifacts, list) or not artifacts:
+            continue
+        for index, raw_path in enumerate(artifacts, start=1):
+            if not isinstance(raw_path, str) or not raw_path.strip():
+                raise PracticalV09Error(
+                    f"{setup_id}: provided setup artifacts must contain non-empty paths"
+                )
+            path = package_relative_path(
+                package_root, raw_path, artifact=f"{setup_id}.artifacts"
+            )
+            if not path.is_file():
+                raise PracticalV09Error(
+                    f"{setup_id}: provided setup artifact is missing: "
+                    + relative_to_package(package_root, path)
+                )
+            relative = relative_to_package(package_root, path)
+            if relative in seen_paths:
+                continue
+            seen_paths.add(relative)
+            bound.append((f"provided-setup-{setup_id}-{index}", path))
+    return bound
+
+
 def execution_contexts(obligation: dict[str, Any]) -> list[dict[str, Any]]:
     """Return explicitly declared user-execution contexts for one OBL."""
     entries = obligation.get("execution_contexts", [])
@@ -2097,6 +2139,7 @@ def validate_scope_obligations(
         kind = str(setup.get("kind") or "")
         availability = str(setup.get("availability") or "")
         evidence = str(setup.get("evidence") or "").strip()
+        setup_artifacts = setup.get("artifacts")
         if not EXECUTION_SETUP_ID_RE.fullmatch(setup_id):
             findings.append(finding(
                 "scope-execution-setup-id",
@@ -2141,6 +2184,53 @@ def validate_scope_obligations(
                 "execution-readiness",
                 "Для предпосылки не указано подтверждение подготовки",
                 f"{setup_id or f'строка {index}'}: укажите воспроизводимый способ подготовки или источник доступности.",
+                artifact,
+                remediation_owner="scope-analyzer",
+            ))
+        if setup_artifacts is not None and (
+            not isinstance(setup_artifacts, list)
+            or not setup_artifacts
+            or not all(isinstance(item, str) and item.strip() for item in setup_artifacts)
+        ):
+            findings.append(finding(
+                "scope-execution-setup-artifacts",
+                "execution-readiness",
+                "У предпосылки некорректно указан набор файлов-доказательств",
+                f"{setup_id or f'строка {index}'}: artifacts должен быть непустым массивом путей к файлам.",
+                artifact,
+                remediation_owner="scope-analyzer",
+            ))
+        elif isinstance(setup_artifacts, list):
+            for raw_path in setup_artifacts:
+                try:
+                    artifact_path = package_relative_path(
+                        package_root, raw_path, artifact=f"{setup_id}.artifacts"
+                    )
+                except PracticalV09Error as exc:
+                    findings.append(finding(
+                        "scope-execution-setup-artifact-path",
+                        "execution-readiness",
+                        "Файл-доказательство предпосылки находится вне FT-пакета",
+                        str(exc),
+                        artifact,
+                        remediation_owner="scope-analyzer",
+                    ))
+                    continue
+                if not artifact_path.is_file():
+                    findings.append(finding(
+                        "scope-execution-setup-artifact-missing",
+                        "execution-readiness",
+                        "Файл-доказательство предпосылки отсутствует",
+                        f"{setup_id}: не найден {relative_to_package(package_root, artifact_path)}.",
+                        artifact,
+                        remediation_owner="scope-analyzer",
+                    ))
+        if availability == "provided" and kind == "fixture" and not setup_artifacts:
+            findings.append(finding(
+                "scope-execution-provided-fixture-artifacts",
+                "execution-readiness",
+                "Для предоставленного fixture не зафиксированы неизменяемые файлы",
+                f"{setup_id or f'строка {index}'}: добавьте artifacts со snapshot/verification/catalog файлами, используемыми в matrix и TC.",
                 artifact,
                 remediation_owner="scope-analyzer",
             ))
@@ -4383,6 +4473,16 @@ def validate_workflow_artifact_links(state: dict[str, Any], package_root: Path) 
     required_keys = list(required_by_phase[phase])
     if workflow_clarification_outcome_enabled(state):
         required_keys.append("scope_clarification_requests")
+    try:
+        obligations_path = workflow_artifact_path(
+            state, package_root, "scope_obligations", required=True
+        )
+        assert obligations_path is not None
+        obligations = read_json(obligations_path)
+    except PracticalV09Error:
+        obligations = {}
+    if dictionary_inventory_required(obligations):
+        required_keys.append("dictionary_inventory")
     for key in required_keys:
         try:
             path = workflow_artifact_path(state, package_root, key, required=True)
@@ -4391,7 +4491,38 @@ def validate_workflow_artifact_links(state: dict[str, Any], package_root: Path) 
             continue
         if path is not None and not path.is_file():
             findings.append(finding("workflow-artifact-missing", "source-integrity", "Workflow ссылается на отсутствующий артефакт", f"artifacts.{key}={relative_to_package(package_root, path)}.", artifact, remediation_owner="controller"))
+    if dictionary_inventory_required(obligations):
+        inventory_path = workflow_artifact_path(
+            state, package_root, "dictionary_inventory", required=False
+        )
+        if inventory_path is not None and inventory_path.is_file():
+            inventory_text = inventory_path.read_text(encoding="utf-8")
+            if not inventory_text.strip():
+                findings.append(finding(
+                    "dictionary-inventory-empty",
+                    "semantic-completeness",
+                    "Inventory закрытого справочника пуст",
+                    "Добавьте извлечённый DICT-* и полный состав значений или зафиксируйте source gap.",
+                    relative_to_package(package_root, inventory_path),
+                    remediation_owner="scope-analyzer",
+                ))
     return findings
+
+
+def dictionary_inventory_required(obligations: Mapping[str, Any]) -> bool:
+    """Return whether active scope obligations require a closed-list inventory.
+
+    A support-backed closed dictionary cannot be safely reviewed through an
+    arbitrary pair of examples.  The inventory is a human-readable immutable
+    input to the matrix and the independent reviewer, not a second source of
+    requirements.
+    """
+    return any(
+        "closed-dictionary" in (
+            item.get("risk_flags") if isinstance(item.get("risk_flags"), list) else []
+        )
+        for item in active_obligations(obligations)
+    )
 
 
 def validate_review_history_integrity(
@@ -4799,6 +4930,40 @@ def validate_scope(
         source_path,
     )
     findings.extend(obligation_findings)
+    if dictionary_inventory_required(obligations):
+        dictionary_path = workflow_artifact_path(
+            state, package_root, "dictionary_inventory", required=False
+        )
+        if dictionary_path is None:
+            findings.append(finding(
+                "dictionary-inventory-reference-missing",
+                "source-integrity",
+                "Для закрытого справочника не указан inventory",
+                "Активные OBL-* с risk_flags=closed-dictionary требуют artifacts.dictionary_inventory.",
+                "workflow-state.json",
+                remediation_owner="scope-analyzer",
+            ))
+        elif not dictionary_path.is_file():
+            findings.append(finding(
+                "dictionary-inventory-missing",
+                "source-integrity",
+                "Для закрытого справочника отсутствует inventory",
+                relative_to_package(package_root, dictionary_path),
+                "workflow-state.json",
+                remediation_owner="scope-analyzer",
+            ))
+    try:
+        provided_fixture_inputs = provided_setup_artifacts(obligations, package_root)
+    except PracticalV09Error as exc:
+        findings.append(finding(
+            "scope-provided-fixture-artifacts-unavailable",
+            "execution-readiness",
+            "Не удалось получить неизменяемые файлы предоставленного fixture",
+            str(exc),
+            relative_to_package(package_root, obligations_path),
+            remediation_owner="scope-analyzer",
+        ))
+        provided_fixture_inputs = []
 
     migration = workflow_contract_migration(state)
     migration_status = str(migration.get("status")) if migration else ""
@@ -4956,12 +5121,20 @@ def validate_scope(
     ]
     if workflow_clarification_outcome_enabled(state):
         content_input_keys.append("scope_clarification_requests")
+    if dictionary_inventory_required(obligations):
+        content_input_keys.append("dictionary_inventory")
     content_input_hashes = {
         key: sha256_file(path)
         for key in content_input_keys
         for path in [workflow_artifact_path(state, package_root, key)]
         if path is not None and path.is_file()
     }
+    content_input_hashes.update(
+        {
+            "provided_setup_artifact:" + relative_to_package(package_root, path): sha256_file(path)
+            for _role, path in provided_fixture_inputs
+        }
+    )
     report_context = {
         "route_version": ROUTE_VERSION,
         "tool_version": ROUTE_TOOL_VERSION,
@@ -5004,6 +5177,12 @@ def review_subject_paths(state: dict[str, Any], package_root: Path, review_mode:
     keys = ["source_package_manifest", "scope_obligations", "test_design_matrix"]
     if workflow_clarification_outcome_enabled(state):
         keys.append("scope_clarification_requests")
+    obligations_path = workflow_artifact_path(
+        state, package_root, "scope_obligations", required=True
+    )
+    assert obligations_path is not None
+    if dictionary_inventory_required(read_json(obligations_path)):
+        keys.append("dictionary_inventory")
     if review_mode == "test-cases":
         keys.append("canonical_test_cases")
     paths: dict[str, Path] = {}
@@ -5155,22 +5334,27 @@ def build_review_manifest(
         source_manifest_path=paths["source_package_manifest"],
         package_root=package_root,
     )
-    manifest_inputs = [
-        {
-            "role": key,
-            "path": relative_to_package(package_root, path),
-            "sha256": sha256_file(path),
-        }
-        for key, path in paths.items()
-    ]
-    manifest_inputs.extend(
-        {
-            "role": role,
-            "path": relative_to_package(package_root, path),
-            "sha256": sha256_file(path),
-        }
-        for role, path in source_inputs
+    provided_inputs = provided_setup_artifacts(
+        read_json(paths["scope_obligations"]), package_root
     )
+    manifest_inputs: list[dict[str, str]] = []
+    bound_paths: set[str] = set()
+
+    def bind(role: str, path: Path) -> None:
+        relative = relative_to_package(package_root, path)
+        if relative in bound_paths:
+            return
+        bound_paths.add(relative)
+        manifest_inputs.append(
+            {"role": role, "path": relative, "sha256": sha256_file(path)}
+        )
+
+    for key, path in paths.items():
+        bind(key, path)
+    for role, path in source_inputs:
+        bind(role, path)
+    for role, path in provided_inputs:
+        bind(role, path)
     manifest = {
         "schema_version": 1,
         "manifest_version": REVIEW_MANIFEST_VERSION,

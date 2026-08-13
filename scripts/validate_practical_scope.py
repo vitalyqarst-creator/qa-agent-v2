@@ -12,6 +12,10 @@ import json
 import sys
 from pathlib import Path
 
+for stream in (sys.stdout, sys.stderr):
+    if hasattr(stream, "reconfigure"):
+        stream.reconfigure(encoding="utf-8")
+
 SCRIPT_DIR = Path(__file__).resolve().parent
 REPO_ROOT = SCRIPT_DIR.parent
 if str(REPO_ROOT) not in sys.path:
@@ -75,8 +79,24 @@ def main(argv: list[str] | None = None) -> int:
     # before validation. validate_scope deliberately excludes this generated
     # report from its dependency closure, so a rerun is not a self-reference.
     state = load_workflow_state(state_path, package_root)
-    current_output = state["artifacts"].get("validator_report")
     expected_output = relative_to_package(package_root, output_path)
+    protected_inputs = {
+        str(value)
+        for key, value in state.get("artifacts", {}).items()
+        if key != "validator_report"
+        and isinstance(value, str)
+        and value not in {"", "not-created"}
+    }
+    if expected_output in protected_inputs:
+        raise PracticalV09Error(
+            "output-profile must be a generated validator report, not an input artifact "
+            "recorded in workflow-state.json"
+        )
+    if output_path.name != "validator-report.json":
+        raise PracticalV09Error(
+            "output-profile must be named validator-report.json for the practical route"
+        )
+    current_output = state["artifacts"].get("validator_report")
     if current_output not in (None, "", "not-created", expected_output):
         raise PracticalV09Error(
             "workflow-state.json already binds a different validator_report; "

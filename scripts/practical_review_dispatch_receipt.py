@@ -33,6 +33,18 @@ TASK_ID_RE = re.compile(
 # receipts remain readable as historical evidence, but this dispatcher creates
 # only the current separate-session protocol.
 EXECUTION_SURFACES = {"codex-thread"}
+PRACTICAL_V09_MANIFEST_VERSION = "practical-review-manifest-v2"
+
+
+def is_practical_v09_manifest(receipt: dict[str, Any]) -> bool:
+    """Return whether a receipt is the current immutable v0.9 review manifest.
+
+    The v0.9 route replaced the old package summary/YAML preflight with a
+    manifest that already pins every reviewed input and the controller thread.
+    It must not be sent through the legacy stage-handoff preflight parser.
+    """
+
+    return str(receipt.get("manifest_version") or "") == PRACTICAL_V09_MANIFEST_VERSION
 
 
 def controller_identity_issues(
@@ -56,6 +68,17 @@ def controller_identity_issues(
         return ["controller CODEX_THREAD_ID is missing or is not a durable Codex thread id"]
     if controller_task_id.casefold() == reviewer_task_id.strip().casefold():
         issues.append("controller task id must differ from reviewer task id")
+
+    if is_practical_v09_manifest(launch):
+        manifest_controller = str(launch.get("controller_thread_id") or "").strip()
+        if manifest_controller.casefold() != controller_task_id.casefold():
+            issues.append("controller_thread_id in practical v0.9 manifest differs from CODEX_THREAD_ID")
+        if str(launch.get("execution_surface_required") or "") != "codex-thread":
+            issues.append("practical v0.9 manifest does not require codex-thread reviewer execution")
+        inputs = launch.get("inputs")
+        if not isinstance(inputs, list) or not inputs:
+            issues.append("practical v0.9 manifest has no immutable review inputs")
+        return issues
 
     required = ("ft_package_root", "scope_ids")
     if not all(launch.get(field) for field in required):
@@ -111,6 +134,12 @@ def current_controller_state_issues(
     historical evidence, but current receipts always contain this contract.
     """
 
+    if is_practical_v09_manifest(launch):
+        # v0.9 hashes all inputs in its immutable manifest.  The controller
+        # identity is checked separately above; re-running the legacy YAML
+        # preflight here would reject a valid v0.9 scope before review starts.
+        return []
+
     required = ("repo_root", "ft_package_root", "summary_path", "scope_ids", "review_mode")
     if not all(launch.get(field) for field in required):
         return []
@@ -149,7 +178,7 @@ def build_dispatch_receipt(
 
     task_id = reviewer_task_id.strip()
     surface = reviewer_execution_surface.strip().casefold()
-    if launch.get("allowed") is not True:
+    if launch.get("allowed") is not True and not is_practical_v09_manifest(launch):
         errors.append("launch receipt is not allowed")
     if not TASK_ID_RE.fullmatch(task_id):
         errors.append("reviewer session id is not a durable Codex thread id")

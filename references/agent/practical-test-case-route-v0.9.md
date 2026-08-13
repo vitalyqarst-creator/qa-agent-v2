@@ -17,12 +17,13 @@
    единый неизменяемый manifest для всех scope данного ФТ-пакета.
 3. `scope-obligations.json` — нормализованные `OBL-*` с точной source-привязкой, формулировкой ФТ, контекстами исполнения и рисками. Это не test design.
 4. `scope-clarification-requests.md` — обязательный итог анализа вопросов БА: содержит карточки `CLR-*` для каждого вопроса либо явную отметку, что вопросов нет; companion к `scope-obligations.json`, а не второй workflow state.
-5. `test-design-matrix.md` — человекочитаемый дизайн будущих проверок на русском.
-6. `validator-report.json` — output единственного scoped validator run для замороженного набора входов.
-7. `<mode>-review-manifest.json` — неизменяемый snapshot состава входов отдельного review.
-8. `<mode>-review-input-snapshot/` — создаётся только если отдельная сессия не получает тот же checkout; read-only копия hash-bound входов reviewer-а.
-9. `<mode>-review-result.json` — дословно сохранённый независимый verdict и findings reviewer.
-9. `fts/<domain>/<ft>/test-cases/<section>-<scope>.md` — canonical test cases.
+5. `dictionary-inventory.md` — полный состав каждого применимого закрытого справочника; обязателен, если в активных `OBL-*` есть `risk_flags: closed-dictionary`.
+6. `test-design-matrix.md` — человекочитаемый дизайн будущих проверок на русском.
+7. `validator-report.json` — output единственного scoped validator run для замороженного набора входов.
+8. `<mode>-review-manifest.json` — неизменяемый snapshot состава входов отдельного review.
+9. `<mode>-review-input-snapshot/` — создаётся только если отдельная сессия не получает тот же checkout; read-only копия hash-bound входов reviewer-а.
+10. `<mode>-review-result.json` — дословно сохранённый независимый verdict и findings reviewer.
+11. `fts/<domain>/<ft>/test-cases/<section>-<scope>.md` — canonical test cases.
 
 Не создавай для v0.9 `writer-self-check.md`, `tc-self-check.md`, Writer Quality Gate, отдельный stage summary, launch/dispatch receipts, parking prompts или вспомогательные coverage tables. Если нужно пояснить недетерминированное решение, добавь короткую запись `decision_notes` в `workflow-state.json` рядом с решением.
 
@@ -210,6 +211,13 @@ python scripts/capture_practical_review_result.py --submission <raw-reviewer-jso
 ```
 
 Результат review содержит `review_manifest_sha256`, `reviewer_thread_id`, `execution_surface: codex-thread`, `review_mode`, `independent_obligations` либо digest-bound `independent_obligation_set`, `verdict` и findings. Перед созданием manifest controller обязан иметь свежий чистый `validator-report.json`, чьи content hashes совпадают с текущими входами scope. Controller проверяет неизменность snapshot и обновляет только `workflow-state.json` командой `finalize_practical_review.py`, которая сохраняет SHA-256 raw receipt в history review.
+
+Для каждого `provided` fixture setup manifest включает каждый файл из
+`artifacts` (response snapshot, verification receipt и catalog при наличии).
+Их SHA-256 входят в content closure scoped validator: изменение fixture после
+validation требует новый validator run до dispatch. Verdict reviewer-а может
+быть только `approved`, `changes-required` или `blocked-input`; при обычных
+содержательных findings используется `changes-required`.
 
 Если raw verdict равен `changes-required` и в нём есть content blocking
 findings, controller до finalization выполняет triage каждого finding. Raw
