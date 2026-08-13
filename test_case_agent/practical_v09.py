@@ -18,7 +18,7 @@ from typing import Any, Iterable, Mapping
 
 
 ROUTE_VERSION = "practical-v0.9"
-ROUTE_TOOL_VERSION = "practical-v0.9.24"
+ROUTE_TOOL_VERSION = "practical-v0.9.25"
 WORKFLOW_STATE_SCHEMA_VERSION = 1
 SOURCE_CONTRACT_VERSION = "source-package-v4"
 MATRIX_CONTRACT_VERSION = "practical-matrix-v3"
@@ -3402,7 +3402,16 @@ def validate_state_formation_contract(
             artifact,
             remediation_owner="writer",
         ))
-    if "dadata" in lowered_statement and re.search(r"\b(?:выбор|выбран|автоматическ)\w*\b", lowered_statement):
+    # The FT may require an effect directly after input (for example,
+    # displaying suggestions or autofilling fields), or only after choosing a
+    # suggestion. Require a selection step only when the source-backed matrix
+    # action itself says that the user selects a suggestion.
+    matrix_action = row.get("Проверяемое действие", "")
+    requires_dadata_selection = bool(
+        "dadata" in lowered_statement
+        and re.search(r"\bвыбр\w*\b", matrix_action, re.IGNORECASE)
+    )
+    if requires_dadata_selection:
         selection_indexes = [
             index for index, step in enumerate(steps)
             if re.search(r"\bвыбр\w*\b", step, re.IGNORECASE)
@@ -3433,7 +3442,6 @@ def validate_state_formation_contract(
     # user enters a name) or during the save flow.  The source-backed matrix
     # action, rather than a generic word such as "существующий" in the
     # obligation, determines whether a save trigger is required.
-    matrix_action = row.get("Проверяемое действие", "")
     duplicate_save_flow = (
         re.search(r"\b(?:одинаков|существующ).*\b(?:наименован|назван)|такой\s+партнер", lowered_statement)
         and re.search(r"\bсохран\w*\b", matrix_action, re.IGNORECASE)

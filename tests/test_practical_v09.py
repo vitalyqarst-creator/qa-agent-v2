@@ -3720,6 +3720,36 @@ class PracticalV09Tests(unittest.TestCase):
             _, findings = validate_scope(package_root=fixture.root, workflow_state_path=fixture.state)
             self.assertNotIn("test-case-autocomplete-trigger", [item.id for item in findings if item.blocking])
 
+            input_autofill = PracticalV09Fixture(
+                Path(raw) / "input-autofill",
+                obligation_statement=(
+                    "При вводе ИНН система автоматически заполняет наименование данными DaData."
+                ),
+            )
+            input_autofill.matrix.write_text(
+                input_autofill.matrix.read_text(encoding="utf-8").replace(
+                    "Не требуется: состояние задано предусловием.",
+                    "Очистить поле «ИНН».",
+                ).replace(
+                    "Открыть пункт меню «Партнеры».",
+                    "Ввести ИНН из сохранённого ответа DaData.",
+                ),
+                encoding="utf-8",
+            )
+            input_autofill.tc.write_text(
+                input_autofill.tc.read_text(encoding="utf-8").replace(
+                    "1. Открыть раздел «Партнеры».",
+                    "1. Очистить поле «ИНН».\n"
+                    "2. Ввести ИНН из сохранённого ответа DaData.",
+                ),
+                encoding="utf-8",
+            )
+            _, findings = validate_scope(
+                package_root=input_autofill.root,
+                workflow_state_path=input_autofill.state,
+            )
+            self.assertNotIn("test-case-autocomplete-trigger", [item.id for item in findings if item.blocking])
+
             fixture = PracticalV09Fixture(
                 Path(raw) / "duplicate",
                 obligation_statement=(
