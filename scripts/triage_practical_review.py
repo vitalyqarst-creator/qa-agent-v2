@@ -143,6 +143,34 @@ def derived_status_for_scenarios(
     return derived
 
 
+def status_assertion_values(
+    *,
+    review_finding: dict[str, Any],
+    state: dict[str, Any],
+    package_root: Path,
+) -> tuple[str, set[str]]:
+    assertion = review_finding.get("status_assertion")
+    if not isinstance(assertion, dict):
+        raise PracticalV09Error(
+            "status decision requires reviewer finding.status_assertion"
+        )
+    claimed = assertion.get("required_status")
+    scenario_ids = assertion.get("scenario_ids")
+    if (
+        claimed not in ALLOWED_EXECUTION_STATUSES
+        or not isinstance(scenario_ids, list)
+        or not scenario_ids
+        or not all(isinstance(item, str) and item.startswith("SCN-") for item in scenario_ids)
+    ):
+        raise PracticalV09Error(
+            "status_assertion requires allowed required_status and scenario_ids"
+        )
+    derived = derived_status_for_scenarios(
+        state=state, package_root=package_root, scenario_ids=scenario_ids
+    )
+    return str(claimed), derived
+
+
 def validate_rejection(
     *,
     decision: dict[str, Any],
@@ -160,24 +188,10 @@ def validate_rejection(
         )
     basis = rejection["basis"]
     if basis == "execution-status-precedence":
-        assertion = review_finding.get("status_assertion")
-        if not isinstance(assertion, dict):
-            raise PracticalV09Error(
-                "status rejection requires reviewer finding.status_assertion"
-            )
-        claimed = assertion.get("required_status")
-        scenario_ids = assertion.get("scenario_ids")
-        if (
-            claimed not in ALLOWED_EXECUTION_STATUSES
-            or not isinstance(scenario_ids, list)
-            or not scenario_ids
-            or not all(isinstance(item, str) and item.startswith("SCN-") for item in scenario_ids)
-        ):
-            raise PracticalV09Error(
-                "status_assertion requires allowed required_status and scenario_ids"
-            )
-        derived = derived_status_for_scenarios(
-            state=state, package_root=package_root, scenario_ids=scenario_ids
+        claimed, derived = status_assertion_values(
+            review_finding=review_finding,
+            state=state,
+            package_root=package_root,
         )
         if claimed in derived:
             raise PracticalV09Error(
@@ -241,10 +255,22 @@ def main(argv: list[str] | None = None) -> int:
     findings_by_id = {str(item.get("id")): item for item in content}
     for finding_id, decision in decisions.items():
         require_common_decision_fields(decision)
+        review_finding = findings_by_id[finding_id]
+        if "status_assertion" in review_finding:
+            claimed, derived = status_assertion_values(
+                review_finding=review_finding,
+                state=state,
+                package_root=package_root,
+            )
+            if decision["disposition"] == "accepted" and claimed not in derived:
+                raise PracticalV09Error(
+                    "accepted status finding conflicts with the derived prerequisite "
+                    "status; reject it with execution-status-precedence"
+                )
         if decision["disposition"] == "rejected":
             validate_rejection(
                 decision=decision,
-                review_finding=findings_by_id[finding_id],
+                review_finding=review_finding,
                 state=state,
                 package_root=package_root,
             )

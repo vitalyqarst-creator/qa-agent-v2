@@ -1360,6 +1360,62 @@ class PracticalV09Tests(unittest.TestCase):
             )
             self.assertIn("review-result-snapshot-changed", [item.id for item in findings])
 
+    def test_reviewer_status_change_requires_structured_status_assertion(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            fixture = PracticalV09Fixture(Path(raw))
+            state = json.loads(fixture.state.read_text(encoding="utf-8"))
+            state["contract_versions"]["controller_triage"] = (
+                CONTROLLER_TRIAGE_CONTRACT_VERSION
+            )
+            state["review_triage"] = []
+            write_json(fixture.state, state)
+            manifest = build_review_manifest(
+                package_root=fixture.root,
+                workflow_state_path=fixture.state,
+                review_mode="test-cases",
+                controller_thread_id="019feebf-3cde-79d2-9f87-ba9c61ff7b13",
+                code_branch="codex/test",
+                code_commit="abc123",
+                contract_digest="contract",
+            )
+            manifest_path = fixture.scope_dir / "test-cases-review-manifest.json"
+            result_path = fixture.scope_dir / "test-cases-review-result.json"
+            write_json(manifest_path, manifest)
+            write_json(
+                result_path,
+                {
+                    "review_manifest_sha256": sha256_file(manifest_path),
+                    "scope_id": "01",
+                    "scope_slug": "menu",
+                    "review_mode": "test-cases",
+                    "execution_surface": "codex-thread",
+                    "reviewer_thread_id": "019feebf-3cde-79d2-9f87-ba9c61ff7b14",
+                    "independent_obligations": independently_derived_obligation(),
+                    "verdict": "changes-required",
+                    "findings": [{
+                        "id": "RV-STATUS-001",
+                        "title": "Ошибочно указан статус исполнения",
+                        "details": "Требуется изменить статус исполнения сценария.",
+                        "source_anchor": "Раздел 9.1, строка «Партнеры».",
+                        "artifact_anchor": "test-cases/9.1-menu.md, TC-MENU-001",
+                        "category": "execution-readiness",
+                        "severity": "High",
+                        "blocking": True,
+                        "blocking_reason": "Без смены статуса результат нельзя считать исполнимым.",
+                        "remediation_owner": "writer",
+                    }],
+                },
+            )
+            _, findings = verify_review_result(
+                package_root=fixture.root,
+                manifest_path=manifest_path,
+                result_path=result_path,
+            )
+            self.assertIn(
+                "review-result-status-assertion",
+                [item.id for item in findings if item.blocking],
+            )
+
     def test_review_manifest_binds_all_source_package_inputs(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             fixture = PracticalV09Fixture(Path(raw))
@@ -2193,6 +2249,32 @@ class PracticalV09Tests(unittest.TestCase):
                 },
             )
             decisions_path = fixture.scope_dir / "controller-triage-input.json"
+            write_json(
+                decisions_path,
+                {
+                    "review_result_sha256": sha256_file(result_path),
+                    "decisions": [{
+                        "finding_id": "RV-STATUS-001",
+                        "disposition": "accepted",
+                        "rationale": "Статус считается скорректированным без проверки полной цепочки предпосылок.",
+                        "checked_anchors": [
+                            "SCN-001; SETUP-ACTOR-001.",
+                        ],
+                    }],
+                },
+            )
+            wrongly_accepted = subprocess.run(
+                [
+                    sys.executable, str(REPO_ROOT / "scripts" / "triage_practical_review.py"),
+                    "--ft-package-root", str(fixture.root),
+                    "--workflow-state", str(fixture.state),
+                    "--review-manifest", str(manifest_path),
+                    "--review-result", str(result_path),
+                    "--decisions-file", str(decisions_path),
+                ],
+                text=True, capture_output=True, encoding="utf-8", errors="replace",
+            )
+            self.assertNotEqual(0, wrongly_accepted.returncode)
             write_json(
                 decisions_path,
                 {

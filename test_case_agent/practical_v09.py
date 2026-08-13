@@ -201,6 +201,12 @@ REVIEW_FINDING_REQUIRED_FIELDS = (
     "blocking",
     "remediation_owner",
 )
+STATUS_CHANGE_CLAIM_RE = re.compile(
+    r"\b(?:измен\w*|установ\w*|замен\w*)\s+(?:\S+\s+){0,4}статус\w*"
+    r"|\bстатус\w*(?:\s+\S+){0,7}\s+(?:измен\w*|установ\w*|замен\w*)"
+    r"|\bошибочно\s+(?:указан|имеет)\s+статус\w*",
+    re.IGNORECASE,
+)
 TEST_DATA_TAUTOLOGY_PATTERNS = (
     re.compile(r"\bданные,?\s+предусмотренные\s+проверяемым\s+правилом\b", re.IGNORECASE),
     re.compile(r"\bвалидные\s+данные\b", re.IGNORECASE),
@@ -4878,6 +4884,33 @@ def verify_review_result(
                         artifact,
                         remediation_owner="reviewer",
                     ))
+                status_change_claimed = bool(STATUS_CHANGE_CLAIM_RE.search(
+                    " ".join(
+                        str(review_finding.get(key) or "")
+                        for key in ("title", "details", "blocking_reason")
+                    )
+                ))
+                assertion = review_finding.get("status_assertion")
+                if status_change_claimed or assertion is not None:
+                    if (
+                        not isinstance(assertion, dict)
+                        or assertion.get("required_status") not in ALLOWED_EXECUTION_STATUSES
+                        or not isinstance(assertion.get("scenario_ids"), list)
+                        or not assertion["scenario_ids"]
+                        or not all(
+                            isinstance(item, str) and item.startswith("SCN-")
+                            for item in assertion["scenario_ids"]
+                        )
+                    ):
+                        findings.append(finding(
+                            "review-result-status-assertion",
+                            "review-integrity",
+                            "Статусное замечание reviewer-а не имеет проверяемой декларации",
+                            f"findings[{index}] запрашивает изменение статуса исполнения; "
+                            "укажите status_assertion с required_status и затронутыми SCN-*.",
+                            artifact,
+                            remediation_owner="reviewer",
+                        ))
     for entry in manifest.get("inputs", []):
         if not isinstance(entry, dict):
             continue
