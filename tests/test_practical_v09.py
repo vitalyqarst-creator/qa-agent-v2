@@ -2865,6 +2865,53 @@ class PracticalV09Tests(unittest.TestCase):
                 [item.id for item in findings if item.blocking],
             )
 
+    def test_validator_rejects_dadata_precondition_that_repeats_trigger(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            fixture = PracticalV09Fixture(
+                Path(raw),
+                obligation_statement="После выбора подсказки DaData система автоматически заполняет наименование.",
+            )
+            fixture.tc.write_text(
+                fixture.tc.read_text(encoding="utf-8")
+                .replace(
+                    "**Предусловия:** Пользователь вошел в систему.",
+                    "**Предусловия:** Пользователь вошел в систему; получен список DaData по наименованию.",
+                )
+                .replace(
+                    "**Тестовые данные:** Не требуются.",
+                    "**Тестовые данные:** Требуемый профиль: юридическое лицо с заполненными "
+                    "наименованием и ИНН в ответе DaData. Способ подготовки: включить "
+                    "интеграцию DaData в тестовом контуре и сохранить выбранную подсказку.",
+                )
+                .replace(
+                    "1. Открыть раздел «Партнеры».",
+                    "1. Ввести поисковый запрос в поле «Наименование партнёра».\n"
+                    "2. Выбрать подсказку DaData.",
+                ),
+                encoding="utf-8",
+            )
+            _, findings = validate_scope(package_root=fixture.root, workflow_state_path=fixture.state)
+            self.assertIn(
+                "test-case-dadata-precondition-duplicates-trigger",
+                [item.id for item in findings if item.blocking],
+            )
+
+    def test_validator_rejects_frozen_profile_process_language(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            fixture = PracticalV09Fixture(Path(raw))
+            fixture.tc.write_text(
+                fixture.tc.read_text(encoding="utf-8").replace(
+                    "**Тестовые данные:** Не требуются.",
+                    "**Тестовые данные:** frozen profile подготовлен до прогона.",
+                ),
+                encoding="utf-8",
+            )
+            _, findings = validate_scope(package_root=fixture.root, workflow_state_path=fixture.state)
+            self.assertIn(
+                "test-case-process-language-frozen-profile",
+                [item.id for item in findings if item.blocking],
+            )
+
     def test_validator_requires_valid_package_id(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             fixture = PracticalV09Fixture(Path(raw))
