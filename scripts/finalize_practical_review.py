@@ -21,6 +21,7 @@ from test_case_agent.practical_v09 import (
     validate_review_triage_integrity,
     verify_review_result,
     workflow_controller_triage_enabled,
+    workflow_controller_triage_version,
     write_json,
 )
 from test_case_agent.practical_review_input_snapshot import verify_snapshot
@@ -107,7 +108,10 @@ def main(argv: list[str] | None = None) -> int:
     if review_mode not in {"matrix", "test-cases"}:
         raise PracticalV09Error("review-result.json has unsupported review_mode")
     effective_verdict = str(result["verdict"])
-    content_findings = review_content_findings(result)
+    content_findings = review_content_findings(
+        result,
+        triage_contract_version=workflow_controller_triage_version(state),
+    )
     if result["verdict"] == "changes-required" and content_findings:
         if workflow_controller_triage_enabled(state):
             triage_issues = [

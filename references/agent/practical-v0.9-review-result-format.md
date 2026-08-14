@@ -139,6 +139,9 @@ finding: blocking-дефекты категорий `coverage`, `expected-result
 единственной writer-доработке своей фазы. Значения `controller` и `validator`
 допустимы без расходования writer budget только для процессных категорий
 `review-integrity`, `source-integrity`, `transport`, `validator` или `tooling`.
+Это правило действует для `controller-triage-v2`. `controller-triage-v1`
+поддерживается только для проверки уже финализированной истории; не назначай
+его новым scope и не переписывай под v2 его immutable triage-записи.
 Если finding требует изменить статус исполнения, он дополнительно содержит
 `status_assertion`:
 

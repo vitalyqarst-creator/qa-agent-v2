@@ -16,6 +16,7 @@ from test_case_agent.practical_v09 import (
     EXCEPTION_SNAPSHOT_CONTRACT_VERSION,
     MATRIX_CONTRACT_VERSION,
     LEGACY_SCENARIO_CONSOLIDATION_CONTRACT_VERSION,
+    LEGACY_CONTROLLER_TRIAGE_CONTRACT_VERSION,
     PREVIOUS_MATRIX_CONTRACT_VERSION,
     ROUTE_VERSION,
     SCENARIO_CONSOLIDATION_CONTRACT_VERSION,
@@ -2681,6 +2682,22 @@ class PracticalV09Tests(unittest.TestCase):
             }
         )
         self.assertEqual(["RV-001"], [item["id"] for item in findings])
+
+    def test_legacy_triage_keeps_historical_owner_classification(self) -> None:
+        findings = review_content_findings(
+            {
+                "findings": [
+                    {
+                        "id": "RV-001",
+                        "category": "coverage",
+                        "blocking": True,
+                        "remediation_owner": "controller",
+                    }
+                ]
+            },
+            triage_contract_version=LEGACY_CONTROLLER_TRIAGE_CONTRACT_VERSION,
+        )
+        self.assertEqual([], findings)
 
     def test_validator_blocks_review_input_change_between_triage_and_finalization(self) -> None:
         with tempfile.TemporaryDirectory() as raw:

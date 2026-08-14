@@ -30,7 +30,14 @@ MIGRATABLE_MATRIX_CONTRACT_VERSIONS = {
 }
 SCENARIO_CONSOLIDATION_CONTRACT_VERSION = "scenario-consolidation-v2"
 LEGACY_SCENARIO_CONSOLIDATION_CONTRACT_VERSION = "scenario-consolidation-v1"
-CONTROLLER_TRIAGE_CONTRACT_VERSION = "controller-triage-v1"
+CONTROLLER_TRIAGE_CONTRACT_VERSION = "controller-triage-v2"
+LEGACY_CONTROLLER_TRIAGE_CONTRACT_VERSION = "controller-triage-v1"
+SUPPORTED_CONTROLLER_TRIAGE_CONTRACT_VERSIONS = frozenset(
+    {
+        LEGACY_CONTROLLER_TRIAGE_CONTRACT_VERSION,
+        CONTROLLER_TRIAGE_CONTRACT_VERSION,
+    }
+)
 CLARIFICATION_OUTCOME_CONTRACT_VERSION = "clarification-outcome-v1"
 EXECUTION_CONTEXT_CONTRACT_VERSION = "execution-context-v1"
 SOURCE_PARITY_CONTRACT_VERSION = "source-parity-v1"
@@ -1019,28 +1026,33 @@ def workflow_scenario_consolidation_enabled(state: Mapping[str, Any]) -> bool:
     return True
 
 
-def workflow_controller_triage_enabled(state: Mapping[str, Any]) -> bool:
-    """Return whether changes-required results require controller triage.
+def workflow_controller_triage_version(state: Mapping[str, Any]) -> str | None:
+    """Return the declared controller-triage contract version.
 
-    The triage contract is intentionally opt-in for existing scopes.  New
-    scopes must record a decision for every content blocker before a reviewer
-    result can consume a revision budget or move the workflow forward.
+    v1 remains readable only for review history finalized before v2 classified
+    semantic findings independently of their delivery owner.  New scopes use
+    v2 and must triage every semantic blocker.
     """
     versions = state.get("contract_versions")
     if not isinstance(versions, Mapping):
         raise PracticalV09Error("workflow-state.json: contract_versions must be an object")
     declared = versions.get("controller_triage")
     if declared is None:
-        return False
-    if declared != CONTROLLER_TRIAGE_CONTRACT_VERSION:
+        return None
+    if declared not in SUPPORTED_CONTROLLER_TRIAGE_CONTRACT_VERSIONS:
         raise PracticalV09Error(
             "workflow-state.json: contract_versions.controller_triage has unsupported value"
         )
     if not isinstance(state.get("review_triage"), list):
         raise PracticalV09Error(
-            "workflow-state.json: review_triage must be an array for controller-triage-v1"
+            "workflow-state.json: review_triage must be an array for controller triage"
         )
-    return True
+    return str(declared)
+
+
+def workflow_controller_triage_enabled(state: Mapping[str, Any]) -> bool:
+    """Return whether changes-required results require controller triage."""
+    return workflow_controller_triage_version(state) is not None
 
 
 def workflow_clarification_outcome_enabled(state: Mapping[str, Any]) -> bool:
@@ -1126,15 +1138,29 @@ def workflow_exception_snapshot_enabled(state: Mapping[str, Any]) -> bool:
     return True
 
 
-def review_content_findings(result: Mapping[str, Any]) -> list[dict[str, Any]]:
+def review_content_findings(
+    result: Mapping[str, Any], *, triage_contract_version: str | None = None
+) -> list[dict[str, Any]]:
     """Return blocking semantic findings that require controller triage.
 
-    A reviewer may identify a delivery owner, but that label cannot turn a
-    coverage or test-design defect into a controller-only correction.
+    A reviewer may identify a delivery owner, but under v2 that label cannot
+    turn a coverage or test-design defect into a controller-only correction.
+    v1 exists only to validate its immutable historical records.
     """
     raw_findings = result.get("findings")
     if not isinstance(raw_findings, list):
         return []
+    contract_version = triage_contract_version or CONTROLLER_TRIAGE_CONTRACT_VERSION
+    if contract_version not in SUPPORTED_CONTROLLER_TRIAGE_CONTRACT_VERSIONS:
+        raise PracticalV09Error("unsupported controller triage contract version")
+    if contract_version == LEGACY_CONTROLLER_TRIAGE_CONTRACT_VERSION:
+        return [
+            item
+            for item in raw_findings
+            if isinstance(item, dict)
+            and item.get("blocking") is True
+            and item.get("remediation_owner") not in {"controller", "validator"}
+        ]
     return [
         item
         for item in raw_findings
@@ -5681,7 +5707,8 @@ def validate_review_triage_integrity(
     state: dict[str, Any], package_root: Path
 ) -> list[ScopeFinding]:
     """Validate controller decisions without changing immutable reviewer JSON."""
-    if not workflow_controller_triage_enabled(state):
+    triage_contract_version = workflow_controller_triage_version(state)
+    if triage_contract_version is None:
         return []
     findings: list[ScopeFinding] = []
     raw_triage = state.get("review_triage")
@@ -5757,7 +5784,9 @@ def validate_review_triage_integrity(
                 remediation_owner="controller",
             ))
             continue
-        content = review_content_findings(result)
+        content = review_content_findings(
+            result, triage_contract_version=triage_contract_version
+        )
         expected_ids = {str(item.get("id")) for item in content}
         findings_by_id = {str(item.get("id")): item for item in content}
         decisions = record.get("decisions")
@@ -6595,9 +6624,10 @@ def build_review_manifest(
             manifest["reviewer_order"].append(
                 "Самостоятельно проверить решения CON-* в matrix и неучтённые кандидаты на объединение."
             )
-    if workflow_controller_triage_enabled(state):
+    triage_contract_version = workflow_controller_triage_version(state)
+    if triage_contract_version is not None:
         manifest["controller_triage_contract"] = {
-            "version": CONTROLLER_TRIAGE_CONTRACT_VERSION,
+            "version": triage_contract_version,
             "finding_schema": "practical-review-finding-v1",
             "required_for": "changes-required-with-content-blockers",
         }
@@ -6892,7 +6922,8 @@ def verify_review_result(
     if triage_contract is not None:
         if (
             not isinstance(triage_contract, dict)
-            or triage_contract.get("version") != CONTROLLER_TRIAGE_CONTRACT_VERSION
+            or triage_contract.get("version")
+            not in SUPPORTED_CONTROLLER_TRIAGE_CONTRACT_VERSIONS
             or triage_contract.get("finding_schema") != "practical-review-finding-v1"
             or triage_contract.get("required_for")
             != "changes-required-with-content-blockers"
@@ -6901,7 +6932,7 @@ def verify_review_result(
                 "review-manifest-controller-triage-contract",
                 "review-integrity",
                 "Manifest review содержит неверный контракт controller triage",
-                "Нужен controller-triage-v1 с форматом practical-review-finding-v1.",
+                "Нужен поддерживаемый controller-triage контракт с форматом practical-review-finding-v1.",
                 artifact,
                 remediation_owner="controller",
             ))

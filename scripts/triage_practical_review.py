@@ -32,6 +32,7 @@ from test_case_agent.practical_v09 import (
     verify_review_result,
     workflow_artifact_path,
     workflow_controller_triage_enabled,
+    workflow_controller_triage_version,
     write_json,
 )
 
@@ -222,9 +223,10 @@ def main(argv: list[str] | None = None) -> int:
     state_path = args.workflow_state.resolve()
     result_path = args.review_result.resolve()
     state = load_workflow_state(state_path, package_root)
-    if not workflow_controller_triage_enabled(state):
+    triage_contract_version = workflow_controller_triage_version(state)
+    if triage_contract_version is None:
         raise PracticalV09Error(
-            "workflow-state.json does not enable controller-triage-v1"
+            "workflow-state.json does not enable controller triage"
         )
     result, verification = verify_review_result(
         package_root=package_root,
@@ -244,7 +246,9 @@ def main(argv: list[str] | None = None) -> int:
         )
     if result.get("verdict") != "changes-required":
         raise PracticalV09Error("controller triage is only valid for changes-required")
-    content = review_content_findings(result)
+    content = review_content_findings(
+        result, triage_contract_version=triage_contract_version
+    )
     expected_ids = {str(item.get("id")) for item in content}
     if not expected_ids:
         raise PracticalV09Error(
@@ -294,7 +298,7 @@ def main(argv: list[str] | None = None) -> int:
     assert isinstance(triage, list)
     triage.append(
         {
-            "contract_version": CONTROLLER_TRIAGE_CONTRACT_VERSION,
+            "contract_version": triage_contract_version,
             "review_mode": result["review_mode"],
             "review_manifest": relative_to_package(
                 package_root, args.review_manifest.resolve()
