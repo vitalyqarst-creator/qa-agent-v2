@@ -270,9 +270,16 @@ finalization блокируется scoped validator. Исключение дл�
 `finalize_practical_review.py --allow-post-triage-recovery` с hash-bound
 immutable input snapshot и сохранённой причиной; это не обычный маршрут.
 
+### 3.5. Планирование и материализация тестовых данных
+
+После matrix acceptance controller выполняет применимый gate из
+`test-data-source-planning-policy.md`: выбирает provider по требуемому evidence
+и до writer материализует минимальный набор fixtures. Недоступная зависимость
+даёт точный `needs-test-data`; live-вызовы в TC и выдуманные literals запрещены.
+
 ### 4. TC, final review и revision
 
-После matrix acceptance writer создаёт canonical TC и повторно запускает scoped validator один раз для нового замороженного набора входов. Затем переводит `workflow-state.json` в `phase: review`, устанавливает следующее действие «Провести независимое final TC review» и сохраняет `final_verdict: not-finalized`. Затем всегда запускается отдельный final TC review. `final_verdict` относится только к final TC review; matrix verdict хранится в `reviews`.
+После matrix acceptance и завершения применимого materialization gate writer создаёт canonical TC и повторно запускает scoped validator один раз для нового замороженного набора входов. Затем переводит `workflow-state.json` в `phase: review`, устанавливает следующее действие «Провести независимое final TC review» и сохраняет `final_verdict: not-finalized`. Затем всегда запускается отдельный final TC review. `final_verdict` относится только к final TC review; matrix verdict хранится в `reviews`.
 
 При `changes-required` для каждой фазы разрешена ровно одна целевая writer revision: одна целевая writer revision матрицы и один свежий matrix re-review, а также отдельно одна целевая writer revision canonical TC и один свежий final independent TC review. До расходования любого budget обязателен controller triage каждого content blocking finding. `matrix_revision_count` и `tc_revision_count` в `workflow-state.json` расходуются только для принятых content findings своей фазы; второй такой вердикт той же фазы переводит scope в `blocked`, а не запускает repair-loop. Process/transport/validator finding с `remediation_owner: controller` или `validator` исправляется без расходования writer revision. Наблюдаемое требование с неизвестным UI-признаком получает `blocked-observability`; это допустимый статус matrix/TC и не является external blocker само по себе. Противоречие источников или непредставимое требование — честный `blocked-input`.
 
@@ -326,16 +333,11 @@ action, один primary oracle, одинаковые элемент/домен/
 контрол. Если механизм входа ещё не подтверждён, зафиксируй открытый экран в
 нейтральном предусловии и не пиши шаг вида «Открыть карточку в
 контексте ...». Не переноси в TC `SETUP-*`, URL, маршрут входа или конкретную
-учётную запись: это волатильная конфигурация среды, передаваемая исполнителю
-вне canonical test-case. В matrix допустим только идентификатор нейтральной
-предпосылки без конкретных параметров среды. Для DaData-сценария предпочитай сохранённый `FX-DADATA-*` с
-только используемыми literals из verified receipt и response snapshot. Нельзя
-подставлять правдоподобные название, ИНН, адрес или иной literal только потому,
-что указан `FX-DADATA-*`: literal допустим лишь при совпадении с сохранённым
-verified fixture. Если такого fixture действительно нет, статус
-`needs-test-data` должен содержать точные свойства нужного ответа DaData и
-явную строку «Способ подготовки: ...». Формулировки «известная организация» и
-«подготовить организацию» без этого контракта запрещены.
+учётную запись: это волатильная конфигурация среды. В matrix допустим только
+идентификатор нейтральной предпосылки. Внешние и synthetic fixtures используй
+строго по `test-data-source-planning-policy.md`; правдоподобный, но не
+проверенный literal запрещён. При отсутствии fixture укажи точные свойства и
+способ подготовки.
 
 Тестовые данные не подменяют подготовку формулировками «остальные обязательные
 поля заполнить допустимыми значениями», «уникальный набор обязательных

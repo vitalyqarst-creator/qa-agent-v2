@@ -63,6 +63,9 @@ lifecycle:
 - Если fixture зависит от внешнего справочника, mock/stub или системного состояния, укажи это в `dependencies`; если зависимость недоступна, используй `GAP-*`, а не generic fixture.
 - Если fixture используется только в одном TC и полностью раскрыта в `Тестовые данные` / `Предусловия`, отдельная строка catalog не обязательна.
 - Fixture catalog не является источником новых требований. Если baseline требует поведения, которого нет в source, добавь `coverage gap` / `unclear`.
+- Источник external-dynamic fixture выбирается по
+  [`test-data-source-planning-policy.md`](test-data-source-planning-policy.md).
+  DaData — один из provider-профилей, а не общий источник для любого ФТ.
 - External-dynamic fixture создаётся и проверяется до writer; writer и runtime TC
   не обращаются к внешнему API для поиска тестового значения.
 - Позитивный external-dynamic fixture хранит точный запрос, предложение и нужные

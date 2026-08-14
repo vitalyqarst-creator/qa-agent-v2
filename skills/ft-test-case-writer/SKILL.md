@@ -14,6 +14,8 @@ scope и активный workflow уже подтверждены. Для об�
 [runtime workflow](../../references/agent/writer-runtime-workflow.md),
 [формат production TC](../../references/qa/test-case-runtime-format.md) и,
 если это v0.9 scope, [practical v0.9 route](../../references/agent/practical-test-case-route-v0.9.md).
+Если matrix требует новых fixtures, используй уже выполненный
+[план источников тестовых данных](../../references/agent/test-data-source-planning-policy.md).
 
 ## Входы
 
@@ -40,8 +42,10 @@ matrix и findings reviewer-а, если это разрешённая дора�
    согласованных metadata. Не включай в TC `SETUP-*`, URL, маршрут входа,
    конкретные логины, роли, пароли или токены.
 5. Тестовые данные содержат конкретные значения, файлы или точные свойства и
-   способ подготовки. Для DaData используй сохранённый проверенный fixture;
-   синтетические данные не подменяют интеграционный источник.
+   способ подготовки. Используй источник, выбранный provider-neutral планом:
+   сохранённый интеграционный fixture для интеграционного evidence и
+   synthetic fixture только для разрешённых нейтральных значений. Writer не
+   вызывает внешний provider и не заменяет им состояние тестовой среды.
 6. Для `create` с успешным сохранением укажи конкретный ключ объекта,
    исходное отсутствие объекта и изоляцию/очистку, если ФТ требует создание.
 7. До TC writing matrix должна пройти mandatory independent matrix review.
