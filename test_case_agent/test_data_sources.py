@@ -98,4 +98,3 @@ def validate_plan(plan: dict[str, Any], *, repo_root: Path | None = None) -> lis
 
 def validate_plan_file(path: Path, *, repo_root: Path | None = None) -> list[str]:
     return validate_plan(json.loads(path.read_text(encoding="utf-8")), repo_root=repo_root)
-
