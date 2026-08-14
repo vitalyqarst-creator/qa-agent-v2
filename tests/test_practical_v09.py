@@ -318,7 +318,15 @@ class PracticalV09Tests(unittest.TestCase):
         self.assertIn("# FT Test Case Writer", writer)
         self.assertIn("[ft-practical-route]", writer)
         self.assertIn("`workflow-state.json`", writer)
+        self.assertIn("source-to-matrix scan", writer)
         self.assertNotIn("practical_v0_8", writer)
+
+    def test_reviewer_skill_requires_bounded_review_pass(self) -> None:
+        reviewer = (REPO_ROOT / "skills" / "ft-test-case-reviewer" / "SKILL.md").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("одним проходом", reviewer)
+        self.assertIn("raw JSON verdict", reviewer)
 
     def test_v09_route_requires_final_review_transition_after_writer_revision(self) -> None:
         route = (REPO_ROOT / "skills" / "ft-practical-route" / "SKILL.md").read_text(
@@ -329,6 +337,10 @@ class PracticalV09Tests(unittest.TestCase):
         self.assertIn("independent final TC review", route)
         self.assertIn("одна содержательная writer-доработка", route)
         self.assertIn("единый законченный пакет", route)
+        canonical_route = (
+            REPO_ROOT / "references" / "agent" / "practical-test-case-route-v0.9.md"
+        ).read_text(encoding="utf-8")
+        self.assertIn("source-to-matrix scan", canonical_route)
 
     def test_initializer_enables_controller_triage_for_new_scope(self) -> None:
         with tempfile.TemporaryDirectory() as raw:

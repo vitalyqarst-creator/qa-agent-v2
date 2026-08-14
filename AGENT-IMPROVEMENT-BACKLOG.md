@@ -1,5 +1,15 @@
 # Backlog улучшений агента
 
+- [x] `AGI-054` (`P1`) Добавить короткий source-to-matrix pre-review scan.
+  - Основание: fresh matrix re-review scope `9.3.2` после одной writer-доработки
+    выявил повторяемые дефекты: объединены показ подсказок и автозаполнение,
+    у автозаполняемых КПП/ОГРН задан искусственный ручной trigger, не разделены
+    file interaction paths, отсутствует наблюдение второго файла и persistence.
+  - Выполнено: practical route и writer skill требуют один ограниченный scan
+    этих пяти инвариантов до scoped validator без нового артефакта или цикла;
+    reviewer skill ограничивает проверку одним проходом по OBL/source и
+    возвратом raw verdict без повторного внутреннего анализа.
+
 - [x] `AGI-051` (`P1`) Включать предоставленные fixture в неизменяемый review snapshot.
   - Основание: независимое matrix review чистого control-run scope `9.3.2` обнаружило, что `FX-DADATA-PARTNER-001` использовался в matrix, но его response snapshot и verification receipt не были hash-bound входами `matrix-review-manifest.json`. Поэтому reviewer не мог проверить происхождение конкретных DaData-literals.
   - Выполнено: у `SETUP-*` с `kind: fixture`, `availability: provided` обязательны `artifacts` с файлами snapshot/verification/catalog. Validator проверяет пути и включает их SHA-256 в content closure; review manifest транзитивно связывает их как immutable inputs. Добавлены регрессии для отсутствующих artifacts и для их присутствия в manifest.

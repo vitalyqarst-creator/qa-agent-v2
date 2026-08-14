@@ -48,6 +48,11 @@ v0.9 scope, [practical route](../../references/agent/practical-test-case-route-v
 4. Верни один raw JSON по canonical format. Не изменяй matrix, TC,
    `workflow-state.json` или findings других агентов.
 
+Проверяй каждый источник и `OBL-*` одним проходом, фиксируя один finding на
+первопричину с перечнем затронутых `SCN-*`. Не повторяй уже сделанный анализ
+ради новых формулировок и не создавай внутренние repair/self-check циклы:
+после source-to-artifact сопоставления сразу верни raw JSON verdict.
+
 ## Вердикт
 
 Допустимы только `approved`, `changes-required`, `blocked-input`. При
