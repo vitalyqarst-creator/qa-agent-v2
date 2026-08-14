@@ -61,6 +61,12 @@ practical v0.9 [канонический маршрут](../../references/agent/
    `CLR-*`.
 6. До matrix разрешён только `validate_practical_obligations.py`; не называй
    его полной валидацией scope.
+   До запуска штатного init script сначала создай обязательные scope-local
+   `source-parity-check.md` и `dictionary-inventory.md`, если они применимы.
+   Init script сам связывает их из `workflow-state.json` и останавливается,
+   если обязательный artifact отсутствует. После появления state не подменяй
+   его новым: metadata-only обновление меняет только ссылки на уже созданные
+   scope-local artifacts, не OBL, gaps, статусы или phase.
 
 ## Ограничения
 

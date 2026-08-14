@@ -373,6 +373,68 @@ class PracticalV09Tests(unittest.TestCase):
                 clarification_path.read_text(encoding="utf-8"),
             )
 
+    def test_initializer_binds_required_parity_and_dictionary_artifacts(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            fixture = PracticalV09Fixture(Path(raw))
+            obligations = json.loads(fixture.obligations.read_text(encoding="utf-8"))
+            obligations["obligations"][0]["risk_flags"] = ["closed-dictionary"]
+            write_json(fixture.obligations, obligations)
+            inventory = fixture.scope_dir / "dictionary-inventory.md"
+            inventory.write_text("# Состав справочника\n\nЗначения извлечены.\n", encoding="utf-8")
+            output = fixture.scope_dir / "fresh-workflow-state.json"
+            completed = subprocess.run(
+                [
+                    sys.executable,
+                    str(REPO_ROOT / "scripts" / "init_practical_v09_workflow.py"),
+                    "--ft-package-root", str(fixture.root),
+                    "--scope-id", "01",
+                    "--scope-slug", "menu",
+                    "--source-package-manifest", str(fixture.source_manifest),
+                    "--scope-obligations", str(fixture.obligations),
+                    "--output", str(output),
+                ],
+                text=True,
+                capture_output=True,
+                encoding="utf-8",
+                errors="replace",
+            )
+            self.assertEqual(0, completed.returncode, completed.stderr)
+            artifacts = json.loads(output.read_text(encoding="utf-8"))["artifacts"]
+            self.assertEqual(
+                "work/practical-v0.9/menu/source-parity-check.md",
+                artifacts["source_parity_check"],
+            )
+            self.assertEqual(
+                "work/practical-v0.9/menu/dictionary-inventory.md",
+                artifacts["dictionary_inventory"],
+            )
+
+    def test_initializer_rejects_missing_required_dictionary_inventory(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            fixture = PracticalV09Fixture(Path(raw))
+            obligations = json.loads(fixture.obligations.read_text(encoding="utf-8"))
+            obligations["obligations"][0]["risk_flags"] = ["closed-dictionary"]
+            write_json(fixture.obligations, obligations)
+            output = fixture.scope_dir / "fresh-workflow-state.json"
+            completed = subprocess.run(
+                [
+                    sys.executable,
+                    str(REPO_ROOT / "scripts" / "init_practical_v09_workflow.py"),
+                    "--ft-package-root", str(fixture.root),
+                    "--scope-id", "01",
+                    "--scope-slug", "menu",
+                    "--source-package-manifest", str(fixture.source_manifest),
+                    "--scope-obligations", str(fixture.obligations),
+                    "--output", str(output),
+                ],
+                text=True,
+                capture_output=True,
+                encoding="utf-8",
+                errors="replace",
+            )
+            self.assertNotEqual(0, completed.returncode)
+            self.assertIn("dictionary-inventory.md", completed.stderr)
+
     def test_current_v09_contract_versions_are_documented_and_initialized(self) -> None:
         workflow_format = (
             REPO_ROOT / "references" / "agent" / "practical-v0.9-workflow-state-format.md"

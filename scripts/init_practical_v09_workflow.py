@@ -16,6 +16,7 @@ from test_case_agent.practical_v09 import (
     PracticalV09Error,
     build_initial_workflow_state,
     clarification_requests_path,
+    dictionary_inventory_required,
     package_relative_path,
     read_json,
     relative_to_package,
@@ -69,6 +70,23 @@ def main(argv: list[str] | None = None) -> int:
         raise PracticalV09Error(
             "scope-id and scope-slug must match scope-obligations.json"
         )
+    manifest_payload = read_json(source_path)
+    documents = manifest_payload.get("documents")
+    has_pdf = isinstance(documents, list) and any(
+        isinstance(item, dict) and item.get("role") == "pdf-cross-check"
+        for item in documents
+    )
+    parity_path = obligations_path.parent / "source-parity-check.md"
+    if has_pdf and not parity_path.is_file():
+        raise PracticalV09Error(
+            "source-parity-check.md must be created before workflow-state when PDF is available"
+        )
+    inventory_path = obligations_path.parent / "dictionary-inventory.md"
+    needs_dictionary_inventory = dictionary_inventory_required(obligations_payload)
+    if needs_dictionary_inventory and not inventory_path.is_file():
+        raise PracticalV09Error(
+            "dictionary-inventory.md must be created before workflow-state for a closed dictionary"
+        )
     clarification_path = clarification_requests_path(obligations_path)
     if not clarification_path.is_file():
         clarification_path.write_text(
@@ -81,6 +99,13 @@ def main(argv: list[str] | None = None) -> int:
         source_package_manifest=relative_to_package(package_root, source_path),
         scope_obligations=relative_to_package(package_root, obligations_path),
         scope_clarification_requests=relative_to_package(package_root, clarification_path),
+        source_parity_check=(
+            relative_to_package(package_root, parity_path) if has_pdf else None
+        ),
+        dictionary_inventory=(
+            relative_to_package(package_root, inventory_path)
+            if needs_dictionary_inventory else None
+        ),
     )
     write_json(output, payload)
     print(relative_to_package(package_root, output))

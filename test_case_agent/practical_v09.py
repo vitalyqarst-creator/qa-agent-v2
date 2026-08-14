@@ -227,6 +227,8 @@ def build_initial_workflow_state(
     source_package_manifest: str,
     scope_obligations: str,
     scope_clarification_requests: str,
+    source_parity_check: str | None = None,
+    dictionary_inventory: str | None = None,
 ) -> dict[str, Any]:
     """Build the only current schema for a newly initialized v0.9 scope.
 
@@ -256,10 +258,11 @@ def build_initial_workflow_state(
             "source_package_manifest": source_package_manifest,
             "scope_obligations": scope_obligations,
             "scope_clarification_requests": scope_clarification_requests,
-            "source_parity_check": "not-created",
+            "source_parity_check": source_parity_check or "not-created",
             "test_design_matrix": "not-created",
             "canonical_test_cases": "not-created",
             "validator_report": "not-created",
+            **({"dictionary_inventory": dictionary_inventory} if dictionary_inventory else {}),
         },
         "reviews": [],
         "matrix_revision_count": 0,
