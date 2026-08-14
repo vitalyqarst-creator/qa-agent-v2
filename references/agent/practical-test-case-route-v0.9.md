@@ -225,6 +225,12 @@ Reviewer возвращает один JSON-object без нормализаци
 python scripts/capture_practical_review_result.py --submission <raw-reviewer-json> --output <scope-dir>/<mode>-review-result.json
 ```
 
+После dispatch controller обязан дождаться завершения отдельной reviewer-сессии
+и перечитать её результат. Timeout или факт создания сессии не являются
+завершением review. Пока raw verdict не захвачен в
+`<mode>-review-result.json`, controller не завершает этап, не выдаёт итоговый
+handoff и не разрешает writer менять matrix или canonical TC.
+
 Результат review содержит `review_manifest_sha256`, `reviewer_thread_id`, `execution_surface: codex-thread`, `review_mode`, `review_session_attestation_sha256`, `independent_obligations` либо `independent_obligation_vector`, `verdict` и findings. Перед созданием manifest controller обязан иметь свежий чистый `validator-report.json`, чьи content hashes совпадают с текущими входами scope. Controller проверяет неизменность snapshot и обновляет только `workflow-state.json` командой `finalize_practical_review.py`, которая сохраняет SHA-256 raw receipt в history review.
 
 ```text

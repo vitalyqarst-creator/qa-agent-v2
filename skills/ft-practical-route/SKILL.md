@@ -41,8 +41,9 @@ canonical TC, scoped validator report и immutable артефакты review. В
 3. Создай workflow и русскоязычную matrix; прогони scoped validator.
 4. Проведи обязательный independent matrix review в отдельной верхнеуровневой
    Codex-сессии. Controller создаёт immutable manifest, записывает
-   controller-owned session attestation с фактическим reviewer thread ID,
-   затем финализирует raw result.
+   controller-owned session attestation с фактическим reviewer thread ID и
+   ждёт raw verdict. Этап review нельзя завершать по одному факту dispatch:
+   сначала захвати raw result, затем выполни triage/finalization.
 5. Только после approved matrix напиши canonical TC, снова проверь scope и
    проведи independent final TC review тем же способом.
 6. Для каждой фазы разрешена одна содержательная writer-доработка и ровно один
