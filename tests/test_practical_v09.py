@@ -4465,6 +4465,79 @@ class PracticalV09Tests(unittest.TestCase):
                 [item.id for item in findings if item.blocking],
             )
 
+    def test_environment_access_does_not_make_source_complete_case_needs_test_data(self) -> None:
+        self.assertEqual(
+            "ready",
+            derived_execution_status(
+                {
+                    "required_setup_kinds": ["actor"],
+                    "setup_ids": ["SETUP-ACTOR-001"],
+                },
+                {
+                    "SETUP-ACTOR-001": {
+                        "kind": "actor",
+                        "availability": "provided",
+                        "availability_scope": "environment-access",
+                    }
+                },
+            ),
+        )
+
+    def test_environment_access_cannot_store_volatile_configuration(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            fixture = PracticalV09Fixture(Path(raw))
+            obligations = json.loads(fixture.obligations.read_text(encoding="utf-8"))
+            obligations["execution_setups"][0]["availability_scope"] = "environment-access"
+            obligations["execution_setups"][0]["evidence"] = "URL: https://test.example; логин: qa-user"
+            write_json(fixture.obligations, obligations)
+            _, findings = validate_scope(
+                package_root=fixture.root,
+                workflow_state_path=fixture.state,
+            )
+            self.assertIn(
+                "scope-execution-environment-access-secret",
+                [item.id for item in findings if item.blocking],
+            )
+
+    def test_environment_access_must_be_provided_not_test_data(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            fixture = PracticalV09Fixture(Path(raw))
+            obligations = json.loads(fixture.obligations.read_text(encoding="utf-8"))
+            obligations["execution_setups"][0]["availability_scope"] = "environment-access"
+            obligations["execution_setups"][0]["availability"] = "needs-test-data"
+            write_json(fixture.obligations, obligations)
+            _, findings = validate_scope(
+                package_root=fixture.root,
+                workflow_state_path=fixture.state,
+            )
+            self.assertIn(
+                "scope-execution-environment-access-availability",
+                [item.id for item in findings if item.blocking],
+            )
+
+    def test_canonical_test_case_rejects_setup_and_environment_configuration(self) -> None:
+        for volatile_value in (
+            "**Предусловия:** Выполнить SETUP-NAV-001.",
+            "**Предусловия:** Открыть https://test.example под логином qa-user.",
+        ):
+            with self.subTest(volatile_value=volatile_value), tempfile.TemporaryDirectory() as raw:
+                fixture = PracticalV09Fixture(Path(raw))
+                fixture.tc.write_text(
+                    fixture.tc.read_text(encoding="utf-8").replace(
+                        "**Предусловия:** Пользователь вошел в систему.",
+                        volatile_value,
+                    ),
+                    encoding="utf-8",
+                )
+                _, findings = validate_scope(
+                    package_root=fixture.root,
+                    workflow_state_path=fixture.state,
+                )
+                self.assertIn(
+                    "test-case-volatile-environment-reference",
+                    [item.id for item in findings if item.blocking],
+                )
+
     def test_execution_status_precedence_covers_every_pair_of_setup_availability(self) -> None:
         statuses = (
             "needs-future-clarification",

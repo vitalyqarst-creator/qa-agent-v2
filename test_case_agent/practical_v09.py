@@ -126,6 +126,10 @@ ALLOWED_EXECUTION_SETUP_KINDS = {
     "navigation",
 }
 ALLOWED_EXECUTION_SETUP_AVAILABILITY = {"provided", *ALLOWED_EXECUTION_STATUSES}
+ALLOWED_EXECUTION_SETUP_AVAILABILITY_SCOPES = {
+    "business-test-data",
+    "environment-access",
+}
 ALLOWED_PARAMETERIZATION_BASES = {
     "значения одного закрытого справочника",
     "эквивалентные значения одного класса",
@@ -398,6 +402,12 @@ MOJIBAKE_RE = re.compile(
 )
 EXECUTION_CONTEXT_ID_RE = re.compile(r"^CTX-[A-Z0-9-]+$")
 EXECUTION_SETUP_ID_RE = re.compile(r"^SETUP-[A-Z0-9-]+$")
+VOLATILE_ENVIRONMENT_CONFIGURATION_RE = re.compile(
+    r"https?://|\b(?:url|uri|login|username|password|token|cookie)\b|"
+    r"\b(?:логин|парол[ья]|токен|куки)\b|"
+    r"(?:уч[её]тн\w*\s+запис\w*|account)\s*(?::|=|`|«)",
+    flags=re.IGNORECASE,
+)
 APPROVED_CLARIFICATION_FILENAME_RE = re.compile(
     r"(?:^|/)[^/]+-approved-clarifications\.md$", flags=re.IGNORECASE
 )
@@ -1635,6 +1645,23 @@ def execution_contexts(obligation: dict[str, Any]) -> list[dict[str, Any]]:
     return [item for item in entries if isinstance(item, dict)] if isinstance(entries, list) else []
 
 
+def execution_setup_availability_scope(setup: dict[str, Any]) -> str:
+    """Return the status scope of one SETUP entry.
+
+    ``environment-access`` is intentionally limited to volatile delivery
+    details such as a test-contour URL or a rotating account.  Those details
+    are supplied outside canonical test cases and must not turn a
+    source-complete scenario into ``needs-test-data``.  All existing entries
+    default to ``business-test-data`` for backward compatibility.
+    """
+    return str(setup.get("availability_scope") or "business-test-data")
+
+
+def setup_affects_execution_status(setup: dict[str, Any]) -> bool:
+    """Return whether an unavailable setup is a material TC-data limitation."""
+    return execution_setup_availability_scope(setup) != "environment-access"
+
+
 def derived_execution_status(
     context: dict[str, Any],
     setup_catalog: dict[str, dict[str, Any]],
@@ -1657,7 +1684,7 @@ def derived_execution_status(
     availability = {
         str(item.get("availability"))
         for item in selected
-        if isinstance(item, dict)
+        if isinstance(item, dict) and setup_affects_execution_status(item)
     }
     for status in EXECUTION_STATUS_PRECEDENCE:
         if status in availability:
@@ -1683,6 +1710,8 @@ def secondary_execution_limitations(
     for setup_id in setup_ids:
         setup = setup_catalog.get(str(setup_id))
         if not isinstance(setup, dict):
+            continue
+        if not setup_affects_execution_status(setup):
             continue
         availability = str(setup.get("availability") or "")
         if (
@@ -2175,6 +2204,7 @@ def validate_scope_obligations(
         setup_id = str(setup.get("id") or "")
         kind = str(setup.get("kind") or "")
         availability = str(setup.get("availability") or "")
+        availability_scope = execution_setup_availability_scope(setup)
         evidence = str(setup.get("evidence") or "").strip()
         setup_artifacts = setup.get("artifacts")
         if not EXECUTION_SETUP_ID_RE.fullmatch(setup_id):
@@ -2214,6 +2244,49 @@ def validate_scope_obligations(
                 f"{setup_id or f'строка {index}'}: availability={availability!r}.",
                 artifact,
                 remediation_owner="scope-analyzer",
+            ))
+        if availability_scope not in ALLOWED_EXECUTION_SETUP_AVAILABILITY_SCOPES:
+            findings.append(finding(
+                "scope-execution-setup-availability-scope",
+                "execution-readiness",
+                "У предпосылки указан неизвестный контур доступности",
+                f"{setup_id or f'строка {index}'}: availability_scope={availability_scope!r}; допустимы: "
+                + ", ".join(sorted(ALLOWED_EXECUTION_SETUP_AVAILABILITY_SCOPES)) + ".",
+                artifact,
+                remediation_owner="scope-analyzer",
+            ))
+        if availability_scope == "environment-access" and setup_artifacts:
+            findings.append(finding(
+                "scope-execution-environment-access-artifacts",
+                "execution-readiness",
+                "Волатильная среда не должна храниться в артефактах FT-пакета",
+                f"{setup_id or f'строка {index}'}: удалите artifacts; URL, логины и иные параметры среды передаются исполнителю вне FT-пакета.",
+                artifact,
+                remediation_owner="scope-analyzer",
+            ))
+        if availability_scope == "environment-access" and availability != "provided":
+            findings.append(finding(
+                "scope-execution-environment-access-availability",
+                "execution-readiness",
+                "Волатильный доступ к среде ошибочно указан как тестовые данные",
+                f"{setup_id or f'строка {index}'}: для availability_scope=environment-access укажите availability=provided; "
+                "конкретные URL и учётная запись передаются исполнителю отдельно и не являются зависимостью TC.",
+                artifact,
+                remediation_owner="scope-analyzer",
+            ))
+        if (
+            availability_scope == "environment-access"
+            and VOLATILE_ENVIRONMENT_CONFIGURATION_RE.search(evidence)
+        ):
+            findings.append(finding(
+                "scope-execution-environment-access-secret",
+                "security",
+                "Волатильная предпосылка раскрывает параметры среды",
+                f"{setup_id or f'строка {index}'}: не записывайте URL, логин, пароль, токен или cookie в FT-пакет; укажите только нейтральное подтверждение доступа.",
+                artifact,
+                remediation_owner="scope-analyzer",
+                blocking=True,
+                blocking_reason="В FT-пакете нельзя хранить параметры доступа к тестовой среде.",
             ))
         if not evidence:
             findings.append(finding(
@@ -4270,6 +4343,19 @@ def validate_test_cases(
         for field in REQUIRED_TC_FIELDS:
             if not re.search(rf"(?m)^\*\*{re.escape(field)}:\*\*\s*\S", body):
                 findings.append(finding("test-case-required-field", "execution-readiness", "В тест-кейсе отсутствует обязательное поле", f"{tc_id}: отсутствует «{field}».", artifact, remediation_owner="writer"))
+        if (
+            re.search(r"\bSETUP-[A-Z0-9-]+\b", body)
+            or VOLATILE_ENVIRONMENT_CONFIGURATION_RE.search(body)
+        ):
+            findings.append(finding(
+                "test-case-volatile-environment-reference",
+                "execution-readiness",
+                "Тест-кейс содержит волатильные параметры среды",
+                f"{tc_id}: не указывайте SETUP-идентификаторы, URL, логин, пароль, токен или cookie. "
+                "Оставьте нейтральное предусловие о доступе к модулю; конкретная среда и учётная запись предоставляются исполнителю вне тест-кейса.",
+                artifact,
+                remediation_owner="writer",
+            ))
         package_id = test_case_field(body, "package_id")
         if package_id and not re.fullmatch(r"WP-\d{2,}", package_id):
             findings.append(finding(
