@@ -47,7 +47,10 @@ class FigmaVisualReferenceContractTests(unittest.TestCase):
         self.assertIn("Не используется как источник требований", template)
 
     def test_partners_package_registers_the_provided_figma_node(self) -> None:
-        index = self.read("fts/Partners/Partners-v1/support/figma/figma-design-index.md")
+        index_path = ROOT_DIR / "fts/Partners/Partners-v1/support/figma/figma-design-index.md"
+        if not index_path.exists():
+            self.skipTest("Partners-v1 is an optional local FT input package.")
+        index = index_path.read_text(encoding="utf-8")
 
         self.assertIn("FIGMA-PARTNERS-001", index)
         self.assertIn("node-id=390-5432", index)

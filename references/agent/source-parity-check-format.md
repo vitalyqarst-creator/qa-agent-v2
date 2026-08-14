@@ -10,15 +10,15 @@
 
 Не создавай этот artifact для `agent-proposed-scope` контейнера с картой candidate scope-ов, пока пользователь не выбрал один scope. Для карты scope-ов достаточно structural cross-check по разделам.
 
-Если PDF отсутствует, явно зафиксируй это ограничение в `scope-contract.md` и `scope-coverage-gaps.md`; не создавай пустой parity artifact.
+Если PDF отсутствует, явно зафиксируй это ограничение в `scope-obligations.json` и `scope-clarification-requests.md`; не создавай пустой parity artifact.
 
 ## Расположение
 
 ```text
-fts/<ft-slug>/work/stage-handoffs/NN-<scope-slug>/source-parity-check.md
+fts/<ft-slug>/work/practical-v0.9/<scope-slug>/source-parity-check.md
 ```
 
-`workflow-state.yaml` должен ссылаться на artifact в `latest_artifacts.source_parity_check`. Если следующий этап writer, reviewer или iteration работает по подтвержденному scope и DOCX+PDF доступны, добавь `source-parity-check.md` в `required_inputs`.
+`workflow-state.json` должен ссылаться на artifact в `artifacts.source_parity_check`. Если следующий этап writer или reviewer работает по подтвержденному scope и DOCX+PDF доступны, добавь `source-parity-check.md` в immutable review inputs.
 
 ## Обязательная сверка
 

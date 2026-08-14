@@ -11,8 +11,8 @@
 
 ## Расположение
 
-До выбора scope файл хранится рядом с `scope-options.md` в контейнере
-`fts/<ft-slug>/work/stage-handoffs/00-<container-slug>/`.
+До выбора scope файл хранится рядом с `scope-options.md` в package-level
+каталоге `fts/<ft-slug>/work/practical-v0.9/scope-selection/`.
 
 ## Содержание
 
@@ -27,12 +27,12 @@
 ## Рекомендуемый шаблон
 
 ```md
-## Prompt Templates
+## Шаблоны prompt для выбора scope
 
 ### SCOPE-OPTION-001
 
-**Scope Order:** `01`
-**Scope Slug:** `2.1-lichnaya-informaciya`
+**Порядок области:** `01`
+**Идентификатор области:** `2.1-lichnaya-informaciya`
 **Название:** Личная информация
 
 ```text
@@ -45,8 +45,8 @@ Scope: `2.1-lichnaya-informaciya`
 
 ## Правила
 
-- До выбора scope `workflow-state.yaml` имеет
-  `stage_status: awaiting-user-scope-selection`; это не `blocked-input`.
+- До выбора scope `workflow-state.json` не создаётся; ожидание выбора
+  пользователя не является `blocked-input`.
 - Prompt не перечисляет route restrictions, список будущих artifacts, reviewer
   mechanics или явные запреты, уже заданные постоянными инструкциями.
 - Prompt не обещает writer, reviewer или canonical test cases: следующий этап

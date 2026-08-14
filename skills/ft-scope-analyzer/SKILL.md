@@ -11,7 +11,7 @@ description: Выделять внешние scope ФТ, подтверждат�
 matrix и TC здесь не создаются.
 
 Прочитай [scope decomposition policy](../../references/agent/scope-decomposition-policy.md),
-[формат gaps](../../references/agent/scope-coverage-gaps-format.md),
+[формат обязательств и gaps practical v0.9](../../references/agent/practical-v0.9-scope-obligations-format.md),
 [source parity](../../references/agent/source-parity-check-format.md) и для
 practical v0.9 [канонический маршрут](../../references/agent/practical-test-case-route-v0.9.md).
 
@@ -42,6 +42,11 @@ practical v0.9 [канонический маршрут](../../references/agent/
    ФТ и локальным макетам.
 2. Разделяй внешний scope по разделам ФТ. Не создавай внутренние work package
    ради размера текста.
+   Если scope ещё не выбран пользователем, создай только
+   `work/practical-v0.9/scope-selection/scope-options.md` и
+   `work/practical-v0.9/scope-selection/scope-selection-prompts.md`. Это
+   package-level карта выбора, а не legacy handoff: не создавай
+   legacy numbered handoff tree.
 3. Сохраняй один `OBL-*` на независимое утверждение ФТ и один основной
    наблюдаемый результат. Разные объекты, роли, lifecycle flow, классы
    значений и результаты разделяй; одинаковые значения одного контрола с

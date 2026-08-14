@@ -1,23 +1,21 @@
 # Scope Options Format
 
-Канонический `scope-options.md` используется как результат режима `agent-proposed-scope`, когда агент должен сначала предложить разбиение FT на candidate scope, а не сразу выпускать `scope-contract.md`.
+Канонический `scope-options.md` используется как результат режима `agent-proposed-scope`, когда агент должен сначала предложить разбиение ФТ на candidate scope, а не сразу создавать `scope-obligations.json`.
 
 ## Назначение
 
 - зафиксировать candidate scope для большого или неоднозначного FT;
 - дать пользователю воспроизводимый список вариантов, а не одноразовый ответ в чате;
-- отделить проектирование scope от подтвержденного source-first handoff.
+- отделить выбор scope от подтверждённого source-first practical scope.
 
 ## Расположение
 
-- `fts/<ft-slug>/work/stage-handoffs/NN-<scope-slug>/scope-options.md` для новых handoff-папок
+- до выбора scope: `fts/<ft-slug>/work/practical-v0.9/scope-selection/scope-options.md`;
+- после выбора scope карта остаётся package-level контекстом; scope-local artifacts
+  создаются только в `fts/<ft-slug>/work/practical-v0.9/<scope-slug>/`.
 
-Если пользователь еще не утвердил один конкретный рабочий `scope-slug`, допускается временный каталог-контейнер для stage handoff, в котором `scope-options.md` хранит shortlist вариантов до выбора одного scope.
-
-Для новых handoff-папок применяй numbered naming из `stage-handoff-model.md`:
-
-- контейнер candidate scope-ов: `fts/<ft-slug>/work/stage-handoffs/00-<container-slug>/scope-options.md`;
-- подтвержденный scope: `fts/<ft-slug>/work/stage-handoffs/NN-<scope-slug>/scope-options.md`, если файл нужен в scope-level handoff.
+`scope-options.md` не является handoff-артефактом и не создаёт
+`workflow-state.json`. Не используй для него legacy numbered handoff tree.
 
 ## Когда использовать
 
@@ -32,7 +30,7 @@
 
 Не создавай стандартный candidate scope вида `all-sections`, `all-sections-without-bp`, `whole-ft` или аналогичный для большого ФТ. Такой широкий scope допустим только как явно подтвержденное исключение после предупреждения о рисках.
 
-Внутренние рабочие пакеты не перечисляются вместо внешних candidate scope-ов. Они появляются позже в `scope-contract.md` только внутри одного уже выбранного внешнего scope.
+Внутренние рабочие пакеты не перечисляются вместо внешних candidate scope-ов. Они появляются позже в `scope-obligations.json` только внутри одного уже выбранного внешнего scope.
 
 Каноническое правило: `references/agent/scope-decomposition-policy.md`.
 
@@ -82,7 +80,7 @@
 
 - `scope_order` — двухзначный номер в рекомендуемом порядке работы;
 - `scope_slug` или временный стабильный идентификатор;
-- `stage_handoff_dir` — будущая numbered-папка вида `NN-<scope-slug>`;
+- `scope_artifact_dir` — будущая папка вида `work/practical-v0.9/<scope-slug>/`;
 - `title`;
 - `source_path`;
 - `что входит`;
@@ -107,7 +105,7 @@
 ### SCOPE-OPTION-001
 **Порядок области:** `01`
 **Идентификатор области:** `2.1.1.1.1.1.2-lichnaya-informaciya`
-**Папка передачи этапа:** `01-2.1.1.1.1.1.2-lichnaya-informaciya`
+**Папка артефактов scope:** `work/practical-v0.9/2.1.1.1.1.1.2-lichnaya-informaciya/`
 **Название:** Личная информация
 **Путь в источнике:** `2.1.1.1.1.1.2 -> Блок "Личная информация"`
 
@@ -131,14 +129,14 @@
 
 ## Что нужно от пользователя дальше
 
-- Выбрать одну область для перехода в `manual-scope`.
+- Выбрать одну область для перехода к `ft-scope-analyzer`.
 ```
 
 ## Правила использования
 
-- До выбора области используй `awaiting-user-scope-selection`, а не `blocked-input`; создай только options/prompts, без scope-contract, writer/BA artifacts. Исключение — противоречие, не позволяющее безопасно выделить варианты.
+- До выбора области ожидай выбор пользователя, а не объявляй `blocked-input`; создай только options/prompts, без `scope-obligations.json`, matrix, тест-кейсов или reviewer artifacts. Исключение — противоречие, не позволяющее безопасно выделить варианты.
 - Карта кандидатных областей не готова, пока в `Распределение требований ФТ` не назначены все формальные коды из выбранных основных источников. Не заменяй это фразой «остальное относится к разделу».
 - После выбора `ft-scope-analyzer` создаёт scope brief и обязательные scope-local artifacts; practical route передаёт matrix-only writer, а canonical TC — только после accepted matrix review.
 - `scope-selection-prompts.md` содержит лишь путь FT и `scope_slug`.
-- Для новых областей фиксируй `Порядок области` и `Папка передачи этапа`, чтобы пользователю не приходилось восстанавливать порядок по содержимому файлов.
+- Для новых областей фиксируй `Порядок области` и `Папка артефактов scope`, чтобы пользователю не приходилось восстанавливать порядок по содержимому файлов.
 - Все человекочитаемые поля должны быть на русском языке.

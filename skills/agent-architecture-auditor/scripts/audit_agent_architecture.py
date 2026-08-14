@@ -32,6 +32,18 @@ REQUIRED_INSTRUCTION_CONTEXT_SCENARIOS=frozenset({
     "practical.v0_9",
     "architecture.audit",
 })
+ACTIVE_V09_ARTIFACT_PATH_SCENARIOS=(
+    "source_locator.discovery",
+    "scope.manual",
+    "scope.agent_proposed",
+    "practical.v0_9",
+)
+LEGACY_V09_SCOPE_ARTIFACT_MARKERS=(
+    "work/stage-handoffs/",
+    "scope-contract.md",
+    "scope-coverage-gaps.md",
+    "workflow-state.yaml",
+)
 TASK_ROUTING_RE=re.compile(r"<!--\s*task-start-skill-routing:v1\s*-->\s*```json\s*(.*?)\s*```",re.DOTALL)
 
 def args_parser():
@@ -208,6 +220,60 @@ def audit_instruction_budgets(root:Path,checks,findings):
     add_check(checks,"instruction-loading-manifest-scenarios","pass" if all_resolved else "warn","All declared instruction-loading scenarios resolved.",[rel(manifest,root)])
     return rows
 
+def audit_active_v09_artifact_paths(root:Path,checks,findings):
+    """Reject legacy handoff paths in the instruction contexts that drive v0.9."""
+    resolver=load_instruction_resolver(root)
+    manifest_path=root/"references"/"agent"/"instruction-loading-manifest.md"
+    paths=[rel(manifest_path,root)]
+    if resolver is None or not manifest_path.exists():
+        add_check(checks,"active-v09-artifact-paths","warn","Cannot resolve active v0.9 instruction contexts.",paths)
+        return
+    try:
+        manifest=resolver.load_manifest(root)
+    except Exception as exc:
+        add_check(checks,"active-v09-artifact-paths","warn",f"Cannot parse instruction manifest: {exc}",paths)
+        return
+
+    offenders=[]
+    for scenario_id in ACTIVE_V09_ARTIFACT_PATH_SCENARIOS:
+        try:
+            resolved=resolver.resolve_instruction_context(
+                root=root, manifest=manifest, scenario_id=scenario_id
+            )
+        except Exception as exc:
+            offenders.append(f"{scenario_id}: unresolved ({exc})")
+            continue
+        for item in resolved.get("files",[]):
+            path_text=item.get("path")
+            if not isinstance(path_text,str) or path_text=="AGENTS.md":
+                continue
+            candidate=root/path_text
+            normalized=txt(candidate).replace("\\\\","/")
+            if any(marker in normalized for marker in LEGACY_V09_SCOPE_ARTIFACT_MARKERS):
+                offenders.append(f"{scenario_id}: {path_text}")
+
+    status="pass" if not offenders else "fail"
+    add_check(
+        checks,
+        "active-v09-artifact-paths",
+        status,
+        "Active practical v0.9 instruction contexts contain no legacy scope artifacts."
+        if not offenders else "Active practical v0.9 instruction contexts contain legacy scope artifacts.",
+        paths,
+    )
+    if offenders:
+        add_finding(
+            findings,
+            "active-v09-legacy-handoff-path",
+            "error",
+            "instruction-contract",
+            "Active practical v0.9 context points to a legacy scope artifact",
+            "A v0.9 agent can create legacy artifacts when any of its loaded instructions directs it to the former handoff contract.",
+            offenders,
+            "Move the active artifact contract to work/practical-v0.9 and leave legacy paths only in archived, unloaded references.",
+            paths,
+        )
+
 def load_task_start_routing(root:Path):
     path=root/"references"/"agent"/"task-start-skill-routing-format.md"
     content=txt(path)
@@ -310,6 +376,7 @@ def audit_task_start_routing(root:Path,checks,findings):
 def audit(root:Path):
     findings=[]; checks=[]; stale=[]
     instruction_budgets=audit_instruction_budgets(root,checks,findings)
+    audit_active_v09_artifact_paths(root,checks,findings)
     ap=root/"AGENTS.md"; ac=txt(ap); low=ac.lower(); steps=len(re.findall(r"(?m)^\d+\.\s",ac))
     if not ap.exists():
         add_check(checks,"agents-file","fail","AGENTS.md is missing.")
