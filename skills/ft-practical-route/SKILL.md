@@ -1,69 +1,54 @@
 ---
 name: ft-practical-route
-description: Compact default route for producing source-traceable, executable test cases from one confirmed FT scope.
+description: Основной компактный маршрут для выпуска трассируемых и исполнимых тест-кейсов по подтверждённому scope ФТ. Используй для обычной задачи написать тест-кейсы по ФТ или его разделу.
 ---
 
-# Compact practical route v0.9
+# Practical route v0.9
 
-Use this skill for a normal request to write test cases from a selected FT scope. It replaces v0.8 as the default. Use v0.8 only to resume an already existing v0.8 run or when the user explicitly requests it.
+Используй только для нового обычного scope. Предыдущие practical-маршруты не
+продолжаются и не являются fallback.
 
-Read [../../references/agent/practical-test-case-route-v0.9.md](../../references/agent/practical-test-case-route-v0.9.md) before work. Before creating obligations or workflow state, additionally read their v0.9 format references; before dispatching, validating or triaging independent review, read [../../references/agent/practical-v0.9-review-result-format.md](../../references/agent/practical-v0.9-review-result-format.md).
-If the scope contains a successful create/save, duplicate rule or provider-backed object selection, additionally read [../../references/agent/fixture-catalog-format.md](../../references/agent/fixture-catalog-format.md) before matrix writing.
+До работы прочитай [канонический маршрут](../../references/agent/practical-test-case-route-v0.9.md).
+При создании obligations/workflow дополнительно прочитай
+[формат обязательств](../../references/agent/practical-v0.9-scope-obligations-format.md)
+и [формат workflow state](../../references/agent/practical-v0.9-workflow-state-format.md).
+Перед dispatch, triage или finalization независимого review прочитай
+[формат результата review](../../references/agent/practical-v0.9-review-result-format.md).
+Для create/save, duplicate rule или provider-backed selection дополнительно
+прочитай [формат fixture catalog](../../references/agent/fixture-catalog-format.md).
 
-## Входы
+## Результат
 
-Подтверждённый scope ФТ, DOCX, XHTML, support, package-level утверждённые решения БА, `AGENT-NOTES.md`, visual references и PDF, если он доступен для structural/visual cross-check.
+В scope остаются только source manifest, `scope-obligations.json`, всегда
+создаваемый `scope-clarification-requests.md`, `workflow-state.json`, matrix,
+canonical TC, scoped validator report и immutable артефакты review. Все
+человекочитаемые поля — на русском.
 
-## Выходы
+## Последовательность
 
-Только канонические артефакты v0.9, перечисленные в маршруте: пакетный source manifest, обязательства scope, conditional вопросы к БА, matrix, TC и независимые review-артефакты при требуемых переходах.
+1. Зафиксируй DOCX/XHTML, доступный PDF, support, package-level решения БА,
+   `AGENT-NOTES.md` и visual inputs в source manifest.
+2. Нормализуй независимые source-backed `OBL-*`, `CTX-*` с явным `flow_kind`
+   и `SETUP-*`; проверь ФТ figures/PDF/Figma как visual evidence, не как
+   источник бизнес-правил. Создай или сохрани файл вопросов БА.
+3. Создай workflow и русскоязычную matrix; прогони scoped validator.
+4. Проведи обязательный independent matrix review в отдельной верхнеуровневой
+   Codex-сессии. Controller создаёт immutable manifest, записывает
+   controller-owned session attestation с фактическим reviewer thread ID,
+   затем финализирует raw result.
+5. Только после approved matrix напиши canonical TC, снова проверь scope и
+   проведи independent final TC review тем же способом.
+6. Для каждой фазы разрешена одна содержательная writer-доработка и ровно один
+   fresh re-review. Повторный `changes-required` блокирует scope; не запускай
+   новый repair-loop без явного решения пользователя.
 
-## Ограничения
+## Границы
 
-Не заменяет UI-калибровку; не создаёт фиктивный review или `accepted`; подробные контракты остаются в canonical reference.
-
-## Route
-
-1. Resolve DOCX, XHTML, stable support, existing package-level approved BA decision registry, `AGENT-NOTES.md`, visual references and an available PDF. Create `source-package-manifest.json`: support, BA decisions и visual-only inputs регистрируй раздельно. Скрипт manifest автоматически включает файлы `mockups/`; до формулирования UI-шага выбери и визуально проверь относящийся к scope макет, а не извлекай его дубликат из PDF.
-2. Create `scope-obligations.json` with one source-backed `OBL-*` per independent assertion, explicit `CTX-*` execution contexts and one shared `SETUP-*` prerequisite catalog. Before this, find every document-global rule referenced by a scope field's type, format, dictionary or cross-reference and include its applicable subrules in the OBL/scenario set. If any active OBL has `risk_flags: closed-dictionary`, extract the complete list into a scope-local Russian `dictionary-inventory.md`, link it from `workflow-state.json.artifacts.dictionary_inventory`, and use that `DICT-*` inventory in matrix/review; two illustrative values never prove a closed list. When the package manifest contains `pdf-cross-check`, create a scope-local `source-parity-check.md`, link it as `artifacts.source_parity_check`, and record section/table/code parity or a narrow terminology discrepancy before matrix work. Before an `ui-calibration` gap, inspect related FT figures, PDF and visual-only inputs: transfer a resolved control identity/name/location into `visual_binding`; retain only a documented residual runtime uncertainty in the gap. When a source term and a visible label describe the same control but differ, record `visual_binding.label_mappings` with `source_label` and `ui_label`; use `ui_label` in matrix/TC interactions and visible assertions. Record every gap in `clarifications`. `init_practical_v09_workflow.py` then creates and links one `scope-clarification-requests.md`: cards `CLR-*` for business questions or an explicit Russian outcome that no BA question is needed. Do not create TC yet.
-3. Create `workflow-state.json`, then write one Russian `test-design-matrix.md`.
-4. Run `validate_practical_scope.py` exactly once for the frozen stage. After any permitted revision, run it again for the new frozen inputs before the next review manifest.
-5. Run independent matrix review only when the deterministic v0.9 complexity rule requires it.
-6. При `changes-required` с content blocking findings controller до любого writer revision выполняет обязательный triage через `triage_practical_review.py`: raw verdict не меняется, а в workflow фиксируются `accepted`/`rejected` решения с anchors и rationale. Сразу после triage и до изменения любого входа review controller запускает `finalize_practical_review.py`: только он записывает raw verdict и расходует budget принятых findings. Если после исчерпания budget пользователь разрешил узкое исключение, controller **до** writer-изменения создаёт `practical_snapshot_preflight.py` snapshot всех разрешённых файлов, записывает в exception JSON `pre_change_snapshot.path`, `manifest_sha256` и `allowed_artifacts`; reviewer получает exception как immutable вход. Ретроспективный snapshot не подтверждает старую правку и не считается выполнением этого контракта. Лишь после успешной finalization разрешена одна целевая writer-доработка, затем один fresh scoped validation и fresh independent re-review этой фазы. Не пытайся исправить matrix/TC между triage и finalization. После accepted/skipped matrix review напиши canonical TC, запусти validation и переведи workflow в `phase: review`, `final_verdict: not-finalized` для independent final TC review.
-7. Run final independent TC review in a separate top-level Codex session. After
-   the one permitted writer revision, writer sets `workflow-state.json` to
-   `phase: review`, `final_verdict: not-finalized` and
-   `next_action: Провести финальное независимое TC review`; controller then
-   creates a fresh immutable TC-review manifest. One targeted revision plus
-   one fresh final review is the maximum.
-
-## Do not create
-
-- writer self-check, TC self-check, WQG, stage summary, dispatch/preflight receipts, parking prompts, duplicated coverage ledgers or full-route artifacts;
-- benchmark, sharding, semantic bridge, source assertion review or iterative repair loops;
-- a TC before the current matrix has passed native validation.
-
-## Quality rules
-
-- TC, matrix and source obligations use Russian in user-facing text.
-- One `SCN-*` normally has one TC and one primary expected result. Before matrix review, scan only possible one-action/one-reaction groups and document every candidate in `workflow-state.json.scenario_consolidation`: merge it as a parameterized TC, cover an internal check through an observable result, or document why the scenarios remain separate. A parameterized merge normally requires the same `Проверяемый элемент`, `Домен проверки`, `Способ взаимодействия`, execution context, type and execution status. The narrow exception is `parameterization_basis: поля одного составного результата`: different fields are allowed only when one common action creates or verifies one mechanism (for example, autofill after choosing a suggestion or editability of a card), the same context/domain/interaction/state/type/status apply, and `CON-*` contains the exact `field_inventory` and `composite_result`. The TC then has one visible table `Поле | Ожидаемое значение/результат` with every field. Do not use this exception for different validations, UI levels, save effects or business reactions. One OBL/CTX may have several SCN only for independent source-backed classes, boundaries or initial states; do not duplicate one check.
-- Matrix declares initial state, its formation and the checked action separately. Test data are concrete values/files or precise properties plus a preparation method; never restate the checked rule as data. Before declaring `needs-test-data`, exhaust literals from FT, approved BA decisions, closed dictionaries, saved DaData fixtures and allowed synthetic fixtures. Reuse one verified data profile for equivalent checks when it is stable; do not invent data diversity. In each TC retain only literals used by steps/oracle or needed to complete a save/transition, not a copied full integration profile. Do not write «подготовлена строка запроса», «доступны указанные предпосылки», «параметры, указанные в тестовых данных», «остальные обязательные поля заполнить допустимыми значениями» or «уникальный набор обязательных значений». User actions belong only in numbered steps, not in test data. A boundary string and a prepared file state exact properties and `Способ подготовки: ...`. For a closed dictionary, one composition TC may be parameterized only with the full `DICT-*` inventory and must assert that exactly these values, and no others, are shown. A trigger-state action is a concrete user action with a screen, field and value; never use meta-steps such as «Сформировать исходное состояние» or «Выполнить подготовку состояния». Put every trigger-state action in its own numbered step and add a follow-up observation when checking absence of persistence. For a one-file limit, attach an allowed file before attempting a distinct second file. If FT prescribes exact message text, reproduce it verbatim in the expected result. A source-only internal action without an oracle does not become a standalone `blocked-observability` TC: link it to a source-backed observable outcome using `covered-by-observable-result`; if no outcome exists, record a source blocker instead of inventing a check.
-- `CTX-*` описывает поток и не заменяет вход на экран. Если способ навигации подтверждён источником или visual binding, укажи конкретное действие с контролом; если он не определён, зафиксируй уже открытый экран в нейтральном предусловии, не пиши шаг «Открыть ... в контексте ...». В canonical TC запрещены `SETUP-*`, URL, маршрут входа, конкретные учётные записи, логины, пароли, токены и cookie. В matrix допустим только идентификатор нейтральной предпосылки без параметров среды. Волатильный доступ к стенду отражается в scope-obligations.json как `availability_scope: environment-access`, `availability: provided` и нейтральное подтверждение; он не является тестовыми данными и не меняет execution status. Для DaData-сценария используй сохранённый `FX-DADATA-*` с literals, совпадающими с verified receipt и response snapshot; правдоподобное выдуманное название, ИНН или адрес недопустимы. При действительном отсутствии fixture укажи `needs-test-data`, точные свойства нужного ответа и отдельную строку `Способ подготовки: ...`; «организация с известными реквизитами» или «подготовить организацию» не являются данными.
-- Не помещай в предусловия результат, который создают шаги того же DaData-теста: список подсказок возникает после ввода поисковой строки. В user-facing полях используй «зафиксированный профиль» или «сохранённый профиль», а не английское `frozen profile`.
-- Preserve source modifiers in OBL and review reconstruction: execution contexts, quantifiers, boundaries, conditions and exceptions. Split them if they create distinct flows or results.
-- Do not treat a local field row as the complete rule when it names a data type, format, dictionary or cross-reference. Independently locate the document-global definition and cover every applicable explicit subrule. A field of type «Дата», for example, requires the format, ranges, calendar validity and persistence rules if the FT defines them globally; one accepted date is not sufficient.
-- A finite list is not automatically one TC: split items that trigger distinct transitions or results; keep one TC only for a same-action, same-logic composition/value check.
-- Missing UI/data/observability is an execution status, not invented behavior or a blocker unless the source assertion itself cannot be represented. Derive it from linked business SETUP prerequisites; `availability_scope: environment-access` never changes the status and is not mentioned in canonical matrix/TC. A source-only internal assertion without an oracle is not an execution status of its own: it is covered by an observable result or escalated as a source blocker. A missing business setup otherwise makes `ready` invalid. Apply the primary-status order defined in the canonical route reference: `needs-test-data` never becomes only `candidate-ui-calibration`. When a lower-priority business limitation remains material, store it in the distinct Russian field `Ограничения исполнения` with neutral explanatory text; do not create a second execution status or assert an unconfirmed UI control as fact. For one source-prescribed rejection result shared by independent invalid classes, declare the linked OBL IDs and require the exact result in every related matrix row/TC. `blocked-observability` is not an external blocker by itself. A source contradiction is a blocker and no TC may be invented for it.
-- Before declaring a source contradiction, compare the asserted target, user trigger, lifecycle moment, condition, and expected result of both anchored statements. Mark a contradiction only when the same target under the same trigger, moment, and condition has mutually exclusive expected results. If the trigger or moment differs, keep separate `OBL-*`/`CTX-*` obligations; do not create a blocker or a BA question. Record this comparison before reporting a blocker.
-- Compare the selected section heading with nearby tables and source assertions. Record a terminology discrepancy as a gap; ground the working scope subject in the content, not a contradictory heading.
-- Before `workflow-state.json`, call the stdout-only `validate_practical_obligations.py` and call its result only an obligations-structure check. Call `validate_practical_scope.py` only after the workflow state and matrix exist.
-- Если активный scope использует legacy matrix schema, сначала составь read-only plan через `migrate_practical_matrix_contract.py`. Не мигрируй и не сбрасывай revision budgets без явного разрешения пользователя; migration сохраняет snapshot, изолирует structural matrix conversion и требует последующей синхронизации TC по canonical route.
-- Обычный подтверждённый scope-local ответ БА связывай с GAP и SHA-256. Для package-level решения БА используй `clarifies-ft` только если оно не меняет утверждение ФТ; решение, которое отменяет или меняет правило, регистрируй как `supersedes-ft` по `practical-v0.9-ba-decision-registry-format.md`. Оно имеет приоритет только в явно указанной области действия, исключает связанные OBL из matrix/TC и делает затронутые scope stale. При противоречии без готового решения обязательно создай CLR-вопрос в том же запуске.
-- До завершения source-analysis запусти `validate_practical_obligations.py --require-clean` и прочитай его поле `findings`. Внутри FT-пакета нельзя оставлять созданные в run файлы в `tmp/` или `work/debug/`: переносить нужно только именованный нужный work-артефакт; pre-existing пользовательские файлы не удаляй, а фиксируй как blocker для controller-а.
-- Figma/mockups clarify visible UI only and never override DOCX. FT figures, PDF and visual-only inputs must nevertheless be checked before UI-calibrating a control identity, label or location; record the checked sources and residual runtime uncertainty in `visual_evidence_check`.
-- Для извлечения scope сначала используй `scripts/inspect_practical_scope_sources.py`; не создавай source-specific debug parser до зафиксированного ограничения штатного helper.
-- Do not add a generic form-isolation test because a create form exists. Add it only when a source obligation explicitly requires isolation, preservation, reset or non-leakage of values.
-
-## Independent review
-
-The reviewer is a separate top-level `codex-thread`, read-only for reviewed matrix/TC. If the thread mechanism is available, dispatch it directly without searching external documentation. Before dispatch, prove every manifest input exists with the same SHA-256 in the target checkout; otherwise create and verify one immutable review-input snapshot and give only that snapshot to the reviewer. The manifest/snapshot must include not only `source-package-manifest.json`, but each document, support input, approved BA decision, visual input and `AGENT-NOTES.md` bound by it, plus every file listed in `artifacts` of a `provided` fixture setup. It must independently reconstruct obligations before comparing author artefacts. For a large scope, use the manifest’s compact digest-bound receipt contract and return it in the first raw JSON response; do not ask the reviewer to compress a completed verdict. Reviewer JSON is captured byte-for-byte by the controller; a subagent does not satisfy this requirement. Verdict enum: only `approved`, `changes-required`, `blocked-input`; content findings without an external source blocker mean `changes-required`, never `rejected`. Каждый finding нового triage-enabled scope возвращай в structured формате из `practical-v0.9-review-result-format.md`; при статусном finding укажи `status_assertion` с `SCN-*` и требуемым статусом. Controller принимает такое замечание только если требуемый статус совпадает с вычисленным по полной цепочке `SETUP-*`; иначе он отклоняет finding по `execution-status-precedence`.
+- Не создавай benchmark, sharding, semantic bridge, source assertion review,
+  self-check, WQG, stage summary, dispatch receipt или дубли coverage state.
+- Matrix review и TC review нельзя заменить subagent-ом, совместной сессией или
+  самозаявленным reviewer receipt.
+- Не выдумывай UI, данные, роли или поведение. Неясность — GAP/вопрос БА либо
+  честный execution status; source contradiction — blocker.
+- Не помещай в canonical TC URL, маршрут входа, логины, пароли, токены,
+  конкретные учётные записи и `SETUP-*`.

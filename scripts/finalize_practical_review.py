@@ -33,6 +33,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--review-manifest", type=Path, required=True)
     parser.add_argument("--review-result", type=Path, required=True)
     parser.add_argument(
+        "--review-session-attestation",
+        type=Path,
+        help="Controller-owned attestation recorded after creating the separate reviewer task.",
+    )
+    parser.add_argument(
         "--allow-post-triage-recovery",
         action="store_true",
         help=(
@@ -71,6 +76,11 @@ def main(argv: list[str] | None = None) -> int:
         package_root=package_root,
         manifest_path=args.review_manifest.resolve(),
         result_path=args.review_result.resolve(),
+        review_session_attestation_path=(
+            args.review_session_attestation.resolve()
+            if args.review_session_attestation is not None
+            else None
+        ),
     )
     blocking = [item for item in findings if item.blocking]
     recovered_snapshot_drift = False
@@ -135,6 +145,12 @@ def main(argv: list[str] | None = None) -> int:
         "result": relative_to_package(package_root, args.review_result.resolve()),
         "result_sha256": sha256_file(args.review_result.resolve()),
     }
+    if args.review_session_attestation is not None:
+        attestation_path = args.review_session_attestation.resolve()
+        review_entry["session_attestation"] = relative_to_package(
+            package_root, attestation_path
+        )
+        review_entry["session_attestation_sha256"] = sha256_file(attestation_path)
     if effective_verdict != result["verdict"]:
         review_entry["effective_verdict"] = effective_verdict
     reviews = state.setdefault("reviews", [])

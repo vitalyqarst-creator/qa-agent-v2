@@ -12,6 +12,7 @@ from test_case_agent.practical_v09 import (
     COMPACT_REVIEWER_RECEIPT_MAX_BYTES,
     CLARIFICATION_OUTCOME_CONTRACT_VERSION,
     CONTROLLER_TRIAGE_CONTRACT_VERSION,
+    EXECUTION_CONTEXT_CONTRACT_VERSION,
     EXCEPTION_SNAPSHOT_CONTRACT_VERSION,
     MATRIX_CONTRACT_VERSION,
     LEGACY_SCENARIO_CONSOLIDATION_CONTRACT_VERSION,
@@ -22,6 +23,7 @@ from test_case_agent.practical_v09 import (
     SOURCE_CONTRACT_VERSION,
     PracticalV09Error,
     build_review_manifest,
+    build_review_session_attestation,
     build_validator_report,
     derived_execution_status,
     dictionary_inventory_required,
@@ -173,6 +175,7 @@ class PracticalV09Fixture:
                             {
                                 "id": "CTX-OPEN-MENU",
                                 "label": "Открытие раздела из меню",
+                                "flow_kind": "view",
                                 "required_setup_kinds": ["actor"],
                                 "setup_ids": ["SETUP-ACTOR-001"],
                             }
@@ -231,7 +234,7 @@ class PracticalV09Fixture:
                 "scope_slug": "menu",
                 "phase": "review",
                 "next_action": "Провести независимое final TC review",
-                "matrix_review_required": False,
+                "matrix_review_required": True,
                 "contract_versions": {
                     "route": ROUTE_VERSION,
                     "source_package": SOURCE_CONTRACT_VERSION,
@@ -247,7 +250,7 @@ class PracticalV09Fixture:
                     "validator_report": "work/practical-v0.9/menu/validator-report.json",
                     "source_parity_check": "work/practical-v0.9/menu/source-parity-check.md",
                 },
-                "reviews": [],
+                "reviews": [{"mode": "matrix", "verdict": "approved"}],
                 "matrix_revision_count": 0,
                 "tc_revision_count": 0,
                 "final_verdict": "not-finalized",
@@ -305,20 +308,19 @@ class PracticalV09Tests(unittest.TestCase):
             encoding="utf-8"
         )
 
-        self.assertIn("Default practical mode: v0.9", writer)
-        self.assertIn("`ft-practical-route` v0.9", writer)
-        self.assertIn("work/practical-v0.9/<scope>/workflow-state.json", writer)
-        self.assertIn("Do not use `practical_review_preflight.py`", writer)
-        self.assertIn("Legacy practical v0.8 continuation", writer)
+        self.assertIn("# FT Test Case Writer", writer)
+        self.assertIn("[ft-practical-route]", writer)
+        self.assertIn("`workflow-state.json`", writer)
+        self.assertNotIn("practical_v0_8", writer)
 
     def test_v09_route_requires_final_review_transition_after_writer_revision(self) -> None:
         route = (REPO_ROOT / "skills" / "ft-practical-route" / "SKILL.md").read_text(
             encoding="utf-8"
         )
 
-        self.assertIn("`phase: review`", route)
-        self.assertIn("`final_verdict: not-finalized`", route)
-        self.assertIn("Провести финальное независимое TC review", route)
+        self.assertIn("обязательный independent matrix review", route)
+        self.assertIn("independent final TC review", route)
+        self.assertIn("одна содержательная writer-доработка", route)
 
     def test_initializer_enables_controller_triage_for_new_scope(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
@@ -351,6 +353,11 @@ class PracticalV09Tests(unittest.TestCase):
                 CLARIFICATION_OUTCOME_CONTRACT_VERSION,
                 state["contract_versions"]["clarification_outcome"],
             )
+            self.assertEqual(
+                EXECUTION_CONTEXT_CONTRACT_VERSION,
+                state["contract_versions"]["execution_context"],
+            )
+            self.assertTrue(state["matrix_review_required"] is None)
             clarification_path = fixture.scope_dir / "scope-clarification-requests.md"
             self.assertEqual(
                 str(clarification_path.relative_to(fixture.root)).replace("\\", "/"),
@@ -359,6 +366,43 @@ class PracticalV09Tests(unittest.TestCase):
             self.assertIn(
                 "Вопросов, требующих ответа БА, не выявлено.",
                 clarification_path.read_text(encoding="utf-8"),
+            )
+
+    def test_current_v09_contract_versions_are_documented_and_initialized(self) -> None:
+        workflow_format = (
+            REPO_ROOT / "references" / "agent" / "practical-v0.9-workflow-state-format.md"
+        ).read_text(encoding="utf-8")
+        self.assertIn(f'"source_package": "{SOURCE_CONTRACT_VERSION}"', workflow_format)
+        self.assertIn(f'"matrix": "{MATRIX_CONTRACT_VERSION}"', workflow_format)
+        self.assertIn(
+            f'"execution_context": "{EXECUTION_CONTEXT_CONTRACT_VERSION}"',
+            workflow_format,
+        )
+        self.assertIn('"matrix_revision_count": 0', workflow_format)
+        self.assertIn('"tc_revision_count": 0', workflow_format)
+
+    def test_invalid_execution_context_contract_or_flow_kind_blocks_current_scope(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            fixture = PracticalV09Fixture(Path(raw))
+            state = json.loads(fixture.state.read_text(encoding="utf-8"))
+            state["contract_versions"]["execution_context"] = "unexpected-v1"
+            write_json(fixture.state, state)
+            with self.assertRaisesRegex(PracticalV09Error, "execution_context"):
+                load_workflow_state(fixture.state, fixture.root)
+
+            state["contract_versions"]["execution_context"] = (
+                EXECUTION_CONTEXT_CONTRACT_VERSION
+            )
+            write_json(fixture.state, state)
+            obligations = json.loads(fixture.obligations.read_text(encoding="utf-8"))
+            obligations["obligations"][0]["execution_contexts"][0]["flow_kind"] = "archive"
+            write_json(fixture.obligations, obligations)
+            _, findings = validate_scope(
+                package_root=fixture.root, workflow_state_path=fixture.state
+            )
+            self.assertIn(
+                "scope-obligation-execution-context-flow-kind",
+                [item.id for item in findings if item.blocking],
             )
 
     def test_initializer_creates_ba_cards_and_binds_outcome_to_review_inputs(self) -> None:
@@ -1309,8 +1353,8 @@ class PracticalV09Tests(unittest.TestCase):
             self.assertIn("scope-clarification-requests.md", content)
             self.assertIn("source-terminology-discrepancy", content)
             self.assertIn("validate_practical_obligations.py", content)
-        self.assertIn("practical route v0.9", analyzer)
-        self.assertIn("v0.8 instructions below are legacy-only", analyzer)
+        self.assertIn("practical v0.9", analyzer)
+        self.assertNotIn("v0.8", analyzer)
         self.assertIn("автозаполняет несколько полей", scope_format)
         self.assertIn("Не создавай `CLR-*` только из-за различия заголовка", scope_format)
         self.assertIn("visual_evidence_check", route)
@@ -1382,7 +1426,7 @@ class PracticalV09Tests(unittest.TestCase):
                 [item.id for item in findings if item.blocking],
             )
 
-    def test_complex_scope_requires_matrix_review(self) -> None:
+    def test_every_new_scope_requires_matrix_review(self) -> None:
         payload = {
             "obligations": [
                 {"id": f"OBL-{index:03d}", "risk_flags": []}
@@ -1391,17 +1435,17 @@ class PracticalV09Tests(unittest.TestCase):
         }
         required, reasons = matrix_review_required(payload)
         self.assertTrue(required)
-        self.assertIn("Количество обязательств", reasons[0])
+        self.assertIn("обязательно", reasons[0])
         required, reasons = matrix_review_required(
             {"obligations": [{"id": "OBL-001", "risk_flags": ["authorization"]}]}
         )
         self.assertTrue(required)
-        self.assertIn("authorization", reasons[0])
+        self.assertIn("authorization", reasons[-1])
         required, reasons = matrix_review_required(
             {"obligations": [{"id": "OBL-001", "risk_flags": ["temporal-rule"]}]}
         )
         self.assertTrue(required)
-        self.assertIn("temporal-rule", reasons[0])
+        self.assertIn("temporal-rule", reasons[-1])
 
     def test_unknown_matrix_review_risk_is_blocking(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
@@ -1421,6 +1465,9 @@ class PracticalV09Tests(unittest.TestCase):
     def test_required_matrix_review_blocks_test_case_phase_until_accepted(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             fixture = PracticalV09Fixture(Path(raw))
+            state = json.loads(fixture.state.read_text(encoding="utf-8"))
+            state["reviews"] = []
+            write_json(fixture.state, state)
             obligations = json.loads(fixture.obligations.read_text(encoding="utf-8"))
             obligations["obligations"][0]["risk_flags"] = ["authorization"]
             write_json(fixture.obligations, obligations)
@@ -1959,7 +2006,7 @@ class PracticalV09Tests(unittest.TestCase):
                 [item.id for item in findings if item.blocking],
             )
 
-    def test_compact_reviewer_receipt_binds_large_scope_to_immutable_obligation_set(self) -> None:
+    def test_compact_reviewer_receipt_binds_large_scope_to_per_obligation_vector(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             fixture = PracticalV09Fixture(Path(raw))
             manifest = build_review_manifest(
@@ -1977,6 +2024,7 @@ class PracticalV09Tests(unittest.TestCase):
                 "scope_obligations_sha256": sha256_file(fixture.obligations),
                 "active_obligation_count": 1,
                 "active_obligation_ids_sha256": obligation_ids_sha256({"OBL-001"}),
+                "obligation_ids": ["OBL-001"],
             }
             manifest_path = fixture.scope_dir / "test-cases-review-manifest.json"
             write_json(manifest_path, manifest)
@@ -1990,11 +2038,17 @@ class PracticalV09Tests(unittest.TestCase):
                     "review_mode": "test-cases",
                     "execution_surface": "codex-thread",
                     "reviewer_thread_id": "019feebf-3cde-79d2-9f87-ba9c61ff7b14",
-                    "independent_obligation_set": {
-                        "source_anchor": "Раздел 9.1, строка «Партнеры»",
-                        "statement": "Проверены все обязательства immutable snapshot.",
-                        **manifest["reviewer_receipt_contract"],
-                    },
+                    "independent_obligation_vector": [
+                        {
+                            "obligation_id": "OBL-001",
+                            "verdict": "covered",
+                            "source_anchor": "Раздел 9.1, строка «Партнеры»",
+                            "statement": "Проверено обязательство immutable snapshot.",
+                        }
+                    ],
+                    "independent_obligation_vector_digest": manifest[
+                        "reviewer_receipt_contract"
+                    ]["active_obligation_ids_sha256"],
                     "verdict": "approved",
                     "findings": [],
                 },
@@ -2007,7 +2061,7 @@ class PracticalV09Tests(unittest.TestCase):
             self.assertFalse([item for item in findings if item.blocking])
 
             result = json.loads(result_path.read_text(encoding="utf-8"))
-            result["independent_obligation_set"]["active_obligation_ids_sha256"] = "0" * 64
+            result["independent_obligation_vector_digest"] = "0" * 64
             write_json(result_path, result)
             _, findings = verify_review_result(
                 package_root=fixture.root,
@@ -2015,7 +2069,139 @@ class PracticalV09Tests(unittest.TestCase):
                 result_path=result_path,
             )
             self.assertIn(
-                "review-result-compact-obligation-set-digest",
+                "review-result-compact-obligation-vector-digest",
+                [item.id for item in findings if item.blocking],
+            )
+
+    def test_session_attestation_is_required_when_manifest_declares_it(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            fixture = PracticalV09Fixture(Path(raw))
+            manifest = build_review_manifest(
+                package_root=fixture.root,
+                workflow_state_path=fixture.state,
+                review_mode="matrix",
+                controller_thread_id="019feebf-3cde-79d2-9f87-ba9c61ff7b13",
+                code_branch="codex/test",
+                code_commit="abc123",
+                contract_digest="contract",
+                ft_package_path="fts/Partners/Partners-v1",
+                require_session_attestation=True,
+            )
+            manifest_path = fixture.scope_dir / "matrix-review-manifest.json"
+            write_json(manifest_path, manifest)
+            attestation_path = fixture.scope_dir / "matrix-review-session.json"
+            write_json(
+                attestation_path,
+                build_review_session_attestation(
+                    package_root=fixture.root,
+                    manifest_path=manifest_path,
+                    reviewer_thread_id="019feebf-3cde-79d2-9f87-ba9c61ff7b14",
+                ),
+            )
+            result_path = fixture.scope_dir / "matrix-review-result.json"
+            write_json(
+                result_path,
+                {
+                    "review_manifest_sha256": sha256_file(manifest_path),
+                    "review_session_attestation_sha256": sha256_file(attestation_path),
+                    "scope_id": "01",
+                    "scope_slug": "menu",
+                    "review_mode": "matrix",
+                    "execution_surface": "codex-thread",
+                    "reviewer_thread_id": "019feebf-3cde-79d2-9f87-ba9c61ff7b14",
+                    "independent_obligations": independently_derived_obligation(),
+                    "verdict": "approved",
+                    "findings": [],
+                },
+            )
+            _, missing = verify_review_result(
+                package_root=fixture.root,
+                manifest_path=manifest_path,
+                result_path=result_path,
+            )
+            self.assertIn(
+                "review-result-session-attestation-missing",
+                [item.id for item in missing if item.blocking],
+            )
+            _, findings = verify_review_result(
+                package_root=fixture.root,
+                manifest_path=manifest_path,
+                result_path=result_path,
+                review_session_attestation_path=attestation_path,
+            )
+            self.assertFalse([item for item in findings if item.blocking])
+
+    def test_finalizer_preserves_required_session_attestation_in_review_history(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            fixture = PracticalV09Fixture(Path(raw))
+            manifest = build_review_manifest(
+                package_root=fixture.root,
+                workflow_state_path=fixture.state,
+                review_mode="matrix",
+                controller_thread_id="019feebf-3cde-79d2-9f87-ba9c61ff7b13",
+                code_branch="codex/test",
+                code_commit="abc123",
+                contract_digest="contract",
+                ft_package_path="fts/Partners/Partners-v1",
+                require_session_attestation=True,
+            )
+            manifest_path = fixture.scope_dir / "matrix-review-manifest.json"
+            write_json(manifest_path, manifest)
+            attestation_path = fixture.scope_dir / "matrix-review-session.json"
+            write_json(
+                attestation_path,
+                build_review_session_attestation(
+                    package_root=fixture.root,
+                    manifest_path=manifest_path,
+                    reviewer_thread_id="019feebf-3cde-79d2-9f87-ba9c61ff7b14",
+                ),
+            )
+            result_path = fixture.scope_dir / "matrix-review-result.json"
+            write_json(
+                result_path,
+                {
+                    "review_manifest_sha256": sha256_file(manifest_path),
+                    "review_session_attestation_sha256": sha256_file(attestation_path),
+                    "scope_id": "01",
+                    "scope_slug": "menu",
+                    "review_mode": "matrix",
+                    "execution_surface": "codex-thread",
+                    "reviewer_thread_id": "019feebf-3cde-79d2-9f87-ba9c61ff7b14",
+                    "independent_obligations": independently_derived_obligation(),
+                    "verdict": "approved",
+                    "findings": [],
+                },
+            )
+            completed = subprocess.run(
+                [
+                    sys.executable,
+                    str(REPO_ROOT / "scripts" / "finalize_practical_review.py"),
+                    "--ft-package-root", str(fixture.root),
+                    "--workflow-state", str(fixture.state),
+                    "--review-manifest", str(manifest_path),
+                    "--review-result", str(result_path),
+                    "--review-session-attestation", str(attestation_path),
+                ],
+                text=True,
+                capture_output=True,
+                encoding="utf-8",
+                errors="replace",
+            )
+            self.assertEqual(0, completed.returncode, completed.stderr)
+            state = json.loads(fixture.state.read_text(encoding="utf-8"))
+            review = state["reviews"][-1]
+            self.assertEqual(
+                "work/practical-v0.9/menu/matrix-review-session.json",
+                review["session_attestation"],
+            )
+            self.assertEqual(
+                sha256_file(attestation_path), review["session_attestation_sha256"]
+            )
+            _, findings = validate_scope(
+                package_root=fixture.root, workflow_state_path=fixture.state
+            )
+            self.assertNotIn(
+                "workflow-review-session-attestation-binding",
                 [item.id for item in findings if item.blocking],
             )
 
@@ -2135,7 +2321,7 @@ class PracticalV09Tests(unittest.TestCase):
             self.assertEqual(0, state["matrix_revision_count"])
             self.assertEqual(0, state["tc_revision_count"])
             self.assertEqual(
-                [{
+                [{"mode": "matrix", "verdict": "approved"}, {
                     "mode": "test-cases",
                     "verdict": "approved",
                     "manifest": "work/practical-v0.9/menu/test-cases-review-manifest.json",
@@ -2273,7 +2459,9 @@ class PracticalV09Tests(unittest.TestCase):
             self.assertNotEqual(0, blocked.returncode)
             state = json.loads(fixture.state.read_text(encoding="utf-8"))
             self.assertEqual(0, state["tc_revision_count"])
-            self.assertEqual([], state["reviews"])
+            self.assertEqual(
+                [{"mode": "matrix", "verdict": "approved"}], state["reviews"]
+            )
 
             decisions_path = fixture.scope_dir / "controller-triage-input.json"
             write_json(
@@ -2496,7 +2684,7 @@ class PracticalV09Tests(unittest.TestCase):
             self.assertEqual(0, recovered.returncode, recovered.stderr)
             state = json.loads(fixture.state.read_text(encoding="utf-8"))
             self.assertEqual(1, state["tc_revision_count"])
-            self.assertEqual(1, len(state["reviews"]))
+            self.assertEqual(2, len(state["reviews"]))
             self.assertEqual(
                 "Провести повторное независимое review тест-кейсов после уже выполненной целевой доработки",
                 state["next_action"],
@@ -3535,17 +3723,18 @@ class PracticalV09Tests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as raw:
             fixture = PracticalV09Fixture(Path(raw))
             obligations = json.loads(fixture.obligations.read_text(encoding="utf-8"))
-            obligations["obligations"][0]["execution_contexts"][0]["id"] = "CTX-CREATE"
+            obligations["obligations"][0]["execution_contexts"][0]["id"] = "CTX-CARD-SAVE"
+            obligations["obligations"][0]["execution_contexts"][0]["flow_kind"] = "create"
             write_json(fixture.obligations, obligations)
             fixture.matrix.write_text(
                 fixture.matrix.read_text(encoding="utf-8").replace(
-                    "CTX-OPEN-MENU", "CTX-CREATE"
+                    "CTX-OPEN-MENU", "CTX-CARD-SAVE"
                 ),
                 encoding="utf-8",
             )
             fixture.tc.write_text(
                 fixture.tc.read_text(encoding="utf-8")
-                .replace("CTX-OPEN-MENU", "CTX-CREATE")
+                .replace("CTX-OPEN-MENU", "CTX-CARD-SAVE")
                 .replace(
                     "1. Открыть раздел «Партнеры».", "1. Нажать «Сохранить»."
                 )
@@ -3589,6 +3778,7 @@ class PracticalV09Tests(unittest.TestCase):
             fixture = PracticalV09Fixture(Path(raw))
             obligations = json.loads(fixture.obligations.read_text(encoding="utf-8"))
             obligations["obligations"][0]["execution_contexts"][0]["id"] = "CTX-CREATE"
+            obligations["obligations"][0]["execution_contexts"][0]["flow_kind"] = "create"
             write_json(fixture.obligations, obligations)
             fixture.matrix.write_text(
                 fixture.matrix.read_text(encoding="utf-8").replace("CTX-OPEN-MENU", "CTX-CREATE"),
@@ -3683,6 +3873,7 @@ class PracticalV09Tests(unittest.TestCase):
             shared_context = {
                 "id": "CTX-CREATE",
                 "label": "Создание карточки партнера",
+                "flow_kind": "create",
                 "required_setup_kinds": ["actor"],
                 "setup_ids": ["SETUP-ACTOR-001"],
             }
@@ -4034,6 +4225,7 @@ class PracticalV09Tests(unittest.TestCase):
                 "source_anchor": "Таблица 7, AS.36–AS.37.",
                 "rationale": "Внутренняя проверка подтверждается наблюдаемым сообщением об ошибке.",
             }]
+            state["reviews"] = []
             write_json(fixture.state, state)
             _, findings = validate_scope(package_root=fixture.root, workflow_state_path=fixture.state)
             finding_ids = [item.id for item in findings if item.blocking]
@@ -4547,6 +4739,7 @@ class PracticalV09Tests(unittest.TestCase):
                 {
                     "id": "CTX-EDIT-MENU",
                     "label": "Повторное открытие после изменения прав",
+                    "flow_kind": "view",
                     "required_setup_kinds": ["actor"],
                     "setup_ids": ["SETUP-ACTOR-001"],
                 }
@@ -4753,6 +4946,7 @@ class PracticalV09Tests(unittest.TestCase):
             fixture = PracticalV09Fixture(Path(raw))
             obligations = json.loads(fixture.obligations.read_text(encoding="utf-8"))
             obligations["obligations"][0]["execution_contexts"][0]["id"] = "CTX-CARD-EDIT"
+            obligations["obligations"][0]["execution_contexts"][0]["flow_kind"] = "edit"
             write_json(fixture.obligations, obligations)
             fixture.matrix.write_text(
                 fixture.matrix.read_text(encoding="utf-8").replace(

@@ -4,7 +4,7 @@
 
 Это default macro-stage маршрут для обычной задачи «написать тест-кейсы по подтвержденному scope ФТ». Его цель — выпускать качественные ручные и пригодные для автоматизации тест-кейсы до accepted baseline или честного external blocker, без повторения одного и того же coverage state в self-check, summary, receipt и нескольких таблицах.
 
-`practical-v0.8` сохранён только для незавершённых legacy-запусков. Новый scope не начинает v0.8 без явного запроса пользователя.
+`practical-v0.9` — единственный активный маршрут обычной работы. Предыдущие practical-маршруты не продолжаются и не используются для новых scope.
 
 ## Канонические артефакты scope
 
@@ -116,7 +116,7 @@ layout-вопросе.
 
 До `workflow-state.json` агент может запустить только `validate_practical_obligations.py`. Это проверка структуры source manifest, OBL и GAP; она не заменяет scoped validator и не подтверждает готовность маршрута целиком. В итоговом сообщении этапа агент обязан назвать вид выполненной проверки точно.
 
-### 2. Матрица и условный matrix review
+### 2. Матрица и обязательный matrix review
 
 Writer создаёт русскоязычный `test-design-matrix.md` с таблицей:
 
@@ -176,17 +176,23 @@ fixture, интеграция или исходное состояние, отн
 python scripts/validate_practical_scope.py --ft-package-root <package> --workflow-state <scope-dir>/workflow-state.json --output-profile <scope-dir>/validator-report.json --exclude-output <scope-dir>/validator-report.json --require-clean
 ```
 
-Matrix review обязателен только если в `scope-obligations.json` не менее 8 обязательств, есть `risk_flags`: `status-transition`, `cross-field-rule`, `closed-dictionary`, `integration`, `authorization`, `exception-over-general-rule`, `mapping-table`, `temporal-rule`, `high-fan-out`, `high-risk`, либо заполнен `scenario_consolidation`. В остальных простых scope после чистой валидации writer переходит к TC.
+После чистой scoped validation matrix review обязателен для каждого нового scope, независимо от количества OBL и `risk_flags`. Эти признаки по-прежнему помогают reviewer-у сфокусировать проверку, но не отменяют её.
 
 ### 3. Separate-session review
 
-Для обязательного matrix review и для любого final TC review controller создаёт один immutable manifest:
+Для matrix review и final TC review controller создаёт один immutable manifest:
 
 ```text
 python scripts/create_practical_review_manifest.py --repo-root <repo> --ft-package-root <package> --workflow-state <scope-dir>/workflow-state.json --review-mode <matrix|test-cases> --controller-thread-id <current-top-level-thread-id> --contract-file references/agent/practical-test-case-route-v0.9.md --output <scope-dir>/<mode>-review-manifest.json
 ```
 
-Reviewer запускается в новой верхнеуровневой Codex-сессии (`codex-thread`), read-only для matrix/TC. Если механизм создания отдельной Codex-сессии доступен, controller использует его напрямую: не ищет внешнюю документацию и не заменяет отдельную сессию subagent-ом. До чтения matrix и TC reviewer самостоятельно восстанавливает требования. Для обычного scope он возвращает `independent_obligations`: указывает `source_anchor`, русскоязычный `statement` и связанные `obligation_ids`. Если manifest содержит `reviewer_receipt_contract`, reviewer возвращает один `independent_obligation_set`, связанный с digest полного набора `OBL-*`; это не освобождает его от самостоятельного чтения источников. Формулировка обязана сохранять все применимые ограничители первичного источника: контекст создания/редактирования, кванторы, границы, условия и исключения. Для каждого открытого `ui-calibration` reviewer сам проверяет связанные изображения ФТ и visual-only inputs: если они уже определяют контрол или его расположение, требует удалить gap и использовать `visual_binding`; если нет, проверяет узость остаточного runtime-вопроса. Не передавай writer self-check: такого артефакта в v0.9 нет.
+Reviewer запускается в новой верхнеуровневой Codex-сессии (`codex-thread`), read-only для matrix/TC. Controller не заменяет такую сессию subagent-ом. Сразу после создания reviewer-сессии controller записывает её фактический ID отдельной командой; без этого attestation финализация блокируется:
+
+```text
+python scripts/record_practical_review_session.py --ft-package-root <package> --review-manifest <scope-dir>/<mode>-review-manifest.json --reviewer-thread-id <created-top-level-reviewer-thread-id> --output <scope-dir>/<mode>-review-session-attestation.json
+```
+
+До чтения matrix и TC reviewer самостоятельно восстанавливает требования. Для обычного scope он возвращает `independent_obligations`: указывает `source_anchor`, русскоязычный `statement` и связанные `obligation_ids`. Если manifest содержит `reviewer_receipt_contract`, reviewer возвращает компактный `independent_obligation_vector` с одним verdict, source anchor и statement для каждого `OBL-*`. Это не освобождает его от самостоятельного чтения источников. Формулировка обязана сохранять все применимые ограничители первичного источника: контекст создания/редактирования, кванторы, границы, условия и исключения. Для каждого открытого `ui-calibration` reviewer сам проверяет связанные изображения ФТ и visual-only inputs: если они уже определяют контрол или его расположение, требует удалить gap и использовать `visual_binding`; если нет, проверяет узость остаточного runtime-вопроса. Не передавай writer self-check: такого артефакта в v0.9 нет.
 
 До dispatch controller обязан проверить доступность каждого hash-bound входа в
 целевом checkout:
@@ -213,7 +219,15 @@ Reviewer возвращает один JSON-object без нормализаци
 python scripts/capture_practical_review_result.py --submission <raw-reviewer-json> --output <scope-dir>/<mode>-review-result.json
 ```
 
-Результат review содержит `review_manifest_sha256`, `reviewer_thread_id`, `execution_surface: codex-thread`, `review_mode`, `independent_obligations` либо digest-bound `independent_obligation_set`, `verdict` и findings. Перед созданием manifest controller обязан иметь свежий чистый `validator-report.json`, чьи content hashes совпадают с текущими входами scope. Controller проверяет неизменность snapshot и обновляет только `workflow-state.json` командой `finalize_practical_review.py`, которая сохраняет SHA-256 raw receipt в history review.
+Результат review содержит `review_manifest_sha256`, `reviewer_thread_id`, `execution_surface: codex-thread`, `review_mode`, `review_session_attestation_sha256`, `independent_obligations` либо `independent_obligation_vector`, `verdict` и findings. Перед созданием manifest controller обязан иметь свежий чистый `validator-report.json`, чьи content hashes совпадают с текущими входами scope. Controller проверяет неизменность snapshot и обновляет только `workflow-state.json` командой `finalize_practical_review.py`, которая сохраняет SHA-256 raw receipt в history review.
+
+```text
+python scripts/finalize_practical_review.py --ft-package-root <package> --workflow-state <scope-dir>/workflow-state.json --review-manifest <scope-dir>/<mode>-review-manifest.json --review-result <scope-dir>/<mode>-review-result.json --review-session-attestation <scope-dir>/<mode>-review-session-attestation.json
+```
+
+Команда сохраняет также путь и SHA-256 attestation в history review. Если
+manifest требует attestation, его отсутствие или несовпадение блокирует
+finalization; controller не может заменить его собственным verdict.
 
 Для каждого `provided` fixture setup manifest включает каждый файл из
 `artifacts` (response snapshot, verification receipt и catalog при наличии).
@@ -232,7 +246,7 @@ verdict остаётся неизменным, а правила triage и фо�
 только после её успешного завершения.
 
 ```text
-python scripts/triage_practical_review.py --ft-package-root <package> --workflow-state <scope-dir>/workflow-state.json --review-manifest <scope-dir>/<mode>-review-manifest.json --review-result <scope-dir>/<mode>-review-result.json --decisions-file <temporary-utf8-json>
+python scripts/triage_practical_review.py --ft-package-root <package> --workflow-state <scope-dir>/workflow-state.json --review-manifest <scope-dir>/<mode>-review-manifest.json --review-result <scope-dir>/<mode>-review-result.json --review-session-attestation <scope-dir>/<mode>-review-session-attestation.json --decisions-file <temporary-utf8-json>
 ```
 
 Только принятые content findings могут расходовать budget writer revision;
@@ -244,7 +258,7 @@ immutable input snapshot и сохранённой причиной; это не
 
 ### 4. TC, final review и revision
 
-После matrix acceptance либо пропуска matrix review writer создаёт canonical TC и повторно запускает scoped validator один раз для нового замороженного набора входов. Затем переводит `workflow-state.json` в `phase: review`, устанавливает следующее действие «Провести независимое final TC review» и сохраняет `final_verdict: not-finalized`. Затем всегда запускается отдельный final TC review. `final_verdict` относится только к final TC review; matrix verdict хранится в `reviews`.
+После matrix acceptance writer создаёт canonical TC и повторно запускает scoped validator один раз для нового замороженного набора входов. Затем переводит `workflow-state.json` в `phase: review`, устанавливает следующее действие «Провести независимое final TC review» и сохраняет `final_verdict: not-finalized`. Затем всегда запускается отдельный final TC review. `final_verdict` относится только к final TC review; matrix verdict хранится в `reviews`.
 
 При `changes-required` для каждой фазы разрешена ровно одна целевая writer revision: одна целевая writer revision матрицы и один свежий matrix re-review, а также отдельно одна целевая writer revision canonical TC и один свежий final independent TC review. До расходования любого budget обязателен controller triage каждого content blocking finding. `matrix_revision_count` и `tc_revision_count` в `workflow-state.json` расходуются только для принятых content findings своей фазы; второй такой вердикт той же фазы переводит scope в `blocked`, а не запускает repair-loop. Process/transport/validator finding с `remediation_owner: controller` или `validator` исправляется без расходования writer revision. Наблюдаемое требование с неизвестным UI-признаком получает `blocked-observability`; это допустимый статус matrix/TC и не является external blocker само по себе. Противоречие источников или непредставимое требование — честный `blocked-input`.
 

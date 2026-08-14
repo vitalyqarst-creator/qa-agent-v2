@@ -1,7 +1,7 @@
 # Specialized Reviewer Contracts
 
 Этот reference загружается только для explicit `source_assertion_review` или
-legacy `scope_gap_review`. Он не относится к practical route v0.8.
+legacy `scope_gap_review`. Он не относится к обычному practical route v0.9.
 
 ## `source_assertion_review`
 

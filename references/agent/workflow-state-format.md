@@ -182,7 +182,7 @@ python scripts\validate_agent_artifacts.py --root <ft-package> --json --fail-on 
 Для `stage_status: signed-off` и `stage_status: round-cap-reached` state должен позволять восстановить итоговую трассировку без чтения истории чата:
 
 - `latest_artifacts.final_traceability_matrix` указывает на последнюю matrix, по которой принято решение;
-- `latest_artifacts.final_traceability_matrix_xlsx` указывает на XLSX-дубль той же matrix только для explicit XLSX/session-based promotion routes; practical route v0.8 не требует XLSX;
+- `latest_artifacts.final_traceability_matrix_xlsx` указывает на XLSX-дубль той же matrix только для explicit XLSX/session-based promotion routes; ordinary practical route не требует XLSX;
 - `latest_artifacts.final_findings` указывает на findings последнего review round;
 - `latest_artifacts.final_writer_response` указывает на writer response, если sign-off или round cap наступили после revision;
 - `latest_artifacts.loop_summary` указывает на summary, где перечислены remaining `gap` / `unclear` refs через `traceability_ref` / `atom_id`.

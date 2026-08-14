@@ -8,6 +8,7 @@
   "review_mode": "matrix",
   "execution_surface": "codex-thread",
   "reviewer_thread_id": "<другая верхнеуровневая Codex-сессия>",
+  "review_session_attestation_sha256": "<sha256 controller-owned attestation>",
   "independent_obligations": [
     {
       "source_anchor": "Раздел 9.1, строка «Партнеры»",
@@ -27,27 +28,37 @@
 сумме должны в точности покрывать `OBL-*` из зафиксированного
 `scope-obligations.json`.
 
+Перед передачей результата controller создаёт immutable
+`review-session-attestation.json` штатным скриптом. Reviewer получает его как
+часть snapshot и переносит его SHA-256 в
+`review_session_attestation_sha256`. Это подтверждает, что ID reviewer-а
+зафиксирован controller-ом после создания отдельной задачи, а не только
+заявлен самим reviewer-ом. Локальный контракт не подменяет API задач и не
+заявляет криптографическое доказательство создания сессии: при отсутствии
+controller-owned attestation финализация честно блокируется.
+
 Для scope, у которого manifest содержит `reviewer_receipt_contract`, reviewer
-использует компактный вариант вместо массива `independent_obligations`:
+использует компактный вектор вместо массива `independent_obligations`:
 
 ```json
 {
-  "independent_obligation_set": {
-    "source_anchor": "Самостоятельно прочитаны исходные материалы и scope-obligations.json из immutable snapshot.",
-    "statement": "Самостоятельно восстановлен и проверен полный набор активных обязательств с их контекстами, границами, условиями и исключениями.",
-    "scope_obligations_sha256": "<из reviewer_receipt_contract manifest>",
-    "active_obligation_count": 50,
-    "active_obligation_ids_sha256": "<из reviewer_receipt_contract manifest>"
-  }
+  "independent_obligation_vector_digest": "<active_obligation_ids_sha256 из manifest>",
+  "independent_obligation_vector": [
+    {
+      "obligation_id": "OBL-001",
+      "source_anchor": "Раздел 9.1, строка «Партнеры»",
+      "statement": "В меню доступен пункт «Партнеры».",
+      "verdict": "covered"
+    }
+  ]
 }
 ```
 
-`source_anchor` и `statement` reviewer формулирует самостоятельно после
-чтения snapshot. Значения SHA-256 и количество обязательств должны совпасть
-с `reviewer_receipt_contract`, но controller не передаёт reviewer-у готовый
-список `OBL-*` и не подменяет его вывод. Компактный вариант сохраняет полное
-покрытие по digest immutable snapshot и не раздувает ответ повторением
-исходных формулировок.
+Вектор содержит ровно одну запись на каждый `OBL-*` из manifest. `source_anchor`
+и `statement` reviewer формулирует самостоятельно после чтения snapshot;
+`verdict` — `covered`, `gap` или `blocked`. При `approved` все значения должны
+быть `covered`. Digest связывает вектор с immutable набором OBL, но не заменяет
+построчную проверку покрытия.
 
 Сначала reviewer читает источники и формирует `independent_obligations`; затем сопоставляет их с matrix и, при `review_mode: test-cases`, с TC. Нельзя использовать transcript writer-а, self-check или изменения matrix/TC как вход первичной оценки.
 
@@ -145,7 +156,7 @@ budget. При содержательных замечаниях без внеш
 `changes-required`.
 
 Raw submission ограничен размером, указанным в `reviewer_receipt_contract`
-manifest (по умолчанию не более 24 KiB). Если первый ответ не проходит этот
+manifest (по умолчанию не более 64 KiB). Если первый ответ не проходит этот
 контракт, controller не просит reviewer-а «сжать» уже вынесенный verdict и не
 переписывает receipt: он фиксирует невалидный dispatch и при необходимости
 запускает новый независимый review по тому же immutable snapshot.

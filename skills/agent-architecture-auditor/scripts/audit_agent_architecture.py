@@ -183,6 +183,7 @@ def audit_instruction_budgets(root:Path,checks,findings):
             "status": status,
         })
         if status!="pass":
+            severity = "error" if scenario_id == "practical.v0_9" else "warning"
             evidence=[
                 f"{budget['total_kib']} KiB / {budget['limit_kib']} KiB",
                 f"headroom {budget.get('headroom_kib')} KiB / min {budget.get('min_headroom_kib')} KiB",
@@ -197,7 +198,7 @@ def audit_instruction_budgets(root:Path,checks,findings):
             add_finding(
                 findings,
                 f"instruction-budget:{scenario_id}",
-                "warning",
+                severity,
                 "references",
                 title,
                 "The scenario's runtime instruction context exceeds the manifest budget, violates safety headroom, or references missing files.",

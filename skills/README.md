@@ -15,7 +15,7 @@ Canonical list of active skills:
 
 - If the first task is to identify which FT to use: `ft-source-locator`.
 - If the FT package is selected but the exact requirement fragment is not selected yet, or a large FT must be split into scopes: `ft-scope-analyzer`.
-- If the user asks to write test cases for a normal FT scope, use `ft-practical-route` v0.9 as one compact macro-stage through an accepted baseline or honest blocker. Chain: source manifest -> source obligations -> matrix -> conditional separate-session matrix review -> TC -> final separate-session TC review -> at most one targeted revision and fresh final review. The only mutable process state is `workflow-state.json`; the scoped validator is one-pass and checks only its declared dependency closure. Separate-session means a real top-level Codex thread (`codex-thread`); sub-agents do not count. Source contradiction blocks without inventing TC; missing data/UI/observability receives `needs-test-data`, `candidate-ui-calibration` or `blocked-observability`. Full contract: `references/agent/practical-test-case-route-v0.9.md`. v0.8 is legacy-only.
+- If the user asks to write test cases for a normal FT scope, use `ft-practical-route` v0.9 as one compact macro-stage through an accepted baseline or honest blocker. Chain: source manifest -> source obligations -> matrix -> mandatory separate-session matrix review -> TC -> final separate-session TC review. Each phase permits at most one targeted revision and one fresh re-review. The only mutable process state is `workflow-state.json`; the scoped validator is one-pass and checks only its declared dependency closure. Separate-session means a real top-level Codex thread (`codex-thread`), bound by a controller-owned session attestation; sub-agents do not count. Source contradiction blocks without inventing TC; missing data/UI/observability receives `needs-test-data`, `candidate-ui-calibration` or `blocked-observability`. Full contract: `references/agent/practical-test-case-route-v0.9.md`.
 - If the scope is fixed and new cases must be written in one writer pass without independent review: `ft-test-case-writer`, but still follow practical-route quality gates.
 - Developer/legacy routes below are explicit-only. Do not propose them for ordinary "write test cases" work:
   - if the scope is independently qualified and the user explicitly asks for a production shadow: `ft-test-case-iteration` through `ft-agent run`;
@@ -29,11 +29,7 @@ Canonical list of active skills:
 
 ## Typical Chains
 
-- New test-case suite, macro-stage default: `ft-practical-route` v0.9. Isolated phase skills remain available only for a user-requested isolated stage or for legacy v0.8 continuation. Do not materialize stage summaries or refresh legacy validator profiles in v0.9.
-
-## Legacy practical route v0.8 continuation
-
-An existing v0.8 scope keeps its previous capped route: one matrix re-review after a matrix repair and one final independent TC review after the bounded revision. Do not apply this legacy chain to a new scope.
+- New test-case suite, macro-stage default: `ft-practical-route` v0.9. Isolated phase skills remain available only for a user-requested isolated stage. Do not materialize stage summaries or legacy validator profiles in v0.9.
 - Explicit production shadow after qualification: `ft-test-case-iteration` through `ft-agent run` with schema-v2 config.
 - Explicit full source-qualified scope in the development environment: `ft-source-locator` -> `ft-scope-analyzer` -> independent source review -> `ft-test-case-iteration`.
 - New FT-version update: `ft-test-case-iteration` in `incremental-update` mode after explicit selection of both versions and target scope.
@@ -58,7 +54,7 @@ The canonical loading manifest lives in `references/agent/instruction-loading-ma
 - Instruction contracts: [../references/agent/instruction-contract-index.md](../references/agent/instruction-contract-index.md)
 - Instruction loading manifest: [../references/agent/instruction-loading-manifest.md](../references/agent/instruction-loading-manifest.md)
 - Task-start skill routing: [../references/agent/task-start-skill-routing-format.md](../references/agent/task-start-skill-routing-format.md)
-- Practical test-case route v0.8: [../references/agent/practical-test-case-route-v0.8.md](../references/agent/practical-test-case-route-v0.8.md)
+- Practical test-case route v0.9: [../references/agent/practical-test-case-route-v0.9.md](../references/agent/practical-test-case-route-v0.9.md)
 - Coverage class catalog: [../references/qa/coverage-class-catalog.md](../references/qa/coverage-class-catalog.md)
 - Source-qualified iteration: [../references/agent/lean-v2-iteration.md](../references/agent/lean-v2-iteration.md)
 - Session-based review cycle: [../references/agent/session-based-review-cycle-format.md](../references/agent/session-based-review-cycle-format.md)

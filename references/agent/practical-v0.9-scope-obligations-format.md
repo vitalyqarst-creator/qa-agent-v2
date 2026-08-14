@@ -25,6 +25,7 @@
         {
           "id": "CTX-OPEN-MENU",
           "label": "Открытие раздела из меню",
+          "flow_kind": "view",
           "required_setup_kinds": ["actor"],
           "setup_ids": ["SETUP-ACTOR-001"]
         }
@@ -74,6 +75,10 @@ matrix/TC, но не создаёт бизнес-правило и не меня
 русскоязычный `label`, `required_setup_kinds` (включая `actor`) и `setup_ids`.
 Разные пользовательские потоки, например создание и редактирование, хранятся
 разными контекстами и затем становятся отдельными строками matrix и TC.
+У каждого контекста обязателен `flow_kind`: `create`, `edit`, `view`,
+`delete`, `search` или `other`. Это тип пользовательского потока, а не
+производная от названия `CTX-*`: lifecycle-проверки создания, редактирования
+и очистки формы используют только `flow_kind`.
 
 Если в одном `CTX-*` недоступны несколько `SETUP-*`, первичный статус строки
 определяется в порядке: `needs-future-clarification`, `blocked-observability`,
@@ -120,7 +125,7 @@ fixture catalog. Пути задаются относительно корня F
 оставить в одном `OBL-*`, только если исходное состояние, действие и ожидаемый
 результат совпадают для каждого значения.
 
-`risk_flags` используй только из: `status-transition`, `cross-field-rule`, `closed-dictionary`, `integration`, `authorization`, `exception-over-general-rule`, `mapping-table`, `temporal-rule`, `high-fan-out`, `high-risk`. Они запускают conditional matrix review.
+`risk_flags` используй только из: `status-transition`, `cross-field-rule`, `closed-dictionary`, `integration`, `authorization`, `exception-over-general-rule`, `mapping-table`, `temporal-rule`, `high-fan-out`, `high-risk`. Они задают фокус matrix review, которое обязательно для каждого нового scope.
 
 ## Gaps и вопросы к БА
 

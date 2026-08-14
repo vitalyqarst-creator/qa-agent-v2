@@ -30,14 +30,14 @@ class FigmaVisualReferenceContractTests(unittest.TestCase):
 
     def test_scope_uses_available_figma_but_optional_access_failure_is_not_blocking(self) -> None:
         scope = self.read("skills/ft-scope-analyzer/SKILL.md")
-        route = self.read("references/agent/practical-test-case-route-v0.8.md")
+        route = self.read("references/agent/practical-test-case-route-v0.9.md")
 
-        self.assertIn("относящийся Figma-узел", scope)
-        self.assertIn("недоступный `optional_visual_reference`", scope)
-        self.assertIn("scope-brief.md", scope)
-        self.assertIn("внеси его index в `required_inputs`, brief и prompt", scope)
-        self.assertIn("close inputs", route)
-        self.assertIn("requirement code or table row matches", route)
+        self.assertIn("Figma — необязательный источник", scope)
+        self.assertIn("не является\n   `blocked-input`", scope)
+        self.assertIn("scope-obligations.json", scope)
+        self.assertIn("visual_evidence_check", scope)
+        self.assertIn("visual binding", route)
+        self.assertIn("не оставляй его название или положение в UI-калибровке", route)
 
     def test_mockup_inventory_template_has_russian_visible_headers(self) -> None:
         template = self.read("references/agent/mockup-visual-inventory-format.md")

@@ -45,6 +45,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--review-manifest", type=Path, required=True)
     parser.add_argument("--review-result", type=Path, required=True)
     parser.add_argument(
+        "--review-session-attestation",
+        type=Path,
+        help="Controller-owned attestation recorded after creating the separate reviewer task.",
+    )
+    parser.add_argument(
         "--decisions-file",
         type=Path,
         required=True,
@@ -179,6 +184,11 @@ def validate_rejection(
     package_root: Path,
 ) -> None:
     rejection = decision.get("rejection")
+    if isinstance(rejection, dict) and rejection.get("basis") == "source-not-supported":
+        raise PracticalV09Error(
+            "source-not-supported нельзя автоматически отклонять в controller triage; "
+            "зафиксируйте blocker или запросите явное решение по scope"
+        )
     if (
         not isinstance(rejection, dict)
         or rejection.get("basis") not in ALLOWED_TRIAGE_REJECTION_BASES
@@ -197,16 +207,6 @@ def validate_rejection(
             raise PracticalV09Error(
                 "status rejection is invalid: reviewer asserted a status that "
                 "matches the derived prerequisite status"
-            )
-    elif basis == "source-not-supported":
-        counter_evidence = rejection.get("counter_evidence")
-        if (
-            not isinstance(counter_evidence, list)
-            or not counter_evidence
-            or not all(isinstance(item, str) and item.strip() for item in counter_evidence)
-        ):
-            raise PracticalV09Error(
-                "source-not-supported rejection requires non-empty counter_evidence"
             )
     else:
         duplicate_of = rejection.get("duplicate_of")
@@ -230,6 +230,11 @@ def main(argv: list[str] | None = None) -> int:
         package_root=package_root,
         manifest_path=args.review_manifest.resolve(),
         result_path=result_path,
+        review_session_attestation_path=(
+            args.review_session_attestation.resolve()
+            if args.review_session_attestation is not None
+            else None
+        ),
     )
     blockers = [item.id for item in verification if item.blocking]
     if blockers:

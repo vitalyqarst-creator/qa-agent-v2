@@ -18,7 +18,7 @@ from typing import Any, Iterable, Mapping
 
 
 ROUTE_VERSION = "practical-v0.9"
-ROUTE_TOOL_VERSION = "practical-v0.9.30"
+ROUTE_TOOL_VERSION = "practical-v0.9.31"
 WORKFLOW_STATE_SCHEMA_VERSION = 1
 SOURCE_CONTRACT_VERSION = "source-package-v4"
 MATRIX_CONTRACT_VERSION = "practical-matrix-v3"
@@ -32,9 +32,11 @@ SCENARIO_CONSOLIDATION_CONTRACT_VERSION = "scenario-consolidation-v2"
 LEGACY_SCENARIO_CONSOLIDATION_CONTRACT_VERSION = "scenario-consolidation-v1"
 CONTROLLER_TRIAGE_CONTRACT_VERSION = "controller-triage-v1"
 CLARIFICATION_OUTCOME_CONTRACT_VERSION = "clarification-outcome-v1"
+EXECUTION_CONTEXT_CONTRACT_VERSION = "execution-context-v1"
 SOURCE_PARITY_CONTRACT_VERSION = "source-parity-v1"
 EXCEPTION_SNAPSHOT_CONTRACT_VERSION = "exception-snapshot-v1"
-REVIEW_MANIFEST_VERSION = "practical-review-manifest-v2"
+REVIEW_MANIFEST_VERSION = "practical-review-manifest-v3"
+REVIEW_SESSION_ATTESTATION_VERSION = "review-session-attestation-v1"
 VALIDATOR_REPORT_VERSION = "practical-scope-validator-v2"
 SOURCE_MANIFEST_RELATIVE_PATH = "work/practical-v0.9/source-package-manifest.json"
 CLARIFICATION_REQUESTS_FILENAME = "scope-clarification-requests.md"
@@ -108,10 +110,9 @@ MATRIX_REVIEW_RISK_FLAGS = {
     "high-fan-out",
     "high-risk",
 }
-MATRIX_REVIEW_OBLIGATION_THRESHOLD = 8
 COMPACT_REVIEWER_RECEIPT_OBLIGATION_THRESHOLD = 8
-COMPACT_REVIEWER_RECEIPT_FORMAT = "compact-obligation-set-v1"
-COMPACT_REVIEWER_RECEIPT_MAX_BYTES = 24 * 1024
+COMPACT_REVIEWER_RECEIPT_FORMAT = "compact-obligation-vector-v2"
+COMPACT_REVIEWER_RECEIPT_MAX_BYTES = 64 * 1024
 ALLOWED_EXECUTION_STATUSES = {
     "ready",
     "needs-test-data",
@@ -131,6 +132,14 @@ ALLOWED_EXECUTION_SETUP_AVAILABILITY = {"provided", *ALLOWED_EXECUTION_STATUSES}
 ALLOWED_EXECUTION_SETUP_AVAILABILITY_SCOPES = {
     "business-test-data",
     "environment-access",
+}
+ALLOWED_EXECUTION_FLOW_KINDS = {
+    "create",
+    "edit",
+    "view",
+    "delete",
+    "search",
+    "other",
 }
 ALLOWED_PARAMETERIZATION_BASES = {
     "значения одного закрытого справочника",
@@ -206,7 +215,6 @@ ALLOWED_FINAL_VERDICTS = {"not-finalized", "approved", "changes-required", "bloc
 ALLOWED_TRIAGE_DISPOSITIONS = {"accepted", "rejected"}
 ALLOWED_TRIAGE_REJECTION_BASES = {
     "execution-status-precedence",
-    "source-not-supported",
     "duplicate-finding",
 }
 REVIEW_FINDING_REQUIRED_FIELDS = (
@@ -816,6 +824,7 @@ def load_workflow_state(path: Path, package_root: Path) -> dict[str, Any]:
     workflow_scenario_consolidation_enabled(state)
     workflow_controller_triage_enabled(state)
     workflow_clarification_outcome_enabled(state)
+    workflow_execution_context_enabled(state)
     migration = workflow_contract_migration(state)
     if migration is not None and workflow_matrix_contract_version(state) != MATRIX_CONTRACT_VERSION:
         raise PracticalV09Error(
@@ -975,6 +984,27 @@ def workflow_clarification_outcome_enabled(state: Mapping[str, Any]) -> bool:
         raise PracticalV09Error(
             "workflow-state.json: scope_clarification_requests is required "
             "for clarification-outcome-v1"
+        )
+    return True
+
+
+def workflow_execution_context_enabled(state: Mapping[str, Any]) -> bool:
+    """Validate the explicit execution-context schema for newly initialized scopes.
+
+    The schema is opt-in only to keep historical scope artifacts readable.
+    Every current initializer declares it; its presence therefore fails closed
+    when an incompatible controller or a stale document writes another value.
+    """
+    versions = state.get("contract_versions")
+    if not isinstance(versions, Mapping):
+        raise PracticalV09Error("workflow-state.json: contract_versions must be an object")
+    declared = versions.get("execution_context")
+    if declared is None:
+        return False
+    if declared != EXECUTION_CONTEXT_CONTRACT_VERSION:
+        raise PracticalV09Error(
+            "workflow-state.json: contract_versions.execution_context "
+            "has unsupported value"
         )
     return True
 
@@ -1684,6 +1714,19 @@ def execution_contexts(obligation: dict[str, Any]) -> list[dict[str, Any]]:
     """Return explicitly declared user-execution contexts for one OBL."""
     entries = obligation.get("execution_contexts", [])
     return [item for item in entries if isinstance(item, dict)] if isinstance(entries, list) else []
+
+
+def execution_context_flow_kind(context: Mapping[str, Any] | None) -> str | None:
+    """Return the structured lifecycle kind for one execution context.
+
+    Context IDs are traceability anchors, not a lifecycle API.  Rules that
+    depend on creation or editing must use this explicit field instead of
+    guessing from a free-form ``CTX-*`` identifier.
+    """
+    if not isinstance(context, Mapping):
+        return None
+    value = context.get("flow_kind")
+    return value if isinstance(value, str) and value in ALLOWED_EXECUTION_FLOW_KINDS else None
 
 
 def execution_setup_availability_scope(setup: dict[str, Any]) -> str:
@@ -2546,6 +2589,7 @@ def validate_scope_obligations(
                         continue
                     context_id = str(context.get("id") or "")
                     label = str(context.get("label") or "").strip()
+                    flow_kind = execution_context_flow_kind(context)
                     required_kinds = context.get("required_setup_kinds")
                     setup_ids = context.get("setup_ids")
                     if not EXECUTION_CONTEXT_ID_RE.fullmatch(context_id):
@@ -2573,6 +2617,16 @@ def validate_scope_obligations(
                             "execution-readiness",
                             "У контекста исполнения нет понятного названия",
                             f"{obligation_id}: {context_id or f'строка {context_index}'} требует русскоязычный label.",
+                            artifact,
+                            remediation_owner="scope-analyzer",
+                        ))
+                    if flow_kind is None:
+                        findings.append(finding(
+                            "scope-obligation-execution-context-flow-kind",
+                            "execution-readiness",
+                            "У контекста исполнения не указан тип пользовательского потока",
+                            f"{obligation_id}: {context_id or f'строка {context_index}'} требует flow_kind: "
+                            + ", ".join(sorted(ALLOWED_EXECUTION_FLOW_KINDS)) + ".",
                             artifact,
                             remediation_owner="scope-analyzer",
                         ))
@@ -3671,11 +3725,6 @@ def numbered_steps(value: str) -> list[str]:
     ]
 
 
-def is_edit_execution_context(context_id: str) -> bool:
-    """Return whether a compact CTX identifier explicitly denotes editing."""
-    return bool(re.search(r"(?:^|-)EDIT(?:-|$)", context_id))
-
-
 def opens_new_card(step: str) -> bool:
     """Detect the narrow, unambiguous create-flow phrase inside an edit TC.
 
@@ -4421,13 +4470,13 @@ def validate_section_numbering(
 
 def successful_create_case(
     *,
-    context_id: str,
+    flow_kind: str | None,
     steps: str,
     expected_result: str,
 ) -> bool:
     """Whether a TC claims a successful persistence of a newly created object."""
     return bool(
-        context_id.endswith("CREATE")
+        flow_kind == "create"
         and re.search(r"\bсохран\w*\b", steps, re.IGNORECASE)
         and SUCCESSFUL_CREATE_EXPECTED_RE.search(expected_result)
         and SUCCESSFUL_CREATE_NEGATION_RE.search(expected_result) is None
@@ -4458,6 +4507,11 @@ def validate_test_cases(
     active_entries = {
         str(item.get("id")): item
         for item in active_obligations(obligations)
+    }
+    context_flow_kinds = {
+        str(context.get("id")): execution_context_flow_kind(context)
+        for obligation in active_entries.values()
+        for context in execution_contexts(obligation)
     }
     setup_catalog = execution_setups(obligations)
     shared_result_literals = common_result_literals_by_obligation(obligations)
@@ -4602,7 +4656,7 @@ def validate_test_cases(
                 artifact,
                 remediation_owner="writer",
             ))
-        elif is_edit_execution_context(context_id):
+        elif context_flow_kinds.get(context_id) == "edit":
             create_steps = [step for step in numbered_steps(steps_value) if opens_new_card(step)]
             if create_steps:
                 findings.append(finding(
@@ -4617,7 +4671,7 @@ def validate_test_cases(
         postconditions = test_case_field(body, "Постусловия")
         expected_result = test_case_field(body, "Итоговый ожидаемый результат")
         if successful_create_case(
-            context_id=context_id,
+            flow_kind=context_flow_kinds.get(context_id),
             steps=steps_value,
             expected_result=expected_result,
         ):
@@ -5042,9 +5096,9 @@ def validate_test_cases(
 
 def matrix_review_required(obligations: dict[str, Any]) -> tuple[bool, list[str]]:
     entries = active_obligations(obligations)
-    reasons: list[str] = []
-    if len(entries) >= MATRIX_REVIEW_OBLIGATION_THRESHOLD:
-        reasons.append(f"Количество обязательств: {len(entries)} (порог {MATRIX_REVIEW_OBLIGATION_THRESHOLD}).")
+    reasons: list[str] = [
+        "Независимое matrix review обязательно для каждого нового scope до написания тест-кейсов."
+    ]
     flags = {
         str(flag)
         for item in entries
@@ -5053,7 +5107,7 @@ def matrix_review_required(obligations: dict[str, Any]) -> tuple[bool, list[str]
     matched = sorted(flags & MATRIX_REVIEW_RISK_FLAGS)
     if matched:
         reasons.append("Риски scope: " + ", ".join(matched) + ".")
-    return bool(reasons), reasons
+    return True, reasons
 
 
 def validate_workflow_artifact_links(state: dict[str, Any], package_root: Path) -> list[ScopeFinding]:
@@ -5345,12 +5399,82 @@ def validate_review_history_integrity(
                 artifact,
                 remediation_owner="controller",
             ))
-        elif sha256_file(result_path) != expected_hash:
+            continue
+        if sha256_file(result_path) != expected_hash:
             findings.append(finding(
                 "workflow-review-result-drift",
                 "artifact-tampering",
                 "Сохранённый raw результат независимого review был изменён после финализации",
                 f"reviews[{index}].result_sha256 не совпадает с {relative_to_package(package_root, result_path)}.",
+                artifact,
+                remediation_owner="controller",
+            ))
+            continue
+        try:
+            manifest_path = package_relative_path(
+                package_root, entry.get("manifest"), artifact=artifact
+            )
+            manifest = read_json(manifest_path)
+        except PracticalV09Error:
+            continue
+        requires_attestation = isinstance(
+            manifest.get("review_session_attestation_required"), Mapping
+        )
+        attestation_ref = entry.get("session_attestation")
+        attestation_hash = entry.get("session_attestation_sha256")
+        if not requires_attestation and attestation_ref is None and attestation_hash is None:
+            continue
+        if (
+            not isinstance(attestation_ref, str)
+            or not attestation_ref.strip()
+            or not isinstance(attestation_hash, str)
+            or not re.fullmatch(r"[0-9a-f]{64}", attestation_hash)
+        ):
+            findings.append(finding(
+                "workflow-review-session-attestation-reference",
+                "review-integrity",
+                "В history review отсутствует ссылка на подтверждение отдельной reviewer-сессии",
+                f"reviews[{index}] должен хранить session_attestation и session_attestation_sha256.",
+                artifact,
+                remediation_owner="controller",
+            ))
+            continue
+        try:
+            attestation_path = package_relative_path(
+                package_root, attestation_ref, artifact=artifact
+            )
+        except PracticalV09Error as exc:
+            findings.append(finding(
+                "workflow-review-session-attestation-reference",
+                "review-integrity",
+                "History review содержит некорректную ссылку на подтверждение reviewer-сессии",
+                str(exc),
+                artifact,
+                remediation_owner="controller",
+            ))
+            continue
+        if not attestation_path.is_file() or sha256_file(attestation_path) != attestation_hash:
+            findings.append(finding(
+                "workflow-review-session-attestation-drift",
+                "artifact-tampering",
+                "Сохранённое подтверждение отдельной reviewer-сессии отсутствует или изменено",
+                f"reviews[{index}].session_attestation не совпадает с сохранённым SHA-256.",
+                artifact,
+                remediation_owner="controller",
+            ))
+            continue
+        attestation = read_json(attestation_path)
+        if (
+            attestation.get("review_manifest_sha256") != sha256_file(manifest_path)
+            or attestation.get("reviewer_thread_id") != read_json(result_path).get("reviewer_thread_id")
+            or read_json(result_path).get("review_session_attestation_sha256")
+            != attestation_hash
+        ):
+            findings.append(finding(
+                "workflow-review-session-attestation-binding",
+                "review-integrity",
+                "History review не подтверждает связь manifest, reviewer-сессии и raw результата",
+                f"reviews[{index}] должен связывать один immutable manifest, attestation и reviewer result.",
                 artifact,
                 remediation_owner="controller",
             ))
@@ -6149,10 +6273,15 @@ def build_review_manifest(
     code_branch: str,
     code_commit: str,
     contract_digest: str,
+    ft_package_path: str = ".",
+    require_session_attestation: bool = False,
 ) -> dict[str, Any]:
     state = load_workflow_state(workflow_state_path, package_root)
     if not is_durable_codex_thread_id(controller_thread_id):
         raise PracticalV09Error("controller_thread_id must be a durable Codex thread UUID")
+    normalized_package_path = Path(ft_package_path)
+    if normalized_package_path.is_absolute() or ".." in normalized_package_path.parts:
+        raise PracticalV09Error("ft_package_path must be a relative path inside the code repository")
     context, findings = validate_scope(package_root=package_root, workflow_state_path=workflow_state_path)
     blocking = [item for item in findings if item.blocking]
     if blocking:
@@ -6201,6 +6330,7 @@ def build_review_manifest(
         "review_mode": review_mode,
         "controller_thread_id": controller_thread_id,
         "execution_surface_required": "codex-thread",
+        "ft_package_path": normalized_package_path.as_posix(),
         "code_branch": code_branch,
         "code_commit": code_commit,
         "contract_digest": contract_digest,
@@ -6213,6 +6343,12 @@ def build_review_manifest(
             "Проверить тест-кейсы, если review_mode=test-cases.",
         ],
     }
+    if require_session_attestation:
+        manifest["review_session_attestation_required"] = {
+            "version": REVIEW_SESSION_ATTESTATION_VERSION,
+            "owner": "controller",
+            "execution_surface": "codex-thread",
+        }
     if review_mode == "matrix" and workflow_scenario_consolidation_enabled(state):
         manifest["scenario_consolidation_contract"] = {
             "version": SCENARIO_CONSOLIDATION_CONTRACT_VERSION,
@@ -6236,14 +6372,54 @@ def build_review_manifest(
             "scope_obligations_sha256": sha256_file(obligations_path),
             "active_obligation_count": len(active_ids),
             "active_obligation_ids_sha256": obligation_ids_sha256(active_ids),
+            "obligation_ids": sorted(active_ids),
         }
     return manifest
+
+
+def build_review_session_attestation(
+    *,
+    package_root: Path,
+    manifest_path: Path,
+    reviewer_thread_id: str,
+) -> dict[str, Any]:
+    """Build the controller-owned binding for an already created reviewer task.
+
+    The desktop task API is the source of the reviewer thread ID.  A local
+    validator cannot create or cryptographically attest that task itself, so
+    it fails closed unless the controller records the returned ID in this
+    immutable, manifest-bound artifact before reviewer finalization.
+    """
+    manifest = read_json(manifest_path)
+    required = manifest.get("review_session_attestation_required")
+    if not isinstance(required, Mapping) or required.get("version") != REVIEW_SESSION_ATTESTATION_VERSION:
+        raise PracticalV09Error("review manifest does not require a current controller session attestation")
+    controller_thread_id = str(manifest.get("controller_thread_id") or "")
+    if (
+        not is_durable_codex_thread_id(reviewer_thread_id)
+        or not is_durable_codex_thread_id(controller_thread_id)
+        or reviewer_thread_id == controller_thread_id
+    ):
+        raise PracticalV09Error("reviewer_thread_id must be a distinct durable Codex thread UUID")
+    return {
+        "schema_version": 1,
+        "attestation_version": REVIEW_SESSION_ATTESTATION_VERSION,
+        "recorded_by": "controller",
+        "execution_surface": "codex-thread",
+        "review_manifest": relative_to_package(package_root, manifest_path),
+        "review_manifest_sha256": sha256_file(manifest_path),
+        "controller_thread_id": controller_thread_id,
+        "reviewer_thread_id": reviewer_thread_id,
+        "code_commit": manifest.get("code_commit"),
+        "ft_package_path": manifest.get("ft_package_path"),
+    }
 
 
 def verify_review_result(
     *, package_root: Path,
     manifest_path: Path,
     result_path: Path,
+    review_session_attestation_path: Path | None = None,
 ) -> tuple[dict[str, Any], list[ScopeFinding]]:
     manifest = read_json(manifest_path)
     result = read_json(result_path)
@@ -6274,6 +6450,79 @@ def verify_review_result(
         or reviewer_thread_id == str(manifest.get("controller_thread_id") or "")
     ):
         findings.append(finding("review-result-thread-independence", "review-integrity", "Не доказана отдельность reviewer-сессии", "reviewer_thread_id должен быть durable Codex thread UUID и отличаться от controller_thread_id.", artifact, remediation_owner="controller"))
+    attestation_contract = manifest.get("review_session_attestation_required")
+    if attestation_contract is not None:
+        if (
+            not isinstance(attestation_contract, Mapping)
+            or attestation_contract.get("version") != REVIEW_SESSION_ATTESTATION_VERSION
+            or attestation_contract.get("owner") != "controller"
+            or attestation_contract.get("execution_surface") != "codex-thread"
+        ):
+            findings.append(finding(
+                "review-manifest-session-attestation-contract",
+                "review-integrity",
+                "Manifest review содержит неверный контракт подтверждения отдельной сессии",
+                f"Ожидается controller-owned {REVIEW_SESSION_ATTESTATION_VERSION} для codex-thread.",
+                artifact,
+                remediation_owner="controller",
+            ))
+        elif review_session_attestation_path is None:
+            findings.append(finding(
+                "review-result-session-attestation-missing",
+                "review-integrity",
+                "Не передано подтверждение controller-а о создании отдельной reviewer-сессии",
+                "Перед финализацией controller обязан записать attestation с фактическим reviewer_thread_id и передать его в verify/finalize.",
+                artifact,
+                remediation_owner="controller",
+            ))
+        else:
+            try:
+                attestation_path = package_relative_path(
+                    package_root,
+                    relative_to_package(package_root, review_session_attestation_path),
+                    artifact=artifact,
+                )
+                attestation = read_json(attestation_path)
+            except (PracticalV09Error, OSError, json.JSONDecodeError) as exc:
+                findings.append(finding(
+                    "review-result-session-attestation-unreadable",
+                    "review-integrity",
+                    "Подтверждение controller-а о reviewer-сессии недоступно",
+                    str(exc),
+                    artifact,
+                    remediation_owner="controller",
+                ))
+            else:
+                expected_attestation = {
+                    "schema_version": 1,
+                    "attestation_version": REVIEW_SESSION_ATTESTATION_VERSION,
+                    "recorded_by": "controller",
+                    "execution_surface": "codex-thread",
+                    "review_manifest": relative_to_package(package_root, manifest_path),
+                    "review_manifest_sha256": sha256_file(manifest_path),
+                    "controller_thread_id": manifest.get("controller_thread_id"),
+                    "reviewer_thread_id": reviewer_thread_id,
+                    "code_commit": manifest.get("code_commit"),
+                    "ft_package_path": manifest.get("ft_package_path"),
+                }
+                if any(attestation.get(key) != value for key, value in expected_attestation.items()):
+                    findings.append(finding(
+                        "review-result-session-attestation-mismatch",
+                        "review-integrity",
+                        "Подтверждение controller-а не связано с текущим review manifest и reviewer-сессией",
+                        "Attestation должен в точности связывать manifest hash, controller/reviewer thread ID, code commit и относительный путь FT-пакета.",
+                        artifact,
+                        remediation_owner="controller",
+                    ))
+                elif result.get("review_session_attestation_sha256") != sha256_file(attestation_path):
+                    findings.append(finding(
+                        "review-result-session-attestation-hash",
+                        "review-integrity",
+                        "Reviewer result не связан с controller-owned подтверждением сессии",
+                        "review_session_attestation_sha256 должен совпадать с SHA-256 attestation.",
+                        artifact,
+                        remediation_owner="reviewer",
+                    ))
     receipt_contract = manifest.get("reviewer_receipt_contract")
     compact_receipt_required = isinstance(receipt_contract, dict) and receipt_contract.get("format") == COMPACT_REVIEWER_RECEIPT_FORMAT
     if receipt_contract is not None and not compact_receipt_required:
@@ -6486,38 +6735,63 @@ def verify_review_result(
                 artifact,
                 remediation_owner="reviewer",
             ))
-        compact_receipt = result.get("independent_obligation_set")
-        if not isinstance(compact_receipt, dict):
+        compact_receipt = result.get("independent_obligation_vector")
+        if not isinstance(compact_receipt, list):
             findings.append(finding(
-                "review-result-compact-obligation-set",
+                "review-result-compact-obligation-vector",
                 "review-integrity",
-                "Для большого scope отсутствует компактное подтверждение набора обязательств",
-                "Reviewer должен вернуть independent_obligation_set из первого raw JSON submission.",
+                "Для большого scope отсутствует компактный вектор обязательств",
+                "Reviewer должен вернуть independent_obligation_vector из первого raw JSON submission.",
                 artifact,
                 remediation_owner="reviewer",
             ))
         else:
-            expected_values = {
-                "scope_obligations_sha256": receipt_contract.get("scope_obligations_sha256"),
-                "active_obligation_count": receipt_contract.get("active_obligation_count"),
-                "active_obligation_ids_sha256": receipt_contract.get("active_obligation_ids_sha256"),
-            }
-            actual_values = {key: compact_receipt.get(key) for key in expected_values}
-            if actual_values != expected_values:
+            received_ids: set[str] = set()
+            vector_invalid = False
+            vector_verdicts: list[str] = []
+            for index, entry in enumerate(compact_receipt, start=1):
+                if not isinstance(entry, dict):
+                    vector_invalid = True
+                    continue
+                obligation_id = entry.get("obligation_id")
+                verdict = entry.get("verdict")
+                if (
+                    not isinstance(obligation_id, str)
+                    or not obligation_id.startswith("OBL-")
+                    or obligation_id in received_ids
+                    or verdict not in {"covered", "gap", "blocked"}
+                    or not str(entry.get("source_anchor") or "").strip()
+                    or not str(entry.get("statement") or "").strip()
+                ):
+                    vector_invalid = True
+                    continue
+                received_ids.add(obligation_id)
+                vector_verdicts.append(str(verdict))
+            if vector_invalid or received_ids != set(receipt_contract.get("obligation_ids", [])):
                 findings.append(finding(
-                    "review-result-compact-obligation-set-digest",
+                    "review-result-compact-obligation-vector-coverage",
                     "review-integrity",
-                    "Компактное подтверждение reviewer-а не связано с immutable набором обязательств",
-                    "scope_obligations_sha256, active_obligation_count и active_obligation_ids_sha256 должны в точности совпадать с reviewer_receipt_contract manifest.",
+                    "Компактный вектор reviewer-а неполон или имеет неверный формат",
+                    "Каждый активный OBL-* из immutable manifest должен иметь один verdict, source_anchor и statement.",
                     artifact,
                     remediation_owner="reviewer",
                 ))
-            if not str(compact_receipt.get("source_anchor") or "").strip() or not str(compact_receipt.get("statement") or "").strip():
+            compact_digest = result.get("independent_obligation_vector_digest")
+            if compact_digest != receipt_contract.get("active_obligation_ids_sha256"):
                 findings.append(finding(
-                    "review-result-compact-obligation-set-content",
+                    "review-result-compact-obligation-vector-digest",
                     "review-integrity",
-                    "Компактное подтверждение reviewer-а не содержит самостоятельной source-привязки или вывода",
-                    "independent_obligation_set требует непустые source_anchor и statement, сформулированные reviewer-ом после чтения snapshot.",
+                    "Компактный вектор reviewer-а не связан с immutable набором обязательств",
+                    "independent_obligation_vector_digest должен совпадать с active_obligation_ids_sha256 из reviewer_receipt_contract.",
+                    artifact,
+                    remediation_owner="reviewer",
+                ))
+            if result.get("verdict") == "approved" and any(item != "covered" for item in vector_verdicts):
+                findings.append(finding(
+                    "review-result-compact-obligation-vector-approved-with-gaps",
+                    "review-integrity",
+                    "Reviewer одобрил scope с незакрытым обязательством",
+                    "При verdict=approved каждый OBL-* в independent_obligation_vector должен иметь verdict=covered.",
                     artifact,
                     remediation_owner="reviewer",
                 ))

@@ -46,7 +46,7 @@ fts/<ft-slug>/work/stage-handoffs/00-<container-slug>/source-selection.md
 - Если `selection_status` не `selected`, workflow остаётся заблокированным и не маршрутизируется к `ft-scope-analyzer`, writer, iteration или reviewer.
 - `Машиночитаемый источник XHTML` содержит `XHTML доступен: yes | no`.
 - При отсутствии matching main FT XHTML source selection устанавливает `Статус выбора: blocked-input`, `XHTML доступен: no` и не маршрутизируется к downstream skill.
-- Для practical route v0.8 видимые заголовки, столбцы и пояснения source-selection артефакта должны быть на русском; технические идентификаторы и значения перечислений могут оставаться без перевода.
+- Для ordinary practical route v0.9 видимые заголовки, столбцы и пояснения source-selection артефакта должны быть на русском; технические идентификаторы и значения перечислений могут оставаться без перевода.
 
 ## Required Sections
 

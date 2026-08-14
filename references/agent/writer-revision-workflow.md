@@ -26,7 +26,7 @@ Do not add new source documents or expand scope during revision unless a separat
 7. Update the canonical test-case file and any required traceability matrix.
 8. Create an `.xlsx` duplicate only when the selected route requires it
    (explicit session-based/promotion route) or the user explicitly requests XLSX
-   export. Do not create XLSX by default in `practical_v0_8`.
+   export. The practical v0.9 default does not create XLSX by itself.
 9. Update workflow state, session log, decision log and reviewer prompt.
 
 ## Rules

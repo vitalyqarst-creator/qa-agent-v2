@@ -8,14 +8,17 @@
   "scope_slug": "9.1-menu-upravleniya-partnerami",
   "phase": "scope",
   "next_action": "Создать матрицу тест-дизайна",
-  "matrix_review_required": false,
+  "matrix_review_required": true,
   "contract_versions": {
     "route": "practical-v0.9",
-    "source_package": "source-package-v3",
-    "matrix": "practical-matrix-v2",
-    "scenario_consolidation": "scenario-consolidation-v1",
+    "source_package": "source-package-v4",
+    "matrix": "practical-matrix-v3",
+    "scenario_consolidation": "scenario-consolidation-v2",
     "controller_triage": "controller-triage-v1",
-    "clarification_outcome": "clarification-outcome-v1"
+    "clarification_outcome": "clarification-outcome-v1",
+    "execution_context": "execution-context-v1",
+    "source_parity": "source-parity-v1",
+    "exception_snapshot": "exception-snapshot-v1"
   },
   "artifacts": {
     "source_package_manifest": "work/practical-v0.9/source-package-manifest.json",
@@ -26,7 +29,8 @@
     "validator_report": "not-created"
   },
   "reviews": [],
-  "revision_count": 0,
+  "matrix_revision_count": 0,
+  "tc_revision_count": 0,
   "final_verdict": "not-finalized",
   "decision_notes": [],
   "scenario_consolidation": [],
@@ -35,9 +39,9 @@
 ```
 
 `reviews` хранит только режим, вердикт и пути завершённых независимых review;
-findings reviewer-а в него не дублируются. Если правило сложности требует review
-матрицы, scope не может перейти в `test-cases`, пока не появится запись `matrix`
-с вердиктом `approved`. Scope не может перейти в `accepted`, пока не появится
+findings reviewer-а в него не дублируются. Matrix review обязателен для каждого
+нового scope: scope не может перейти в `test-cases`, пока не появится запись
+`matrix` с вердиктом `approved`. Scope не может перейти в `accepted`, пока не появится
 запись `test-cases` с вердиктом `approved`.
 
 `matrix_revision_count` и `tc_revision_count` — числа уже разрешённых
@@ -64,3 +68,7 @@ repair-loop: scope получает честный `blocked` до решения
 отметка об отсутствии вопросов БА. Файл входит в snapshot независимого review.
 
 `phase`: `scope`, `matrix`, `test-cases`, `review`, `accepted` или `blocked`.
+
+Новый scope создаётся только командой `init_practical_v09_workflow.py`; не
+копируй пример выше вручную. Регрессионный contract-sync test проверяет, что
+результат команды содержит актуальные версии contracts.

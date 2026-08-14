@@ -47,7 +47,8 @@ class TaskStartSkillRoutingTests(unittest.TestCase):
     def test_user_facing_preflight_hides_internal_route_versions(self) -> None:
         content = ROUTING_PATH.read_text(encoding="utf-8")
         self.assertIn("Do not put internal route/profile", content)
-        self.assertIn("`practical v0.8`", content)
+        self.assertIn("internal route/profile", content)
+        self.assertIn("names or versions", content)
 
     def test_route_ids_are_unique(self) -> None:
         route_ids = [route["id"] for route in self.routes]
@@ -91,79 +92,29 @@ class TaskStartSkillRoutingTests(unittest.TestCase):
 
     def test_representative_route_expectations(self) -> None:
         self.assertEqual(
-            [
-                "ft-source-locator",
-                "ft-scope-analyzer",
-                "ft-test-case-writer",
-                "ft-test-case-reviewer",
-                "ft-test-case-writer",
-                "ft-test-case-reviewer",
-                "ft-test-case-writer",
-                "ft-test-case-reviewer",
-            ],
-            self.route_by_id["test_cases.practical_v0_8"]["skill_chain"],
+            ["ft-practical-route"],
+            self.route_by_id["test_cases.practical_v0_9"]["skill_chain"],
         )
         self.assertEqual(
-            [
-                "source_locator.discovery",
-                "scope.practical_v0_8",
-                "writer.practical_v0_8",
-                "reviewer.practical_v0_8",
-                "writer.practical_v0_8",
-                "reviewer.practical_v0_8",
-                "writer.practical_v0_8",
-                "reviewer.practical_v0_8",
-            ],
+            ["practical.v0_9"],
             [
                 item["scenario"]
-                for item in self.route_by_id["test_cases.practical_v0_8"][
+                for item in self.route_by_id["test_cases.practical_v0_9"][
                     "instruction_scenarios"
                 ]
             ],
         )
         self.assertIn(
-            "no benchmark/sharding/bridge/immutable attempt artifacts are created",
-            self.route_by_id["test_cases.practical_v0_8"]["verification_gates"],
+            "matrix review has immutable manifest, controller-owned separate-session attestation and result from a distinct top-level Codex session",
+            self.route_by_id["test_cases.practical_v0_9"]["verification_gates"],
         )
         self.assertIn(
-            "review-independence.md exists and proves separate reviewer Codex task/thread sessions for matrix and TC review before independent sign-off; sub-agents do not count",
-            self.route_by_id["test_cases.practical_v0_8"]["verification_gates"],
+            "final TC review has the same independent-review evidence",
+            self.route_by_id["test_cases.practical_v0_9"]["verification_gates"],
         )
         self.assertIn(
-            "practical-stage-summary.md exists after matrix review and lists accepted scopes, blocked/round-cap scopes, reasons, TC-with-status decision, next safe step, code_root, execution_working_directory equal to code_root, ft_package_root, artifact_write_root, root_split_allowed, validator-error classification, validator-warning classification, production_tc_clean, git_persistence, fresh validator counts/evidence, per-scope transitions for package-level writer/tc-review conditional, source_contradiction yes/no for round-cap scopes, source restore provenance/SHA-256 when package files were restored, and next_stage_transition",
-            self.route_by_id["test_cases.practical_v0_8"]["verification_gates"],
-        )
-        self.assertIn(
-            "practical-stage-summary.md is linked from affected workflow-state.yaml or package state/index inside the actual FT package root",
-            self.route_by_id["test_cases.practical_v0_8"]["verification_gates"],
-        )
-        self.assertIn(
-            "TC review is blocked until production TC files contain no embedded split-design sections such as Coverage Gaps, Source Row Inventory, Package Test Design Plan, Writer Self-Check or Writer Quality Gate",
-            self.route_by_id["test_cases.practical_v0_8"]["verification_gates"],
-        )
-        self.assertIn(
-            "TC reviewer re-derived coverage from FT/PDF/XHTML/support instead of trusting the matrix",
-            self.route_by_id["test_cases.practical_v0_8"]["verification_gates"],
-        )
-        self.assertIn(
-            "test-design-matrix.md exists with Russian headers and source-triggered classes from coverage-class-catalog.md",
-            self.route_by_id["test_cases.practical_v0_8"]["verification_gates"],
-        )
-        self.assertIn(
-            "a tc-changes-required verdict permits exactly one bounded writer revision followed by one final independent TC review in a separate full-scope session; no third TC review or automatic extra repair",
-            self.route_by_id["test_cases.practical_v0_8"]["verification_gates"],
-        )
-        self.assertIn(
-            "final TC review treats Review Focus as priority only, re-derives full-scope coverage and verifies that ready TC have no pending confirmation, fixture, test-data, access or observability dependency",
-            self.route_by_id["test_cases.practical_v0_8"]["verification_gates"],
-        )
-        self.assertIn(
-            "no current canonical test-case file is created or updated before matrix-accepted",
-            self.route_by_id["test_cases.practical_v0_8"]["verification_gates"],
-        )
-        self.assertIn(
-            "test-design-matrix-review.md exists with matrix-accepted from a separate reviewer session or round-cap practical-policy evidence",
-            self.route_by_id["test_cases.practical_v0_8"]["verification_gates"],
+            "one targeted writer revision per phase at most; controller/validator findings do not consume it",
+            self.route_by_id["test_cases.practical_v0_9"]["verification_gates"],
         )
         self.assertEqual(
             ["ft-source-locator", "ft-scope-analyzer", "ft-test-case-iteration"],

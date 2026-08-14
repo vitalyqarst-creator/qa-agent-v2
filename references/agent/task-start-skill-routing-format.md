@@ -17,7 +17,7 @@ Before substantive work, state:
 
 Keep instruction-loading scenarios and verification gates in the internal routing
 decision, handoff and validation artifacts. Do not put internal route/profile
-names or versions (for example, `practical v0.8`), instruction scenario IDs,
+names or versions, instruction scenario IDs,
 schema names or individual gate names into the user-facing preflight line unless
 the user explicitly asks for them.
 
@@ -77,28 +77,12 @@ The JSON block is canonical. Tests and architecture audit parse it directly.
     },
     {
       "id": "test_cases.practical_v0_9",
-      "task_type": "Default compact macro-stage route for ordinary FT test-case writing: source package manifest, normalized source obligations, Russian matrix, conditional separate-session matrix review, canonical test cases and final separate-session TC review. It reaches an accepted baseline or an honest external blocker without legacy self-check and receipt artefacts.",
+      "task_type": "Default compact macro-stage route for ordinary FT test-case writing: source package manifest, normalized source obligations, Russian matrix, mandatory separate-session matrix review, canonical test cases and final separate-session TC review. It reaches an accepted baseline or an honest external blocker without legacy self-check and receipt artefacts.",
       "skill_chain": ["ft-practical-route"],
       "instruction_scenarios": [
         {"skill": "ft-practical-route", "scenario": "practical.v0_9"}
       ],
-      "verification_gates": ["source-package-manifest.json binds DOCX/XHTML/PDF and existing AGENT-NOTES.md", "scope-obligations.json contains one source-backed OBL per independent assertion", "test-design-matrix.md has Russian compact headers and one OBL per row", "one-pass validator-report.json is clean for its declared dependency closure", "matrix review is dispatched only when deterministic complexity requires it", "final TC review has an immutable manifest and result from a distinct top-level Codex session", "one targeted writer revision at most; controller/validator findings do not consume it", "no benchmark/sharding/bridge/legacy self-check artefacts are created"]
-    },
-    {
-      "id": "test_cases.practical_v0_8",
-      "task_type": "Legacy continuation route for an existing practical v0.8 run: compact scope brief, Russian user-facing test-design matrix with explicit coverage classes from the coverage class catalog, one separate-session matrix review, canonical test cases only after matrix-accepted, one separate-session TC review, one bounded revision only if needed, and one final independent TC review in a separate full-scope session before accepted baseline or an honest external blocker.",
-      "skill_chain": ["ft-source-locator", "ft-scope-analyzer", "ft-test-case-writer", "ft-test-case-reviewer", "ft-test-case-writer", "ft-test-case-reviewer", "ft-test-case-writer", "ft-test-case-reviewer"],
-      "instruction_scenarios": [
-        {"skill": "ft-source-locator", "scenario": "source_locator.discovery"},
-        {"skill": "ft-scope-analyzer", "scenario": "scope.practical_v0_8"},
-        {"skill": "ft-test-case-writer", "scenario": "writer.practical_v0_8"},
-        {"skill": "ft-test-case-reviewer", "scenario": "reviewer.practical_v0_8"},
-        {"skill": "ft-test-case-writer", "scenario": "writer.practical_v0_8"},
-        {"skill": "ft-test-case-reviewer", "scenario": "reviewer.practical_v0_8"},
-        {"skill": "ft-test-case-writer", "scenario": "writer.practical_v0_8"},
-        {"skill": "ft-test-case-reviewer", "scenario": "reviewer.practical_v0_8"}
-      ],
-      "verification_gates": ["scope-brief.md exists", "test-design-matrix.md exists with Russian headers and source-triggered classes from coverage-class-catalog.md", "no current canonical test-case file is created or updated before matrix-accepted", "test-design-matrix-review.md exists with matrix-accepted from a separate reviewer session or round-cap practical-policy evidence", "practical-stage-summary.md exists after matrix review and lists accepted scopes, blocked/round-cap scopes, reasons, TC-with-status decision, next safe step, code_root, execution_working_directory equal to code_root, ft_package_root, artifact_write_root, root_split_allowed, validator-error classification, validator-warning classification, production_tc_clean, git_persistence, fresh validator counts/evidence, per-scope transitions for package-level writer/tc-review conditional, source_contradiction yes/no for round-cap scopes, source restore provenance/SHA-256 when package files were restored, and next_stage_transition", "practical-stage-summary.md is linked from affected workflow-state.yaml or package state/index inside the actual FT package root", "matrix-changes-required has at most one matrix-repair-summary.md and one matrix re-review before TC writing", "round-cap-reached blocks only source_contradiction yes/unrepresentable obligations; missing data/UI reaction/observability becomes explicit TC status", "canonical test-case file exists only after accepted matrix review or applicable practical round-cap policy", "TC review is blocked until production TC files contain no embedded split-design sections such as Coverage Gaps, Source Row Inventory, Package Test Design Plan, Writer Self-Check or Writer Quality Gate", "TC reviewer re-derived coverage from FT/PDF/XHTML/support instead of trusting the matrix", "review-findings.md exists or reviewer accepted without findings", "review-independence.md exists and proves separate reviewer Codex task/thread sessions for matrix and TC review before independent sign-off; sub-agents do not count", "a tc-changes-required verdict permits exactly one bounded writer revision followed by one final independent TC review in a separate full-scope session; no third TC review or automatic extra repair", "final TC review treats Review Focus as priority only, re-derives full-scope coverage and verifies that ready TC have no pending confirmation, fixture, test-data, access or observability dependency", "macro-stage continues across internal matrix/review/writer handoffs without user confirmation when no external input is required", "no benchmark/sharding/bridge/immutable attempt artifacts are created"]
+      "verification_gates": ["source-package-manifest.json binds DOCX/XHTML/PDF and existing AGENT-NOTES.md", "scope-obligations.json contains one source-backed OBL per independent assertion", "test-design-matrix.md has Russian compact headers and one OBL per row", "one-pass validator-report.json is clean for its declared dependency closure", "matrix review has immutable manifest, controller-owned separate-session attestation and result from a distinct top-level Codex session", "final TC review has the same independent-review evidence", "one targeted writer revision per phase at most; controller/validator findings do not consume it", "no benchmark/sharding/bridge/legacy self-check artefacts are created"]
     },
     {
       "id": "production.bounded_full_loop",

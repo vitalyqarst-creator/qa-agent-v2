@@ -2,8 +2,8 @@
 
 Этот reference применяется только для direct `full` / `traceability` /
 `structure` / `test-design` review и explicit session-based promotion routes.
-Practical route v0.8 использует свой компактный контракт в reviewer skill и
-`practical-test-case-route-v0.8.md`.
+Обычный practical route использует отдельный компактный контракт v0.9 в
+reviewer skill и `practical-test-case-route-v0.9.md`.
 
 ## Режимы и границы
 
@@ -12,8 +12,8 @@ Practical route v0.8 использует свой компактный конт
 - `source_assertion_review` работает по
   `reviewer-specialized-review-contracts.md`; это explicit production route.
 - `structure_preflight`, `semantic_traceability_test_design`,
-  `structure_format_final` и `semantic_regression` используются только в
-  явном qualification/development route, а не в practical v0.8.
+`structure_format_final` и `semantic_regression` используются только в
+явном qualification/development route, а не в обычном practical route.
 
 ## Входы и выходы
 
