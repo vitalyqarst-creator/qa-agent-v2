@@ -18,7 +18,6 @@ fts/Partners/Partners-v1
 
 - `support/PAB_справочники_выгрузка_v2.md` — статический справочник проекта;
 - `support/partners-v1-table-column-legend.md` — расшифровка колонок ФТ;
-- `support/partners-v1-approved-ba-decisions.md` — утверждённые решения БА;
 - `support/spravochnik_gorodov_only_names.md` — переданный пользователем
   перечень городов для выбора конкретных тестовых значений;
 - `support/figma/figma-design-index.md` — ссылка на необязательный визуальный источник;
