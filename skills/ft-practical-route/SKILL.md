@@ -17,7 +17,14 @@ description: Основной компактный маршрут для вып�
 Для create/save, duplicate rule или provider-backed selection дополнительно
 прочитай [формат fixture catalog](../../references/agent/fixture-catalog-format.md).
 
-## Результат
+## Входы
+
+- подтверждённый FT-пакет и выбранный scope;
+- DOCX и matching XHTML основного ФТ, доступный PDF, support и visual inputs;
+- package-specific `AGENT-NOTES.md`, если он есть;
+- утверждённые решения БА, если они уже помещены в пакет.
+
+## Выходы
 
 В scope остаются только source manifest, `scope-obligations.json`, всегда
 создаваемый `scope-clarification-requests.md`, `workflow-state.json`, matrix,
@@ -42,7 +49,7 @@ canonical TC, scoped validator report и immutable артефакты review. В
    fresh re-review. Повторный `changes-required` блокирует scope; не запускай
    новый repair-loop без явного решения пользователя.
 
-## Границы
+## Ограничения
 
 - Не создавай benchmark, sharding, semantic bridge, source assertion review,
   self-check, WQG, stage summary, dispatch receipt или дубли coverage state.

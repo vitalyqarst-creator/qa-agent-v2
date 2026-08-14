@@ -105,6 +105,8 @@ Reviewer:
 - считает отсутствие PDF-only `req_id` blocking traceability defect;
 - не подписывает набор, если parity artifact показывает `blocked-mismatch`.
 
-Iteration:
+Practical route v0.9:
 
-- не считает loop готовым к `signed-off`, если обязательный parity artifact отсутствует или reviewer не проверил source parity.
+- не допускает matrix review и final TC review как `approved`, если для scope
+  обязателен parity artifact, но он отсутствует или содержит
+  `blocked-mismatch`.

@@ -15,6 +15,17 @@ Codex-сессии, назначенной controller-ом. Subagent или та
 v0.9 scope, [practical route](../../references/agent/practical-test-case-route-v0.9.md)
 с [форматом result](../../references/agent/practical-v0.9-review-result-format.md).
 
+## Входы
+
+- immutable review manifest и его snapshot;
+- DOCX/XHTML/PDF, релевантные support, решения БА и visual inputs;
+- matrix или canonical TC в зависимости от режима review.
+
+## Выходы
+
+- один raw JSON reviewer result с вердиктом и source-backed findings;
+- compact per-OBL receipt, когда его требует manifest.
+
 ## Режимы
 
 - `full`: трассировка, структура и test design;
@@ -45,3 +56,9 @@ source/artifact anchors. Не объявляй source-not-supported ложным
 переводи его в approval: это спор или blocker для controller-а. Matrix и TC
 имеют раздельные бюджеты одной доработки и одного re-review; третьего
 автоматического цикла нет.
+
+## Ограничения
+
+Не изменяй matrix, canonical TC, workflow state или raw findings других
+участников. Не заменяй independent review subagent-ом, той же writer-сессией
+или самоаттестацией.

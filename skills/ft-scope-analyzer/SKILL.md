@@ -15,7 +15,13 @@ matrix и TC здесь не создаются.
 [source parity](../../references/agent/source-parity-check-format.md) и для
 practical v0.9 [канонический маршрут](../../references/agent/practical-test-case-route-v0.9.md).
 
-## Результат practical v0.9
+## Входы
+
+- выбранный FT-пакет с DOCX/XHTML и доступным PDF;
+- подтверждённый внешний scope или запрос на его выбор;
+- package-specific notes, support и visual inputs в пределах FT-пакета.
+
+## Выходы
 
 - `scope-obligations.json` с независимыми source-backed `OBL-*`, `CTX-*` с
   `flow_kind` и нужными `SETUP-*`;

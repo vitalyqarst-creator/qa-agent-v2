@@ -1,16 +1,16 @@
 # UI Automation Prep Format
 
-Канонический формат UI-проверки и automation-ready версии хранится в Markdown и используется для handoff после `ft-test-case-iteration`.
+Канонический формат UI-проверки и automation-ready версии хранится в Markdown и используется после выпуска accepted practical v0.9 baseline.
 
 Все человекочитаемые поля `ui-validation-report.md`, `ui-evidence-index.md` и automation-ready версии должны быть заполнены на русском языке. Служебные имена полей, статусы и другие канонические enum-значения сохраняются в виде, заданном этим форматом.
 
 ## Общие правила
 
-- UI-проверка запускается только на наборе со статусом `signed-off`.
-- Базовый signed-off набор остается FT-first и не перезаписывается.
+- UI-проверка запускается только на accepted practical v0.9 baseline с approved final TC review.
+- Базовый FT-first набор остается неизменным и не перезаписывается.
 - Если UI расходится с ФТ, это фиксируется как расхождение `FT vs UI`, а не как новый source of truth.
-- UI-проверка не заменяет session-based review-cycle и не генерирует Playwright test specs.
-- Automation-ready версия предназначена для practically executable handoff в автоматизацию: по итогам UI-прохождения она может уточнять фактически необходимые предусловия, тестовые данные, шаги и наблюдаемый результат, если это не ломает signed-off intent и не подменяет FT смыслом UI.
+- UI-проверка не заменяет independent final TC review и не генерирует Playwright test specs.
+- Automation-ready версия предназначена для practically executable handoff в автоматизацию: по итогам UI-прохождения она может уточнять фактически необходимые предусловия, тестовые данные, шаги и наблюдаемый результат, если это не ломает approved FT-first intent и не подменяет FT смыслом UI.
 - Если после прогона пользователь дает комментарий, уточняющий воспроизведение или ожидаемое поведение, этот комментарий используется как вход для повторной UI-проверки, а не как самостоятельное evidence для смены статуса или актуализации кейса.
 - Подробный lifecycle `baseline -> initial automation-ready -> UI rerun -> updated automation-ready` хранится в [automation-ready-lifecycle.md](./automation-ready-lifecycle.md).
 - Evidence trust levels, DOM-seeded ограничения, local `output/` portability и trace policy определяются в [../agent/ui-evidence-policy.md](../agent/ui-evidence-policy.md).
@@ -114,7 +114,7 @@ Automation-ready версия хранится в `fts/<ft-slug>/test-cases/auto
 - шаги;
 - итоговый ожидаемый результат.
 
-Такая актуализация нужна для того, чтобы кейс стал воспроизводимым и пригодным для дальнейшей автоматизации. Она допустима только в пределах already signed-off intent. Если уточнение меняет бизнес-ожидание относительно ФТ, это оформляется не как тихая правка кейса, а как явное расхождение `FT/UI Divergence`.
+Такая актуализация нужна для того, чтобы кейс стал воспроизводимым и пригодным для дальнейшей автоматизации. Она допустима только в пределах принятого FT-first intent practical v0.9. Если уточнение меняет бизнес-ожидание относительно ФТ, это оформляется не как тихая правка кейса, а как явное расхождение `FT/UI Divergence`.
 
 Если основанием для уточнения служит комментарий пользователя после прогона, перед изменением `ui_verification_status`, evidence или automation-ready кейса нужно перепроверить этот кейс в UI с учетом комментария и только после этого вносить актуализацию.
 

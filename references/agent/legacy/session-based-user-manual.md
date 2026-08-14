@@ -4,7 +4,7 @@
 
 Этот документ описывает, как пользоваться FT Test Case Agent для работы с функциональными требованиями, макетами, тест-кейсами, session-based review-cycle и подготовкой automation-ready версии. Финальные пользовательские версии руководства выпускаются в DOCX и PDF. Markdown-файл нужен как редактируемый источник.
 
-Важно для текущей рабочей версии: для обычной задачи “написать тест-кейсы” default route — `practical_v0_8` из `references/agent/practical-test-case-route-v0.8.md`. Session-based review-cycle, mandatory XLSX companion, `ft-test-case-iteration`, semantic bridge, benchmark, sharding и source-qualified routes применяются только по явному запросу или в development/qualification workflow. Если этот manual ниже описывает session-based artifacts как обязательные, это относится к explicit session-based route, а не к practical default.
+Исторический контекст: этот manual относится к снятому с эксплуатации маршруту `practical_v0_8`, архивный контракт которого находится в `practical-test-case-route-v0.8.md`. Он не задаёт default route и не должен использоваться в новых прогонах.
 
 Руководство является навигационным документом. Если оно расходится с каноническими контрактами, приоритет имеют:
 

@@ -50,7 +50,6 @@
 - `ft-source-locator` - найти нужный FT-пакет, основное ФТ, support-файлы и макеты.
 - `ft-practical-route` - default macro-route v0.9: исходники → обязательства → матрица → independent matrix review → TC → final independent review.
 - `ft-scope-analyzer` - выделить релевантные внешние scope-ы по разделам/подразделам ФТ, подтвердить границы выбранного scope и зафиксировать `coverage gaps`.
-- `ft-test-case-iteration` - только по явному запросу выполнить source-qualified immutable / observation / incremental route. Не используй этот skill как default для обычного написания тест-кейсов.
 - `ft-test-case-writer` - писать новые тест-кейсы по уже выбранному фрагменту требований.
 - `ft-test-case-reviewer` - review существующих кейсов и поиск пробелов покрытия. По умолчанию работает как umbrella-reviewer в режиме `full`, но допускает узкие режимы `traceability`, `structure`, `test-design`.
 - `ft-ui-automation-prep` - после выпуска baseline test cases пройти готовые кейсы в реальном UI, собрать Playwright evidence, использовать package-level UI notes и выпустить отдельную automation-ready версию без перезаписи FT-first baseline. Без package-local `UI-AGENT-NOTES.md` с runtime/access входами skill должен остановиться как `blocked-input`, не создавая пустой `automation-ready` файл.

@@ -46,7 +46,7 @@
 
 ## XLSX-дубль
 
-- Для `practical_v0_8` не создавай `.xlsx` по умолчанию: Markdown matrix является достаточным review artifact.
+- Для practical v0.9 не создавай `.xlsx` по умолчанию: Markdown matrix является достаточным review artifact.
 - Для explicit session-based/promotion routes или явного пользовательского XLSX-export рядом с Markdown artifact `round-N-traceability-matrix.md` создавай файл `round-N-traceability-matrix.xlsx`.
 - `.xlsx` должен содержать те же обязательные колонки и те же строки, что и Markdown matrix; не добавляй в `.xlsx` скрытых требований или дополнительных интерпретаций.
 - Рекомендуемый лист для основной таблицы: `traceability`.

@@ -1,23 +1,22 @@
 ---
 name: ft-ui-automation-prep
-description: Проводит post-iteration UI-проверку уже signed-off набора через Playwright CLI, собирает evidence, фиксирует расхождения FT vs UI и выпускает отдельную automation-ready версию тест-кейсов с актуализированными предусловиями, шагами и ожидаемыми результатами там, где это нужно для воспроизводимого прохождения и дальнейшей автоматизации.
+description: Проводит UI-проверку accepted FT-first baseline через Playwright CLI, собирает evidence, фиксирует расхождения FT vs UI и выпускает отдельную automation-ready версию тест-кейсов с актуализированными предусловиями, шагами и ожидаемыми результатами там, где это нужно для воспроизводимого прохождения и дальнейшей автоматизации.
 ---
 
 # FT UI Automation Prep
 
-Используй этот skill только после `ft-test-case-iteration`, когда набор уже получил статус `signed-off`.
+Используй этот skill после accepted baseline practical v0.9: final TC review
+подтверждён в отдельной сессии, а scope имеет фазу `accepted`.
 
-Skill не пересматривает scope, не заменяет session-based review-cycle и не делает UI новым source of truth. Его задача — проверить готовые ручные кейсы в реальном интерфейсе, собрать evidence и подготовить отдельную automation-ready версию под дальнейшее написание автотестов. Эта версия должна быть не просто копией baseline со статусами, а practically executable handoff: по итогам UI-прохождения она уточняет реальные предусловия, тестовые данные, шаги и ожидаемые результаты там, где это требуется для воспроизводимого прохождения.
+Skill не пересматривает scope, не заменяет independent review practical v0.9 и не делает UI новым source of truth. Его задача — проверить готовые ручные кейсы в реальном интерфейсе, собрать evidence и подготовить отдельную automation-ready версию под дальнейшее написание автотестов. Эта версия должна быть не просто копией baseline со статусами, а practically executable handoff: по итогам UI-прохождения она уточняет реальные предусловия, тестовые данные, шаги и ожидаемые результаты там, где это требуется для воспроизводимого прохождения.
 
 ## Входы
 
 - путь к FT-пакету `fts/<ft-slug>/...`;
 - package-specific `AGENT-NOTES.md`, если он есть;
 - package-level UI notes `fts/<ft-slug>/work/ui-automation-prep/UI-AGENT-NOTES.md` с runtime URL/entrypoint, способом авторизации и тестовой учетной записью или storage-state;
-- signed-off набор тест-кейсов;
-- `cycle-state.yaml` со статусом `signed-off`;
-- `prompt.reviewer-to-ui-prep.md` из фактической stage-handoff папки; для новых handoff-папок это `fts/<ft-slug>/work/stage-handoffs/NN-<scope-slug>/`;
-- `workflow-state.yaml` со значениями `stage_status: ready-for-next-stage` и `next_skill: ft-ui-automation-prep`;
+- accepted FT-first baseline тест-кейсов;
+- `workflow-state.json` v0.9 с approved final TC review;
 - подтвержденный `scope-slug`;
 - runtime URL или route entrypoint приложения;
 - доступ к приложению: учетные данные, тестовая сессия или другой согласованный способ входа;
@@ -33,12 +32,12 @@ Skill не пересматривает scope, не заменяет session-bas
 - `ui-validation-report.md` в `fts/<ft-slug>/work/ui-automation-prep/<scope-slug>/`;
 - `ui-evidence-index.md` в `fts/<ft-slug>/work/ui-automation-prep/<scope-slug>/`;
 - Playwright artifacts в `fts/<ft-slug>/work/ui-automation-prep/<scope-slug>/evidence/`;
-- отдельная automation-ready версия тест-кейсов в `fts/<ft-slug>/test-cases/automation-ready/<section-id>-<scope-slug>.md`, уточненная по фактически наблюдаемому UI в пределах signed-off intent;
+- отдельная automation-ready версия тест-кейсов в `fts/<ft-slug>/test-cases/automation-ready/<section-id>-<scope-slug>.md`, уточненная по фактически наблюдаемому UI в пределах approved FT-first intent;
 - список blockers и limitations, если UI недоступен или шаги не наблюдаемы.
 
 ## Workflow
 
-1. Подтверди, что входной набор уже имеет статус `signed-off`. Если статус `round-cap-reached` или другой unresolved, зафиксируй blocked input и не выпускай automation-ready версию.
+1. Подтверди, что входной набор является accepted practical v0.9 baseline: scope находится в фазе `accepted`, а final TC review имеет verdict `approved`. При unresolved blocker не выпускай automation-ready версию.
 2. Выполни UI access preflight до создания любых UI-prep output artifacts:
    - проверь наличие `work/ui-automation-prep/UI-AGENT-NOTES.md`;
    - проверь, что в notes или prompt есть runtime URL/entrypoint приложения;
@@ -105,9 +104,9 @@ Skill не пересматривает scope, не заменяет session-bas
 
 ## Ограничения
 
-- Не используй этот skill до завершения `ft-test-case-iteration` со статусом `signed-off`.
+- Не используй этот skill до выпуска accepted practical v0.9 baseline.
 - Не выбирай FT-пакет и не определяй scope с нуля.
-- Не перезаписывай baseline signed-off набор тест-кейсов.
+- Не перезаписывай FT-first baseline набор тест-кейсов.
 - Не считай UI канонической заменой текста ФТ.
 - Не генерируй Playwright test specs вместо подготовки automation-ready тест-кейсов.
 - Не подменяй молча FT-смысл: можно уточнять executable flow и условия прохождения в UI, но нельзя менять бизнес-ожидание без явной пометки `FT/UI Divergence`.

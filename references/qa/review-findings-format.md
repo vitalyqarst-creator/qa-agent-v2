@@ -28,7 +28,7 @@ machine keys остаются в каноническом виде.
 
 ## Practical Final Review Scope Attestation
 
-For the final independent TC review after a bounded `practical_v0_8` revision,
+For the final independent TC review after a bounded practical v0.9 revision,
 the reviewer must add this section to the review receipt or findings artifact:
 
 ```md

@@ -200,18 +200,15 @@ Resolver должен читать JSON-блок ниже как канонич�
       ]
     },
     "source_locator_core": {
-      "rationale": "Instruction context for locating an FT package and source files.",
+      "rationale": "Instruction context for locating an FT package and creating its practical v0.9 source manifest.",
       "paths": [
         "skills/ft-source-locator/SKILL.md",
-        "references/agent/source-selection-format.md",
-        "references/agent/stage-handoff-model.md",
-        "references/agent/workflow-state-format.md",
-        "references/agent/session-log-format.md",
-        "references/agent/agent-decision-log-format.md"
+        "references/agent/practical-test-case-route-v0.9.md",
+        "references/agent/practical-v0.9-ba-decision-registry-format.md"
       ]
     },
     "source_locator_rare_artifacts": {
-      "rationale": "Load only when source locator creates a package notes file, records an alias or handles a UI-calibration exception.",
+      "rationale": "Load only when source locator needs a package notes template, artifact alias or UI-calibration policy.",
       "paths": [
         "references/agent/artifact-manifest-format.md",
         "references/agent/ft-package-agent-notes-template.md",
@@ -219,23 +216,16 @@ Resolver должен читать JSON-блок ниже как канонич�
       ]
     },
     "scope_manual_core": {
-      "rationale": "Scope analyzer context for a user-provided manual scope.",
+      "rationale": "Scope analyzer context for a user-provided manual scope in practical v0.9.",
       "paths": [
         "skills/ft-scope-analyzer/SKILL.md",
-        "references/agent/source-selection-format.md",
-        "references/agent/scope-contract-format.md",
-        "references/agent/scope-coverage-gaps-format.md",
-        "references/agent/scope-clarification-requests-format.md",
+        "references/agent/practical-test-case-route-v0.9.md",
+        "references/agent/practical-v0.9-scope-obligations-format.md",
+        "references/agent/practical-v0.9-workflow-state-format.md",
+        "references/agent/practical-v0.9-ba-decision-registry-format.md",
         "references/agent/scope-decomposition-policy.md",
         "references/agent/source-parity-check-format.md",
-        "references/agent/source-assertions-format.md",
-        "references/agent/source-assertion-semantic-rule-card.md",
-        "references/agent/source-row-baseline-format.md",
-        "references/agent/stage-handoff-model.md",
-        "references/agent/workflow-state-format.md",
-        "references/agent/session-log-format.md",
-        "references/agent/agent-decision-log-format.md",
-        "references/agent/next-step-prompt-format.md"
+        "references/agent/dictionary-inventory-format.md"
       ]
     },
     "scope_table_artifacts": {
@@ -251,62 +241,13 @@ Resolver должен читать JSON-блок ниже как канонич�
       ]
     },
     "scope_agent_proposed_core": {
-      "rationale": "Scope analyzer context for proposing candidate external scopes before writer work.",
+      "rationale": "Scope analyzer context for proposing candidate external scopes before practical v0.9 work.",
       "paths": [
         "skills/ft-scope-analyzer/SKILL.md",
-        "references/agent/source-selection-format.md",
+        "references/agent/practical-test-case-route-v0.9.md",
         "references/agent/scope-options-format.md",
         "references/agent/scope-selection-prompts-format.md",
-        "references/agent/scope-decomposition-policy.md",
-        "references/agent/stage-handoff-model.md",
-        "references/agent/workflow-state-format.md",
-        "references/agent/session-log-format.md",
-        "references/agent/agent-decision-log-format.md"
-      ]
-    },
-    "iteration_core": {
-      "rationale": "Orchestrator context for the session-based writer/reviewer cycle and final routing.",
-      "paths": [
-        "skills/ft-test-case-iteration/SKILL.md",
-        "references/agent/full-process-timing-observation.md",
-        "references/qa/test-case-versioning-policy.md",
-        "references/agent/workflow-state-format.md",
-        "references/agent/session-log-format.md",
-        "references/agent/agent-decision-log-format.md",
-        "references/agent/stage-handoff-model.md",
-        "references/agent/controlled-promotion-format.md"
-      ]
-    },
-    "incremental_update_core": {
-      "rationale": "Conditional FT-version update workflow; excluded from ordinary full-loop production context.",
-      "paths": [
-        "skills/ft-test-case-iteration/SKILL.md",
-        "references/agent/incremental-update-iteration.md",
-        "references/qa/test-case-versioning-policy.md"
-      ]
-    },
-    "lean_v2_core": {
-      "rationale": "Conditional source-qualified iteration over compiler-v3 obligations and an independently accepted v4 source contract; new production configs should use model-runtime-prose writer mode.",
-      "paths": [
-        "skills/ft-test-case-iteration/SKILL.md",
-        "references/agent/lean-v2-iteration.md",
-        "references/qa/test-case-runtime-format.md",
-        "references/agent/negative-ui-calibration-policy.md"
-      ]
-    },
-    "deterministic_production_core": {
-      "rationale": "Single public schema-v2 source-qualified production route; qualification-only orchestration and compatibility control planes are excluded.",
-      "paths": [
-        "skills/ft-test-case-iteration/SKILL.md",
-        "references/agent/lean-v2-iteration.md",
-        "references/agent/negative-ui-calibration-policy.md"
-      ]
-    },
-    "checked_in_observation_executor_core": {
-      "rationale": "Root-only instructions for one validated schema-v2 observation; deterministic source/scope gates are executor-owned and stage-specific rules load inside subprocess stages.",
-      "paths": [
-        "skills/ft-test-case-iteration/SKILL.md",
-        "references/agent/full-process-timing-observation.md"
+        "references/agent/scope-decomposition-policy.md"
       ]
     },
     "reviewer_core": {
@@ -461,7 +402,6 @@ Resolver должен читать JSON-блок ниже как канонич�
         "references/agent/skill-boundaries.md",
         "references/agent/duplication-policy.md",
         "references/agent/instruction-authoring-policy.md",
-        "references/agent/deep-reference-loading-policy.md",
         "references/agent/maintenance-checklist.md",
         "references/agent/audit-output-format.md"
       ]
@@ -524,8 +464,8 @@ Resolver должен читать JSON-блок ниже как канонич�
       "required_groups": ["global_core", "source_locator_core"],
       "conditional_groups": ["source_locator_rare_artifacts", "scope_manual_core", "scope_agent_proposed_core", "scope_table_artifacts", "scope_ui_artifacts"],
       "audit_only_groups": ["audit_only_history", "governance_audit_only"],
-      "budget_limit_kib": 132,
-      "rationale": "FT package and source discovery before scope or test-case work."
+      "budget_limit_kib": 120,
+      "rationale": "FT package and source discovery before practical scope or test-case work."
     },
     {
       "id": "writer.initial_draft.simple",
@@ -649,50 +589,6 @@ Resolver должен читать JSON-блок ниже как канонич�
       "rationale": "Explicit deep/debug validator-remediation context when compact finding map is insufficient."
     },
     {
-      "id": "writer.session_initial_draft",
-      "phase": "writer",
-      "mode": "session_initial_draft",
-      "scope_profile": "any",
-      "required_groups": ["global_core", "review_cycle_core", "writer_core", "quality_rule_cards", "writer_process_artifacts"],
-      "conditional_groups": ["writer_table_artifacts", "writer_ui_artifacts", "writer_numeric_coverage", "writer_integration_coverage", "writer_revision_artifacts", "writer_validator_failure_deep", "style_remediation"],
-      "audit_only_groups": ["audit_only_history", "governance_audit_only"],
-      "budget_limit_kib": 200,
-      "rationale": "Initial writer session inside the session-based review cycle."
-    },
-    {
-      "id": "writer.session_prepared_initial_draft",
-      "phase": "writer",
-      "mode": "session_prepared_initial_draft",
-      "scope_profile": "prepared-package",
-      "required_groups": ["prepared_global_core", "writer_prepared_package_core"],
-      "conditional_groups": [],
-      "audit_only_groups": ["audit_only_history", "governance_audit_only"],
-      "budget_limit_kib": 120,
-      "rationale": "Fast initial writer session that consumes a verified compact prepared package; orchestration remains runner-owned."
-    },
-    {
-      "id": "writer.session_semantic_revision",
-      "phase": "writer",
-      "mode": "session_semantic_revision",
-      "scope_profile": "any",
-      "required_groups": ["global_core", "review_cycle_core", "writer_core", "quality_rule_cards", "writer_process_artifacts", "writer_revision_artifacts"],
-      "conditional_groups": ["writer_table_artifacts", "writer_ui_artifacts", "writer_numeric_coverage", "writer_integration_coverage", "writer_validator_failure_deep", "style_remediation"],
-      "audit_only_groups": ["audit_only_history", "governance_audit_only"],
-      "budget_limit_kib": 240,
-      "rationale": "Writer semantic revision session after semantic reviewer findings."
-    },
-    {
-      "id": "writer.session_format_revision",
-      "phase": "writer",
-      "mode": "session_format_revision",
-      "scope_profile": "any",
-      "required_groups": ["global_core", "review_cycle_core", "writer_core", "quality_rule_cards", "writer_process_artifacts", "format_remediation"],
-      "conditional_groups": ["writer_revision_artifacts", "writer_table_artifacts", "writer_ui_artifacts", "writer_numeric_coverage", "writer_integration_coverage", "writer_validator_failure_deep", "style_remediation"],
-      "audit_only_groups": ["audit_only_history", "governance_audit_only"],
-      "budget_limit_kib": 245,
-      "rationale": "Format-only writer revision after final structure/format review. The 245 KiB cap accommodates the canonical promotion-recovery and source-context clarification contracts while retaining at least 15 KiB safety headroom; it is an instruction-context cap, not a release-quality waiver."
-    },
-    {
       "id": "reviewer.full_existing_cases",
       "phase": "reviewer",
       "mode": "full",
@@ -704,94 +600,6 @@ Resolver должен читать JSON-блок ниже как канонич�
       "rationale": "Direct review of an existing test-case set for an already confirmed FT package and scope; includes mandatory semantic rubric, defect taxonomy and dictionary checks. The limit includes a small explicit reserve for source-bound runtime quality rules such as oracle polarity, equivalence classes and priority-risk checks."
     },
     {
-      "id": "reviewer.session_prepared_semantic",
-      "phase": "reviewer",
-      "mode": "session_prepared_semantic",
-      "scope_profile": "prepared-package",
-      "required_groups": ["prepared_global_core", "reviewer_prepared_package_core"],
-      "conditional_groups": [],
-      "audit_only_groups": ["audit_only_history", "governance_audit_only"],
-      "budget_limit_kib": 92,
-      "rationale": "Fresh read-only semantic reviewer session over an eligible prepared package, inline validated draft and deterministic gate summaries; orchestration remains runner-owned."
-    },
-    {
-      "id": "reviewer.session_prepared_source_assertion",
-      "phase": "reviewer",
-      "mode": "session_prepared_source_assertion",
-      "scope_profile": "source-first-prepared",
-      "required_groups": ["prepared_global_core", "reviewer_prepared_source_assertion_core"],
-      "conditional_groups": [],
-      "audit_only_groups": ["audit_only_history", "governance_audit_only"],
-      "budget_limit_kib": 72,
-      "rationale": "Fresh read-only, tool-free source assertion review over a runner-owned bounded direct-evidence basis and strict receipt-v6 schema."
-    },
-    {
-      "id": "reviewer.scope_gap_review",
-      "phase": "reviewer",
-      "mode": "scope_gap_review",
-      "scope_profile": "any",
-      "required_groups": ["global_core", "review_cycle_core", "reviewer_scope_gap_core", "reviewer_process_artifacts"],
-      "conditional_groups": ["source_locator_core", "scope_manual_core", "scope_table_artifacts", "scope_ui_artifacts", "writer_core", "reviewer_handoff_artifacts"],
-      "audit_only_groups": ["audit_only_history", "governance_audit_only"],
-      "budget_limit_kib": 230,
-      "rationale": "Session-based pre-writer review of scope coverage gaps, source anchors and clarification requests."
-    },
-    {
-      "id": "reviewer.structure_preflight",
-      "phase": "reviewer",
-      "mode": "structure_preflight",
-      "scope_profile": "any",
-      "required_groups": ["global_core", "review_cycle_core", "reviewer_structure_preflight_core", "reviewer_process_artifacts"],
-      "conditional_groups": ["source_locator_core", "scope_manual_core", "writer_table_artifacts", "writer_ui_artifacts", "reviewer_handoff_artifacts"],
-      "audit_only_groups": ["audit_only_history", "governance_audit_only"],
-      "budget_limit_kib": 210,
-      "rationale": "Session-based lightweight structure preflight before semantic review."
-    },
-    {
-      "id": "reviewer.semantic_traceability_test_design",
-      "phase": "reviewer",
-      "mode": "semantic_traceability_test_design",
-      "scope_profile": "any",
-      "required_groups": ["global_core", "review_cycle_core", "reviewer_semantic_core", "reviewer_process_artifacts"],
-      "conditional_groups": ["source_locator_core", "scope_manual_core", "scope_table_artifacts", "scope_ui_artifacts", "writer_table_artifacts", "writer_ui_artifacts", "style_remediation", "reviewer_handoff_artifacts"],
-      "audit_only_groups": ["audit_only_history", "governance_audit_only"],
-      "budget_limit_kib": 290,
-      "rationale": "Session-based semantic review for traceability and test-design, before format polishing."
-    },
-    {
-      "id": "reviewer.structure_format_final",
-      "phase": "reviewer",
-      "mode": "structure_format_final",
-      "scope_profile": "any",
-      "required_groups": ["global_core", "review_cycle_core", "reviewer_structure_format_core", "reviewer_process_artifacts"],
-      "conditional_groups": ["reviewer_semantic_core", "writer_revision_artifacts", "writer_table_artifacts", "writer_ui_artifacts", "reviewer_handoff_artifacts"],
-      "audit_only_groups": ["audit_only_history", "governance_audit_only"],
-      "budget_limit_kib": 260,
-      "rationale": "Final structure and formatting review after semantic closure."
-    },
-    {
-      "id": "reviewer.semantic_regression",
-      "phase": "reviewer",
-      "mode": "semantic_regression",
-      "scope_profile": "any",
-      "required_groups": ["global_core", "review_cycle_core", "reviewer_semantic_regression_core", "reviewer_process_artifacts"],
-      "conditional_groups": ["reviewer_structure_format_core", "writer_revision_artifacts", "writer_table_artifacts", "writer_ui_artifacts", "reviewer_handoff_artifacts"],
-      "audit_only_groups": ["audit_only_history", "governance_audit_only"],
-      "budget_limit_kib": 260,
-      "rationale": "Final semantic regression pass after format-only changes."
-    },
-    {
-      "id": "scope.bounded_production",
-      "phase": "scope",
-      "mode": "bounded_production",
-      "scope_profile": "bounded-source-first",
-      "required_groups": ["prepared_global_core", "scope_bounded_production_core"],
-      "conditional_groups": ["scope_ui_artifacts"],
-      "audit_only_groups": ["audit_only_history", "governance_audit_only"],
-      "budget_limit_kib": 110,
-      "rationale": "Bounded scope materialization plus the compact capacity-sharding contract; executable orchestration stays in Python and independent source/TC reviews remain downstream. The 110 KiB cap preserves safety headroom without forcing omission of quality rules."
-    },
-    {
       "id": "scope.manual",
       "phase": "scope",
       "mode": "manual",
@@ -799,8 +607,8 @@ Resolver должен читать JSON-блок ниже как канонич�
       "required_groups": ["global_core", "source_locator_core", "scope_manual_core"],
       "conditional_groups": ["scope_table_artifacts", "scope_ui_artifacts"],
       "audit_only_groups": ["audit_only_history", "governance_audit_only"],
-      "budget_limit_kib": 280,
-      "rationale": "Manual scope selection when the user already provides the intended section or boundary. The 280 KiB cap preserves the mandatory source-assertion/gap/clarification and promotion-recovery contracts plus at least 15 KiB safety headroom after the analyst-friendly clarification format; it is an instruction-context cap, not a release-quality waiver."
+      "budget_limit_kib": 160,
+      "rationale": "Manual scope selection and practical v0.9 obligation analysis when the user already provides the intended section or boundary."
     },
     {
       "id": "scope.agent_proposed",
@@ -810,74 +618,19 @@ Resolver должен читать JSON-блок ниже как канонич�
       "required_groups": ["global_core", "source_locator_core", "scope_agent_proposed_core"],
       "conditional_groups": ["scope_manual_core"],
       "audit_only_groups": ["audit_only_history", "governance_audit_only"],
-      "budget_limit_kib": 220,
-      "rationale": "Candidate-scope proposal before the user confirms one external scope."
+      "budget_limit_kib": 140,
+      "rationale": "Candidate-scope proposal before the user confirms one external scope for practical v0.9."
     },
     {
-      "id": "iteration.checked_in_observation",
-      "phase": "iteration",
-      "mode": "checked_in_observation",
-      "scope_profile": "checked-in-schema-v2",
-      "required_groups": ["prepared_global_core", "checked_in_observation_executor_core"],
-      "conditional_groups": [],
-      "audit_only_groups": ["audit_only_history", "governance_audit_only"],
-      "budget_limit_kib": 75,
-      "rationale": "One-command execution of a checked-in schema-v2 observation without root-side source discovery or manual scope analysis."
-    },
-    {
-      "id": "iteration.incremental_update",
-      "phase": "iteration",
-      "mode": "incremental_update",
-      "scope_profile": "two-ft-versions",
-      "required_groups": ["prepared_global_core", "incremental_update_core"],
-      "conditional_groups": [],
-      "audit_only_groups": ["audit_only_history", "governance_audit_only"],
-      "budget_limit_kib": 75,
-      "rationale": "Narrow old-to-new FT update context with deterministic unchanged-case reuse; normal full-loop instructions remain unloaded."
-    },
-    {
-      "id": "iteration.deterministic_production",
-      "phase": "iteration",
-      "mode": "deterministic_production",
-      "scope_profile": "source-qualified-schema-v2",
-      "required_groups": ["prepared_global_core", "deterministic_production_core"],
-      "conditional_groups": [],
-      "audit_only_groups": ["audit_only_history", "governance_audit_only"],
-      "budget_limit_kib": 60,
-      "rationale": "Public schema-v2 production route with deterministic rendering, at most one bounded writer for complex cards and exactly one independent reviewer for every admitted draft."
-    },
-    {
-      "id": "iteration.lean_v2",
-      "phase": "iteration",
-      "mode": "lean_v2",
-      "scope_profile": "atomic-source-packet",
-      "required_groups": ["prepared_global_core", "lean_v2_core"],
-      "conditional_groups": [],
-      "audit_only_groups": ["audit_only_history", "governance_audit_only"],
-      "budget_limit_kib": 90,
-      "rationale": "Short source-qualified iteration; compatibility mode can stay deterministic-first, while new production configs should run model-runtime-prose writer plus one independent reviewer."
-    },
-    {
-      "id": "iteration.full_loop",
-      "phase": "iteration",
-      "mode": "full_loop",
-      "scope_profile": "any",
-      "required_groups": ["global_core", "review_cycle_core", "iteration_core", "iteration_stage_summaries"],
-      "conditional_groups": ["source_locator_core", "scope_manual_core", "scope_table_artifacts", "scope_ui_artifacts", "writer_core", "quality_rule_cards", "writer_process_artifacts", "writer_revision_artifacts", "writer_table_artifacts", "writer_ui_artifacts", "writer_numeric_coverage", "writer_integration_coverage", "writer_validator_failure_deep", "format_remediation", "style_remediation", "reviewer_core"],
-      "audit_only_groups": ["audit_only_history", "governance_audit_only"],
-      "budget_limit_kib": 445,
-      "rationale": "Orchestration-only full-loop dispatcher. It loads lifecycle, stage routing and compact quality summaries; source, scope, writer and reviewer rules load in their stage-specific scenarios."
-    },
-    {
-      "id": "ui_automation_prep.signed_off",
+      "id": "ui_automation_prep.accepted_baseline",
       "phase": "ui_automation_prep",
-      "mode": "signed_off",
+      "mode": "accepted_baseline",
       "scope_profile": "any",
       "required_groups": ["global_core", "ui_automation_prep_core"],
-      "conditional_groups": ["source_locator_core", "scope_manual_core", "iteration_core", "reviewer_core"],
+      "conditional_groups": ["source_locator_core", "scope_manual_core", "reviewer_core"],
       "audit_only_groups": ["audit_only_history", "governance_audit_only"],
       "budget_limit_kib": 210,
-      "rationale": "Post-sign-off UI verification and automation-ready preparation without rewriting the FT-first baseline."
+      "rationale": "UI verification of an accepted practical baseline without rewriting the FT-first baseline."
     },
     {
       "id": "architecture.audit",
@@ -888,18 +641,7 @@ Resolver должен читать JSON-блок ниже как канонич�
       "conditional_groups": ["audit_only_history"],
       "audit_only_groups": [],
       "budget_limit_kib": 134,
-      "rationale": "Agent-layer governance audit with script-first workflow and manual interpretation. The 134 KiB cap includes the bounded-production and checked-in observation routing contracts while retaining at least 15 KiB safety headroom."
-    },
-    {
-      "id": "sdk_orchestration.review_cycle",
-      "phase": "sdk_orchestration",
-      "mode": "review_cycle",
-      "scope_profile": "any",
-      "required_groups": ["global_core", "sdk_orchestration_core"],
-      "conditional_groups": ["writer_core", "reviewer_core", "writer_process_artifacts", "reviewer_process_artifacts"],
-      "audit_only_groups": ["audit_only_history", "governance_audit_only"],
-      "budget_limit_kib": 130,
-      "rationale": "Codex SDK runner context for session-based review-cycle orchestration."
+      "rationale": "Agent-layer governance audit with script-first workflow and manual interpretation; it keeps a 15 KiB safety reserve without loading historical execution routes."
     }
   ]
 }

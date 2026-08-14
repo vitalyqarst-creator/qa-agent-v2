@@ -8,7 +8,7 @@ Policy нужна, чтобы:
 
 - сохранять один канонический текущий набор тест-кейсов;
 - не терять состояние набора между writer/reviewer сессиями;
-- обеспечивать трассируемость изменений по session-based review cycle;
+- обеспечивать трассируемость изменений по independent review practical v0.9;
 - не плодить несколько конкурирующих основных версий одного и того же scope.
 
 ## Канонический Набор
@@ -25,7 +25,6 @@ fts/<ft-slug>/test-cases/<section-id>-<scope-slug>.md
 
 - `ft-test-case-writer`;
 - `ft-test-case-reviewer`;
-- `ft-test-case-iteration`;
 - `ft-ui-automation-prep`.
 
 Не создавай в `test-cases/` файлы вида `<scope>-round-1.md`, `<scope>-draft.md`, `<scope>-signed-off.md` или другие конкурирующие основные версии.

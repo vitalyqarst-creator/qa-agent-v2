@@ -4,7 +4,6 @@
 
 - `ft-source-locator`
 - `ft-scope-analyzer`
-- `ft-test-case-iteration`
 - `ft-test-case-writer`
 - `ft-test-case-reviewer`
 - `ft-ui-automation-prep`
@@ -62,20 +61,6 @@
 - orchestration of the session-based review-cycle;
 - аудит agent-layer.
 
-### `ft-test-case-iteration`
-
-- оркестрировать цикл writer -> reviewer -> writer -> reviewer;
-- передавать findings artifact и writer response artifact между раундами;
-- передавать traceability matrix между reviewer и writer, если она требуется;
-- завершать цикл со статусом `signed-off` или `round-cap-reached`.
-
-Не входит:
-
-- писать тест-кейсы вместо writer;
-- делать review вместо reviewer;
-- выбирать FT-пакет и scope с нуля;
-- аудит agent-layer.
-
 ### `ft-test-case-reviewer`
 
 - review существующих кейсов;
@@ -95,7 +80,7 @@
 
 ### `ft-ui-automation-prep`
 
-- запускаться только после `ft-test-case-iteration` со статусом `signed-off`;
+- запускаться только после accepted practical v0.9 baseline с approved final TC review;
 - проходить утвержденные ручные кейсы в реальном UI;
 - использовать package-level UI operational notes из `fts/<ft-slug>/work/ui-automation-prep/UI-AGENT-NOTES.md`, если они есть;
 - собирать Playwright evidence и индекс артефактов;
@@ -105,7 +90,7 @@
 Не входит:
 
 - выбор FT-пакета и первичное определение scope;
-- session-based review-cycle и sign-off ручного набора;
+- выпуск или изменение FT-first baseline;
 - перезапись FT-first baseline;
 - трактовка UI как нового source of truth;
 - генерация Playwright test specs.
@@ -120,5 +105,4 @@
 
 - быть источником доменных QA-правил;
 - подменять writer/reviewer/source/scope skill-и.
-
 

@@ -5,10 +5,9 @@ Canonical list of active skills:
 - `ft-source-locator` - locate the target FT package and related materials.
 - `ft-practical-route` - compact default v0.9 route for one confirmed FT scope.
 - `ft-scope-analyzer` - propose external scopes by FT sections/subsections, confirm selected-scope boundaries, and record `coverage gaps`.
-- `ft-test-case-iteration` - explicit-only source-qualified / observation / incremental route through `ft-agent run`.
 - `ft-test-case-writer` - write new test cases for an already selected scope.
 - `ft-test-case-reviewer` - review existing test cases.
-- `ft-ui-automation-prep` - post-iteration verification of signed-off cases in the real UI and preparation of an automation-ready version.
+- `ft-ui-automation-prep` - verify an accepted practical baseline in the real UI and prepare an automation-ready version.
 - `agent-architecture-auditor` - audit `AGENTS.md`, `skills/`, `references/`, and scripts.
 
 ## Which Skill to Use
@@ -17,22 +16,13 @@ Canonical list of active skills:
 - If the FT package is selected but the exact requirement fragment is not selected yet, or a large FT must be split into scopes: `ft-scope-analyzer`.
 - If the user asks to write test cases for a normal FT scope, use `ft-practical-route` v0.9 as one compact macro-stage through an accepted baseline or honest blocker. Chain: source manifest -> source obligations -> matrix -> mandatory separate-session matrix review -> TC -> final separate-session TC review. Each phase permits at most one targeted revision and one fresh re-review. The only mutable process state is `workflow-state.json`; the scoped validator is one-pass and checks only its declared dependency closure. Separate-session means a real top-level Codex thread (`codex-thread`), bound by a controller-owned session attestation; sub-agents do not count. Source contradiction blocks without inventing TC; missing data/UI/observability receives `needs-test-data`, `candidate-ui-calibration` or `blocked-observability`. Full contract: `references/agent/practical-test-case-route-v0.9.md`.
 - If the scope is fixed and new cases must be written in one writer pass without independent review: `ft-test-case-writer`, but still follow practical-route quality gates.
-- Developer/legacy routes below are explicit-only. Do not propose them for ordinary "write test cases" work:
-  - if the scope is independently qualified and the user explicitly asks for a production shadow: `ft-test-case-iteration` through `ft-agent run`;
-  - if the scope has compiler-v3 obligations and the user explicitly asks for source-qualified immutable execution: `ft-test-case-iteration` `lean_v2` through one public `ft-agent run`;
-  - if a new FT version must update a signed-off suite: conditional `ft-test-case-iteration` mode `incremental-update` through `scripts/run_incremental_update_iteration.py`;
-  - if a checked-in full-process config with `schema_version = 2` is explicitly provided: route directly to `ft-test-case-iteration` through `scripts/start_full_process_observation.py --execute`;
-  - the old session-based writer/reviewer cycle remains a qualification/development compatibility tool and is not the default route for writing test cases.
 - If cases already exist and review is needed: `ft-test-case-reviewer`. By default, it runs in `full` mode and performs `traceability` -> `structure` -> `test-design`.
-- If the suite already has `signed-off` and must be checked against the real UI before automation: `ft-ui-automation-prep`.
+- If an accepted baseline must be checked against the real UI before automation: `ft-ui-automation-prep`.
 - If the request is about agent architecture, duplication, knowledge placement, and skill boundaries: `agent-architecture-auditor`.
 
 ## Typical Chains
 
 - New test-case suite, macro-stage default: `ft-practical-route` v0.9. Isolated phase skills remain available only for a user-requested isolated stage. Do not materialize stage summaries or legacy validator profiles in v0.9.
-- Explicit production shadow after qualification: `ft-test-case-iteration` through `ft-agent run` with schema-v2 config.
-- Explicit full source-qualified scope in the development environment: `ft-source-locator` -> `ft-scope-analyzer` -> independent source review -> `ft-test-case-iteration`.
-- New FT-version update: `ft-test-case-iteration` in `incremental-update` mode after explicit selection of both versions and target scope.
 - Automation-ready preparation after baseline release: `ft-ui-automation-prep`
 - Existing-suite review: `ft-source-locator` -> `ft-scope-analyzer` -> `ft-test-case-reviewer`
 - Agent-layer audit: `agent-architecture-auditor` with script-first workflow (`skills/agent-architecture-auditor/scripts/audit_agent_architecture.py` -> manual interpretation)
@@ -56,9 +46,5 @@ The canonical loading manifest lives in `references/agent/instruction-loading-ma
 - Task-start skill routing: [../references/agent/task-start-skill-routing-format.md](../references/agent/task-start-skill-routing-format.md)
 - Practical test-case route v0.9: [../references/agent/practical-test-case-route-v0.9.md](../references/agent/practical-test-case-route-v0.9.md)
 - Coverage class catalog: [../references/qa/coverage-class-catalog.md](../references/qa/coverage-class-catalog.md)
-- Source-qualified iteration: [../references/agent/lean-v2-iteration.md](../references/agent/lean-v2-iteration.md)
-- Session-based review cycle: [../references/agent/session-based-review-cycle-format.md](../references/agent/session-based-review-cycle-format.md)
-- Codex SDK orchestration: [../references/agent/codex-sdk-orchestration-format.md](../references/agent/codex-sdk-orchestration-format.md)
-- Quality feedback loop: [../references/agent/quality-feedback-loop.md](../references/agent/quality-feedback-loop.md)
 - User interaction guide: [../references/agent/user-interaction-guide.md](../references/agent/user-interaction-guide.md)
 - End-to-end use case: [../references/agent/test-case-writing-use-case.md](../references/agent/test-case-writing-use-case.md)

@@ -11,13 +11,12 @@ from pathlib import Path
 REQ_SKILLS={
     "ft-source-locator",
     "ft-scope-analyzer",
-    "ft-test-case-iteration",
     "ft-test-case-writer",
     "ft-test-case-reviewer",
     "ft-ui-automation-prep",
     "agent-architecture-auditor",
 }
-REQ_AGENT={"content-placement.md","skill-boundaries.md","duplication-policy.md","instruction-authoring-policy.md","maintenance-checklist.md","audit-output-format.md","task-start-skill-routing-format.md","session-based-review-cycle-format.md","codex-sdk-orchestration-format.md"}
+REQ_AGENT={"content-placement.md","skill-boundaries.md","duplication-policy.md","instruction-authoring-policy.md","maintenance-checklist.md","audit-output-format.md","task-start-skill-routing-format.md","practical-test-case-route-v0.9.md"}
 REQ_QA={
     "test-case-format.md",
     "coverage-checklist.md",
@@ -30,8 +29,7 @@ STALE=("uv run ft-test-agent"," ft-test-agent "," list-sections ","skills/ft-tes
 SECTIONS=("## Входы","## Выходы","## Ограничения")
 REQUIRED_INSTRUCTION_CONTEXT_SCENARIOS=frozenset({
     "source_locator.discovery",
-    "scope.bounded_production",
-    "iteration.deterministic_production",
+    "practical.v0_9",
     "architecture.audit",
 })
 TASK_ROUTING_RE=re.compile(r"<!--\s*task-start-skill-routing:v1\s*-->\s*```json\s*(.*?)\s*```",re.DOTALL)
@@ -384,8 +382,17 @@ def audit(root:Path):
             add_finding(findings,f"references-missing:{name}","error","references",f"Shared {name} references are incomplete","The shared knowledge layer is missing mandatory files.",miss,"Restore the missing canonical references under references/.",[rel(rd,root)])
 
     review_cycle_runner=root/"scripts"/"codex_review_cycle_runner.py"
-    add_check(checks,"codex-review-cycle-runner","pass" if review_cycle_runner.exists() else "fail","Session-based review-cycle runner check.",[rel(review_cycle_runner,root)])
-    if not review_cycle_runner.exists():
+    routing_content=txt(root/"references"/"agent"/"task-start-skill-routing-format.md")
+    legacy_review_cycle_active="review_cycle.session_based" in routing_content
+    add_check(
+        checks,
+        "codex-review-cycle-runner",
+        "pass" if (not legacy_review_cycle_active or review_cycle_runner.exists()) else "fail",
+        "Legacy review-cycle runner is archived and not active."
+        if not legacy_review_cycle_active else "Session-based review-cycle runner check.",
+        [rel(review_cycle_runner,root)],
+    )
+    if legacy_review_cycle_active and not review_cycle_runner.exists():
         add_finding(findings,"codex-review-cycle-runner-missing","error","scripts","Codex review-cycle runner is missing","The session-based review-cycle contract requires scripts/codex_review_cycle_runner.py for validation, dry-run orchestration and snapshots.","Create the runner or remove the SDK orchestration contract until it exists.",[rel(review_cycle_runner,root)])
 
     exec_runner=root/"scripts"/"codex_exec_review_cycle_runner.py"
@@ -395,6 +402,8 @@ def audit(root:Path):
     readme=root/"README.md"
     readme_content=txt(readme).lower()
     legacy_exec_default_activated=(
+        legacy_review_cycle_active
+        and
         exec_runner.exists()
         and backend_dispatcher.exists()
         and "review_cycle_backend_dispatcher.py" in readme_content
@@ -402,6 +411,8 @@ def audit(root:Path):
         and "--backend sdk" in readme_content
     )
     source_qualified_exec_default_activated=(
+        legacy_review_cycle_active
+        and
         stage_backend.exists()
         and immutable_iteration.exists()
         and "ft-agent run" in readme_content
@@ -414,12 +425,15 @@ def audit(root:Path):
     add_check(
         checks,
         "codex-exec-default-activation",
-        "pass" if exec_default_activated else ("warn" if exec_runner.exists() else "fail"),
+        "pass" if (not legacy_review_cycle_active or exec_default_activated) else ("warn" if exec_runner.exists() else "fail"),
         "Verified exec backend dispatcher is the documented default."
-        if exec_default_activated else "Exec backend default activation is incomplete.",
+        if exec_default_activated else (
+            "Legacy execution route is archived and does not require a default backend."
+            if not legacy_review_cycle_active else "Exec backend default activation is incomplete."
+        ),
         [rel(exec_runner,root),rel(backend_dispatcher,root),rel(stage_backend,root),rel(immutable_iteration,root),rel(readme,root)],
     )
-    if exec_runner.exists() and not exec_default_activated:
+    if legacy_review_cycle_active and exec_runner.exists() and not exec_default_activated:
         add_finding(
             findings,
             "codex-exec-backend-not-default",

@@ -15,13 +15,15 @@ scope и активный workflow уже подтверждены. Для об�
 [формат production TC](../../references/qa/test-case-runtime-format.md) и,
 если это v0.9 scope, [practical v0.9 route](../../references/agent/practical-test-case-route-v0.9.md).
 
-## Входы и выходы
+## Входы
 
-Входы: выбранный scope, его main DOCX/XHTML/PDF/support/visual inputs,
+Выбранный scope, его main DOCX/XHTML/PDF/support/visual inputs,
 `AGENT-NOTES.md`, актуальный `workflow-state.json`, source obligations,
 matrix и findings reviewer-а, если это разрешённая доработка.
 
-Выход: только текущая matrix либо canonical TC своего scope и обновлённый
+## Выходы
+
+Только текущая matrix либо canonical TC своего scope и обновлённый
 `workflow-state.json`; не создавай self-check, stage summary или новые
 процессные копии покрытия.
 

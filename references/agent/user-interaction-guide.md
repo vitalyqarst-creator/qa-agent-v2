@@ -13,16 +13,15 @@
 - какой FT-пакет нужен, если он уже известен;
 - какой этап нужен:
   - `ft-source-locator`
+  - `ft-practical-route`
   - `ft-scope-analyzer`
-  - `ft-test-case-writer`
   - `ft-test-case-reviewer`
-  - `ft-test-case-iteration`
   - `ft-ui-automation-prep`
 - какой scope нужен: раздел, подраздел, поле, блок, сценарий;
 - что должно быть результатом:
   - новые тест-кейсы;
   - review существующих кейсов;
-  - writer/reviewer iteration;
+  - accepted baseline по practical route;
   - automation-ready версия;
   - аудит agent-layer;
 - ограничения:
@@ -58,12 +57,8 @@ Scope: раздел / блок / поле / сценарий
 
 - Указывай точный `ft-slug`, если он уже известен.
 - Указывай точный `scope-slug`, если он уже существует.
-- Если нужен следующий этап pipeline, ссылайся на `workflow-state.yaml` и prompt-файл из фактической handoff-папки `work/stage-handoffs/NN-<scope-slug>/` для новых scope-ов.
-- Если нужен revision, давай путь к:
-  - каноническому набору `test-cases/<section-id>-<scope-slug>.md`;
-  - `round-N-findings.md`;
-  - `round-N-traceability-matrix.md`, если есть;
-  - `round-N-writer-response.md`, если это второй review.
+- Для продолжения practical route ссылайся на `workflow-state.json` выбранного scope и immutable review result текущей фазы.
+- Если нужна целевая доработка, укажи канонический файл тест-кейсов, идентификаторы findings и фазу (`matrix` или `tc`).
 - Если нужен review, явно пиши `review_mode`, если он должен быть не `full`.
 - Если есть package-specific контекст, указывай на `AGENT-NOTES.md` или `UI-AGENT-NOTES.md`.
 
@@ -85,14 +80,9 @@ Scope: раздел / блок / поле / сценарий
   - сценарий;
 - ограничение, что scope нельзя расширять.
 
-На выходе ожидается:
-
-- один подтвержденный scope;
-- `scope-contract.md` по каноническому формату;
-- `scope-coverage-gaps.md` по каноническому формату;
-- `prompt.scope-to-writer.md`;
-- при необходимости `scope-execution-options.md` как подсказка по следующему запуску;
-- обновленный `workflow-state.yaml`.
+На выходе ожидается подтвержденная граница scope и список требующих уточнения
+вопросов. Сам practical route затем создаёт `scope-obligations.json`,
+`scope-clarification-requests.md` и `workflow-state.json`.
 
 ### `agent-proposed-scope`
 
@@ -141,8 +131,7 @@ Scope: раздел / блок / поле / сценарий
 ```md
 Режим scope: `manual-scope`
 Для `fts/<ft-slug>` выдели scope по разделу `<section-id>`.
-Нужны `scope-contract.md`, `scope-coverage-gaps.md` и handoff к writer.
-Используй канонические форматы `scope-contract-format.md` и `scope-coverage-gaps-format.md`.
+Нужны подтверждённые границы scope и вопросы, которые нельзя решить по ФТ.
 ```
 
 Пример для `agent-proposed-scope`:
@@ -153,16 +142,15 @@ Scope: раздел / блок / поле / сценарий
 Нужен список scope с краткими границами и рекомендацией, с какого начать.
 ```
 
-### 3. Написать тест-кейсы
+### 3. Выпустить тест-кейсы по practical route
 
 Используй, когда scope уже подтвержден.
 
 Пример:
 
 ```md
-Для scope `2.1.1.1.1.1.2-lichnaya-informaciya` подготовь initial draft тест-кейсов.
-Работай только в границах `scope-contract.md`.
-На выходе нужен канонический файл и handoff к reviewer.
+Для scope `2.1.1.1.1.1.2-lichnaya-informaciya` выполни practical route v0.9
+до accepted baseline либо честного external blocker-а.
 ```
 
 ### 4. Сделать review
@@ -172,31 +160,21 @@ Scope: раздел / блок / поле / сценарий
 Пример:
 
 ```md
-Проведи review набора `fts/.../test-cases/<section-id>-<scope-slug>.md`.
-Режим: `full`.
-Не исправляй кейсы, верни findings, traceability matrix и handoff к writer при необходимости.
+Проведи независимое review набора `fts/.../test-cases/<section-id>-<scope-slug>.md`.
+Не исправляй кейсы. Верни findings и не объявляй набор accepted baseline вне
+controller-а practical route.
 ```
 
-### 5. Запустить iteration
+### 5. Подготовить automation-ready
 
-Используй, когда нужен полный writer/reviewer loop до `signed-off` или `round-cap-reached`.
-
-Пример:
-
-```md
-Запусти `ft-test-case-iteration` для scope `<scope-slug>`.
-Нужен полный цикл с обновлением `workflow-state.yaml` и всех handoff-артефактов.
-```
-
-### 6. Подготовить automation-ready
-
-Используй только после `signed-off`.
+Используй только после accepted baseline practical v0.9.
 
 Пример:
 
 ```md
 Для scope `<scope-slug>` выполни `ft-ui-automation-prep`.
-Проверь, что в `workflow-state.yaml` следующий этап — `ft-ui-automation-prep`.
+Проверь в `workflow-state.json`, что final TC review принят и scope находится
+в фазе `accepted`.
 Если есть `UI-AGENT-NOTES.md`, используй его.
 ```
 
@@ -206,17 +184,16 @@ Scope: раздел / блок / поле / сценарий
 
 - `test_case_id`;
 - `finding_id`;
-- `scope-contract.md`;
-- `cycle-state.yaml`;
-- `workflow-state.yaml`;
-- конкретному файлу в `work/stage-handoffs/` или `work/review-cycles/`.
+- `OBL-*` или `CON-*`;
+- `workflow-state.json`;
+- immutable review result соответствующей фазы.
 
 Хороший формат:
 
 ```md
 Исправь `FINDING-003`.
 Scope не расширяй.
-Нужен только revision существующего набора и обновление handoff к reviewer.
+Нужна только разрешённая revision существующего набора и fresh independent re-review.
 ```
 
 ## Что ухудшает результат
@@ -225,7 +202,7 @@ Scope не расширяй.
 - смешивание нескольких FT-пакетов в одной задаче;
 - смешивание нескольких независимых scope в одном наборе тест-кейсов;
 - просьба придумать поведение, которого нет в ФТ;
-- запуск `ft-ui-automation-prep` до `signed-off`;
+- запуск `ft-ui-automation-prep` до принятого final TC review;
 - отсутствие ссылки на текущие артефакты, если работа идет не с нуля.
 
 ## Минимальный шаблон для оптимальной работы
