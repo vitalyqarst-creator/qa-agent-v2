@@ -48,6 +48,7 @@
 - `representative_invalid_value` не заменяет oracle. Значение `12A00` полезно только если известно, как система должна реагировать.
 - Макет не задает validation oracle, если он не подтвержден ФТ/support/common standard.
 - Если общий validation standard найден, укажи его в `oracle_source` и передай writer-у как разрешенный источник.
+- Тип значения `Дата` является source-backed ограничением класса значения даже без отдельной фразы о валидации. Для каждого применимого контекста создай positive scenario с календарной датой и отдельную строку `negative_class = impossible-calendar-date` с representative value, например `31.02.2026`. Если точный UI oracle не задан, negative-строка обязательна как `candidate_tc_required` / `ui-calibration-required`; не заменяй её pure gap.
 
 ## Минимальный шаблон
 

@@ -27,6 +27,7 @@ from test_case_agent.practical_v09 import (
     build_review_session_attestation,
     build_initial_workflow_state,
     build_validator_report,
+    composite_field_mentions,
     derived_execution_status,
     dictionary_inventory_required,
     finding,
@@ -34,6 +35,7 @@ from test_case_agent.practical_v09 import (
     has_composite_result_table,
     matrix_review_required,
     matrix_exact_duplicate_groups,
+    parse_test_case_blocks,
     parse_matrix_consolidation_decisions,
     parse_matrix_rows,
     scenario_consolidation_contract,
@@ -328,6 +330,64 @@ class PracticalV09Tests(unittest.TestCase):
         self.assertIn("одним проходом", reviewer)
         self.assertIn("raw JSON verdict", reviewer)
         self.assertIn("remediation_closure", reviewer)
+
+    def test_runtime_format_allows_grouped_cases_with_global_numbering(self) -> None:
+        runtime_format = (
+            REPO_ROOT / "references" / "qa" / "test-case-runtime-format.md"
+        ).read_text(encoding="utf-8")
+        with tempfile.TemporaryDirectory() as raw:
+            path = Path(raw) / "cases.md"
+            path.write_text(
+                "## Интеграция\n\n"
+                "### TC-TEST-001\n**Номер в разделе:** 1 из 2\n\n"
+                "## Сохранение\n\n"
+                "### TC-TEST-002\n**Номер в разделе:** 2 из 2\n",
+                encoding="utf-8",
+            )
+            blocks = parse_test_case_blocks(path)
+
+        self.assertEqual(["TC-TEST-001", "TC-TEST-002"], [item["id"] for item in blocks])
+        self.assertIn("### TC-*", runtime_format)
+        self.assertIn("Сквозной номер", runtime_format)
+
+    def test_composite_wording_rejects_a_partial_field_list(self) -> None:
+        fields = ["Поле «Юридический адрес»", "Поле «ИНН»", "Поле «ОГРН»"]
+        self.assertEqual(
+            {"юридический адрес"},
+            composite_field_mentions(
+                "Выбор подсказки автоматически заполняет юридический адрес.",
+                fields,
+            ),
+        )
+        self.assertEqual(
+            set(),
+            composite_field_mentions(
+                "Выбор подсказки заполняет сведения организации.", fields
+            ),
+        )
+
+    def test_matrix_requires_negative_candidate_for_typed_date_input(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            fixture = PracticalV09Fixture(
+                Path(raw),
+                obligation_statement="Поле «Дата аккредитации» доступно для ввода даты.",
+            )
+            fixture.matrix.write_text(
+                "# Матрица тест-дизайна\n\n"
+                "| Проверка | Идентификатор сценария | Обязательство ФТ | Контекст исполнения | Проверяемый элемент | Домен проверки | Способ взаимодействия | Проверяемое правило | Исходное состояние | Формирование состояния | Проверяемое действие | Ожидаемый результат | Нужные предпосылки | Тип | Приоритет | Статус исполнения | Планируемый TC-ID |\n"
+                "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |\n"
+                "| MTX-001 | SCN-001 | OBL-001 | CTX-OPEN-MENU — Открытие раздела из меню | Поле «Дата аккредитации» | Дата | Ввод | Поле доступно для ввода даты. | Открыта карточка. | Не требуется: состояние задано предусловием. | Ввести дату. | В поле отображается введённая дата. | SETUP-ACTOR-001 — пользователь с доступом к модулю. | Positive | High | ready | TC-MENU-001 |\n",
+                encoding="utf-8",
+            )
+            _, findings = validate_scope(
+                package_root=fixture.root,
+                workflow_state_path=fixture.state,
+            )
+
+        self.assertIn(
+            "matrix-date-negative-candidate-missing",
+            [item.id for item in findings if item.blocking],
+        )
 
     def test_writer_runtime_requires_full_remediation_closure(self) -> None:
         workflow = (REPO_ROOT / "references" / "agent" / "writer-runtime-workflow.md").read_text(

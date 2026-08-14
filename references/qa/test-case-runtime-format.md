@@ -7,8 +7,7 @@
 Каждый test case должен иметь:
 
 - stable id `TC-<scope>-NNN` или локально принятый `TC-*` формат canonical file;
-- `Номер в разделе` в формате `N из M`, где `N` — уникальный сквозной номер текущего canonical file, а `M` — фактическое число его `TC-*`;
-- use `## TC-*`; `### TC-*` is invalid;
+- Сквозной номер: `N/M`; заголовок: `## TC-*` либо `## блок` / `### TC-*`;
 - `Название`;
 - `Тип`: `Positive` или `Negative`;
 - `Приоритет`;
@@ -28,6 +27,7 @@
 - Canonical writer output must use parser-supported bold metadata fields from `test-case-format.md`: `**Название:**`, `**Тип:**`, `**Приоритет:**`, `**package_id:**`, `**Трассировка:**`. A table-only metadata block such as `| Поле | Значение |` / `| package_id | WP-01 |` is not acceptable for canonical `TC-*`, because validator parsing of required fields and `package_id` relies on the bold-field/runtime-field contract. Do not mix table metadata with the same bold fields either; use bold fields only.
 
 - Один `TC-*` проверяет одну обязанность системы и один основной pass/fail результат.
+- Название/цель охватывают весь `CON-*` и способ из шагов.
 - Не объединяй в одном `TC-*` разные режимы работы с объектом через формулировки
   `создание или редактирование`, `добавление или изменение`, `новый или
   существующий`. У них разные предусловия, действия и риски; разделяй их на

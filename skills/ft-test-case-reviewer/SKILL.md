@@ -44,7 +44,12 @@ v0.9 scope, [practical route](../../references/agent/practical-test-case-route-v
    с canonical TC. Для больших scope верни compact per-OBL vector, а не один
    общий digest.
 3. Проверь source modifiers, `flow_kind`, исходные состояния, конкретные
-   данные, primary oracle, статусы исполнения и допустимость объединений.
+   данные, primary oracle, статусы исполнения и допустимость объединений. Для
+   объединённого составного результата сверяй `Название` и `Цель` со всем
+   `field_inventory`; для разных способов взаимодействия — со шагами
+   конкретного `SCN-*`. Для поля типа `Дата` проверь отдельный negative
+   scenario в каждом применимом контексте; при неизвестной реакции UI он
+   обязан быть `candidate-ui-calibration`, а не отсутствовать.
 4. Верни один raw JSON по canonical format. Не изменяй matrix, TC,
    `workflow-state.json` или findings других агентов.
 

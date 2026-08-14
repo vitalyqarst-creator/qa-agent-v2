@@ -18,7 +18,7 @@ from typing import Any, Iterable, Mapping
 
 
 ROUTE_VERSION = "practical-v0.9"
-ROUTE_TOOL_VERSION = "practical-v0.9.33"
+ROUTE_TOOL_VERSION = "practical-v0.9.34"
 WORKFLOW_STATE_SCHEMA_VERSION = 1
 SOURCE_CONTRACT_VERSION = "source-package-v4"
 MATRIX_CONTRACT_VERSION = "practical-matrix-v3"
@@ -3009,6 +3009,98 @@ def has_composite_result_table(body: str, field_inventory: Iterable[str]) -> boo
     return False
 
 
+def composite_field_mentions(value: str, field_inventory: Iterable[str]) -> set[str]:
+    """Return explicitly named fan-out fields in a TC title or goal.
+
+    A generic label such as ``сведения организации`` is allowed when the
+    expected-result table defines the composition. What is misleading is a
+    title that names one particular member while the same TC asserts a larger
+    fan-out. This narrow check catches that asymmetric wording without trying
+    to judge Russian paraphrases automatically.
+    """
+    normalized_value = normalized_matrix_phrase(value)
+    mentioned: set[str] = set()
+    for field in field_inventory:
+        label = normalized_field_label(field)
+        if label and re.search(rf"(?<!\w){re.escape(label)}(?!\w)", normalized_value):
+            mentioned.add(label)
+    return mentioned
+
+
+def validate_date_negative_matrix_coverage(
+    *,
+    rows: Iterable[Mapping[str, str]],
+    obligations: Mapping[str, Any],
+    artifact: str,
+) -> list[ScopeFinding]:
+    """Require a calibration candidate for every typed date input.
+
+    Type ``Дата`` proves a value class, but without an explicit UI oracle it
+    does not prove filtering, clearing, a message or a save effect. A negative
+    candidate keeps the check in the suite and defers only that mechanism to
+    UI calibration.
+    """
+    findings: list[ScopeFinding] = []
+    by_context_and_element: dict[tuple[str, str], list[Mapping[str, str]]] = {}
+    active_entries = {
+        str(item.get("id")): item
+        for item in active_obligations(dict(obligations))
+    }
+    for row in rows:
+        domain = normalized_matrix_phrase(row.get("Домен проверки", ""))
+        element = normalized_matrix_phrase(row.get("Проверяемый элемент", ""))
+        interaction = normalized_matrix_phrase(row.get("Способ взаимодействия", ""))
+        context_id = context_id_from_cell(row.get("Контекст исполнения", ""))
+        if (
+            not context_id
+            or "дата" not in domain
+            or "поле" not in element
+            or not re.search(r"\b(?:ввод|выбор|заполн)\w*\b", interaction)
+        ):
+            continue
+        by_context_and_element.setdefault((context_id, element), []).append(row)
+
+    explicit_oracle = re.compile(
+        r"\b(?:некоррект|недопуст|невалид|ошибк|отклон|запрещ|не\s+принима)\w*",
+        re.IGNORECASE,
+    )
+    for (context_id, element), group in sorted(by_context_and_element.items()):
+        if not any(row.get("Тип", "").strip() == "Positive" for row in group):
+            continue
+        negative_rows = [row for row in group if row.get("Тип", "").strip() == "Negative"]
+        representative = group[0]
+        matrix_id = representative.get("Проверка", "<без ID>")
+        obligation = active_entries.get(representative.get("Обязательство ФТ", ""), {})
+        statement = str(obligation.get("statement") or "")
+        if not negative_rows:
+            findings.append(finding(
+                "matrix-date-negative-candidate-missing",
+                "test-design",
+                "Для поля типа «Дата» отсутствует negative-проверка",
+                f"{matrix_id}: для {element} в {context_id} добавьте отдельный Negative SCN "
+                "с невозможной календарной датой. При отсутствии точного UI oracle "
+                "назначьте candidate-ui-calibration.",
+                artifact,
+                remediation_owner="writer",
+                blocking=True,
+            ))
+            continue
+        if not explicit_oracle.search(statement):
+            invalid_statuses = {row.get("Статус исполнения", "").strip() for row in negative_rows}
+            if invalid_statuses != {"candidate-ui-calibration"}:
+                findings.append(finding(
+                    "matrix-date-negative-ui-calibration-status",
+                    "execution-readiness",
+                    "Negative-проверка даты получила неподтверждённый исполнимый статус",
+                    f"{matrix_id}: ФТ задаёт тип «Дата», но не конкретный механизм реакции UI; "
+                    "negative SCN должен иметь статус candidate-ui-calibration.",
+                    artifact,
+                    remediation_owner="writer",
+                    blocking=True,
+                ))
+    return findings
+
+
 def matrix_exact_duplicate_signatures(
     row: Mapping[str, str],
 ) -> list[tuple[str, ...]]:
@@ -3741,6 +3833,11 @@ def validate_matrix(
                             artifact,
                             remediation_owner="writer",
                         ))
+    findings.extend(validate_date_negative_matrix_coverage(
+        rows=rows,
+        obligations=obligations,
+        artifact=artifact,
+    ))
     consolidation_findings, consolidation = scenario_consolidation_contract(
         state=workflow_state,
         rows_by_scenario=by_scenario,
@@ -5018,6 +5115,33 @@ def validate_test_cases(
                 remediation_owner="writer",
                 blocking=True,
             ))
+        if (
+            consolidation_decision.get("parameterization_basis")
+            == COMPOSITE_RESULT_PARAMETERIZATION_BASIS
+        ):
+            field_inventory = consolidation_decision.get("field_inventory", ())
+            all_fields = {
+                normalized_field_label(field) for field in field_inventory
+                if normalized_field_label(field)
+            }
+            for field_name in ("Название", "Цель"):
+                value = test_case_field(body, field_name)
+                mentioned_fields = composite_field_mentions(value, field_inventory)
+                if mentioned_fields and mentioned_fields != all_fields:
+                    findings.append(finding(
+                        "test-case-composite-result-wording",
+                        "semantic-completeness",
+                        "Название или цель называют только часть составного результата",
+                        f"{tc_id}: «{field_name}» упоминает "
+                        + ", ".join(sorted(mentioned_fields))
+                        + ", но составной результат также включает "
+                        + ", ".join(sorted(all_fields - mentioned_fields))
+                        + ". Назовите весь результат или используйте нейтральное "
+                        "общее наименование, раскрытое таблицей результата.",
+                        artifact,
+                        remediation_owner="writer",
+                        blocking=True,
+                    ))
         if (
             obligation_ids
             and scenario_ids
