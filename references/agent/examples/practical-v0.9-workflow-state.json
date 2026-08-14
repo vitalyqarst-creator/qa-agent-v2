@@ -1,0 +1,34 @@
+{
+  "artifacts": {
+    "canonical_test_cases": "not-created",
+    "scope_clarification_requests": "work/practical-v0.9/example-scope/scope-clarification-requests.md",
+    "scope_obligations": "work/practical-v0.9/example-scope/scope-obligations.json",
+    "source_package_manifest": "work/practical-v0.9/source-package-manifest.json",
+    "source_parity_check": "not-created",
+    "test_design_matrix": "not-created",
+    "validator_report": "not-created"
+  },
+  "contract_versions": {
+    "clarification_outcome": "clarification-outcome-v1",
+    "controller_triage": "controller-triage-v1",
+    "exception_snapshot": "exception-snapshot-v1",
+    "execution_context": "execution-context-v1",
+    "matrix": "practical-matrix-v3",
+    "route": "practical-v0.9",
+    "source_package": "source-package-v4",
+    "source_parity": "source-parity-v1"
+  },
+  "decision_notes": [],
+  "final_verdict": "not-finalized",
+  "matrix_review_required": null,
+  "matrix_revision_count": 0,
+  "next_action": "Создать матрицу тест-дизайна",
+  "phase": "scope",
+  "reviews": [],
+  "review_triage": [],
+  "route_version": "practical-v0.9",
+  "schema_version": 1,
+  "scope_id": "01",
+  "scope_slug": "example-scope",
+  "tc_revision_count": 0
+}

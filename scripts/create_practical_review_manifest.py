@@ -72,6 +72,7 @@ def main(argv: list[str] | None = None) -> int:
         code_commit=git_value(repo_root, "rev-parse", "HEAD"),
         contract_digest=contract_digest,
         ft_package_path=ft_package_path,
+        repo_root_path=str(repo_root),
         require_session_attestation=True,
     )
     write_json(output, payload)

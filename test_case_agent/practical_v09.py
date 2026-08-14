@@ -18,7 +18,7 @@ from typing import Any, Iterable, Mapping
 
 
 ROUTE_VERSION = "practical-v0.9"
-ROUTE_TOOL_VERSION = "practical-v0.9.31"
+ROUTE_TOOL_VERSION = "practical-v0.9.32"
 WORKFLOW_STATE_SCHEMA_VERSION = 1
 SOURCE_CONTRACT_VERSION = "source-package-v4"
 MATRIX_CONTRACT_VERSION = "practical-matrix-v3"
@@ -35,11 +35,12 @@ CLARIFICATION_OUTCOME_CONTRACT_VERSION = "clarification-outcome-v1"
 EXECUTION_CONTEXT_CONTRACT_VERSION = "execution-context-v1"
 SOURCE_PARITY_CONTRACT_VERSION = "source-parity-v1"
 EXCEPTION_SNAPSHOT_CONTRACT_VERSION = "exception-snapshot-v1"
-REVIEW_MANIFEST_VERSION = "practical-review-manifest-v3"
-REVIEW_SESSION_ATTESTATION_VERSION = "review-session-attestation-v1"
+REVIEW_MANIFEST_VERSION = "practical-review-manifest-v4"
+REVIEW_SESSION_ATTESTATION_VERSION = "review-session-attestation-v2"
 VALIDATOR_REPORT_VERSION = "practical-scope-validator-v2"
 SOURCE_MANIFEST_RELATIVE_PATH = "work/practical-v0.9/source-package-manifest.json"
 CLARIFICATION_REQUESTS_FILENAME = "scope-clarification-requests.md"
+MATRIX_CONSOLIDATION_SECTION_HEADING = "## Решения о консолидации сценариев"
 NO_BUSINESS_QUESTIONS_MARKER = "Вопросов, требующих ответа БА, не выявлено."
 CLARIFICATION_REQUEST_SECTION_HEADINGS = (
     "Контекст",
@@ -217,6 +218,56 @@ ALLOWED_TRIAGE_REJECTION_BASES = {
     "execution-status-precedence",
     "duplicate-finding",
 }
+
+
+def build_initial_workflow_state(
+    *,
+    scope_id: str,
+    scope_slug: str,
+    source_package_manifest: str,
+    scope_obligations: str,
+    scope_clarification_requests: str,
+) -> dict[str, Any]:
+    """Build the only current schema for a newly initialized v0.9 scope.
+
+    Initializer, generated documentation example and contract tests use this
+    builder. No current contract version or default field is duplicated in a
+    Markdown example.
+    """
+    return {
+        "schema_version": WORKFLOW_STATE_SCHEMA_VERSION,
+        "route_version": ROUTE_VERSION,
+        "scope_id": scope_id,
+        "scope_slug": scope_slug,
+        "phase": "scope",
+        "next_action": "Создать матрицу тест-дизайна",
+        "matrix_review_required": None,
+        "contract_versions": {
+            "route": ROUTE_VERSION,
+            "source_package": SOURCE_CONTRACT_VERSION,
+            "matrix": MATRIX_CONTRACT_VERSION,
+            "controller_triage": CONTROLLER_TRIAGE_CONTRACT_VERSION,
+            "clarification_outcome": CLARIFICATION_OUTCOME_CONTRACT_VERSION,
+            "execution_context": EXECUTION_CONTEXT_CONTRACT_VERSION,
+            "source_parity": SOURCE_PARITY_CONTRACT_VERSION,
+            "exception_snapshot": EXCEPTION_SNAPSHOT_CONTRACT_VERSION,
+        },
+        "artifacts": {
+            "source_package_manifest": source_package_manifest,
+            "scope_obligations": scope_obligations,
+            "scope_clarification_requests": scope_clarification_requests,
+            "source_parity_check": "not-created",
+            "test_design_matrix": "not-created",
+            "canonical_test_cases": "not-created",
+            "validator_report": "not-created",
+        },
+        "reviews": [],
+        "matrix_revision_count": 0,
+        "tc_revision_count": 0,
+        "final_verdict": "not-finalized",
+        "decision_notes": [],
+        "review_triage": [],
+    }
 REVIEW_FINDING_REQUIRED_FIELDS = (
     "id",
     "title",
@@ -349,19 +400,37 @@ SUCCESSFUL_CREATE_NEGATION_RE = re.compile(
     r"(?:создани\w*|сохранени\w*)\s+не\s+выполн\w*)\b",
     re.IGNORECASE,
 )
-SYSTEM_OBJECT_KEY_RE = re.compile(
-    r"(?im)^\s*[-*]\s*Ключ создаваемого объекта\s*:\s*(\S.+)$"
+CREATE_OBJECT_KEY_PATTERNS = (
+    re.compile(r"(?im)^\s*[-*]\s*Ключ создаваемого объекта\s*:\s*(\S.+)$"),
+    re.compile(r"(?im)^\s*[-*]\s*Идентификатор создаваемого объекта\s*:\s*(\S.+)$"),
+    re.compile(r"(?im)^\s*[-*]\s*Уникальный ключ объекта\s*:\s*(\S.+)$"),
 )
-SYSTEM_OBJECT_ABSENT_RE = re.compile(
-    r"(?im)^\s*[-*]\s*(?:Исходное состояние|Состояние)"
-    r"(?: создаваемого)? объекта(?: в системе)?\s*:\s*"
-    r"(?:отсутствует|не создан\w*)\b"
+CREATE_OBJECT_ABSENCE_PATTERNS = (
+    re.compile(
+        r"(?im)^\s*[-*]\s*(?:Исходное состояние|Состояние)"
+        r"(?: создаваемого)? объекта(?: в системе)?\s*:\s*"
+        r"(?:отсутствует|не создан\w*)\b"
+    ),
+    re.compile(
+        r"(?im)^\s*[-*]\s*До начала проверки объект с (?:указанным )?ключом\s*"
+        r"(?:отсутствует|не создан\w*)\b"
+    ),
+    re.compile(
+        r"(?im)^\s*[-*]\s*В системе нет объекта с (?:указанным )?ключом\b"
+    ),
 )
-SUCCESSFUL_CREATE_CLEANUP_RE = re.compile(
-    r"\b(?:удал\w*[^.\n]{0,100}\bсоздан\w*|"
-    r"восстанов\w*[^.\n]{0,100}\bисходн\w*\s+состо\w*|"
-    r"изолированн\w*\s+прогон\w*|одноразов\w*\s+fixture)\b",
-    re.IGNORECASE,
+SUCCESSFUL_CREATE_CLEANUP_PATTERNS = (
+    re.compile(
+        r"\b(?:удал\w*[^.\n]{0,100}\bсоздан\w*|"
+        r"восстанов\w*[^.\n]{0,100}\bисходн\w*\s+состо\w*|"
+        r"изолированн\w*\s+прогон\w*|одноразов\w*\s+fixture)\b",
+        re.IGNORECASE,
+    ),
+    re.compile(r"\bпосле проверки\s+удал\w*\s+объект\b", re.IGNORECASE),
+    re.compile(
+        r"\bпосле проверки\s+верн\w*\s+систем\w*\s+в\s+исходн\w*\s+состо\w*",
+        re.IGNORECASE,
+    ),
 )
 FOLLOW_UP_OBSERVATION_RE = re.compile(
     r"\b(?:повторн|откр|найт|провер|убед|поиск)\w*\b", re.IGNORECASE
@@ -913,9 +982,10 @@ def workflow_matrix_contract_version(state: Mapping[str, Any]) -> str:
 def workflow_scenario_consolidation_enabled(state: Mapping[str, Any]) -> bool:
     """Return whether a scope uses the explicit consolidation contract.
 
-    Existing scopes remain readable without a migration.  New scopes are
-    initialized with this contract, which makes every shared planned TC a
-    deliberate, reviewable decision rather than the result of a heuristic.
+    This is a compatibility reader for scopes created before decisions moved
+    into ``test-design-matrix.md``.  New scopes do not declare this workflow
+    contract: every shared planned TC is instead a deliberate, reviewable
+    ``CON-*`` decision in the matrix.
     """
     versions = state.get("contract_versions")
     if not isinstance(versions, Mapping):
@@ -2764,6 +2834,49 @@ def matrix_contract_version_from_path(path: Path) -> str | None:
     return None
 
 
+def parse_matrix_consolidation_decisions(path: Path) -> tuple[list[dict[str, Any]], list[str]]:
+    """Read current ``CON-*`` decisions from their immutable matrix section.
+
+    The current matrix contract keeps the structured decision list directly
+    beside the SCN rows it governs. This makes the matrix, rather than mutable
+    workflow state, the single owner of test-design reasoning.
+    """
+    try:
+        source = path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
+        raise PracticalV09Error(f"Cannot read matrix {path}: {exc}") from exc
+    if MATRIX_CONSOLIDATION_SECTION_HEADING not in source:
+        return [], [
+            "в матрице отсутствует раздел «Решения о консолидации сценариев»"
+        ]
+    section = source.split(MATRIX_CONSOLIDATION_SECTION_HEADING, 1)[1]
+    match = re.search(r"(?ms)^```json\s*\n(.*?)^```\s*$", section)
+    if match is None:
+        return [], [
+            "в разделе решений о консолидации требуется один JSON-массив в блоке ```json"
+        ]
+    try:
+        payload = json.loads(match.group(1))
+    except json.JSONDecodeError as exc:
+        return [], [f"JSON решений о консолидации не читается: {exc.msg}"]
+    if not isinstance(payload, list) or not all(isinstance(item, dict) for item in payload):
+        return [], ["JSON решений о консолидации должен быть массивом объектов CON-*"]
+    return payload, []
+
+
+def matrix_consolidation_enabled(
+    *, state: Mapping[str, Any] | None, matrix_path: Path | None
+) -> bool:
+    """Return current matrix ownership or explicit compatibility with legacy state."""
+    if matrix_path is not None and matrix_path.is_file():
+        try:
+            if MATRIX_CONSOLIDATION_SECTION_HEADING in matrix_path.read_text(encoding="utf-8"):
+                return True
+        except (OSError, UnicodeDecodeError):
+            pass
+    return state is not None and workflow_scenario_consolidation_enabled(state)
+
+
 def parse_matrix_rows(path: Path) -> tuple[list[dict[str, str]], list[str]]:
     try:
         lines = path.read_text(encoding="utf-8").splitlines()
@@ -2857,7 +2970,7 @@ def matrix_exact_duplicate_signatures(
     Natural-language similarity is not evidence that two source assertions
     are one test.  In particular, editability and manual input of the same
     field are independent properties.  Broader consolidation remains an
-    explicit writer/reviewer decision in workflow-state.json.
+    explicit writer/reviewer decision in the matrix-owned ``CON-*`` section.
     """
     context_id = context_id_from_cell(row.get("Контекст исполнения", ""))
     required = (
@@ -2920,6 +3033,7 @@ def scenario_consolidation_contract(
     state: Mapping[str, Any] | None,
     rows_by_scenario: Mapping[str, dict[str, str]],
     artifact: str,
+    matrix_path: Path | None = None,
 ) -> tuple[list[ScopeFinding], dict[str, Any]]:
     """Validate explicit, bounded decisions to merge or retain scenarios.
 
@@ -2927,7 +3041,10 @@ def scenario_consolidation_contract(
     does not create a second coverage artefact and never auto-merges prose
     that merely looks similar.
     """
-    enabled = state is not None and workflow_scenario_consolidation_enabled(state)
+    current_matrix = matrix_consolidation_enabled(state=None, matrix_path=matrix_path)
+    enabled = current_matrix or (
+        state is not None and workflow_scenario_consolidation_enabled(state)
+    )
     result: dict[str, Any] = {
         "enabled": enabled,
         "decisions": [],
@@ -2939,13 +3056,29 @@ def scenario_consolidation_contract(
         return [], result
 
     findings: list[ScopeFinding] = []
+    if current_matrix:
+        raw_decisions, parsing_errors = parse_matrix_consolidation_decisions(matrix_path)
+        for parsing_error in parsing_errors:
+            findings.append(finding(
+                "scenario-consolidation-matrix-section",
+                "traceability",
+                "Матрица не содержит читаемое решение о консолидации сценариев",
+                parsing_error + ".",
+                artifact,
+                remediation_owner="writer",
+                blocking=True,
+            ))
+        if parsing_errors:
+            return findings, result
+    else:
+        raw_decisions = state.get("scenario_consolidation", []) if state is not None else []
     declared_versions = state.get("contract_versions") if state is not None else None
     declared_version = (
         declared_versions.get("scenario_consolidation")
         if isinstance(declared_versions, Mapping)
         else None
     )
-    if declared_version != SCENARIO_CONSOLIDATION_CONTRACT_VERSION:
+    if not current_matrix and declared_version != SCENARIO_CONSOLIDATION_CONTRACT_VERSION:
         findings.append(finding(
             "scenario-consolidation-contract-migration-required",
             "transport",
@@ -2960,7 +3093,6 @@ def scenario_consolidation_contract(
             blocking_reason="scenario-consolidation-contract-migration-required",
         ))
         return findings, result
-    raw_decisions = state.get("scenario_consolidation", [])
     seen_ids: set[str] = set()
     scenario_to_decision: dict[str, str] = {}
     allowed = {"merge-parameterized", "covered-by-observable-result", "separate"}
@@ -3231,7 +3363,7 @@ def scenario_consolidation_contract(
                 "scenario-consolidation-shared-tc-without-decision",
                 "test-design",
                 "Несколько сценариев назначены одному TC без подтверждённого решения о консолидации",
-                f"{planned_tc_id}: {', '.join(sorted(scenario_ids))}. Добавьте одно решение scenario_consolidation с общим source_anchor и rationale либо разнесите planned TC-ID.",
+                f"{planned_tc_id}: {', '.join(sorted(scenario_ids))}. Добавьте одно решение CON-* в разделе консолидации matrix с общим source_anchor и rationale либо разнесите planned TC-ID.",
                 artifact,
                 remediation_owner="writer",
                 blocking=True,
@@ -3327,9 +3459,8 @@ def validate_matrix(
     active_entries = {str(item.get("id")): item for item in active_obligations(obligations)}
     setup_catalog = execution_setups(obligations)
     shared_result_literals = common_result_literals_by_obligation(obligations)
-    consolidation_enabled = (
-        workflow_state is not None
-        and workflow_scenario_consolidation_enabled(workflow_state)
+    consolidation_enabled = matrix_consolidation_enabled(
+        state=workflow_state, matrix_path=matrix_path
     )
     all_ids = {
         str(item.get("id"))
@@ -3566,7 +3697,8 @@ def validate_matrix(
     consolidation_findings, consolidation = scenario_consolidation_contract(
         state=workflow_state,
         rows_by_scenario=by_scenario,
-        artifact="workflow-state.json",
+        artifact=artifact,
+        matrix_path=matrix_path,
     )
     findings.extend(consolidation_findings)
     if consolidation["enabled"]:
@@ -3584,9 +3716,10 @@ def validate_matrix(
                     "test-design",
                     "Для точного кандидата на дублирование не принято решение о консолидации",
                     "Сценарии " + ", ".join(sorted(scenario_ids))
-                    + " имеют один контекст, действие и результат. В scenario_consolidation "
-                    "зафиксируйте merge-parameterized или separate с source_anchor и rationale.",
-                    "workflow-state.json",
+                    + " имеют один контекст, действие и результат. В разделе решений о "
+                    "консолидации matrix зафиксируйте merge-parameterized или separate "
+                    "с source_anchor и rationale.",
+                    artifact,
                     remediation_owner="writer",
                     blocking=True,
                 ))
@@ -3602,7 +3735,7 @@ def validate_matrix(
                     "matrix-internal-oracle-needs-observable-coverage",
                     "test-design",
                     "Внутреннее действие ФТ без наблюдаемого oracle запланировано как самостоятельная проверка",
-                    f"{scenario_id}: свяжите его с наблюдаемым результатом отдельным решением scenario_consolidation "
+                    f"{scenario_id}: свяжите его с наблюдаемым результатом отдельным решением CON-* "
                     "или зафиксируйте source contradiction; standalone TC не создавайте.",
                     artifact,
                     remediation_owner="writer",
@@ -3627,8 +3760,14 @@ def validate_matrix(
                     blocking=True,
                 ))
     else:
-        # Compatibility for scopes initiated before scenario-consolidation-v1.
-        # They retain the former warning-only detector until explicitly migrated.
+        # New v0.9 scopes do not keep decisions in workflow-state.  If their
+        # matrix has an exact duplicate, the writer must add a matrix-owned
+        # CON-* section instead of relying on the old warning-only detector.
+        is_current_scope = (
+            workflow_state is not None
+            and workflow_matrix_contract_version(workflow_state)
+            == MATRIX_CONTRACT_VERSION
+        )
         for group_index, (_signature, group) in enumerate(
             matrix_exact_duplicate_groups(rows), start=1
         ):
@@ -3636,7 +3775,22 @@ def validate_matrix(
             for row in group:
                 row["_shared_test_case_group"] = group_key
             planned_tc_ids = {row.get("Планируемый TC-ID", "").strip() for row in group}
-            if len(planned_tc_ids) != 1:
+            if is_current_scope:
+                matrix_ids = ", ".join(row.get("Проверка", "<без ID>") for row in group)
+                scenario_ids = ", ".join(row.get("Идентификатор сценария", "<без SCN>") for row in group)
+                findings.append(finding(
+                    "matrix-exact-duplicate-consolidation-missing",
+                    "test-design",
+                    "Для точного кандидата на дублирование не принято решение в матрице",
+                    f"{matrix_ids}: совпадают контекст, действие и основной результат ({scenario_ids}). "
+                    "Добавьте раздел «Решения о консолидации сценариев» с решением CON-* "
+                    "либо разнесите сценарии по действительно разным проверкам.",
+                    artifact,
+                    remediation_owner="writer",
+                    blocking=True,
+                    evidence=["duplicate_group=" + group_key],
+                ))
+            elif len(planned_tc_ids) != 1:
                 matrix_ids = ", ".join(row.get("Проверка", "<без ID>") for row in group)
                 scenario_ids = ", ".join(row.get("Идентификатор сценария", "<без SCN>") for row in group)
                 findings.append(finding(
@@ -4483,12 +4637,32 @@ def successful_create_case(
     )
 
 
+def successful_create_object_key(test_data: str) -> str | None:
+    """Extract a concrete object key from one approved lifecycle label."""
+    for pattern in CREATE_OBJECT_KEY_PATTERNS:
+        match = pattern.search(test_data)
+        if match is not None:
+            return match.group(1)
+    return None
+
+
+def successful_create_has_initial_absence(test_data: str) -> bool:
+    """Accept only approved, equivalent declarations of initial absence."""
+    return any(pattern.search(test_data) is not None for pattern in CREATE_OBJECT_ABSENCE_PATTERNS)
+
+
+def successful_create_has_cleanup(postconditions: str) -> bool:
+    """Accept only approved, equivalent cleanup/isolation declarations."""
+    return any(pattern.search(postconditions) is not None for pattern in SUCCESSFUL_CREATE_CLEANUP_PATTERNS)
+
+
 def validate_test_cases(
     tc_path: Path,
     package_root: Path,
     obligations: dict[str, Any],
     matrix_by_scenario: dict[str, dict[str, str]],
     workflow_state: Mapping[str, Any] | None = None,
+    matrix_path: Path | None = None,
     fixture_root: Path | None = None,
 ) -> list[ScopeFinding]:
     artifact = relative_to_package(package_root, tc_path)
@@ -4516,9 +4690,8 @@ def validate_test_cases(
     setup_catalog = execution_setups(obligations)
     shared_result_literals = common_result_literals_by_obligation(obligations)
     fixture_root = fixture_root or Path("__missing_dadata_fixture_root__")
-    consolidation_enabled = (
-        workflow_state is not None
-        and workflow_scenario_consolidation_enabled(workflow_state)
+    consolidation_enabled = matrix_consolidation_enabled(
+        state=workflow_state, matrix_path=matrix_path
     )
     shared_scenarios_by_tc: dict[str, frozenset[str]] = {}
     consolidation_by_tc: dict[str, dict[str, Any]] = {}
@@ -4526,7 +4699,10 @@ def validate_test_cases(
         _consolidation_findings, consolidation = scenario_consolidation_contract(
             state=workflow_state,
             rows_by_scenario=matrix_by_scenario,
-            artifact="workflow-state.json",
+            artifact=relative_to_package(package_root, matrix_path)
+            if matrix_path is not None
+            else "workflow-state.json",
+            matrix_path=matrix_path,
         )
         shared_scenarios_by_tc = consolidation["shared_scenarios_by_tc"]
         consolidation_by_tc = consolidation["consolidation_by_tc"]
@@ -4675,8 +4851,8 @@ def validate_test_cases(
             steps=steps_value,
             expected_result=expected_result,
         ):
-            key_match = SYSTEM_OBJECT_KEY_RE.search(test_data)
-            if key_match is None:
+            object_key_value = successful_create_object_key(test_data)
+            if object_key_value is None:
                 findings.append(finding(
                     "test-case-successful-create-key-missing",
                     "execution-readiness",
@@ -4685,7 +4861,7 @@ def validate_test_cases(
                     artifact,
                     remediation_owner="writer",
                 ))
-            if SYSTEM_OBJECT_ABSENT_RE.search(test_data) is None:
+            if not successful_create_has_initial_absence(test_data):
                 findings.append(finding(
                     "test-case-successful-create-initial-state-missing",
                     "execution-readiness",
@@ -4694,7 +4870,7 @@ def validate_test_cases(
                     artifact,
                     remediation_owner="writer",
                 ))
-            has_cleanup = SUCCESSFUL_CREATE_CLEANUP_RE.search(postconditions) is not None
+            has_cleanup = successful_create_has_cleanup(postconditions)
             if not has_cleanup:
                 findings.append(finding(
                     "test-case-successful-create-cleanup-missing",
@@ -4704,11 +4880,11 @@ def validate_test_cases(
                     artifact,
                     remediation_owner="writer",
                 ))
-            if key_match is not None:
-                object_key = " ".join(key_match.group(1).casefold().split())
+            if object_key_value is not None:
+                object_key = " ".join(object_key_value.casefold().split())
                 successful_creates.setdefault(object_key, []).append((tc_id, has_cleanup))
         title = test_case_field(body, "Название").casefold()
-        if context_id.endswith("CREATE") and MIXED_CREATE_EDIT_TITLE_RE.search(title):
+        if context_flow_kinds.get(context_id) == "create" and MIXED_CREATE_EDIT_TITLE_RE.search(title):
             findings.append(finding(
                 "test-case-title-context-mismatch",
                 "semantic-completeness",
@@ -4717,7 +4893,7 @@ def validate_test_cases(
                 artifact,
                 remediation_owner="writer",
             ))
-        if context_id.endswith("EDIT") and MIXED_CREATE_EDIT_TITLE_RE.search(title):
+        if context_flow_kinds.get(context_id) == "edit" and MIXED_CREATE_EDIT_TITLE_RE.search(title):
             findings.append(finding(
                 "test-case-title-context-mismatch",
                 "semantic-completeness",
@@ -4888,7 +5064,7 @@ def validate_test_cases(
                     "test-case-shared-scenario-not-authorized",
                     "traceability",
                     "Один тест-кейс объединяет сценарии без решения о консолидации",
-                    f"{tc_id}: scenario_consolidation должен в точности содержать {', '.join(sorted(scenario_ids))} и этот planned TC-ID.",
+                    f"{tc_id}: решение CON-* в разделе консолидации matrix должно в точности содержать {', '.join(sorted(scenario_ids))} и этот planned TC-ID.",
                     artifact,
                     remediation_owner="writer",
                 ))
@@ -5943,20 +6119,26 @@ def validate_scope(
                 obligations,
                 matrix_by_scenario,
                 state,
+                matrix_path,
                 obligations_path.parent / "fixtures",
             ))
         else:
             findings.append(finding("test-cases-missing", "source-integrity", "Файл тест-кейсов отсутствует", relative_to_package(package_root, tc_path), "workflow-state.json", remediation_owner="writer"))
 
     matrix_required, matrix_reasons = matrix_review_required(obligations)
-    if (
-        workflow_scenario_consolidation_enabled(state)
-        and state.get("scenario_consolidation")
-    ):
+    consolidation_decisions: list[dict[str, Any]] = []
+    if matrix_consolidation_enabled(state=state, matrix_path=matrix_path):
+        if matrix_consolidation_enabled(state=None, matrix_path=matrix_path):
+            consolidation_decisions, _consolidation_errors = (
+                parse_matrix_consolidation_decisions(matrix_path)
+            )
+        else:
+            consolidation_decisions = state.get("scenario_consolidation", [])
+    if consolidation_decisions:
         matrix_required = True
         matrix_reasons = [
             *matrix_reasons,
-            "в matrix есть решение scenario_consolidation, требующее независимой проверки",
+            "в matrix есть решение CON-*, требующее независимой проверки",
         ]
     declared = state.get("matrix_review_required")
     if declared is not None and bool(declared) != matrix_required:
@@ -6274,14 +6456,29 @@ def build_review_manifest(
     code_commit: str,
     contract_digest: str,
     ft_package_path: str = ".",
+    repo_root_path: str | None = None,
     require_session_attestation: bool = False,
 ) -> dict[str, Any]:
     state = load_workflow_state(workflow_state_path, package_root)
     if not is_durable_codex_thread_id(controller_thread_id):
         raise PracticalV09Error("controller_thread_id must be a durable Codex thread UUID")
+    normalized_repo_root = Path(repo_root_path).resolve() if repo_root_path else package_root.resolve()
+    normalized_package_root = package_root.resolve()
+    try:
+        derived_package_path = normalized_package_root.relative_to(normalized_repo_root).as_posix()
+    except ValueError as exc:
+        raise PracticalV09Error("package_root must be inside repo_root_path") from exc
     normalized_package_path = Path(ft_package_path)
     if normalized_package_path.is_absolute() or ".." in normalized_package_path.parts:
         raise PracticalV09Error("ft_package_path must be a relative path inside the code repository")
+    if normalized_package_path.as_posix() != derived_package_path:
+        raise PracticalV09Error(
+            "ft_package_path must exactly match the normalized package path relative to repo_root_path"
+        )
+    if require_session_attestation and repo_root_path is None:
+        raise PracticalV09Error(
+            "repo_root_path is required when an independent reviewer-session attestation is required"
+        )
     context, findings = validate_scope(package_root=package_root, workflow_state_path=workflow_state_path)
     blocking = [item for item in findings if item.blocking]
     if blocking:
@@ -6330,7 +6527,9 @@ def build_review_manifest(
         "review_mode": review_mode,
         "controller_thread_id": controller_thread_id,
         "execution_surface_required": "codex-thread",
-        "ft_package_path": normalized_package_path.as_posix(),
+        "repo_root": str(normalized_repo_root),
+        "ft_package_root": str(normalized_package_root),
+        "ft_package_path": derived_package_path,
         "code_branch": code_branch,
         "code_commit": code_commit,
         "contract_digest": contract_digest,
@@ -6349,14 +6548,33 @@ def build_review_manifest(
             "owner": "controller",
             "execution_surface": "codex-thread",
         }
-    if review_mode == "matrix" and workflow_scenario_consolidation_enabled(state):
-        manifest["scenario_consolidation_contract"] = {
-            "version": SCENARIO_CONSOLIDATION_CONTRACT_VERSION,
-            "decisions": state.get("scenario_consolidation", []),
-        }
-        manifest["reviewer_order"].append(
-            "Самостоятельно проверить решения scenario_consolidation и неучтённые кандидаты на объединение."
+    matrix_path = paths.get("test_design_matrix")
+    if review_mode == "matrix" and matrix_consolidation_enabled(
+        state=state, matrix_path=matrix_path
+    ):
+        matrix_owns_consolidation = matrix_consolidation_enabled(
+            state=None, matrix_path=matrix_path
         )
+        if matrix_owns_consolidation:
+            consolidation_decisions, consolidation_errors = (
+                parse_matrix_consolidation_decisions(matrix_path)
+            )
+            if consolidation_errors:
+                raise PracticalV09Error(
+                    "Cannot create matrix review manifest: "
+                    + "; ".join(consolidation_errors)
+                )
+        else:
+            consolidation_decisions = state.get("scenario_consolidation", [])
+        if consolidation_decisions:
+            manifest["scenario_consolidation_contract"] = {
+                "version": SCENARIO_CONSOLIDATION_CONTRACT_VERSION,
+                "decisions": consolidation_decisions,
+                "owner": "test-design-matrix" if matrix_owns_consolidation else "legacy-workflow-state",
+            }
+            manifest["reviewer_order"].append(
+                "Самостоятельно проверить решения CON-* в matrix и неучтённые кандидаты на объединение."
+            )
     if workflow_controller_triage_enabled(state):
         manifest["controller_triage_contract"] = {
             "version": CONTROLLER_TRIAGE_CONTRACT_VERSION,
@@ -6401,6 +6619,19 @@ def build_review_session_attestation(
         or reviewer_thread_id == controller_thread_id
     ):
         raise PracticalV09Error("reviewer_thread_id must be a distinct durable Codex thread UUID")
+    try:
+        repo_root = Path(str(manifest.get("repo_root") or "")).resolve()
+        manifest_package_root = Path(str(manifest.get("ft_package_root") or "")).resolve()
+        expected_relative = manifest_package_root.relative_to(repo_root).as_posix()
+    except (TypeError, ValueError) as exc:
+        raise PracticalV09Error("review manifest has invalid normalized repository roots") from exc
+    if (
+        manifest_package_root != package_root.resolve()
+        or manifest.get("ft_package_path") != expected_relative
+    ):
+        raise PracticalV09Error(
+            "review manifest roots do not match the current FT package root"
+        )
     return {
         "schema_version": 1,
         "attestation_version": REVIEW_SESSION_ATTESTATION_VERSION,
@@ -6411,6 +6642,8 @@ def build_review_session_attestation(
         "controller_thread_id": controller_thread_id,
         "reviewer_thread_id": reviewer_thread_id,
         "code_commit": manifest.get("code_commit"),
+        "repo_root": manifest.get("repo_root"),
+        "ft_package_root": manifest.get("ft_package_root"),
         "ft_package_path": manifest.get("ft_package_path"),
     }
 
@@ -6425,6 +6658,25 @@ def verify_review_result(
     result = read_json(result_path)
     artifact = relative_to_package(package_root, result_path)
     findings: list[ScopeFinding] = []
+    try:
+        manifest_repo_root = Path(str(manifest.get("repo_root") or "")).resolve()
+        manifest_package_root = Path(str(manifest.get("ft_package_root") or "")).resolve()
+        expected_package_path = manifest_package_root.relative_to(manifest_repo_root).as_posix()
+        manifest_roots_valid = (
+            manifest_package_root == package_root.resolve()
+            and manifest.get("ft_package_path") == expected_package_path
+        )
+    except (TypeError, ValueError):
+        manifest_roots_valid = False
+    if not manifest_roots_valid:
+        findings.append(finding(
+            "review-manifest-roots",
+            "review-integrity",
+            "Manifest review не содержит корректные нормализованные roots репозитория и FT-пакета",
+            "repo_root и ft_package_root должны быть абсолютными нормализованными путями; ft_package_path должен быть их корректным относительным путём.",
+            artifact,
+            remediation_owner="controller",
+        ))
     if has_suspicious_mojibake(result):
         findings.append(finding(
             "review-result-mojibake",
@@ -6503,6 +6755,8 @@ def verify_review_result(
                     "controller_thread_id": manifest.get("controller_thread_id"),
                     "reviewer_thread_id": reviewer_thread_id,
                     "code_commit": manifest.get("code_commit"),
+                    "repo_root": manifest.get("repo_root"),
+                    "ft_package_root": manifest.get("ft_package_root"),
                     "ft_package_path": manifest.get("ft_package_path"),
                 }
                 if any(attestation.get(key) != value for key, value in expected_attestation.items()):
@@ -6510,7 +6764,7 @@ def verify_review_result(
                         "review-result-session-attestation-mismatch",
                         "review-integrity",
                         "Подтверждение controller-а не связано с текущим review manifest и reviewer-сессией",
-                        "Attestation должен в точности связывать manifest hash, controller/reviewer thread ID, code commit и относительный путь FT-пакета.",
+                        "Attestation должен в точности связывать manifest hash, controller/reviewer thread ID, code commit и нормализованные roots репозитория/FT-пакета.",
                         artifact,
                         remediation_owner="controller",
                     ))

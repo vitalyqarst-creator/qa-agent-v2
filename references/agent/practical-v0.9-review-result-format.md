@@ -29,7 +29,9 @@
 `scope-obligations.json`.
 
 Перед передачей результата controller создаёт immutable
-`review-session-attestation.json` штатным скриптом. Reviewer получает его как
+`review-session-attestation.json` штатным скриптом. Attestation связывает
+фактический ID reviewer-а с теми же нормализованными `repo_root` и
+`ft_package_root`, что и manifest. Reviewer получает его как
 часть snapshot и переносит его SHA-256 в
 `review_session_attestation_sha256`. Это подтверждает, что ID reviewer-а
 зафиксирован controller-ом после создания отдельной задачи, а не только
@@ -107,7 +109,8 @@ runtime-полей и отклоняй английские служебные �
 разные контексты или классы входных данных дают самостоятельные проверяемые
 потоки, они должны быть разложены на разные `OBL-*`/matrix rows/TC.
 
-Reviewer сам проверяет `scenario_consolidation`, а не доверяет prose writer-а:
+Reviewer сам проверяет решения `CON-*` в разделе консолидации matrix, а не
+доверяет prose writer-а:
 у параметризованной группы совпадают проверяемый элемент, домен проверки,
 способ взаимодействия, контекст, тип и статус исполнения; `parameterization_basis`
 описывает только допустимый вид параметра. Для `поля одного составного

@@ -24,6 +24,7 @@ from test_case_agent.practical_v09 import (
     PracticalV09Error,
     build_review_manifest,
     build_review_session_attestation,
+    build_initial_workflow_state,
     build_validator_report,
     derived_execution_status,
     dictionary_inventory_required,
@@ -32,8 +33,12 @@ from test_case_agent.practical_v09 import (
     has_composite_result_table,
     matrix_review_required,
     matrix_exact_duplicate_groups,
+    parse_matrix_consolidation_decisions,
     parse_matrix_rows,
     scenario_consolidation_contract,
+    successful_create_has_cleanup,
+    successful_create_has_initial_absence,
+    successful_create_object_key,
     obligation_ids_sha256,
     requirement_codes,
     relative_to_package,
@@ -372,14 +377,49 @@ class PracticalV09Tests(unittest.TestCase):
         workflow_format = (
             REPO_ROOT / "references" / "agent" / "practical-v0.9-workflow-state-format.md"
         ).read_text(encoding="utf-8")
-        self.assertIn(f'"source_package": "{SOURCE_CONTRACT_VERSION}"', workflow_format)
-        self.assertIn(f'"matrix": "{MATRIX_CONTRACT_VERSION}"', workflow_format)
-        self.assertIn(
-            f'"execution_context": "{EXECUTION_CONTEXT_CONTRACT_VERSION}"',
-            workflow_format,
+        example_path = (
+            REPO_ROOT / "references" / "agent" / "examples"
+            / "practical-v0.9-workflow-state.json"
         )
-        self.assertIn('"matrix_revision_count": 0', workflow_format)
-        self.assertIn('"tc_revision_count": 0', workflow_format)
+        self.assertIn("генерируется тем же runtime builder-ом", workflow_format)
+        self.assertIn("practical-v0.9-workflow-state.json", workflow_format)
+        self.assertEqual(
+            build_initial_workflow_state(
+                scope_id="01",
+                scope_slug="example-scope",
+                source_package_manifest="work/practical-v0.9/source-package-manifest.json",
+                scope_obligations="work/practical-v0.9/example-scope/scope-obligations.json",
+                scope_clarification_requests=(
+                    "work/practical-v0.9/example-scope/scope-clarification-requests.md"
+                ),
+            ),
+            json.loads(example_path.read_text(encoding="utf-8")),
+        )
+
+    def test_workflow_example_renderer_matches_checked_in_example(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            output = Path(raw) / "workflow-state.json"
+            completed = subprocess.run(
+                [
+                    sys.executable,
+                    str(REPO_ROOT / "scripts" / "render_practical_v09_workflow_example.py"),
+                    "--output",
+                    str(output),
+                ],
+                text=True,
+                capture_output=True,
+                encoding="utf-8",
+                errors="replace",
+            )
+            self.assertEqual(0, completed.returncode, completed.stderr)
+            example_path = (
+                REPO_ROOT / "references" / "agent" / "examples"
+                / "practical-v0.9-workflow-state.json"
+            )
+            self.assertEqual(
+                json.loads(example_path.read_text(encoding="utf-8")),
+                json.loads(output.read_text(encoding="utf-8")),
+            )
 
     def test_invalid_execution_context_contract_or_flow_kind_blocks_current_scope(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
@@ -404,6 +444,87 @@ class PracticalV09Tests(unittest.TestCase):
                 "scope-obligation-execution-context-flow-kind",
                 [item.id for item in findings if item.blocking],
             )
+
+    def test_successful_create_lifecycle_metadata_accepts_equivalent_russian_forms(self) -> None:
+        key_cases = {
+            "- Ключ создаваемого объекта: ИНН `7707083893`.": "ИНН `7707083893`.",
+            "- Идентификатор создаваемого объекта: `PARTNER-001`.": "`PARTNER-001`.",
+            "- Уникальный ключ объекта: ИНН `7707083893`, тип `СК`.": "ИНН `7707083893`, тип `СК`.",
+        }
+        for source, expected in key_cases.items():
+            with self.subTest(source=source):
+                self.assertEqual(expected, successful_create_object_key(source))
+        for source in (
+            "- Исходное состояние объекта: отсутствует.",
+            "- До начала проверки объект с указанным ключом отсутствует.",
+            "- В системе нет объекта с ключом.",
+        ):
+            with self.subTest(initial_state=source):
+                self.assertTrue(successful_create_has_initial_absence(source))
+        for source in (
+            "После проверки удалить созданный объект.",
+            "После проверки вернуть систему в исходное состояние.",
+            "Выполнить изолированный прогон.",
+        ):
+            with self.subTest(cleanup=source):
+                self.assertTrue(successful_create_has_cleanup(source))
+        self.assertIsNone(successful_create_object_key("- Наименование: Партнер."))
+        self.assertFalse(successful_create_has_initial_absence("- Открыта новая карточка."))
+        self.assertFalse(successful_create_has_cleanup("Закрыть карточку."))
+
+    def test_current_consolidation_decisions_are_owned_by_matrix_not_workflow_state(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            fixture = PracticalV09Fixture(Path(raw))
+            matrix_text = fixture.matrix.read_text(encoding="utf-8")
+            matrix_text += (
+                "\n## Решения о консолидации сценариев\n\n```json\n"
+                "[{\n"
+                "  \"id\": \"CON-001\",\n"
+                "  \"decision\": \"merge-parameterized\",\n"
+                "  \"scenario_ids\": [\"SCN-001\", \"SCN-002\"],\n"
+                "  \"planned_tc_id\": \"TC-MENU-001\",\n"
+                "  \"source_anchor\": \"Раздел 9.1\",\n"
+                "  \"rationale\": \"Один элемент и одна реакция.\",\n"
+                "  \"parameterization_basis\": \"эквивалентные значения одного класса\"\n"
+                "}]\n```\n"
+            )
+            fixture.matrix.write_text(matrix_text, encoding="utf-8")
+            raw_decisions, errors = parse_matrix_consolidation_decisions(fixture.matrix)
+            self.assertEqual([], errors)
+            self.assertEqual("CON-001", raw_decisions[0]["id"])
+            rows = {
+                "SCN-001": {
+                    "Идентификатор сценария": "SCN-001",
+                    "Контекст исполнения": "CTX-OPEN-MENU — Открытие раздела из меню",
+                    "Проверяемый элемент": "Пункт меню «Партнеры»",
+                    "Домен проверки": "Доступность",
+                    "Способ взаимодействия": "Нажатие",
+                    "Тип": "Positive",
+                    "Статус исполнения": "ready",
+                    "Планируемый TC-ID": "TC-MENU-001",
+                },
+                "SCN-002": {
+                    "Идентификатор сценария": "SCN-002",
+                    "Контекст исполнения": "CTX-OPEN-MENU — Открытие раздела из меню",
+                    "Проверяемый элемент": "Пункт меню «Партнеры»",
+                    "Домен проверки": "Доступность",
+                    "Способ взаимодействия": "Нажатие",
+                    "Тип": "Positive",
+                    "Статус исполнения": "ready",
+                    "Планируемый TC-ID": "TC-MENU-001",
+                },
+            }
+            state = json.loads(fixture.state.read_text(encoding="utf-8"))
+            self.assertNotIn("scenario_consolidation", state)
+            findings, consolidation = scenario_consolidation_contract(
+                state=state,
+                rows_by_scenario=rows,
+                artifact="test-design-matrix.md",
+                matrix_path=fixture.matrix,
+            )
+            self.assertEqual([], [item.id for item in findings if item.blocking])
+            self.assertTrue(consolidation["enabled"])
+            self.assertEqual("CON-001", consolidation["decisions"][0]["id"])
 
     def test_initializer_creates_ba_cards_and_binds_outcome_to_review_inputs(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
@@ -2076,6 +2197,7 @@ class PracticalV09Tests(unittest.TestCase):
     def test_session_attestation_is_required_when_manifest_declares_it(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             fixture = PracticalV09Fixture(Path(raw))
+            repo_root = fixture.root.parent
             manifest = build_review_manifest(
                 package_root=fixture.root,
                 workflow_state_path=fixture.state,
@@ -2084,11 +2206,15 @@ class PracticalV09Tests(unittest.TestCase):
                 code_branch="codex/test",
                 code_commit="abc123",
                 contract_digest="contract",
-                ft_package_path="fts/Partners/Partners-v1",
+                ft_package_path=fixture.root.name,
+                repo_root_path=str(repo_root),
                 require_session_attestation=True,
             )
             manifest_path = fixture.scope_dir / "matrix-review-manifest.json"
             write_json(manifest_path, manifest)
+            self.assertEqual(str(repo_root.resolve()), manifest["repo_root"])
+            self.assertEqual(str(fixture.root.resolve()), manifest["ft_package_root"])
+            self.assertEqual(fixture.root.name, manifest["ft_package_path"])
             attestation_path = fixture.scope_dir / "matrix-review-session.json"
             write_json(
                 attestation_path,
@@ -2098,6 +2224,9 @@ class PracticalV09Tests(unittest.TestCase):
                     reviewer_thread_id="019feebf-3cde-79d2-9f87-ba9c61ff7b14",
                 ),
             )
+            attestation = json.loads(attestation_path.read_text(encoding="utf-8"))
+            self.assertEqual(manifest["repo_root"], attestation["repo_root"])
+            self.assertEqual(manifest["ft_package_root"], attestation["ft_package_root"])
             result_path = fixture.scope_dir / "matrix-review-result.json"
             write_json(
                 result_path,
@@ -2130,6 +2259,21 @@ class PracticalV09Tests(unittest.TestCase):
                 review_session_attestation_path=attestation_path,
             )
             self.assertFalse([item for item in findings if item.blocking])
+            attestation["repo_root"] = str((fixture.root / "other-root").resolve())
+            write_json(attestation_path, attestation)
+            result = json.loads(result_path.read_text(encoding="utf-8"))
+            result["review_session_attestation_sha256"] = sha256_file(attestation_path)
+            write_json(result_path, result)
+            _, findings = verify_review_result(
+                package_root=fixture.root,
+                manifest_path=manifest_path,
+                result_path=result_path,
+                review_session_attestation_path=attestation_path,
+            )
+            self.assertIn(
+                "review-result-session-attestation-mismatch",
+                [item.id for item in findings if item.blocking],
+            )
 
     def test_finalizer_preserves_required_session_attestation_in_review_history(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
@@ -2142,7 +2286,8 @@ class PracticalV09Tests(unittest.TestCase):
                 code_branch="codex/test",
                 code_commit="abc123",
                 contract_digest="contract",
-                ft_package_path="fts/Partners/Partners-v1",
+                ft_package_path=".",
+                repo_root_path=str(fixture.root),
                 require_session_attestation=True,
             )
             manifest_path = fixture.scope_dir / "matrix-review-manifest.json"
@@ -2205,15 +2350,9 @@ class PracticalV09Tests(unittest.TestCase):
                 [item.id for item in findings if item.blocking],
             )
 
-    def test_matrix_reviewer_must_confirm_scenario_consolidation_scan(self) -> None:
+    def test_matrix_reviewer_does_not_require_consolidation_receipt_without_decisions(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             fixture = PracticalV09Fixture(Path(raw))
-            state = json.loads(fixture.state.read_text(encoding="utf-8"))
-            state["contract_versions"]["scenario_consolidation"] = (
-                SCENARIO_CONSOLIDATION_CONTRACT_VERSION
-            )
-            state["scenario_consolidation"] = []
-            write_json(fixture.state, state)
             manifest = build_review_manifest(
                 package_root=fixture.root,
                 workflow_state_path=fixture.state,
@@ -2223,48 +2362,7 @@ class PracticalV09Tests(unittest.TestCase):
                 code_commit="abc123",
                 contract_digest="contract",
             )
-            self.assertIn("scenario_consolidation_contract", manifest)
-            manifest_path = fixture.scope_dir / "matrix-review-manifest.json"
-            write_json(manifest_path, manifest)
-            result_path = fixture.scope_dir / "matrix-review-result.json"
-            result = {
-                "review_manifest_sha256": sha256_file(manifest_path),
-                "scope_id": "01",
-                "scope_slug": "menu",
-                "review_mode": "matrix",
-                "execution_surface": "codex-thread",
-                "reviewer_thread_id": "019feebf-3cde-79d2-9f87-ba9c61ff7b14",
-                "independent_obligations": independently_derived_obligation(),
-                "verdict": "approved",
-                "findings": [],
-            }
-            write_json(result_path, result)
-            _, findings = verify_review_result(
-                package_root=fixture.root,
-                manifest_path=manifest_path,
-                result_path=result_path,
-            )
-            self.assertIn(
-                "review-result-scenario-consolidation",
-                [item.id for item in findings if item.blocking],
-            )
-
-            result["scenario_consolidation_review"] = {
-                "checked": True,
-                "decision_ids": [],
-                "uncategorized_candidate_count": 0,
-                "method": "Проверены группы с общими объектом, контекстом и пользовательским действием.",
-            }
-            write_json(result_path, result)
-            _, findings = verify_review_result(
-                package_root=fixture.root,
-                manifest_path=manifest_path,
-                result_path=result_path,
-            )
-            self.assertNotIn(
-                "review-result-scenario-consolidation",
-                [item.id for item in findings if item.blocking],
-            )
+            self.assertNotIn("scenario_consolidation_contract", manifest)
 
     def test_finalizer_records_review_and_allows_accepted_only_after_approval(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
@@ -3944,9 +4042,24 @@ class PracticalV09Tests(unittest.TestCase):
                 [item.id for item in findings if item.blocking],
             )
 
+            current_state = json.loads(fixture.state.read_text(encoding="utf-8"))
+            current_state["contract_versions"].pop("scenario_consolidation")
+            current_state.pop("scenario_consolidation")
+            write_json(fixture.state, current_state)
+            _, findings = validate_scope(
+                package_root=fixture.root, workflow_state_path=fixture.state
+            )
+            self.assertIn(
+                "matrix-exact-duplicate-consolidation-missing",
+                [item.id for item in findings if item.blocking],
+            )
+
             merged_rows = exact_rows.replace("TC-CARD-002", "TC-CARD-001")
             fixture.matrix.write_text(merged_rows, encoding="utf-8")
             state = json.loads(fixture.state.read_text(encoding="utf-8"))
+            state["contract_versions"]["scenario_consolidation"] = (
+                SCENARIO_CONSOLIDATION_CONTRACT_VERSION
+            )
             state["scenario_consolidation"] = [{
                 "id": "CON-001",
                 "decision": "merge-parameterized",

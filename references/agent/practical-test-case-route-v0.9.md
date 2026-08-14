@@ -39,13 +39,14 @@
   `OBL/CTX` может иметь несколько `SCN-*` только если ФТ требует независимые
   классы, границы или исходные состояния с разными primary oracle.
 - Разные `OBL-*` сами по себе не оправдывают отдельные TC. Для кандидата с
-  одним объектом, `CTX-*`, действием и реакцией writer записывает в
-  `workflow-state.json.scenario_consolidation` решение `CON-*`: объединить
-  параметры, покрыть внутреннюю проверку наблюдаемым результатом или оставить
-  раздельно. Укажи `SCN-*`, `source_anchor` и русскоязычное `rationale`; при
-  объединении — общий `planned_tc_id`, для внутренней проверки — ещё
-  `observable_scenario_id`. Не объединяй автоматически разные create/edit,
-  состояния, свойства поля, реакции или результаты.
+  одним объектом, `CTX-*`, действием и реакцией writer записывает в разделе
+  `## Решения о консолидации сценариев` файла `test-design-matrix.md` решение
+  `CON-*`: объединить параметры, покрыть внутреннюю проверку наблюдаемым
+  результатом или оставить раздельно. Укажи `SCN-*`, `source_anchor` и
+  русскоязычное `rationale`; при объединении — общий `planned_tc_id`, для
+  внутренней проверки — ещё `observable_scenario_id`. Не объединяй
+  автоматически разные create/edit, состояния, свойства поля, реакции или
+  результаты.
 - Для `merge-parameterized` у всех связанных строк matrix должны совпадать
   `Проверяемый элемент`, `Домен проверки`, `Способ взаимодействия`, `CTX-*`,
   `Тип`, `Статус исполнения` и исходный поток. В `CON-*` укажи допустимое
@@ -186,7 +187,12 @@ python scripts/validate_practical_scope.py --ft-package-root <package> --workflo
 python scripts/create_practical_review_manifest.py --repo-root <repo> --ft-package-root <package> --workflow-state <scope-dir>/workflow-state.json --review-mode <matrix|test-cases> --controller-thread-id <current-top-level-thread-id> --contract-file references/agent/practical-test-case-route-v0.9.md --output <scope-dir>/<mode>-review-manifest.json
 ```
 
-Reviewer запускается в новой верхнеуровневой Codex-сессии (`codex-thread`), read-only для matrix/TC. Controller не заменяет такую сессию subagent-ом. Сразу после создания reviewer-сессии controller записывает её фактический ID отдельной командой; без этого attestation финализация блокируется:
+Manifest фиксирует нормализованные `repo_root`, `ft_package_root` и их
+относительную связь. Reviewer запускается в новой верхнеуровневой
+Codex-сессии (`codex-thread`), read-only для matrix/TC. Controller не заменяет
+такую сессию subagent-ом. Сразу после создания reviewer-сессии controller
+записывает её фактический ID и те же roots отдельной командой; без этого
+attestation финализация блокируется:
 
 ```text
 python scripts/record_practical_review_session.py --ft-package-root <package> --review-manifest <scope-dir>/<mode>-review-manifest.json --reviewer-thread-id <created-top-level-reviewer-thread-id> --output <scope-dir>/<mode>-review-session-attestation.json
@@ -293,7 +299,7 @@ DaData/fixture-профиль можно использовать повторн
 только данные, которые участвуют в шагах, primary oracle или обязательном
 сохранении/переходе; не копируй весь профиль организации в проверку одной
 подсказки или одного автозаполненного поля. Несколько `SCN-*` в одном TC
-допустимы только по `scenario_consolidation` того же `planned_tc_id`: один
+допустимы только по `CON-*` из раздела консолидации matrix того же `planned_tc_id`: один
 action, один primary oracle, одинаковые элемент/домен/способ взаимодействия
 и параметры с одинаковой реакцией. Исключение для `поля одного составного
 результата` допускает разные поля одной карточки, но только с полным
@@ -333,9 +339,11 @@ verified fixture. Если такого fixture действительно не�
 домена и способа взаимодействия. Если активный scope был начат с
 `practical-matrix-v1` или `practical-matrix-v2`, controller не исправляет
 его частично и не сбрасывает `matrix_revision_count` или `tc_revision_count`.
-Если в scope уже есть `scenario_consolidation`, мигратор одновременно
-переводит его в `scenario-consolidation-v2`; writer заново подтверждает
-`parameterization_basis` и классификацию каждой объединяемой строки.
+Legacy scope с `scenario_consolidation` в workflow не является шаблоном для
+новой работы. Он остаётся читаемым только как compatibility path; при явной
+содержательной доработке writer фиксирует последующие решения в разделе
+консолидации matrix и заново подтверждает `parameterization_basis` и
+классификацию каждой объединяемой строки.
 
 Сначала он выполняет только read-only план:
 

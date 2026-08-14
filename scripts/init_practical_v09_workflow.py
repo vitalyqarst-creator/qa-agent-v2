@@ -12,18 +12,9 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from test_case_agent.practical_v09 import (
-    ROUTE_VERSION,
-    SOURCE_CONTRACT_VERSION,
-    MATRIX_CONTRACT_VERSION,
-    SCENARIO_CONSOLIDATION_CONTRACT_VERSION,
-    CONTROLLER_TRIAGE_CONTRACT_VERSION,
-    CLARIFICATION_OUTCOME_CONTRACT_VERSION,
-    EXECUTION_CONTEXT_CONTRACT_VERSION,
-    SOURCE_PARITY_CONTRACT_VERSION,
-    EXCEPTION_SNAPSHOT_CONTRACT_VERSION,
-    WORKFLOW_STATE_SCHEMA_VERSION,
     SOURCE_MANIFEST_RELATIVE_PATH,
     PracticalV09Error,
+    build_initial_workflow_state,
     clarification_requests_path,
     package_relative_path,
     read_json,
@@ -84,42 +75,13 @@ def main(argv: list[str] | None = None) -> int:
             render_scope_clarification_requests(obligations_payload),
             encoding="utf-8",
         )
-    payload = {
-        "schema_version": WORKFLOW_STATE_SCHEMA_VERSION,
-        "route_version": ROUTE_VERSION,
-        "scope_id": args.scope_id,
-        "scope_slug": args.scope_slug,
-        "phase": "scope",
-        "next_action": "Создать матрицу тест-дизайна",
-        "matrix_review_required": None,
-        "contract_versions": {
-            "route": ROUTE_VERSION,
-            "source_package": SOURCE_CONTRACT_VERSION,
-            "matrix": MATRIX_CONTRACT_VERSION,
-            "scenario_consolidation": SCENARIO_CONSOLIDATION_CONTRACT_VERSION,
-            "controller_triage": CONTROLLER_TRIAGE_CONTRACT_VERSION,
-            "clarification_outcome": CLARIFICATION_OUTCOME_CONTRACT_VERSION,
-            "execution_context": EXECUTION_CONTEXT_CONTRACT_VERSION,
-            "source_parity": SOURCE_PARITY_CONTRACT_VERSION,
-            "exception_snapshot": EXCEPTION_SNAPSHOT_CONTRACT_VERSION,
-        },
-        "artifacts": {
-            "source_package_manifest": relative_to_package(package_root, source_path),
-            "scope_obligations": relative_to_package(package_root, obligations_path),
-            "scope_clarification_requests": relative_to_package(package_root, clarification_path),
-            "source_parity_check": "not-created",
-            "test_design_matrix": "not-created",
-            "canonical_test_cases": "not-created",
-            "validator_report": "not-created",
-        },
-        "reviews": [],
-        "matrix_revision_count": 0,
-        "tc_revision_count": 0,
-        "final_verdict": "not-finalized",
-        "decision_notes": [],
-        "scenario_consolidation": [],
-        "review_triage": [],
-    }
+    payload = build_initial_workflow_state(
+        scope_id=args.scope_id,
+        scope_slug=args.scope_slug,
+        source_package_manifest=relative_to_package(package_root, source_path),
+        scope_obligations=relative_to_package(package_root, obligations_path),
+        scope_clarification_requests=relative_to_package(package_root, clarification_path),
+    )
     write_json(output, payload)
     print(relative_to_package(package_root, output))
     return 0
