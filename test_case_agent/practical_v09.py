@@ -44,10 +44,10 @@ MATRIX_CONSOLIDATION_SECTION_HEADING = "## Решения о консолида�
 NO_BUSINESS_QUESTIONS_MARKER = "Вопросов, требующих ответа БА, не выявлено."
 CLARIFICATION_REQUEST_SECTION_HEADINGS = (
     "Контекст",
-    "Как Заполнять",
+    "Заполнение ответа",
     "Запросы на уточнение",
     "Пробелы без запросов",
-    "Правила Использования Ответов",
+    "Правила использования ответов",
 )
 
 REQUIRED_SOURCE_ROLES = {"main-docx", "main-xhtml"}
@@ -764,14 +764,14 @@ def render_scope_clarification_requests(payload: Mapping[str, Any]) -> str:
         "## Контекст\n\n"
         f"- `scope_slug`: `{scope_slug}`\n"
         "- Основание: `scope-obligations.json`.\n\n"
-        "## Как Заполнять\n\n"
-        "- Для каждой карточки заполняйте только `user_response`, затем обновляйте статус ответа.\n"
+        "## Заполнение ответа\n\n"
+        "- Для каждой карточки заполните поле «Ответ БА» (`user_response`), затем обновите статус ответа.\n"
         "- Не меняйте `CLR-*`, `GAP-*`, source-привязки и формулировку вопроса.\n\n"
         "## Запросы на уточнение\n\n"
         f"{questions_section}\n\n"
         "## Пробелы без запросов\n\n"
         f"{no_request_section}\n\n"
-        "## Правила Использования Ответов\n\n"
+        "## Правила использования ответов\n\n"
         "- Подтверждённый ответ связывается с соответствующим `GAP-*`; он не заменяет основной ФТ без явного решения БА.\n"
     )
 
@@ -5361,15 +5361,15 @@ def validate_workflow_artifact_links(state: dict[str, Any], package_root: Path) 
         if parity_path is not None and parity_path.is_file():
             parity_text = parity_path.read_text(encoding="utf-8")
             if (
-                "Source Parity Check" not in parity_text
+                "Сверка источников" not in parity_text
                 or not parity_text.strip()
                 or ("## Решение" not in parity_text and "## Decision" not in parity_text)
             ):
                 findings.append(finding(
                     "source-parity-check-invalid",
                     "source-integrity",
-                    "Source parity check не содержит проверяемого результата",
-                    "Файл source-parity-check.md должен содержать заголовок Source Parity Check и раздел Решение с результатом сверки DOCX/PDF.",
+                    "Сверка источников не содержит проверяемого результата",
+                    "Файл source-parity-check.md должен содержать заголовок «Сверка источников» и раздел «Решение» с результатом сверки DOCX/PDF.",
                     relative_to_package(package_root, parity_path),
                     remediation_owner="scope-analyzer",
                 ))

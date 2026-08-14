@@ -99,14 +99,14 @@ def clarification_card(
     return (
         "## Контекст\n\n"
         f"- `scope_slug`: `{scope_slug}`\n\n"
-        "## Как Заполнять\n\n"
-        "- Заполните только поле `user_response`.\n\n"
+        "## Заполнение ответа\n\n"
+        "- Заполните поле «Ответ БА» (`user_response`).\n\n"
         "## Запросы на уточнение\n\n"
         f"### {clarification_id} — {gap_id}\n\n"
         f"```yaml\n{yaml_body}\n```\n\n"
         "## Пробелы без запросов\n\n"
         "- Отсутствуют.\n\n"
-        "## Правила Использования Ответов\n\n"
+        "## Правила использования ответов\n\n"
         "- Ответ не заменяет основной ФТ.\n"
     )
 
@@ -227,7 +227,7 @@ class PracticalV09Fixture:
         self.state = self.scope_dir / "workflow-state.json"
         self.source_parity = self.scope_dir / "source-parity-check.md"
         self.source_parity.write_text(
-            "## Source Parity Check\n\n- DOCX/PDF parity: match.\n\n## Решение\n\n- Расхождений нет.\n",
+            "## Сверка источников\n\n- DOCX/PDF: совпадает.\n\n## Решение\n\n- Расхождений нет.\n",
             encoding="utf-8",
         )
         write_json(

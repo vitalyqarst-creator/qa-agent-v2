@@ -1,4 +1,4 @@
-# Source Parity Check Format
+# Формат сверки источников
 
 `source-parity-check.md` фиксирует сверку основного FT DOCX и PDF по подтвержденному scope до writer/reviewer handoff. Он не заменяет обязательный main FT XHTML extraction source из `source-selection.md`.
 
@@ -46,49 +46,49 @@ fts/<ft-slug>/work/practical-v0.9/<scope-slug>/source-parity-check.md
 ## Минимальный шаблон
 
 ```md
-## Source Parity Check
+## Сверка источников
 
-- FT package: `fts/<ft-slug>`
+- Пакет ФТ: `fts/<ft-slug>`
 - Scope: `<scope-slug>`
-- DOCX source: `source/<main-ft>.docx`
-- XHTML source: `source/<main-ft>.xhtml`
-- PDF source: `source/<main-ft>.pdf`
-- DOCX extraction: `<tool/method>`
-- XHTML extraction: `<tool/method>`
-- PDF extraction: `<tool/method>`
-- DOCX scope refs: `<sections/headings>`
-- PDF scope refs: `<pages/sections>`
+- DOCX: `source/<main-ft>.docx`
+- XHTML: `source/<main-ft>.xhtml`
+- PDF: `source/<main-ft>.pdf`
+- Извлечение DOCX: `<инструмент/метод>`
+- Извлечение XHTML: `<инструмент/метод>`
+- Извлечение PDF: `<инструмент/метод>`
+- Границы scope в DOCX: `<разделы/заголовки>`
+- Границы scope в PDF: `<страницы/разделы>`
 
-## Boundary Parity
+## Сверка границ scope
 
-| item | docx_ref | pdf_ref | status | note |
+| Элемент | Ссылка в DOCX | Ссылка в PDF | Статус | Примечание |
 | --- | --- | --- | --- | --- |
-| `<section/block/table>` | `<ref>` | `<page/ref>` | `match | mismatch | docx-only | pdf-only` | `<note>` |
+| `<раздел/блок/таблица>` | `<ссылка>` | `<страница/ссылка>` | `совпадает | расхождение | только-DOCX | только-PDF` | `<примечание>` |
 
-## Requirement Id Inventory
+## Инвентаризация кодов требований
 
-| req_id | docx_ref | pdf_ref | status | source_decision | note |
+| Код требования | Ссылка в DOCX | Ссылка в PDF | Статус | Решение по источнику | Примечание |
 | --- | --- | --- | --- | --- | --- |
-| `GSR 123` | `-` | `page 61, table ...` | `pdf-only` | `mandatory-req-id` | `Use as req_id in ledger/matrix` |
+| `GSR 123` | `-` | `стр. 61, таблица ...` | `только-PDF` | `обязательный req_id` | `Указать как req_id в реестре/матрице` |
 
-## Table / Row Parity
+## Сверка таблиц и строк
 
-| row_anchor | docx_ref | pdf_ref | docx_text | pdf_text | status | action |
+| Якорь строки | Ссылка в DOCX | Ссылка в PDF | Текст DOCX | Текст PDF | Статус | Действие |
 | --- | --- | --- | --- | --- | --- | --- |
-| `<field/block>` | `<ref>` | `<page/ref>` | `<short>` | `<short>` | `match | mismatch | docx-only | pdf-only | extraction-risk` | `use | gap | exclude-out-of-scope` |
+| `<поле/блок>` | `<ссылка>` | `<страница/ссылка>` | `<кратко>` | `<кратко>` | `совпадает | расхождение | только-DOCX | только-PDF | риск извлечения` | `использовать | gap | исключить вне scope` |
 
-## Mandatory Traceability Inputs
+## Обязательные данные трассировки
 
-- Requirement IDs to preserve: `GSR ...`
-- PDF-only IDs to preserve: `GSR ... | none`
-- DOCX-only IDs to preserve: `... | none`
-- Semantic mismatches requiring gaps: `GAP-* | none`
+- Коды требований для сохранения: `GSR ...`
+- Коды только из PDF: `GSR ... | нет`
+- Коды только из DOCX: `... | нет`
+- Смысловые расхождения, требующие gaps: `GAP-* | нет`
 
-## Decision
+## Решение
 
-- Scope parity status: `pass | pass-with-extraction-risk | blocked-mismatch`
-- Writer/reviewer rule: `<how downstream must use the parity result>`
-- Open gaps/questions: `GAP-* | none`
+- Статус сверки scope: `пройдено | пройдено с риском извлечения | заблокировано расхождением`
+- Правило для writer/reviewer: `<как использовать результат сверки на следующих этапах>`
+- Открытые gaps/вопросы: `GAP-* | нет`
 ```
 
 ## Downstream contract
