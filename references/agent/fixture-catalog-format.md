@@ -6,9 +6,9 @@ Artifact обязателен, если writer использует именов
 
 ## Fixture Catalog
 
-| fixture_id | purpose | source_ref | setup_state | concrete_data | valid_for | invalid_for | dependencies | cleanup | linked_tcs |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `FX-EMP-BASE-001` | Валидный baseline раздела занятости для негативных проверок одного поля | `section 2.1.1.1.1.2` | `Открыта карточка УЗ, пользователь может редактировать раздел` | `Тип занятости = Работа по найму; ...` | `TC-EMP-...` | `-` | `F-DADATA-ORG-001` | `Откатить изменения заявки` | `TC-EMP-006; TC-EMP-013` |
+| fixture_id | purpose | source_ref | setup_state | concrete_data | system_object_key | initial_system_state | run_isolation | valid_for | invalid_for | dependencies | cleanup | linked_tcs |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `FX-EMP-BASE-001` | Валидный baseline раздела занятости для негативных проверок одного поля | `section 2.1.1.1.1.2` | `Открыта карточка УЗ, пользователь может редактировать раздел` | `Тип занятости = Работа по найму; ...` | `-` | `existing` | `reusable-read-only` | `TC-EMP-...` | `-` | `F-DADATA-ORG-001` | `Откатить изменения заявки` | `TC-EMP-006; TC-EMP-013` |
 
 ## External-dynamic fixture
 
@@ -45,6 +45,21 @@ lifecycle:
 
 - `concrete_data` должен содержать literals, параметры с source (`min`, `N`, `DICT-*`) или ссылки на другие fixtures; фразы `валидные данные`, `минимальный валидный набор`, `корректная заявка` без раскрытия недопустимы.
 - Negative TC должен задавать только один invalid delta поверх valid fixture. Если несколько полей невалидны, failure attribution ненадежен.
+- `system_object_key`, `initial_system_state` и `run_isolation` обязательны
+  для fixture успешного create/save, если объект может столкнуться с правилом
+  уникальности. `system_object_key` — конкретная комбинация literals, по
+  которой система распознаёт объект; `initial_system_state` — `absent`,
+  `existing` или `duplicate-base`; `run_isolation` — `cleanup-after-run`,
+  `isolated-run` или `one-time-fixture`.
+- `FX-DADATA-*` фиксирует provider query/response. Он не заменяет
+  `initial_system_state`: значение, найденное в DaData, может уже существовать
+  в системе. Для positive create заранее докажи `absent` и зафиксируй cleanup
+  или изоляцию. Для duplicate/edit укажи `existing`/`duplicate-base` и точный
+  объект, который должен быть доступен до прогона.
+- Повторный успешный create с тем же `system_object_key` допустим только если
+  каждый кейс восстанавливает исходное состояние или выполняется изолированно.
+  Не маскируй коллизию фразой «уникальный набор» и не придумывай второе имя,
+  если поле source-bound и требует DaData.
 - Если fixture зависит от внешнего справочника, mock/stub или системного состояния, укажи это в `dependencies`; если зависимость недоступна, используй `GAP-*`, а не generic fixture.
 - Если fixture используется только в одном TC и полностью раскрыта в `Тестовые данные` / `Предусловия`, отдельная строка catalog не обязательна.
 - Fixture catalog не является источником новых требований. Если baseline требует поведения, которого нет в source, добавь `coverage gap` / `unclear`.

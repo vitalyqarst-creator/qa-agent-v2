@@ -47,6 +47,7 @@ Before writing `TC-*`, check whether the scope contains:
 - For concrete domain test data, prove its provenance before marking a TC executable: source literal, dictionary value, verified fixture, execution-relative formula, or neutral synthetic value for an unrestricted free-text field. If the value is source-bound by integration, dictionary, rights, status, search/filter, autofill, backend mapping or similar business logic, a plausible synthetic value is not enough.
 - For 3+ independent factors with multiple values, pairwise/combinatorial coverage is mandatory; choose `2-way | 3-way | t-way`, prove coverage strength, or record a gap.
 - For reusable baseline and negative transition, use a concrete fixture or `fixture-catalog.md`.
+- For successful create/save, record concrete system key, `absent`/`existing` state and cleanup/isolated run; a DaData response proves neither system absence nor uniqueness. For source-backed cancel/close without save, assert no creation/no saved change after a follow-up observation.
 - Record coverage metrics for applicable dimensions; missing metrics mean unfinished design work.
 
 ## Deep Coverage Triggers

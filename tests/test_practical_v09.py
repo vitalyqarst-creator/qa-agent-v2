@@ -200,6 +200,7 @@ class PracticalV09Fixture:
         self.tc.parent.mkdir()
         self.tc.write_text(
             "## TC-MENU-001\n"
+            "**Номер в разделе:** 1 из 1\n"
             "**Название:** Открытие раздела «Партнеры»\n"
             "**Тип:** Positive\n"
             "**Приоритет:** High\n"
@@ -211,7 +212,8 @@ class PracticalV09Fixture:
             "**Предусловия:** Пользователь вошел в систему.\n"
             "**Тестовые данные:** Не требуются.\n"
             "**Шаги:**\n1. Открыть раздел «Партнеры».\n"
-            "**Итоговый ожидаемый результат:** Открывается раздел «Партнеры».\n",
+            "**Итоговый ожидаемый результат:** Открывается раздел «Партнеры».\n"
+            "**Постусловия:** Не требуются.\n",
             encoding="utf-8",
         )
         self.state = self.scope_dir / "workflow-state.json"
@@ -3448,6 +3450,115 @@ class PracticalV09Tests(unittest.TestCase):
                 "test-case-process-language-frozen-profile",
                 [item.id for item in findings if item.blocking],
             )
+
+    def test_validator_requires_section_number_and_total(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            fixture = PracticalV09Fixture(Path(raw))
+            fixture.tc.write_text(
+                fixture.tc.read_text(encoding="utf-8").replace(
+                    "**Номер в разделе:** 1 из 1\n", ""
+                ),
+                encoding="utf-8",
+            )
+            _, findings = validate_scope(
+                package_root=fixture.root, workflow_state_path=fixture.state
+            )
+            self.assertIn(
+                "test-case-section-numbering-missing",
+                [item.id for item in findings if item.blocking],
+            )
+
+    def test_validator_rejects_unsaved_value_placeholder(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            fixture = PracticalV09Fixture(Path(raw))
+            fixture.tc.write_text(
+                fixture.tc.read_text(encoding="utf-8").replace(
+                    "**Тестовые данные:** Не требуются.",
+                    "**Тестовые данные:** Несохранённое значение: `Несохранённое значение`.",
+                ),
+                encoding="utf-8",
+            )
+            _, findings = validate_scope(
+                package_root=fixture.root, workflow_state_path=fixture.state
+            )
+            self.assertIn(
+                "test-case-test-data-runtime-placeholder",
+                [item.id for item in findings if item.blocking],
+            )
+
+    def test_validator_rejects_edit_tc_process_marker(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            fixture = PracticalV09Fixture(Path(raw))
+            fixture.tc.write_text(
+                fixture.tc.read_text(encoding="utf-8").replace(
+                    "**Тестовые данные:** Не требуются.",
+                    "**Тестовые данные:** Исходное значение для edit TC: `Москва`.",
+                ),
+                encoding="utf-8",
+            )
+            _, findings = validate_scope(
+                package_root=fixture.root, workflow_state_path=fixture.state
+            )
+            self.assertIn(
+                "test-case-process-language-tc-marker",
+                [item.id for item in findings if item.blocking],
+            )
+
+    def test_validator_requires_no_save_persistence_oracle(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            fixture = PracticalV09Fixture(Path(raw))
+            obligations = json.loads(fixture.obligations.read_text(encoding="utf-8"))
+            obligations["obligations"][0]["statement"] = (
+                "При нажатии «Отменить» карточка закрывается без сохранения."
+            )
+            write_json(fixture.obligations, obligations)
+            fixture.tc.write_text(
+                fixture.tc.read_text(encoding="utf-8")
+                .replace(
+                    "1. Открыть раздел «Партнеры».",
+                    "1. Нажать «Отменить».\n2. Повторно открыть карточку добавления.",
+                )
+                .replace(
+                    "Открывается раздел «Партнеры».", "Карточка закрыта."
+                ),
+                encoding="utf-8",
+            )
+            _, findings = validate_scope(
+                package_root=fixture.root, workflow_state_path=fixture.state
+            )
+            self.assertIn(
+                "test-case-no-save-persistence-oracle",
+                [item.id for item in findings if item.blocking],
+            )
+
+    def test_validator_requires_system_lifecycle_for_successful_create(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            fixture = PracticalV09Fixture(Path(raw))
+            obligations = json.loads(fixture.obligations.read_text(encoding="utf-8"))
+            obligations["obligations"][0]["execution_contexts"][0]["id"] = "CTX-CREATE"
+            write_json(fixture.obligations, obligations)
+            fixture.matrix.write_text(
+                fixture.matrix.read_text(encoding="utf-8").replace(
+                    "CTX-OPEN-MENU", "CTX-CREATE"
+                ),
+                encoding="utf-8",
+            )
+            fixture.tc.write_text(
+                fixture.tc.read_text(encoding="utf-8")
+                .replace("CTX-OPEN-MENU", "CTX-CREATE")
+                .replace(
+                    "1. Открыть раздел «Партнеры».", "1. Нажать «Сохранить»."
+                )
+                .replace("Открывается раздел «Партнеры».", "Партнер создан."),
+                encoding="utf-8",
+            )
+            _, findings = validate_scope(
+                package_root=fixture.root, workflow_state_path=fixture.state
+            )
+            finding_ids = [item.id for item in findings if item.blocking]
+            self.assertIn("test-case-successful-create-key-missing", finding_ids)
+            self.assertIn("test-case-successful-create-initial-state-missing", finding_ids)
+            self.assertIn("test-case-successful-create-cleanup-missing", finding_ids)
 
     def test_validator_requires_valid_package_id(self) -> None:
         with tempfile.TemporaryDirectory() as raw:

@@ -8,6 +8,7 @@ description: Compact default route for producing source-traceable, executable te
 Use this skill for a normal request to write test cases from a selected FT scope. It replaces v0.8 as the default. Use v0.8 only to resume an already existing v0.8 run or when the user explicitly requests it.
 
 Read [../../references/agent/practical-test-case-route-v0.9.md](../../references/agent/practical-test-case-route-v0.9.md) before work. Before creating obligations or workflow state, additionally read their v0.9 format references; before dispatching, validating or triaging independent review, read [../../references/agent/practical-v0.9-review-result-format.md](../../references/agent/practical-v0.9-review-result-format.md).
+If the scope contains a successful create/save, duplicate rule or provider-backed object selection, additionally read [../../references/agent/fixture-catalog-format.md](../../references/agent/fixture-catalog-format.md) before matrix writing.
 
 ## Входы
 

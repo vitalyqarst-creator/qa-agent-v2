@@ -18,7 +18,7 @@ from typing import Any, Iterable, Mapping
 
 
 ROUTE_VERSION = "practical-v0.9"
-ROUTE_TOOL_VERSION = "practical-v0.9.29"
+ROUTE_TOOL_VERSION = "practical-v0.9.30"
 WORKFLOW_STATE_SCHEMA_VERSION = 1
 SOURCE_CONTRACT_VERSION = "source-package-v4"
 MATRIX_CONTRACT_VERSION = "practical-matrix-v3"
@@ -72,6 +72,7 @@ ALLOWED_VISUAL_EVIDENCE_OUTCOMES = {
     "runtime-only",
 }
 REQUIRED_TC_FIELDS = (
+    "Номер в разделе",
     "Название",
     "Тип",
     "Приоритет",
@@ -84,6 +85,7 @@ REQUIRED_TC_FIELDS = (
     "Тестовые данные",
     "Шаги",
     "Итоговый ожидаемый результат",
+    "Постусловия",
 )
 BLOCKING_CATEGORIES = {
     "source-integrity",
@@ -249,6 +251,9 @@ TEST_DATA_GENERIC_COMPLETION_PATTERNS = (
         re.IGNORECASE,
     ),
 )
+TEST_DATA_RUNTIME_PLACEHOLDER_PATTERNS = (
+    re.compile(r"\bнесохран[её]нн\w*\s+значени\w*\b", re.IGNORECASE),
+)
 TEST_DATA_ACTION_LEAK_RE = re.compile(
     r"(?im)^\s*[-*]\s*(?:заполнить|открыть|выбрать|изменить|перейти|"
     r"нажать|прикрепить|загрузить)\w*\b",
@@ -299,6 +304,10 @@ DADATA_PROPERTY_RE = re.compile(
     re.IGNORECASE,
 )
 FROZEN_PROFILE_PROCESS_LANGUAGE_RE = re.compile(r"\bfrozen\s+profile\b", re.IGNORECASE)
+RUNTIME_PROCESS_TC_MARKER_RE = re.compile(
+    r"\b(?:edit|create|writer|reviewer)\s+TC\b",
+    re.IGNORECASE,
+)
 MIXED_CREATE_EDIT_TITLE_RE = re.compile(
     r"\bсоздани\w*\b[^.]{0,48}\b(?:и|или)\b[^.]{0,48}\bредактир\w*\b",
     re.IGNORECASE,
@@ -313,6 +322,38 @@ STATE_FORMATION_VERB_RE = re.compile(
 )
 SAVE_OR_CLOSE_ACTION_RE = re.compile(
     r"\b(?:сохран|отмен|закр|крестик)\w*\b", re.IGNORECASE
+)
+NO_SAVE_SOURCE_RE = re.compile(r"\b(?:не\s+сохран\w*|без\s+сохран\w*)\b", re.IGNORECASE)
+NO_SAVE_ACTION_RE = re.compile(r"\b(?:отмен|закры|крестик)\w*\b", re.IGNORECASE)
+NO_SAVE_PERSISTENCE_ORACLE_RE = re.compile(
+    r"\b(?:не\s+(?:создан\w*|сохран\w*|добавлен\w*)|"
+    r"(?:создани\w*|сохранени\w*)\s+не\s+выполн\w*)\b",
+    re.IGNORECASE,
+)
+SECTION_NUMBER_RE = re.compile(
+    r"(?m)^\*\*Номер в разделе:\*\*\s*(\d+)\s+из\s+(\d+)\s*$"
+)
+SUCCESSFUL_CREATE_EXPECTED_RE = re.compile(
+    r"\b(?:создан\w*|сохран\w*)\b", re.IGNORECASE
+)
+SUCCESSFUL_CREATE_NEGATION_RE = re.compile(
+    r"\b(?:не\s+(?:создан\w*|сохран\w*)|"
+    r"(?:создани\w*|сохранени\w*)\s+не\s+выполн\w*)\b",
+    re.IGNORECASE,
+)
+SYSTEM_OBJECT_KEY_RE = re.compile(
+    r"(?im)^\s*[-*]\s*Ключ создаваемого объекта\s*:\s*(\S.+)$"
+)
+SYSTEM_OBJECT_ABSENT_RE = re.compile(
+    r"(?im)^\s*[-*]\s*(?:Исходное состояние|Состояние)"
+    r"(?: создаваемого)? объекта(?: в системе)?\s*:\s*"
+    r"(?:отсутствует|не создан\w*)\b"
+)
+SUCCESSFUL_CREATE_CLEANUP_RE = re.compile(
+    r"\b(?:удал\w*[^.\n]{0,100}\bсоздан\w*|"
+    r"восстанов\w*[^.\n]{0,100}\bисходн\w*\s+состо\w*|"
+    r"изолированн\w*\s+прогон\w*|одноразов\w*\s+fixture)\b",
+    re.IGNORECASE,
 )
 FOLLOW_UP_OBSERVATION_RE = re.compile(
     r"\b(?:повторн|откр|найт|провер|убед|поиск)\w*\b", re.IGNORECASE
@@ -4034,7 +4075,18 @@ def validate_state_formation_contract(
                 artifact,
                 remediation_owner="writer",
             ))
-    if re.search(r"\bне\s+сохран\w*\b", statement, re.IGNORECASE) and not has_explicit_follow_up_observation(steps):
+    no_save_source = NO_SAVE_SOURCE_RE.search(statement) is not None
+    has_close_or_cancel = any(NO_SAVE_ACTION_RE.search(step) for step in steps)
+    if no_save_source and has_close_or_cancel and NO_SAVE_PERSISTENCE_ORACLE_RE.search(expected_result) is None:
+        findings.append(finding(
+            "test-case-no-save-persistence-oracle",
+            "semantic-completeness",
+            "Закрытие без сохранения не подтверждает отсутствие созданного или сохранённого объекта",
+            f"{tc_id}: если источник задаёт закрытие без сохранения, итоговый ожидаемый результат должен явно подтвердить, что объект не создан или изменения не сохранены.",
+            artifact,
+            remediation_owner="writer",
+        ))
+    if no_save_source and not has_explicit_follow_up_observation(steps):
         findings.append(finding(
             "test-case-no-save-observation",
             "execution-readiness",
@@ -4265,6 +4317,18 @@ def validate_test_data_executability(
             artifact,
             remediation_owner="writer",
         ))
+    for pattern in TEST_DATA_RUNTIME_PLACEHOLDER_PATTERNS:
+        match = pattern.search(test_data)
+        if match is None:
+            continue
+        findings.append(finding(
+            "test-case-test-data-runtime-placeholder",
+            "execution-readiness",
+            "В тестовых данных использован служебный placeholder вместо воспроизводимого значения",
+            f"{tc_id}: «{match.group(0)}» не является значением для ввода или проверки. Укажите конкретное значение с подтверждённым происхождением либо, для DaData, FX-DADATA fixture и выбранную подсказку.",
+            artifact,
+            remediation_owner="writer",
+        ))
     if TEST_DATA_ACTION_LEAK_RE.search(test_data):
         findings.append(finding(
             "test-case-test-data-action-leak",
@@ -4294,6 +4358,82 @@ def validate_test_data_executability(
     return findings
 
 
+def validate_section_numbering(
+    *,
+    blocks: list[dict[str, str]],
+    artifact: str,
+) -> list[ScopeFinding]:
+    """Ensure that a canonical scope file exposes an executable local sequence.
+
+    ``TC-*`` identifiers are traceability identifiers and may contain a source
+    code.  They are not a usable answer to "which case and how many are in
+    this section?".  The explicit number is therefore validated separately.
+    """
+    findings: list[ScopeFinding] = []
+    total = len(blocks)
+    seen_numbers: dict[int, str] = {}
+    for expected_number, block in enumerate(blocks, start=1):
+        tc_id = block["id"]
+        match = SECTION_NUMBER_RE.search(block["body"])
+        if match is None:
+            findings.append(finding(
+                "test-case-section-numbering-missing",
+                "execution-readiness",
+                "В тест-кейсе отсутствует сквозной номер внутри раздела",
+                f"{tc_id}: добавьте поле «Номер в разделе» в формате «{expected_number} из {total}».",
+                artifact,
+                remediation_owner="writer",
+            ))
+            continue
+        number, declared_total = (int(match.group(1)), int(match.group(2)))
+        if declared_total != total:
+            findings.append(finding(
+                "test-case-section-numbering-total",
+                "traceability",
+                "В тест-кейсе указан неверный общий счётчик раздела",
+                f"{tc_id}: указано «{number} из {declared_total}», в canonical file {total} TC.",
+                artifact,
+                remediation_owner="writer",
+            ))
+        previous_tc_id = seen_numbers.get(number)
+        if previous_tc_id is not None:
+            findings.append(finding(
+                "test-case-section-numbering-duplicate",
+                "traceability",
+                "Сквозной номер раздела повторяется",
+                f"{tc_id}: номер {number} уже использован в {previous_tc_id}.",
+                artifact,
+                remediation_owner="writer",
+            ))
+        else:
+            seen_numbers[number] = tc_id
+        if number != expected_number:
+            findings.append(finding(
+                "test-case-section-numbering-order",
+                "traceability",
+                "Сквозная нумерация раздела содержит пропуск или нарушенный порядок",
+                f"{tc_id}: на позиции {expected_number} ожидается «{expected_number} из {total}», указано «{number} из {declared_total}».",
+                artifact,
+                remediation_owner="writer",
+            ))
+    return findings
+
+
+def successful_create_case(
+    *,
+    context_id: str,
+    steps: str,
+    expected_result: str,
+) -> bool:
+    """Whether a TC claims a successful persistence of a newly created object."""
+    return bool(
+        context_id.endswith("CREATE")
+        and re.search(r"\bсохран\w*\b", steps, re.IGNORECASE)
+        and SUCCESSFUL_CREATE_EXPECTED_RE.search(expected_result)
+        and SUCCESSFUL_CREATE_NEGATION_RE.search(expected_result) is None
+    )
+
+
 def validate_test_cases(
     tc_path: Path,
     package_root: Path,
@@ -4310,9 +4450,11 @@ def validate_test_cases(
     findings: list[ScopeFinding] = []
     if not blocks:
         return [finding("test-cases-empty", "semantic-completeness", "В файле нет тест-кейсов компактного формата", "Ожидается заголовок уровня ## или ### с TC-*.", artifact, remediation_owner="writer")]
+    findings.extend(validate_section_numbering(blocks=blocks, artifact=artifact))
     seen_ids: set[str] = set()
     covered_scenarios: dict[str, list[str]] = {}
     covered_obligation_contexts: dict[tuple[str, str], list[str]] = {}
+    successful_creates: dict[str, list[tuple[str, bool]]] = {}
     active_entries = {
         str(item.get("id")): item
         for item in active_obligations(obligations)
@@ -4472,6 +4614,45 @@ def validate_test_cases(
                     artifact,
                     remediation_owner="writer",
                 ))
+        postconditions = test_case_field(body, "Постусловия")
+        expected_result = test_case_field(body, "Итоговый ожидаемый результат")
+        if successful_create_case(
+            context_id=context_id,
+            steps=steps_value,
+            expected_result=expected_result,
+        ):
+            key_match = SYSTEM_OBJECT_KEY_RE.search(test_data)
+            if key_match is None:
+                findings.append(finding(
+                    "test-case-successful-create-key-missing",
+                    "execution-readiness",
+                    "Успешное создание не содержит конкретный ключ создаваемого объекта",
+                    f"{tc_id}: в «Тестовые данные» добавьте строку «Ключ создаваемого объекта: ...» с конкретными значениями, определяющими уникальность объекта в системе.",
+                    artifact,
+                    remediation_owner="writer",
+                ))
+            if SYSTEM_OBJECT_ABSENT_RE.search(test_data) is None:
+                findings.append(finding(
+                    "test-case-successful-create-initial-state-missing",
+                    "execution-readiness",
+                    "Успешное создание не подтверждает отсутствие объекта до начала теста",
+                    f"{tc_id}: в «Тестовые данные» добавьте «Исходное состояние объекта: отсутствует»; происхождение данных от DaData не доказывает отсутствие объекта в системе.",
+                    artifact,
+                    remediation_owner="writer",
+                ))
+            has_cleanup = SUCCESSFUL_CREATE_CLEANUP_RE.search(postconditions) is not None
+            if not has_cleanup:
+                findings.append(finding(
+                    "test-case-successful-create-cleanup-missing",
+                    "execution-readiness",
+                    "Успешное создание не изолировано от повторного прогона",
+                    f"{tc_id}: в «Постусловия» укажите конкретное удаление созданного объекта, восстановление исходного состояния или изолированный прогон. Иначе следующий TC может столкнуться с дублем.",
+                    artifact,
+                    remediation_owner="writer",
+                ))
+            if key_match is not None:
+                object_key = " ".join(key_match.group(1).casefold().split())
+                successful_creates.setdefault(object_key, []).append((tc_id, has_cleanup))
         title = test_case_field(body, "Название").casefold()
         if context_id.endswith("CREATE") and MIXED_CREATE_EDIT_TITLE_RE.search(title):
             findings.append(finding(
@@ -4804,8 +4985,34 @@ def validate_test_cases(
                 remediation_owner="writer",
                 blocking=True,
             ))
+        process_match = RUNTIME_PROCESS_TC_MARKER_RE.search(body_without_metadata)
+        if process_match is not None:
+            findings.append(finding(
+                "test-case-process-language-tc-marker",
+                "style",
+                "В пользовательском поле тест-кейса остался служебный маркер процесса",
+                f"{tc_id}: «{process_match.group(0)}» замените описанием объекта, поля, действия или конкретного значения продукта.",
+                artifact,
+                remediation_owner="writer",
+                blocking=True,
+            ))
         if re.search(r"\b(source-backed|residual|fixture|blocked-observability)\b", body_without_metadata, flags=re.IGNORECASE):
             findings.append(finding("test-case-process-language", "style", "В тест-кейсе остался служебный английский текст", f"Проверьте пользовательские поля {tc_id}.", artifact, remediation_owner="writer", severity="warning"))
+    for object_key, entries in sorted(successful_creates.items()):
+        if len(entries) < 2 or all(has_cleanup for _tc_id, has_cleanup in entries):
+            continue
+        related_tcs = ", ".join(tc_id for tc_id, _has_cleanup in entries)
+        for tc_id, has_cleanup in entries:
+            if has_cleanup:
+                continue
+            findings.append(finding(
+                "test-case-successful-create-key-reused",
+                "execution-readiness",
+                "Несколько успешных созданий используют один ключ без изоляции прогона",
+                f"{tc_id}: ключ «{object_key}» повторяется в {related_tcs}. Выделите разные конкретные данные либо задайте cleanup/изолированный прогон для каждого создания.",
+                artifact,
+                remediation_owner="writer",
+            ))
     for scenario_id, row in sorted(matrix_by_scenario.items()):
         mapped_tcs = covered_scenarios.get(scenario_id, [])
         if not mapped_tcs:
