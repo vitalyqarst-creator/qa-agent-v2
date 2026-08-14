@@ -282,6 +282,15 @@ REVIEW_FINDING_REQUIRED_FIELDS = (
     "blocking",
     "remediation_owner",
 )
+CONTROLLER_OR_VALIDATOR_REVIEW_CATEGORIES = frozenset(
+    {
+        "review-integrity",
+        "source-integrity",
+        "transport",
+        "validator",
+        "tooling",
+    }
+)
 STATUS_CHANGE_CLAIM_RE = re.compile(
     r"\b(?:измен\w*|установ\w*|замен\w*)\s+(?:\S+\s+){0,4}статус\w*"
     r"|\bстатус\w*(?:\s+\S+){0,7}\s+(?:измен\w*|установ\w*|замен\w*)"
@@ -1118,7 +1127,11 @@ def workflow_exception_snapshot_enabled(state: Mapping[str, Any]) -> bool:
 
 
 def review_content_findings(result: Mapping[str, Any]) -> list[dict[str, Any]]:
-    """Return blocking reviewer findings that can trigger a writer revision."""
+    """Return blocking semantic findings that require controller triage.
+
+    A reviewer may identify a delivery owner, but that label cannot turn a
+    coverage or test-design defect into a controller-only correction.
+    """
     raw_findings = result.get("findings")
     if not isinstance(raw_findings, list):
         return []
@@ -1127,7 +1140,11 @@ def review_content_findings(result: Mapping[str, Any]) -> list[dict[str, Any]]:
         for item in raw_findings
         if isinstance(item, dict)
         and item.get("blocking") is True
-        and item.get("remediation_owner") not in {"controller", "validator"}
+        and (
+            item.get("remediation_owner") not in {"controller", "validator"}
+            or item.get("category")
+            not in CONTROLLER_OR_VALIDATOR_REVIEW_CATEGORIES
+        )
     ]
 
 

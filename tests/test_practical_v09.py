@@ -42,6 +42,7 @@ from test_case_agent.practical_v09 import (
     obligation_ids_sha256,
     requirement_codes,
     relative_to_package,
+    review_content_findings,
     render_scope_clarification_requests,
     sha256_file,
     validate_source_package_manifest,
@@ -2658,6 +2659,27 @@ class PracticalV09Tests(unittest.TestCase):
             state = json.loads(fixture.state.read_text(encoding="utf-8"))
             self.assertEqual(1, state["tc_revision_count"])
             self.assertEqual("test-cases", state["phase"])
+
+    def test_content_finding_cannot_be_misclassified_as_controller_only(self) -> None:
+        findings = review_content_findings(
+            {
+                "findings": [
+                    {
+                        "id": "RV-001",
+                        "category": "coverage",
+                        "blocking": True,
+                        "remediation_owner": "controller",
+                    },
+                    {
+                        "id": "RV-002",
+                        "category": "review-integrity",
+                        "blocking": True,
+                        "remediation_owner": "controller",
+                    },
+                ]
+            }
+        )
+        self.assertEqual(["RV-001"], [item["id"] for item in findings])
 
     def test_validator_blocks_review_input_change_between_triage_and_finalization(self) -> None:
         with tempfile.TemporaryDirectory() as raw:

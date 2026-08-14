@@ -132,6 +132,13 @@ source-backed покрытия или противоречие источник�
 `source_anchor`, `artifact_anchor`, `category`, `severity`,
 `blocking` и `remediation_owner`; у blocking finding обязательно
 `blocking_reason`. Все содержательные поля формулируются по-русски.
+`remediation_owner` определяет исполнителя исправления, но не меняет природы
+finding: blocking-дефекты категорий `coverage`, `expected-result`,
+`test-design`, `traceability`, `execution-readiness` и иные предметные
+замечания всегда проходят controller triage и могут быть исправлены только в
+единственной writer-доработке своей фазы. Значения `controller` и `validator`
+допустимы без расходования writer budget только для процессных категорий
+`review-integrity`, `source-integrity`, `transport`, `validator` или `tooling`.
 Если finding требует изменить статус исполнения, он дополнительно содержит
 `status_assertion`:
 
