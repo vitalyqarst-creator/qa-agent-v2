@@ -274,6 +274,13 @@ immutable input snapshot и сохранённой причиной; это не
 
 При `changes-required` для каждой фазы разрешена ровно одна целевая writer revision: одна целевая writer revision матрицы и один свежий matrix re-review, а также отдельно одна целевая writer revision canonical TC и один свежий final independent TC review. До расходования любого budget обязателен controller triage каждого content blocking finding. `matrix_revision_count` и `tc_revision_count` в `workflow-state.json` расходуются только для принятых content findings своей фазы; второй такой вердикт той же фазы переводит scope в `blocked`, а не запускает repair-loop. Process/transport/validator finding с `remediation_owner: controller` или `validator` исправляется без расходования writer revision. Наблюдаемое требование с неизвестным UI-признаком получает `blocked-observability`; это допустимый статус matrix/TC и не является external blocker само по себе. Противоречие источников или непредставимое требование — честный `blocked-input`.
 
+Единая writer revision является неделимым пакетом: до её завершения writer
+исправляет все принятые предметные findings и все связанные процессные
+коррекции из того же raw verdict, затем запускает validator и fresh
+independent re-review. Нельзя завершать этап после исправления одного finding
+и оставлять частично изменённую matrix/TC, если только это не документированно
+`blocked-input`.
+
 В canonical TC тестовые данные — это либо конкретные значения/файлы, либо
 точные свойства действительно недостающего набора и способ его подготовки.
 Нельзя пересказывать проверяемое правило вместо данных или писать

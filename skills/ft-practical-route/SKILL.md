@@ -50,6 +50,12 @@ canonical TC, scoped validator report и immutable артефакты review. В
    fresh re-review. Повторный `changes-required` блокирует scope; не запускай
    новый repair-loop без явного решения пользователя.
 
+Одна writer-доработка — единый законченный пакет, а не серия частичных
+изменений. За один запуск исправь все принятые findings текущего review, а
+также связанные controller/validator-коррекции этого же verdict; прогони
+validator и запусти fresh re-review. Не завершай этап после исправления только
+части findings, кроме честного `blocked-input`.
+
 ## Ограничения
 
 - Не создавай benchmark, sharding, semantic bridge, source assertion review,

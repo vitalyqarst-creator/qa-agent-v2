@@ -327,6 +327,7 @@ class PracticalV09Tests(unittest.TestCase):
         self.assertIn("обязательный independent matrix review", route)
         self.assertIn("independent final TC review", route)
         self.assertIn("одна содержательная writer-доработка", route)
+        self.assertIn("единый законченный пакет", route)
 
     def test_initializer_enables_controller_triage_for_new_scope(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
