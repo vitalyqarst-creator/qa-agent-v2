@@ -10,7 +10,7 @@
   },
   "contract_versions": {
     "clarification_outcome": "clarification-outcome-v1",
-    "controller_triage": "controller-triage-v2",
+    "controller_triage": "controller-triage-v3",
     "exception_snapshot": "exception-snapshot-v1",
     "execution_context": "execution-context-v1",
     "matrix": "practical-matrix-v3",

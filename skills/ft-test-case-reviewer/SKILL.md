@@ -52,6 +52,9 @@ v0.9 scope, [practical route](../../references/agent/practical-test-case-route-v
 первопричину с перечнем затронутых `SCN-*`. Не повторяй уже сделанный анализ
 ради новых формулировок и не создавай внутренние repair/self-check циклы:
 после source-to-artifact сопоставления сразу верни raw JSON verdict.
+Для `controller-triage-v3` каждый блокирующий содержательный finding обязан
+содержать `remediation_closure` по canonical result format: полный охват
+связанных `SCN-*` и/или `OBL-*`, а не несколько примеров одной проблемы.
 
 ## Вердикт
 

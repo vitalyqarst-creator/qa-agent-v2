@@ -327,6 +327,19 @@ class PracticalV09Tests(unittest.TestCase):
         )
         self.assertIn("одним проходом", reviewer)
         self.assertIn("raw JSON verdict", reviewer)
+        self.assertIn("remediation_closure", reviewer)
+
+    def test_writer_runtime_requires_full_remediation_closure(self) -> None:
+        workflow = (REPO_ROOT / "references" / "agent" / "writer-runtime-workflow.md").read_text(
+            encoding="utf-8"
+        )
+        review_format = (
+            REPO_ROOT / "references" / "agent" / "practical-v0.9-review-result-format.md"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn("remediation_closure", workflow)
+        self.assertIn("весь ограниченный класс", workflow)
+        self.assertIn("remediation_closure", review_format)
 
     def test_v09_route_requires_final_review_transition_after_writer_revision(self) -> None:
         route = (REPO_ROOT / "skills" / "ft-practical-route" / "SKILL.md").read_text(
@@ -1797,6 +1810,10 @@ class PracticalV09Tests(unittest.TestCase):
                 "review-result-status-assertion",
                 [item.id for item in findings if item.blocking],
             )
+            self.assertIn(
+                "review-result-finding-remediation-closure",
+                [item.id for item in findings if item.blocking],
+            )
 
     def test_review_manifest_binds_all_source_package_inputs(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
@@ -2618,6 +2635,11 @@ class PracticalV09Tests(unittest.TestCase):
                         "blocking": True,
                         "blocking_reason": "Без исправления нет source-backed покрытия.",
                         "remediation_owner": "writer",
+                        "remediation_closure": {
+                            "basis": "Отсутствующее source-backed покрытие в том же пользовательском потоке.",
+                            "scenario_ids": ["SCN-001"],
+                            "obligation_ids": ["OBL-001"],
+                        },
                     }],
                 },
             )
@@ -2754,6 +2776,11 @@ class PracticalV09Tests(unittest.TestCase):
                         "blocking": True,
                         "blocking_reason": "Без исправления нет source-backed покрытия.",
                         "remediation_owner": "writer",
+                        "remediation_closure": {
+                            "basis": "Отсутствующее source-backed покрытие в том же пользовательском потоке.",
+                            "scenario_ids": ["SCN-001"],
+                            "obligation_ids": ["OBL-001"],
+                        },
                     }],
                 },
             )
@@ -2839,6 +2866,11 @@ class PracticalV09Tests(unittest.TestCase):
                         "blocking": True,
                         "blocking_reason": "Без исправления нет source-backed покрытия.",
                         "remediation_owner": "writer",
+                        "remediation_closure": {
+                            "basis": "Отсутствующее source-backed покрытие в том же пользовательском потоке.",
+                            "scenario_ids": ["SCN-001"],
+                            "obligation_ids": ["OBL-001"],
+                        },
                     }],
                 },
             )
@@ -2965,6 +2997,11 @@ class PracticalV09Tests(unittest.TestCase):
                         "blocking": True,
                         "blocking_reason": "Статус необходимо изменить.",
                         "remediation_owner": "writer",
+                        "remediation_closure": {
+                            "basis": "Тот же сценарий с неполной цепочкой предпосылок исполнения.",
+                            "scenario_ids": ["SCN-001"],
+                            "obligation_ids": ["OBL-001"],
+                        },
                         "status_assertion": {
                             "scenario_ids": ["SCN-001"],
                             "required_status": "candidate-ui-calibration",

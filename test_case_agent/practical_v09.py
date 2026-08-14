@@ -18,7 +18,7 @@ from typing import Any, Iterable, Mapping
 
 
 ROUTE_VERSION = "practical-v0.9"
-ROUTE_TOOL_VERSION = "practical-v0.9.32"
+ROUTE_TOOL_VERSION = "practical-v0.9.33"
 WORKFLOW_STATE_SCHEMA_VERSION = 1
 SOURCE_CONTRACT_VERSION = "source-package-v4"
 MATRIX_CONTRACT_VERSION = "practical-matrix-v3"
@@ -30,11 +30,13 @@ MIGRATABLE_MATRIX_CONTRACT_VERSIONS = {
 }
 SCENARIO_CONSOLIDATION_CONTRACT_VERSION = "scenario-consolidation-v2"
 LEGACY_SCENARIO_CONSOLIDATION_CONTRACT_VERSION = "scenario-consolidation-v1"
-CONTROLLER_TRIAGE_CONTRACT_VERSION = "controller-triage-v2"
+CONTROLLER_TRIAGE_CONTRACT_VERSION = "controller-triage-v3"
+PREVIOUS_CONTROLLER_TRIAGE_CONTRACT_VERSION = "controller-triage-v2"
 LEGACY_CONTROLLER_TRIAGE_CONTRACT_VERSION = "controller-triage-v1"
 SUPPORTED_CONTROLLER_TRIAGE_CONTRACT_VERSIONS = frozenset(
     {
         LEGACY_CONTROLLER_TRIAGE_CONTRACT_VERSION,
+        PREVIOUS_CONTROLLER_TRIAGE_CONTRACT_VERSION,
         CONTROLLER_TRIAGE_CONTRACT_VERSION,
     }
 )
@@ -1029,9 +1031,8 @@ def workflow_scenario_consolidation_enabled(state: Mapping[str, Any]) -> bool:
 def workflow_controller_triage_version(state: Mapping[str, Any]) -> str | None:
     """Return the declared controller-triage contract version.
 
-    v1 remains readable only for review history finalized before v2 classified
-    semantic findings independently of their delivery owner.  New scopes use
-    v2 and must triage every semantic blocker.
+    Historical v1/v2 records remain readable. New scopes use v3, which also
+    binds every content blocker to an explicit remediation closure.
     """
     versions = state.get("contract_versions")
     if not isinstance(versions, Mapping):
@@ -1143,7 +1144,7 @@ def review_content_findings(
 ) -> list[dict[str, Any]]:
     """Return blocking semantic findings that require controller triage.
 
-    A reviewer may identify a delivery owner, but under v2 that label cannot
+    A reviewer may identify a delivery owner, but under v2/v3 that label cannot
     turn a coverage or test-design defect into a controller-only correction.
     v1 exists only to validate its immutable historical records.
     """
@@ -6626,9 +6627,14 @@ def build_review_manifest(
             )
     triage_contract_version = workflow_controller_triage_version(state)
     if triage_contract_version is not None:
+        finding_schema = (
+            "practical-review-finding-v2"
+            if triage_contract_version == CONTROLLER_TRIAGE_CONTRACT_VERSION
+            else "practical-review-finding-v1"
+        )
         manifest["controller_triage_contract"] = {
             "version": triage_contract_version,
-            "finding_schema": "practical-review-finding-v1",
+            "finding_schema": finding_schema,
             "required_for": "changes-required-with-content-blockers",
         }
     obligations_path = paths["scope_obligations"]
@@ -6920,11 +6926,17 @@ def verify_review_result(
         ))
     triage_contract = manifest.get("controller_triage_contract")
     if triage_contract is not None:
+        expected_finding_schema = (
+            "practical-review-finding-v2"
+            if isinstance(triage_contract, dict)
+            and triage_contract.get("version") == CONTROLLER_TRIAGE_CONTRACT_VERSION
+            else "practical-review-finding-v1"
+        )
         if (
             not isinstance(triage_contract, dict)
             or triage_contract.get("version")
             not in SUPPORTED_CONTROLLER_TRIAGE_CONTRACT_VERSIONS
-            or triage_contract.get("finding_schema") != "practical-review-finding-v1"
+            or triage_contract.get("finding_schema") != expected_finding_schema
             or triage_contract.get("required_for")
             != "changes-required-with-content-blockers"
         ):
@@ -6932,7 +6944,7 @@ def verify_review_result(
                 "review-manifest-controller-triage-contract",
                 "review-integrity",
                 "Manifest review содержит неверный контракт controller triage",
-                "Нужен поддерживаемый controller-triage контракт с форматом practical-review-finding-v1.",
+                "Нужен поддерживаемый controller-triage контракт с соответствующим форматом practical-review-finding.",
                 artifact,
                 remediation_owner="controller",
             ))
@@ -6944,7 +6956,7 @@ def verify_review_result(
                         "review-result-finding-schema",
                         "review-integrity",
                         "Finding reviewer-а имеет неверный формат",
-                        f"findings[{index}] должен быть объектом practical-review-finding-v1.",
+                        f"findings[{index}] должен быть объектом {expected_finding_schema}.",
                         artifact,
                         remediation_owner="reviewer",
                     ))
@@ -6983,6 +6995,48 @@ def verify_review_result(
                         artifact,
                         remediation_owner="reviewer",
                     ))
+                remediation_owner = str(review_finding.get("remediation_owner") or "")
+                review_category = str(review_finding.get("category") or "")
+                requires_remediation_closure = (
+                    triage_contract.get("version") == CONTROLLER_TRIAGE_CONTRACT_VERSION
+                    and review_finding["blocking"] is True
+                    and (
+                        remediation_owner not in {"controller", "validator"}
+                        or review_category
+                        not in CONTROLLER_OR_VALIDATOR_REVIEW_CATEGORIES
+                    )
+                )
+                if requires_remediation_closure:
+                    closure = review_finding.get("remediation_closure")
+                    scenario_ids = closure.get("scenario_ids") if isinstance(closure, dict) else None
+                    obligation_ids = closure.get("obligation_ids") if isinstance(closure, dict) else None
+                    closure_is_valid = (
+                        isinstance(closure, dict)
+                        and isinstance(closure.get("basis"), str)
+                        and bool(closure["basis"].strip())
+                        and isinstance(scenario_ids, list)
+                        and isinstance(obligation_ids, list)
+                        and all(
+                            isinstance(item, str) and item.startswith("SCN-")
+                            for item in scenario_ids
+                        )
+                        and all(
+                            isinstance(item, str) and item.startswith("OBL-")
+                            for item in obligation_ids
+                        )
+                        and len(scenario_ids) == len(set(scenario_ids))
+                        and len(obligation_ids) == len(set(obligation_ids))
+                        and bool(scenario_ids or obligation_ids)
+                    )
+                    if not closure_is_valid:
+                        findings.append(finding(
+                            "review-result-finding-remediation-closure",
+                            "review-integrity",
+                            "Содержательное finding reviewer-а не имеет проверяемого охвата доработки",
+                            f"findings[{index}] должен содержать remediation_closure с непустым basis и полным перечнем затронутых SCN-* и/или OBL-*.",
+                            artifact,
+                            remediation_owner="reviewer",
+                        ))
                 status_change_claimed = bool(STATUS_CHANGE_CLAIM_RE.search(
                     " ".join(
                         str(review_finding.get(key) or "")
