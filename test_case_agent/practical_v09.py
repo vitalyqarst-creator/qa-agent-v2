@@ -3806,8 +3806,41 @@ def is_internal_unobservable_statement(statement: str) -> bool:
 
 
 def has_internal_unobservability_justification(expected_result: str) -> bool:
-    """Compatibility check for pre-consolidation scopes only."""
+    """Return whether a matrix row explicitly records a missing source oracle."""
     return bool(INTERNAL_UNOBSERVABILITY_JUSTIFICATION_RE.search(expected_result))
+
+
+def source_limited_internal_oracle_exception(
+    *,
+    row: Mapping[str, str],
+    obligation_id: str,
+    open_gap_obligations: Mapping[str, set[str]],
+) -> bool:
+    """Allow a deferred internal check only when its missing oracle is source-bound.
+
+    A consolidation decision must normally bind an internal system check to a
+    source-backed observable result.  This is impossible when the source does
+    not define that result at all.  The narrow exception keeps the obligation
+    visible in the matrix, but requires a pending BA gap that explicitly
+    affects the same OBL; it cannot be used to hide an ordinary duplicate.
+    """
+    if row.get("Статус исполнения", "").strip() != "needs-future-clarification":
+        return False
+    expected_result = row.get("Ожидаемый результат", "")
+    if not has_internal_unobservability_justification(expected_result):
+        return False
+    visible_text = " ".join(
+        (
+            expected_result,
+            row.get("Ограничения исполнения", ""),
+            row.get("Нужные предпосылки", ""),
+        )
+    )
+    referenced_gap_ids = set(re.findall(r"\bGAP-[A-Z0-9-]+\b", visible_text))
+    return any(
+        obligation_id in open_gap_obligations.get(gap_id, set())
+        for gap_id in referenced_gap_ids
+    )
 
 
 def validate_matrix(
@@ -3835,6 +3868,21 @@ def validate_matrix(
     active_entries = {str(item.get("id")): item for item in active_obligations(obligations)}
     setup_catalog = execution_setups(obligations)
     shared_result_literals = common_result_literals_by_obligation(obligations)
+    open_gap_obligations: dict[str, set[str]] = {}
+    for gap in obligations.get("clarifications", []):
+        if not isinstance(gap, Mapping):
+            continue
+        gap_id = str(gap.get("id") or "")
+        affected_ids = gap.get("affected_obligation_ids")
+        if (
+            re.fullmatch(r"GAP-[A-Z0-9-]+", gap_id)
+            and gap.get("status") == "open"
+            and gap.get("requires_business_answer") is True
+            and isinstance(affected_ids, list)
+        ):
+            open_gap_obligations[gap_id] = {
+                str(item) for item in affected_ids if isinstance(item, str)
+            }
     consolidation_enabled = matrix_consolidation_enabled(
         state=workflow_state, matrix_path=matrix_path
     )
@@ -4139,6 +4187,12 @@ def validate_matrix(
                 continue
             decision = consolidation["covered_internal_scenarios"].get(scenario_id)
             if decision is None or decision.get("decision") != "covered-by-observable-result":
+                if source_limited_internal_oracle_exception(
+                    row=row,
+                    obligation_id=str(obligation.get("id") or ""),
+                    open_gap_obligations=open_gap_obligations,
+                ):
+                    continue
                 findings.append(finding(
                     "matrix-internal-oracle-needs-observable-coverage",
                     "test-design",
