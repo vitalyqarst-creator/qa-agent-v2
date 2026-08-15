@@ -139,13 +139,11 @@ def derived_status_for_scenarios(
             raise PracticalV09Error(
                 f"status triage cannot resolve {scenario_id} context {context_id}"
             )
-        expected = derived_execution_status(context, setup_catalog)
-        if row.get("Статус исполнения", "").strip() != expected:
-            raise PracticalV09Error(
-                f"status triage requires the matrix to already use derived status "
-                f"{expected} for {scenario_id}"
-            )
-        derived.add(expected)
+        # Triage records whether the reviewer correctly identified a status
+        # defect in the immutable pre-revision matrix.  Requiring the matrix
+        # to already contain the derived status would make that finding
+        # impossible to accept without changing review input before triage.
+        derived.add(derived_execution_status(context, setup_catalog))
     return derived
 
 

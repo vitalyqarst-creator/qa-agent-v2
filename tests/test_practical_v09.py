@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib.util
 import json
 import subprocess
 import sys
@@ -3292,6 +3293,41 @@ class PracticalV09Tests(unittest.TestCase):
             self.assertEqual(
                 "approved", state["reviews"][-1]["effective_verdict"]
             )
+
+    def test_status_triage_derives_status_before_matrix_revision(self) -> None:
+        """A valid status finding is triaged against setup closure, not pre-revised matrix text."""
+        spec = importlib.util.spec_from_file_location(
+            "triage_practical_review",
+            REPO_ROOT / "scripts" / "triage_practical_review.py",
+        )
+        assert spec is not None and spec.loader is not None
+        triage = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(triage)
+        with tempfile.TemporaryDirectory() as raw:
+            fixture = PracticalV09Fixture(Path(raw))
+            obligations = json.loads(fixture.obligations.read_text(encoding="utf-8"))
+            obligations["execution_setups"][0]["availability"] = "needs-future-clarification"
+            write_json(fixture.obligations, obligations)
+            fixture.matrix.write_text(
+                fixture.matrix.read_text(encoding="utf-8").replace(
+                    "| Positive | High | ready |",
+                    "| Positive | High | blocked-observability |",
+                ),
+                encoding="utf-8",
+            )
+            state = json.loads(fixture.state.read_text(encoding="utf-8"))
+            claimed, derived = triage.status_assertion_values(
+                review_finding={
+                    "status_assertion": {
+                        "scenario_ids": ["SCN-001"],
+                        "required_status": "needs-future-clarification",
+                    }
+                },
+                state=state,
+                package_root=fixture.root,
+            )
+            self.assertEqual("needs-future-clarification", claimed)
+            self.assertEqual({"needs-future-clarification"}, derived)
 
     def test_matrix_approval_during_contract_migration_requires_tc_sync(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
