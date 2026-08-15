@@ -3105,8 +3105,12 @@ def validate_date_negative_matrix_coverage(
             ))
             continue
         if not explicit_oracle.search(statement):
-            invalid_statuses = {row.get("Статус исполнения", "").strip() for row in negative_rows}
-            if invalid_statuses != {"candidate-ui-calibration"}:
+            calibration_rows = [
+                row for row in negative_rows
+                if row.get("Статус исполнения", "").strip() == "candidate-ui-calibration"
+                or "candidate-ui-calibration" in row.get("Ограничения исполнения", "")
+            ]
+            if len(calibration_rows) != len(negative_rows):
                 findings.append(finding(
                     "matrix-date-negative-ui-calibration-status",
                     "execution-readiness",
@@ -3117,6 +3121,24 @@ def validate_date_negative_matrix_coverage(
                     remediation_owner="writer",
                     blocking=True,
                 ))
+            for row in calibration_rows:
+                limitation = row.get("Ограничения исполнения", "")
+                if not re.search(
+                    r"(?:состо\w*\s+пол|фильтрац|сообщени|сохранени|переход)",
+                    limitation,
+                    re.IGNORECASE,
+                ):
+                    findings.append(finding(
+                        "matrix-date-negative-ui-calibration-question",
+                        "execution-readiness",
+                        "Для negative-проверки даты не указан остаточный вопрос UI-калибровки",
+                        f"{row.get('Проверка', matrix_id)}: укажите в «Ограничениях исполнения», "
+                        "какой наблюдаемый механизм требуется подтвердить: состояние поля, "
+                        "фильтрация, сообщение, сохранение или переход.",
+                        artifact,
+                        remediation_owner="writer",
+                        blocking=True,
+                    ))
         negative_text = "\n".join(matrix_row_text(row) for row in negative_rows)
         if source_format.search(statement) and not invalid_format_value.search(negative_text):
             findings.append(finding(
@@ -3147,6 +3169,59 @@ def validate_date_negative_matrix_coverage(
                     remediation_owner="writer",
                     blocking=True,
                 ))
+    return findings
+
+
+def validate_negative_enforcement_calibration(
+    *, rows: Iterable[Mapping[str, str]], obligations: Mapping[str, Any], artifact: str
+) -> list[ScopeFinding]:
+    """Require an explicit UI-calibration path for source-defined negative enforcement.
+
+    A format, boundary or digits-only rule states a business restriction but, without a source
+    reaction, does not establish filtering, an error, clearing or a save
+    outcome. A missing fixture may remain the primary execution status; the
+    residual UI question must still be visible in the matrix.
+    """
+    findings: list[ScopeFinding] = []
+    active_entries = {
+        str(item.get("id")): item for item in active_obligations(dict(obligations))
+    }
+    for row in rows:
+        if row.get("Тип", "").strip() != "Negative":
+            continue
+        obligation = active_entries.get(row.get("Обязательство ФТ", ""), {})
+        statement = str(obligation.get("statement") or "")
+        if not re.search(
+            r"(?:тольк\w*\s+цифр|недопустим\w*|формат\w*|диапазон\w*)",
+            statement,
+            re.IGNORECASE,
+        ):
+            continue
+        if re.search(r"(?:сообщени|ошибк|не\s+сохран|не\s+принима|фильтр)\w*", statement, re.IGNORECASE):
+            continue
+        limitation = row.get("Ограничения исполнения", "")
+        has_calibration = (
+            row.get("Статус исполнения", "").strip() == "candidate-ui-calibration"
+            or "candidate-ui-calibration" in limitation
+        )
+        has_question = bool(re.search(
+            r"(?:состо\w*\s+пол|фильтрац|сообщени|сохранени|переход)", limitation,
+            re.IGNORECASE,
+        ))
+        if has_calibration and has_question:
+            continue
+        findings.append(finding(
+            "matrix-negative-enforcement-ui-calibration",
+            "execution-readiness",
+            "Negative-проверка ограничения ФТ не содержит наблюдаемого пути UI-калибровки",
+            f"{row.get('Проверка', '<без ID>')}: правило формата или границ не задаёт "
+            "механизм реакции UI. Укажите candidate-ui-calibration как основной статус "
+            "или ограничение при needs-test-data и сформулируйте остаточный вопрос о "
+            "состоянии поля, фильтрации, сообщении, сохранении или переходе.",
+            artifact,
+            remediation_owner="writer",
+            blocking=True,
+        ))
     return findings
 
 
@@ -3792,7 +3867,10 @@ def is_internal_unobservable_statement(statement: str) -> bool:
     presumed absent.
     """
     text = statement.casefold()
-    internal_check = re.search(r"\bсистем\w*\s+провер\w*\b", text)
+    internal_check = re.search(
+        r"\b(?:систем\w*\s+провер\w*|(?:присваива|устанавлива)\w*(?:\s+\w+){0,6}\s+статус\w*)\b",
+        text,
+    )
     if internal_check is None:
         return False
     # An action before the assertion (for example, «При нажатии Сохранить»)
@@ -3800,7 +3878,7 @@ def is_internal_unobservable_statement(statement: str) -> bool:
     # check can make the source assertion executable.
     result_clause = text[internal_check.end() :]
     return not re.search(
-        r"\b(?:сообщени|текст|ошибк|отображ|показыв|доступ|сохран|закры|откры|переход)\w*\b",
+        r"\b(?:сообщени|текст|ошибк|отображ|показыв|индикатор|доступ|сохран|закры|откры|переход)\w*\b",
         result_clause,
     )
 
@@ -4129,6 +4207,11 @@ def validate_matrix(
         obligations=obligations,
         artifact=artifact,
     ))
+    findings.extend(validate_negative_enforcement_calibration(
+        rows=rows,
+        obligations=obligations,
+        artifact=artifact,
+    ))
     consolidation_findings, consolidation = scenario_consolidation_contract(
         state=workflow_state,
         rows_by_scenario=by_scenario,
@@ -4179,6 +4262,41 @@ def validate_matrix(
                 remediation_owner="writer",
                 blocking=True,
             ))
+        for obligation_id, obligation in active_entries.items():
+            target_ids = obligation.get("common_result_for_obligation_ids")
+            literals = required_message_literals(str(obligation.get("statement") or ""))
+            if not isinstance(target_ids, list) or not literals:
+                continue
+            owner_rows = [
+                row for row in by_scenario.values()
+                if row.get("Обязательство ФТ", "") == obligation_id
+            ]
+            for owner_row in owner_rows:
+                scenario_id = owner_row.get("Идентификатор сценария", "")
+                decision = consolidation["covered_internal_scenarios"].get(scenario_id)
+                observable_row = (
+                    by_scenario.get(str(decision.get("observable_scenario_id") or ""))
+                    if decision is not None else None
+                )
+                if (
+                    decision is not None
+                    and decision.get("decision") == "covered-by-observable-result"
+                    and observable_row is not None
+                    and all(literal in observable_row.get("Ожидаемый результат", "") for literal in literals)
+                ):
+                    continue
+                findings.append(finding(
+                    "matrix-common-result-needs-observable-coverage",
+                    "test-design",
+                    "Точный общий результат ФТ запланирован отдельной проверкой вместо наблюдаемого покрытия",
+                    f"{scenario_id}: обязательство {obligation_id} задаёт общий дословный результат "
+                    "для других классов нарушения. Свяжите его решением "
+                    "covered-by-observable-result с negative-сценарием, где этот текст "
+                    "проверяется тем же действием; самостоятельный дублирующий TC не создавайте.",
+                    artifact,
+                    remediation_owner="writer",
+                    blocking=True,
+                ))
         for scenario_id, row in by_scenario.items():
             obligation = active_entries.get(row.get("Обязательство ФТ", ""))
             if obligation is None or not is_internal_unobservable_statement(

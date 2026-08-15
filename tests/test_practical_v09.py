@@ -34,6 +34,7 @@ from test_case_agent.practical_v09 import (
     finding,
     load_workflow_state,
     has_composite_result_table,
+    is_internal_unobservable_statement,
     matrix_review_required,
     matrix_exact_duplicate_groups,
     matrix_semantic_consolidation_groups,
@@ -53,6 +54,7 @@ from test_case_agent.practical_v09 import (
     validate_source_package_manifest,
     validate_scope_obligations,
     validate_matrix_file_state_contract,
+    validate_negative_enforcement_calibration,
     validate_matrix,
     validate_matrix_state_and_primary_oracle_contract,
     validate_scope,
@@ -4745,6 +4747,44 @@ class PracticalV09Tests(unittest.TestCase):
                 "matrix-review-required-before-test-cases",
                 finding_ids,
             )
+
+    def test_status_assignment_without_visible_projection_is_internal(self) -> None:
+        self.assertTrue(is_internal_unobservable_statement(
+            "При нажатии «Сохранить» карточке присваивается статус «Подтвержден»."
+        ))
+        self.assertFalse(is_internal_unobservable_statement(
+            "После сохранения отображается зеленый индикатор статуса «Подтвержден»."
+        ))
+
+    def test_negative_enforcement_requires_calibration_question(self) -> None:
+        obligations = {
+            "obligations": [{
+                "id": "OBL-001",
+                "statement": "Поле принимает только цифры.",
+                "execution_contexts": [],
+            }],
+        }
+        rows = [{
+            "Проверка": "MTX-001",
+            "Обязательство ФТ": "OBL-001",
+            "Тип": "Negative",
+            "Статус исполнения": "needs-test-data",
+            "Ограничения исполнения": "Нужен fixture.",
+        }]
+        findings = validate_negative_enforcement_calibration(
+            rows=rows, obligations=obligations, artifact="test"
+        )
+        self.assertIn(
+            "matrix-negative-enforcement-ui-calibration",
+            [item.id for item in findings],
+        )
+        rows[0]["Ограничения исполнения"] = (
+            "candidate-ui-calibration: уточнить состояние поля или сообщение."
+        )
+        findings = validate_negative_enforcement_calibration(
+            rows=rows, obligations=obligations, artifact="test"
+        )
+        self.assertEqual([], findings)
 
     def test_validator_allows_source_limited_internal_check_with_open_gap(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
