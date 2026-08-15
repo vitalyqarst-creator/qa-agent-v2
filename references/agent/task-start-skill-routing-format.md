@@ -82,7 +82,7 @@ The JSON block is canonical. Tests and architecture audit parse it directly.
       "instruction_scenarios": [
         {"skill": "ft-practical-route", "scenario": "practical.v1"}
       ],
-      "verification_gates": ["source-scope.md identifies scope, source refs, visual bindings and applicable BA decisions", "scope-clarification-requests.md exists, including when it has no questions", "test-design-matrix.md is Russian and is accepted by a distinct top-level reviewer session before TC writing", "test-case file is visible as draft before final review", "TC review is performed by a distinct top-level reviewer session", "one complete writer revision and one finding-closure check per phase at most", "no manifests, attestations, receipts or repair loops are created"]
+      "verification_gates": ["source-scope.md identifies scope, source refs, visual bindings, applicable global data-type rules and applicable BA decisions", "scope-clarification-requests.md exists, including when it has no questions", "test-design-matrix.md is Russian and is accepted by a distinct top-level reviewer session before TC writing", "test-case file is visible as draft before final review", "TC review is performed by a distinct top-level reviewer session", "one complete writer revision, one finding-closure check and at most one bounded micro-closure per phase", "no manifests, attestations, receipts or repair loops are created"]
     },
     {
       "id": "test_cases.legacy_practical_v0_9",

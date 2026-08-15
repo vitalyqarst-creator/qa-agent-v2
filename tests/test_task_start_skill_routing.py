@@ -113,7 +113,7 @@ class TaskStartSkillRoutingTests(unittest.TestCase):
             self.route_by_id["test_cases.practical_v1"]["verification_gates"],
         )
         self.assertIn(
-            "one complete writer revision and one finding-closure check per phase at most",
+            "one complete writer revision, one finding-closure check and at most one bounded micro-closure per phase",
             self.route_by_id["test_cases.practical_v1"]["verification_gates"],
         )
         self.assertEqual(

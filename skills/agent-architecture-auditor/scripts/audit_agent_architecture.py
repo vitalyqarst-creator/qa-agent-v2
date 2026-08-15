@@ -234,6 +234,8 @@ def audit_active_practical_v1_contract(root:Path,checks,findings):
         "matrix-review.md",
         "test-cases-review.md",
         "Только после `matrix-accepted` writer создаёт тест-кейсы",
+        "глобальные правила типа данных",
+        "micro-closure",
         "`review-failed`",
     )
     missing=[item for item in required if item not in content]
