@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -61,3 +63,37 @@ class CapturePracticalReviewResultTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "exceeds compact receipt limit"):
                 module.capture(submission=submission, output=output, max_bytes=64)
             self.assertFalse(output.exists())
+
+    def test_reviewer_submission_preflight_uses_manifest_bound(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            manifest = root / "matrix-review-manifest.json"
+            manifest.write_text(
+                json.dumps(
+                    {"reviewer_receipt_contract": {"max_bytes": 96}},
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+            submission = root / "reviewer-submission.json"
+            submission.write_text(json.dumps({"value": "ok"}), encoding="utf-8")
+            command = [
+                sys.executable,
+                str(ROOT / "scripts" / "validate_practical_review_submission.py"),
+                "--manifest",
+                str(manifest),
+                "--submission",
+                str(submission),
+            ]
+            completed = subprocess.run(
+                command, text=True, capture_output=True, encoding="utf-8", errors="replace"
+            )
+            self.assertEqual(0, completed.returncode, completed.stdout + completed.stderr)
+            self.assertIn('"status": "valid"', completed.stdout)
+
+            submission.write_text(json.dumps({"value": "x" * 128}), encoding="utf-8")
+            completed = subprocess.run(
+                command, text=True, capture_output=True, encoding="utf-8", errors="replace"
+            )
+            self.assertEqual(2, completed.returncode, completed.stdout + completed.stderr)
+            self.assertIn("exceeds manifest limit", completed.stdout)

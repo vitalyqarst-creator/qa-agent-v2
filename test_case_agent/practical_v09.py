@@ -122,7 +122,11 @@ MATRIX_REVIEW_RISK_FLAGS = {
 }
 COMPACT_REVIEWER_RECEIPT_OBLIGATION_THRESHOLD = 8
 COMPACT_REVIEWER_RECEIPT_FORMAT = "compact-obligation-vector-v2"
-COMPACT_REVIEWER_RECEIPT_MAX_BYTES = 64 * 1024
+# A compact receipt must be small enough to survive the transport used by the
+# controller as a single raw JSON response.  Keep this value aligned with
+# ``capture_practical_review_result.py``; the immutable manifest is the
+# reviewer-visible source for every individual review.
+COMPACT_REVIEWER_RECEIPT_MAX_BYTES = 24 * 1024
 ALLOWED_EXECUTION_STATUSES = {
     "ready",
     "needs-test-data",
@@ -3064,6 +3068,21 @@ def validate_date_negative_matrix_coverage(
         r"\b(?:некоррект|недопуст|невалид|ошибк|отклон|запрещ|не\s+принима)\w*",
         re.IGNORECASE,
     )
+    source_format = re.compile(
+        r"(?:дд\s*[.\-/]\s*мм\s*[.\-/]\s*гггг|\bформат\w*\b)",
+        re.IGNORECASE,
+    )
+    source_day_bounds = re.compile(
+        r"\bдень\w*\b[^.\n]{0,100}\b(?:01|1)\s*(?:[-–—]|до)\s*(?:31|28|29|30)\b",
+        re.IGNORECASE,
+    )
+    invalid_format_value = re.compile(
+        r"(?:неверн\w*\s+формат|формат\w*[^.\n]{0,60}(?:неверн|недопуст)|"
+        r"\b\d{1,4}[/-]\d{1,2}[/-]\d{1,4}\b)",
+        re.IGNORECASE,
+    )
+    lower_day_value = re.compile(r"\b00[.\-/]\d{1,2}[.\-/]\d{2,4}\b")
+    upper_day_value = re.compile(r"\b32[.\-/]\d{1,2}[.\-/]\d{2,4}\b")
     for (context_id, element), group in sorted(by_context_and_element.items()):
         if not any(row.get("Тип", "").strip() == "Positive" for row in group):
             continue
@@ -3098,6 +3117,160 @@ def validate_date_negative_matrix_coverage(
                     remediation_owner="writer",
                     blocking=True,
                 ))
+        negative_text = "\n".join(matrix_row_text(row) for row in negative_rows)
+        if source_format.search(statement) and not invalid_format_value.search(negative_text):
+            findings.append(finding(
+                "matrix-date-format-negative-class-missing",
+                "test-design",
+                "Для даты с source-defined форматом не выделен класс неверного формата",
+                f"{matrix_id}: для {element} в {context_id} добавьте отдельный Negative SCN "
+                "с конкретным значением, не соответствующим формату из ФТ. Не заменяйте "
+                "его только общей формулировкой «некорректная дата».",
+                artifact,
+                remediation_owner="writer",
+                blocking=True,
+            ))
+        if source_day_bounds.search(statement):
+            missing_bounds: list[str] = []
+            if not lower_day_value.search(negative_text):
+                missing_bounds.append("день `00`")
+            if not upper_day_value.search(negative_text):
+                missing_bounds.append("день `32`")
+            if missing_bounds:
+                findings.append(finding(
+                    "matrix-date-day-boundary-classes-missing",
+                    "test-design",
+                    "Для даты не покрыты внешние классы дня из source-defined диапазона",
+                    f"{matrix_id}: для {element} в {context_id} добавьте Negative SCN со значениями "
+                    + " и ".join(missing_bounds) + ".",
+                    artifact,
+                    remediation_owner="writer",
+                    blocking=True,
+                ))
+    return findings
+
+
+FILE_MATRIX_SIGNAL_RE = re.compile(
+    r"\b(?:файл\w*|документ\w*|вложен\w*|прикреп\w*|загруз\w*)\b", re.IGNORECASE
+)
+FILE_CONTAINER_STATE_RE = re.compile(
+    r"(?:\bпуст\w*\s+(?:контейнер|блок|список)\b|"
+    r"\b(?:контейнер|блок|список)\b[^.\n]{0,80}\b(?:пуст|нет|отсутств|один\s+файл|прикрепл)\w*|"
+    r"\bфайл\b[^.\n]{0,80}\b(?:отсутств|не\s+прикрепл|прикрепл)\w*)",
+    re.IGNORECASE,
+)
+FILE_FORMAT_VALUE_RE = re.compile(r"\b(?:jpe?g|png|pdf)\b", re.IGNORECASE)
+FILE_ITERATION_ISOLATION_RE = re.compile(
+    r"(?:\bдля\s+кажд\w*\s+(?:формат\w*|итерац\w*)\b[^.\n]{0,120}"
+    r"\b(?:пуст|очист|сброс|нов\w*\s+(?:контейнер|форма|карточк))\w*|"
+    r"\bотдельн\w*\s+итерац\w*\b|\bсброс\w*\s+состо\w*\b|"
+    r"\bочист\w*\s+(?:контейнер|список|блок)\b)",
+    re.IGNORECASE,
+)
+PRIMARY_ORACLE_MIX_RE = re.compile(
+    r"\b(?:созда\w*|создани\w*|нов\w*\s+карточк\w*)\b[^.\n]{0,90}"
+    r"\bили\b[^.\n]{0,90}\b(?:измен\w*|сохран\w*\s+изменени\w*)\b|"
+    r"\b(?:измен\w*|сохран\w*\s+изменени\w*)\b[^.\n]{0,90}"
+    r"\bили\b[^.\n]{0,90}\b(?:созда\w*|создани\w*|нов\w*\s+карточк\w*)\b",
+    re.IGNORECASE,
+)
+COMPLETED_STATE_STEMS = ("заполн", "измен", "внес", "указ", "выбра", "прикреп", "загруз")
+
+
+def matrix_is_file_scenario(row: Mapping[str, str]) -> bool:
+    return bool(FILE_MATRIX_SIGNAL_RE.search(matrix_row_text(row)))
+
+
+def validate_matrix_file_state_contract(
+    *, rows: Iterable[Mapping[str, str]], artifact: str
+) -> list[ScopeFinding]:
+    """Require deterministic file-container state and isolated format iterations.
+
+    A source can allow one file and several file formats at the same time.  A
+    matrix must show how each iteration starts; otherwise the result of the
+    second parameter depends on the first parameter rather than on the rule.
+    """
+    findings: list[ScopeFinding] = []
+    for row in rows:
+        if not matrix_is_file_scenario(row):
+            continue
+        matrix_id = row.get("Проверка", "<без ID>")
+        scenario_id = row.get("Идентификатор сценария", "<без SCN>")
+        initial_state = row.get("Исходное состояние", "")
+        if not FILE_CONTAINER_STATE_RE.search(initial_state):
+            findings.append(finding(
+                "matrix-file-container-initial-state",
+                "execution-readiness",
+                "Для файлового сценария не задано точное исходное состояние контейнера",
+                f"{matrix_id}/{scenario_id}: укажите пустой контейнер либо конкретный уже "
+                "прикреплённый файл и его ожидаемое состояние перед действием.",
+                artifact,
+                remediation_owner="writer",
+                blocking=True,
+            ))
+        format_values = set(FILE_FORMAT_VALUE_RE.findall(matrix_row_text(row)))
+        if len(format_values) > 1:
+            iteration_text = " ".join(
+                row.get(column, "")
+                for column in ("Формирование состояния", "Проверяемое действие", "Проверяемое правило")
+            )
+            if not FILE_ITERATION_ISOLATION_RE.search(iteration_text):
+                findings.append(finding(
+                    "matrix-file-format-iteration-isolation",
+                    "test-design",
+                    "Несколько форматов файла проверяются без изоляции итераций",
+                    f"{matrix_id}/{scenario_id}: для каждого формата задайте отдельную "
+                    "итерацию с пустым контейнером или явным возвратом к исходному состоянию.",
+                    artifact,
+                    remediation_owner="writer",
+                    blocking=True,
+                ))
+    return findings
+
+
+def validate_matrix_state_and_primary_oracle_contract(
+    *,
+    row: Mapping[str, str],
+    flow_kind: str | None,
+    artifact: str,
+) -> list[ScopeFinding]:
+    """Catch deterministic state/action and create/edit oracle ambiguities."""
+    findings: list[ScopeFinding] = []
+    matrix_id = row.get("Проверка", "<без ID>")
+    scenario_id = row.get("Идентификатор сценария", "<без SCN>")
+    initial_state = row.get("Исходное состояние", "").casefold()
+    formation = row.get("Формирование состояния", "").casefold()
+    action = row.get("Проверяемое действие", "")
+    if SAVE_OR_CLOSE_ACTION_RE.search(action):
+        duplicated = [
+            stem for stem in COMPLETED_STATE_STEMS
+            if stem in initial_state and stem in formation
+        ]
+        if duplicated and re.search(r"\b(?:уже|ранее|предварительно|заполнен|изменен|внесен)\w*", initial_state):
+            findings.append(finding(
+                "matrix-state-formation-duplicates-trigger",
+                "test-design",
+                "Исходное состояние уже содержит изменение, которое повторно формируется перед действием",
+                f"{matrix_id}/{scenario_id}: оставьте форму или карточку до изменения в "
+                "«Исходном состоянии», а изменение выполните ровно один раз в "
+                "«Формировании состояния». Совпадающие признаки: " + ", ".join(duplicated) + ".",
+                artifact,
+                remediation_owner="writer",
+                blocking=True,
+            ))
+    expected_result = row.get("Ожидаемый результат", "")
+    if flow_kind in {"create", "edit"} and PRIMARY_ORACLE_MIX_RE.search(expected_result):
+        expected_kind = "создание новой карточки" if flow_kind == "create" else "сохранение или несохранение изменения существующей карточки"
+        findings.append(finding(
+            "matrix-context-primary-oracle-ambiguous",
+            "expected-result",
+            "Ожидаемый результат смешивает create и edit в одном контексте",
+            f"{matrix_id}/{scenario_id}: контекст относится к {flow_kind}; укажите только "
+            f"{expected_kind}, без альтернативы «или». ",
+            artifact,
+            remediation_owner="writer",
+            blocking=True,
+        ))
     return findings
 
 
@@ -3155,6 +3328,70 @@ def matrix_exact_duplicate_groups(
         if len(scenario_ids) < 2 or len(obligation_ids) < 2:
             continue
         candidates.append((signature, group, scenario_ids))
+    result: list[tuple[tuple[str, ...], list[dict[str, str]]]] = []
+    covered_scenarios: set[str] = set()
+    for signature, group, scenario_ids in sorted(
+        candidates, key=lambda item: (-len(item[2]), item[0])
+    ):
+        if covered_scenarios & scenario_ids:
+            continue
+        covered_scenarios.update(scenario_ids)
+        result.append((signature, group))
+    return result
+
+
+def matrix_semantic_consolidation_groups(
+    rows: Iterable[dict[str, str]],
+) -> list[tuple[tuple[str, ...], list[dict[str, str]]]]:
+    """Return candidate groups that differ only by the source assertion.
+
+    Exact duplicate detection is deliberately narrow.  It misses the common
+    case where two FT rows describe the same user action and visible result
+    from different angles (for example, autofill and requiredness).  Those
+    rows are not auto-merged: the matrix must contain an explicit CON-* that
+    says whether the pair is parameterized, observed through one result, or
+    intentionally separate.
+    """
+    grouped: dict[tuple[str, ...], list[dict[str, str]]] = {}
+    required = (
+        "Проверяемый элемент",
+        "Домен проверки",
+        "Способ взаимодействия",
+        "Исходное состояние",
+        "Формирование состояния",
+        "Проверяемое действие",
+        "Ожидаемый результат",
+        "Тип",
+        "Статус исполнения",
+    )
+    for row in rows:
+        context_id = context_id_from_cell(row.get("Контекст исполнения", ""))
+        scenario_id = row.get("Идентификатор сценария", "")
+        if (
+            not context_id
+            or not SCENARIO_ID_RE.fullmatch(scenario_id)
+            or any(not row.get(column, "").strip() for column in required)
+        ):
+            continue
+        signature = (
+            "semantic",
+            context_id,
+            *(normalized_matrix_phrase(row[column]) for column in required),
+        )
+        grouped.setdefault(signature, []).append(row)
+
+    candidates: list[tuple[tuple[str, ...], list[dict[str, str]], frozenset[str]]] = []
+    for signature, group in grouped.items():
+        scenario_ids = frozenset(row["Идентификатор сценария"] for row in group)
+        obligation_ids = {
+            row.get("Обязательство ФТ", "")
+            for row in group
+            if re.fullmatch(r"OBL-[A-Z0-9-]+", row.get("Обязательство ФТ", ""))
+        }
+        if len(scenario_ids) < 2 or len(obligation_ids) < 2:
+            continue
+        candidates.append((signature, group, scenario_ids))
+
     result: list[tuple[tuple[str, ...], list[dict[str, str]]]] = []
     covered_scenarios: set[str] = set()
     for signature, group, scenario_ids in sorted(
@@ -3833,6 +4070,12 @@ def validate_matrix(
                             artifact,
                             remediation_owner="writer",
                         ))
+                findings.extend(validate_matrix_state_and_primary_oracle_contract(
+                    row=row,
+                    flow_kind=execution_context_flow_kind(context),
+                    artifact=artifact,
+                ))
+    findings.extend(validate_matrix_file_state_contract(rows=rows, artifact=artifact))
     findings.extend(validate_date_negative_matrix_coverage(
         rows=rows,
         obligations=obligations,
@@ -3850,11 +4093,13 @@ def validate_matrix(
             frozenset(decision["scenario_ids"])
             for decision in consolidation["decisions"]
         }
+        def candidate_is_declared(scenario_ids: frozenset[str]) -> bool:
+            return any(scenario_ids <= declared for declared in declared_groups)
         for _signature, group in matrix_exact_duplicate_groups(rows):
             scenario_ids = frozenset(
                 row.get("Идентификатор сценария", "") for row in group
             )
-            if scenario_ids not in declared_groups:
+            if not candidate_is_declared(scenario_ids):
                 findings.append(finding(
                     "scenario-consolidation-exact-candidate-undecided",
                     "test-design",
@@ -3867,6 +4112,25 @@ def validate_matrix(
                     remediation_owner="writer",
                     blocking=True,
                 ))
+        for _signature, group in matrix_semantic_consolidation_groups(rows):
+            scenario_ids = frozenset(
+                row.get("Идентификатор сценария", "") for row in group
+            )
+            if candidate_is_declared(scenario_ids):
+                continue
+            findings.append(finding(
+                "scenario-consolidation-semantic-candidate-undecided",
+                "test-design",
+                "Для семантически одинаковой пользовательской проверки не принято решение о консолидации",
+                "Сценарии " + ", ".join(sorted(scenario_ids))
+                + " имеют одинаковые элемент, домен, взаимодействие, исходное состояние, "
+                "действие и основной ожидаемый результат, но относятся к разным OBL-*. "
+                "Добавьте CON-* с merge-parameterized, covered-by-observable-result или "
+                "separate и source-backed rationale.",
+                artifact,
+                remediation_owner="writer",
+                blocking=True,
+            ))
         for scenario_id, row in by_scenario.items():
             obligation = active_entries.get(row.get("Обязательство ФТ", ""))
             if obligation is None or not is_internal_unobservable_statement(

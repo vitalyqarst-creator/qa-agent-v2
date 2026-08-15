@@ -188,7 +188,10 @@ budget. При содержательных замечаниях без внеш
 `changes-required`.
 
 Raw submission ограничен размером, указанным в `reviewer_receipt_contract`
-manifest (по умолчанию не более 64 KiB). Если первый ответ не проходит этот
+manifest (по умолчанию не более 24 KiB). Перед отправкой reviewer сохраняет
+тот же raw JSON во временный UTF-8 файл и запускает
+`python scripts/validate_practical_review_submission.py --manifest <manifest> --submission <временный-json>`.
+Controller принимает только результат, прошедший этот preflight. Если первый ответ не проходит этот
 контракт, controller не просит reviewer-а «сжать» уже вынесенный verdict и не
 переписывает receipt: он фиксирует невалидный dispatch и при необходимости
 запускает новый независимый review по тому же immutable snapshot.

@@ -35,6 +35,7 @@ from test_case_agent.practical_v09 import (
     has_composite_result_table,
     matrix_review_required,
     matrix_exact_duplicate_groups,
+    matrix_semantic_consolidation_groups,
     parse_test_case_blocks,
     parse_matrix_consolidation_decisions,
     parse_matrix_rows,
@@ -50,6 +51,8 @@ from test_case_agent.practical_v09 import (
     sha256_file,
     validate_source_package_manifest,
     validate_scope_obligations,
+    validate_matrix_file_state_contract,
+    validate_matrix_state_and_primary_oracle_contract,
     validate_scope,
     verify_review_result,
     write_json,
@@ -386,6 +389,152 @@ class PracticalV09Tests(unittest.TestCase):
 
         self.assertIn(
             "matrix-date-negative-candidate-missing",
+            [item.id for item in findings if item.blocking],
+        )
+
+    def test_matrix_requires_source_defined_date_format_and_day_boundaries(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            fixture = PracticalV09Fixture(
+                Path(raw),
+                obligation_statement=(
+                    "Поле «Дата аккредитации» имеет формат дд.мм.гггг; "
+                    "день 01–31 и невозможные календарные даты не принимаются."
+                ),
+            )
+            fixture.matrix.write_text(
+                "# Матрица тест-дизайна\n\n"
+                "| Проверка | Идентификатор сценария | Обязательство ФТ | Контекст исполнения | Проверяемый элемент | Домен проверки | Способ взаимодействия | Проверяемое правило | Исходное состояние | Формирование состояния | Проверяемое действие | Ожидаемый результат | Нужные предпосылки | Тип | Приоритет | Статус исполнения | Планируемый TC-ID |\n"
+                "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |\n"
+                "| MTX-001 | SCN-001 | OBL-001 | CTX-OPEN-MENU — Открытие раздела из меню | Поле «Дата аккредитации» | Дата | Ввод | Допустимая дата. | Открыта карточка. | Не требуется: состояние задано предусловием. | Ввести `01.01.2026`. | Значение отображается. | SETUP-ACTOR-001 — пользователь. | Positive | High | ready | TC-DATE-001 |\n"
+                "| MTX-002 | SCN-002 | OBL-001 | CTX-OPEN-MENU — Открытие раздела из меню | Поле «Дата аккредитации» | Дата | Ввод | Невозможная дата. | Открыта карточка. | Не требуется: состояние задано предусловием. | Ввести `31.02.2026`. | Значение не принимается. | SETUP-ACTOR-001 — пользователь. | Negative | High | candidate-ui-calibration | TC-DATE-002 |\n",
+                encoding="utf-8",
+            )
+            _, findings = validate_scope(
+                package_root=fixture.root,
+                workflow_state_path=fixture.state,
+            )
+
+        finding_ids = {item.id for item in findings if item.blocking}
+        self.assertIn("matrix-date-format-negative-class-missing", finding_ids)
+        self.assertIn("matrix-date-day-boundary-classes-missing", finding_ids)
+
+    def test_file_matrix_gate_requires_container_state_and_isolated_format_iterations(self) -> None:
+        findings = validate_matrix_file_state_contract(
+            rows=[
+                {
+                    "Проверка": "MTX-FILE-001",
+                    "Идентификатор сценария": "SCN-FILE-001",
+                    "Проверяемый элемент": "Информационное письмо",
+                    "Домен проверки": "Допустимый файл",
+                    "Способ взаимодействия": "Выбор файла",
+                    "Проверяемое правило": "Принимаются jpg, png и pdf.",
+                    "Исходное состояние": "Открыта карточка реквизита.",
+                    "Формирование состояния": "Выбрать jpg, png и pdf по очереди.",
+                    "Проверяемое действие": "Прикрепить файл.",
+                    "Ожидаемый результат": "Файл добавлен.",
+                }
+            ],
+            artifact="test-design-matrix.md",
+        )
+        finding_ids = {item.id for item in findings if item.blocking}
+        self.assertIn("matrix-file-container-initial-state", finding_ids)
+        self.assertIn("matrix-file-format-iteration-isolation", finding_ids)
+
+    def test_matrix_gate_rejects_duplicated_trigger_and_mixed_create_edit_oracle(self) -> None:
+        findings = validate_matrix_state_and_primary_oracle_contract(
+            row={
+                "Проверка": "MTX-CREATE-001",
+                "Идентификатор сценария": "SCN-CREATE-001",
+                "Исходное состояние": "Новая карточка уже заполнена обязательными полями.",
+                "Формирование состояния": "Заполнить обязательные поля и ввести значение.",
+                "Проверяемое действие": "Нажать «Сохранить».",
+                "Ожидаемый результат": "Карточка не создаётся или не изменяется.",
+            },
+            flow_kind="create",
+            artifact="test-design-matrix.md",
+        )
+        finding_ids = {item.id for item in findings if item.blocking}
+        self.assertIn("matrix-state-formation-duplicates-trigger", finding_ids)
+        self.assertIn("matrix-context-primary-oracle-ambiguous", finding_ids)
+
+    def test_semantic_consolidation_candidates_are_detected_beyond_exact_duplicates(self) -> None:
+        rows = [
+            {
+                "Идентификатор сценария": "SCN-001",
+                "Обязательство ФТ": "OBL-001",
+                "Контекст исполнения": "CTX-CREATE — Создание",
+                "Проверяемый элемент": "Поле «БИК»",
+                "Домен проверки": "Автозаполнение",
+                "Способ взаимодействия": "Выбор подсказки",
+                "Проверяемое правило": "Подсказка заполняет БИК.",
+                "Исходное состояние": "Банковские поля пусты.",
+                "Формирование состояния": "Открыть список подсказок.",
+                "Проверяемое действие": "Выбрать подсказку.",
+                "Ожидаемый результат": "В поле отображается БИК из подсказки.",
+                "Тип": "Positive",
+                "Статус исполнения": "ready",
+            },
+            {
+                "Идентификатор сценария": "SCN-002",
+                "Обязательство ФТ": "OBL-002",
+                "Контекст исполнения": "CTX-CREATE — Создание",
+                "Проверяемый элемент": "Поле «БИК»",
+                "Домен проверки": "Автозаполнение",
+                "Способ взаимодействия": "Выбор подсказки",
+                "Проверяемое правило": "БИК заполнен после выбора подсказки.",
+                "Исходное состояние": "Банковские поля пусты.",
+                "Формирование состояния": "Открыть список подсказок.",
+                "Проверяемое действие": "Выбрать подсказку.",
+                "Ожидаемый результат": "В поле отображается БИК из подсказки.",
+                "Тип": "Positive",
+                "Статус исполнения": "ready",
+            },
+        ]
+        groups = matrix_semantic_consolidation_groups(rows)
+        self.assertEqual(1, len(groups))
+        self.assertEqual(
+            {"SCN-001", "SCN-002"},
+            {row["Идентификатор сценария"] for row in groups[0][1]},
+        )
+
+    def test_validator_requires_con_decision_for_semantic_candidate(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            fixture = PracticalV09Fixture(Path(raw))
+            obligations = json.loads(fixture.obligations.read_text(encoding="utf-8"))
+            context = obligations["obligations"][0]["execution_contexts"][0]
+            obligations["obligations"] = [
+                {
+                    "id": "OBL-001",
+                    "source_anchor": "Таблица 8, поле «БИК».",
+                    "statement": "После выбора подсказки БИК заполнен.",
+                    "risk_flags": [],
+                    "execution_contexts": [context],
+                },
+                {
+                    "id": "OBL-002",
+                    "source_anchor": "Таблица 8, поле «БИК», О=Да.",
+                    "statement": "После выбора подсказки обязательное поле БИК заполнено.",
+                    "risk_flags": [],
+                    "execution_contexts": [context],
+                },
+            ]
+            write_json(fixture.obligations, obligations)
+            fixture.matrix.write_text(
+                "# Матрица тест-дизайна\n\n"
+                "| Проверка | Идентификатор сценария | Обязательство ФТ | Контекст исполнения | Проверяемый элемент | Домен проверки | Способ взаимодействия | Проверяемое правило | Исходное состояние | Формирование состояния | Проверяемое действие | Ожидаемый результат | Нужные предпосылки | Тип | Приоритет | Статус исполнения | Планируемый TC-ID |\n"
+                "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |\n"
+                "| MTX-001 | SCN-001 | OBL-001 | CTX-OPEN-MENU — Открытие раздела из меню | Поле «БИК» | Автозаполнение | Выбор подсказки | Подсказка заполняет БИК. | Банковские поля пусты. | Открыть список подсказок. | Выбрать подсказку. | В поле отображается БИК из подсказки. | SETUP-ACTOR-001 — пользователь. | Positive | High | ready | TC-BIK-001 |\n"
+                "| MTX-002 | SCN-002 | OBL-002 | CTX-OPEN-MENU — Открытие раздела из меню | Поле «БИК» | Автозаполнение | Выбор подсказки | БИК заполнен после выбора. | Банковские поля пусты. | Открыть список подсказок. | Выбрать подсказку. | В поле отображается БИК из подсказки. | SETUP-ACTOR-001 — пользователь. | Positive | High | ready | TC-BIK-002 |\n\n"
+                "## Решения о консолидации сценариев\n\n```json\n[]\n```\n",
+                encoding="utf-8",
+            )
+            _, findings = validate_scope(
+                package_root=fixture.root,
+                workflow_state_path=fixture.state,
+            )
+
+        self.assertIn(
+            "scenario-consolidation-semantic-candidate-undecided",
             [item.id for item in findings if item.blocking],
         )
 
