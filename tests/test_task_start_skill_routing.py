@@ -93,28 +93,37 @@ class TaskStartSkillRoutingTests(unittest.TestCase):
     def test_representative_route_expectations(self) -> None:
         self.assertEqual(
             ["ft-practical-route"],
-            self.route_by_id["test_cases.practical_v0_9"]["skill_chain"],
+            self.route_by_id["test_cases.practical_v1"]["skill_chain"],
         )
         self.assertEqual(
-            ["practical.v0_9"],
+            ["practical.v1"],
             [
                 item["scenario"]
-                for item in self.route_by_id["test_cases.practical_v0_9"][
+                for item in self.route_by_id["test_cases.practical_v1"][
                     "instruction_scenarios"
                 ]
             ],
         )
         self.assertIn(
-            "matrix review has immutable manifest, controller-owned separate-session attestation and result from a distinct top-level Codex session",
-            self.route_by_id["test_cases.practical_v0_9"]["verification_gates"],
+            "test-design-matrix.md is Russian and is accepted by a distinct top-level reviewer session before TC writing",
+            self.route_by_id["test_cases.practical_v1"]["verification_gates"],
         )
         self.assertIn(
-            "final TC review has the same independent-review evidence",
-            self.route_by_id["test_cases.practical_v0_9"]["verification_gates"],
+            "TC review is performed by a distinct top-level reviewer session",
+            self.route_by_id["test_cases.practical_v1"]["verification_gates"],
         )
         self.assertIn(
-            "one targeted writer revision per phase at most; controller/validator findings do not consume it",
-            self.route_by_id["test_cases.practical_v0_9"]["verification_gates"],
+            "one complete writer revision and one finding-closure check per phase at most",
+            self.route_by_id["test_cases.practical_v1"]["verification_gates"],
+        )
+        self.assertEqual(
+            ["practical.v0_9"],
+            [
+                item["scenario"]
+                for item in self.route_by_id["test_cases.legacy_practical_v0_9"][
+                    "instruction_scenarios"
+                ]
+            ],
         )
         self.assertEqual(
             ["writer.initial_draft.table"],

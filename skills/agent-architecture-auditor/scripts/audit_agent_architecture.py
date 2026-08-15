@@ -16,7 +16,7 @@ REQ_SKILLS={
     "ft-ui-automation-prep",
     "agent-architecture-auditor",
 }
-REQ_AGENT={"content-placement.md","skill-boundaries.md","duplication-policy.md","instruction-authoring-policy.md","maintenance-checklist.md","audit-output-format.md","task-start-skill-routing-format.md","practical-test-case-route-v0.9.md"}
+REQ_AGENT={"content-placement.md","skill-boundaries.md","duplication-policy.md","instruction-authoring-policy.md","maintenance-checklist.md","audit-output-format.md","task-start-skill-routing-format.md","practical-test-case-route-v1.md"}
 REQ_QA={
     "test-case-format.md",
     "coverage-checklist.md",
@@ -29,21 +29,9 @@ STALE=("uv run ft-test-agent"," ft-test-agent "," list-sections ","skills/ft-tes
 SECTIONS=("## Входы","## Выходы","## Ограничения")
 REQUIRED_INSTRUCTION_CONTEXT_SCENARIOS=frozenset({
     "source_locator.discovery",
-    "practical.v0_9",
+    "practical.v1",
     "architecture.audit",
 })
-ACTIVE_V09_ARTIFACT_PATH_SCENARIOS=(
-    "source_locator.discovery",
-    "scope.manual",
-    "scope.agent_proposed",
-    "practical.v0_9",
-)
-LEGACY_V09_SCOPE_ARTIFACT_MARKERS=(
-    "work/stage-handoffs/",
-    "scope-contract.md",
-    "scope-coverage-gaps.md",
-    "workflow-state.yaml",
-)
 TASK_ROUTING_RE=re.compile(r"<!--\s*task-start-skill-routing:v1\s*-->\s*```json\s*(.*?)\s*```",re.DOTALL)
 
 def args_parser():
@@ -193,7 +181,7 @@ def audit_instruction_budgets(root:Path,checks,findings):
             "status": status,
         })
         if status!="pass":
-            severity = "error" if scenario_id == "practical.v0_9" else "warning"
+            severity = "error" if scenario_id == "practical.v1" else "warning"
             evidence=[
                 f"{budget['total_kib']} KiB / {budget['limit_kib']} KiB",
                 f"headroom {budget.get('headroom_kib')} KiB / min {budget.get('min_headroom_kib')} KiB",
@@ -220,57 +208,54 @@ def audit_instruction_budgets(root:Path,checks,findings):
     add_check(checks,"instruction-loading-manifest-scenarios","pass" if all_resolved else "warn","All declared instruction-loading scenarios resolved.",[rel(manifest,root)])
     return rows
 
-def audit_active_v09_artifact_paths(root:Path,checks,findings):
-    """Reject legacy handoff paths in the instruction contexts that drive v0.9."""
+def audit_active_practical_v1_contract(root:Path,checks,findings):
+    """Verify that the default route retains its minimal, ordered review contract."""
     resolver=load_instruction_resolver(root)
     manifest_path=root/"references"/"agent"/"instruction-loading-manifest.md"
     paths=[rel(manifest_path,root)]
     if resolver is None or not manifest_path.exists():
-        add_check(checks,"active-v09-artifact-paths","warn","Cannot resolve active v0.9 instruction contexts.",paths)
+        add_check(checks,"active-practical-v1-contract","warn","Cannot resolve active practical v1 context.",paths)
         return
     try:
         manifest=resolver.load_manifest(root)
     except Exception as exc:
-        add_check(checks,"active-v09-artifact-paths","warn",f"Cannot parse instruction manifest: {exc}",paths)
+        add_check(checks,"active-practical-v1-contract","warn",f"Cannot parse instruction manifest: {exc}",paths)
         return
-
-    offenders=[]
-    for scenario_id in ACTIVE_V09_ARTIFACT_PATH_SCENARIOS:
-        try:
-            resolved=resolver.resolve_instruction_context(
-                root=root, manifest=manifest, scenario_id=scenario_id
-            )
-        except Exception as exc:
-            offenders.append(f"{scenario_id}: unresolved ({exc})")
-            continue
-        for item in resolved.get("files",[]):
-            path_text=item.get("path")
-            if not isinstance(path_text,str) or path_text=="AGENTS.md":
-                continue
-            candidate=root/path_text
-            normalized=txt(candidate).replace("\\\\","/")
-            if any(marker in normalized for marker in LEGACY_V09_SCOPE_ARTIFACT_MARKERS):
-                offenders.append(f"{scenario_id}: {path_text}")
-
-    status="pass" if not offenders else "fail"
+    try:
+        resolved=resolver.resolve_instruction_context(root=root,manifest=manifest,scenario_id="practical.v1")
+    except Exception as exc:
+        add_check(checks,"active-practical-v1-contract","warn",f"Cannot resolve practical.v1: {exc}",paths)
+        return
+    content="\n".join(txt(root/item["path"]) for item in resolved.get("files",[]) if isinstance(item.get("path"),str))
+    required=(
+        "source-scope.md",
+        "scope-clarification-requests.md",
+        "test-design-matrix.md",
+        "matrix-review.md",
+        "test-cases-review.md",
+        "Только после `matrix-accepted` writer создаёт тест-кейсы",
+        "`review-failed`",
+    )
+    missing=[item for item in required if item not in content]
+    status="pass" if not missing else "fail"
     add_check(
         checks,
-        "active-v09-artifact-paths",
+        "active-practical-v1-contract",
         status,
-        "Active practical v0.9 instruction contexts contain no legacy scope artifacts."
-        if not offenders else "Active practical v0.9 instruction contexts contain legacy scope artifacts.",
+        "Active practical v1 instruction context retains the source → matrix review → TC review contract."
+        if not missing else "Active practical v1 instruction context is missing required route elements.",
         paths,
     )
-    if offenders:
+    if missing:
         add_finding(
             findings,
-            "active-v09-legacy-handoff-path",
+            "active-practical-v1-contract",
             "error",
             "instruction-contract",
-            "Active practical v0.9 context points to a legacy scope artifact",
-            "A v0.9 agent can create legacy artifacts when any of its loaded instructions directs it to the former handoff contract.",
-            offenders,
-            "Move the active artifact contract to work/practical-v0.9 and leave legacy paths only in archived, unloaded references.",
+            "Default practical v1 route is incomplete",
+            "The default route must preserve compact source scope, matrix-first independent review, TC review and a bounded failure state.",
+            missing,
+            "Restore the missing practical-v1 contract element in the selected runtime instructions.",
             paths,
         )
 
@@ -376,7 +361,7 @@ def audit_task_start_routing(root:Path,checks,findings):
 def audit(root:Path):
     findings=[]; checks=[]; stale=[]
     instruction_budgets=audit_instruction_budgets(root,checks,findings)
-    audit_active_v09_artifact_paths(root,checks,findings)
+    audit_active_practical_v1_contract(root,checks,findings)
     ap=root/"AGENTS.md"; ac=txt(ap); low=ac.lower(); steps=len(re.findall(r"(?m)^\d+\.\s",ac))
     if not ap.exists():
         add_check(checks,"agents-file","fail","AGENTS.md is missing.")

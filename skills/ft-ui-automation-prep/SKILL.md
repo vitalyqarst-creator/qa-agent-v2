@@ -5,10 +5,10 @@ description: Проводит UI-проверку accepted FT-first baseline ч�
 
 # FT UI Automation Prep
 
-Используй этот skill после accepted baseline practical v0.9: final TC review
-подтверждён в отдельной сессии, а scope имеет фазу `accepted`.
+Используй этот skill после accepted baseline practical v1: final TC review
+подтверждён в отдельной сессии, а набор имеет статус `baseline`.
 
-Skill не пересматривает scope, не заменяет independent review practical v0.9 и не делает UI новым source of truth. Его задача — проверить готовые ручные кейсы в реальном интерфейсе, собрать evidence и подготовить отдельную automation-ready версию под дальнейшее написание автотестов. Эта версия должна быть не просто копией baseline со статусами, а practically executable handoff: по итогам UI-прохождения она уточняет реальные предусловия, тестовые данные, шаги и ожидаемые результаты там, где это требуется для воспроизводимого прохождения.
+Skill не пересматривает scope, не заменяет independent review practical v1 и не делает UI новым source of truth. Его задача — проверить готовые ручные кейсы в реальном интерфейсе, собрать evidence и подготовить отдельную automation-ready версию под дальнейшее написание автотестов. Эта версия должна быть не просто копией baseline со статусами, а practically executable handoff: по итогам UI-прохождения она уточняет реальные предусловия, тестовые данные, шаги и ожидаемые результаты там, где это требуется для воспроизводимого прохождения.
 
 ## Входы
 
@@ -16,7 +16,7 @@ Skill не пересматривает scope, не заменяет independent
 - package-specific `AGENT-NOTES.md`, если он есть;
 - package-level UI notes `fts/<ft-slug>/work/ui-automation-prep/UI-AGENT-NOTES.md` с runtime URL/entrypoint, способом авторизации и тестовой учетной записью или storage-state;
 - accepted FT-first baseline тест-кейсов;
-- `workflow-state.json` v0.9 с approved final TC review;
+- `test-cases-review.md` с verdict `tc-accepted`;
 - подтвержденный `scope-slug`;
 - runtime URL или route entrypoint приложения;
 - доступ к приложению: учетные данные, тестовая сессия или другой согласованный способ входа;
@@ -37,12 +37,12 @@ Skill не пересматривает scope, не заменяет independent
 
 ## Workflow
 
-1. Подтверди, что входной набор является accepted practical v0.9 baseline: scope находится в фазе `accepted`, а final TC review имеет verdict `approved`. При unresolved blocker не выпускай automation-ready версию.
+1. Подтверди, что входной набор является accepted practical v1 baseline: в заголовке набора указан статус `baseline`, а `test-cases-review.md` имеет verdict `tc-accepted`. При unresolved blocker не выпускай automation-ready версию.
 2. Выполни UI access preflight до создания любых UI-prep output artifacts:
    - проверь наличие `work/ui-automation-prep/UI-AGENT-NOTES.md`;
    - проверь, что в notes или prompt есть runtime URL/entrypoint приложения;
    - проверь, что есть способ авторизации и тестовая учетная запись или storage-state.
-   Если любой из этих входов отсутствует, зафиксируй blocker в текущем `workflow-state.yaml` и practical summary, затем останови UI-prep. Не создавай initial `automation-ready`, `ui-validation-report.md`, `ui-evidence-index.md` или локальный `output/playwright` placeholder.
+   Если любой из этих входов отсутствует, зафиксируй blocker в `work/ui-automation-prep/ui-prep-blocker.md`, затем останови UI-prep. Не создавай initial `automation-ready`, `ui-validation-report.md`, `ui-evidence-index.md` или локальный `output/playwright` placeholder.
 3. Проверь, существует ли `fts/<ft-slug>/test-cases/automation-ready/<section-id>-<scope-slug>.md`.
    - Если файл уже есть, используй его как входной артефакт для UI-прогона.
    - Если файла нет, но существует baseline файл `fts/<ft-slug>/test-cases/<section-id>-<scope-slug>.md`, сначала создай initial `automation-ready` версию из baseline без смены UI-статусов.
@@ -104,7 +104,7 @@ Skill не пересматривает scope, не заменяет independent
 
 ## Ограничения
 
-- Не используй этот skill до выпуска accepted practical v0.9 baseline.
+- Не используй этот skill до выпуска accepted practical v1 baseline.
 - Не выбирай FT-пакет и не определяй scope с нуля.
 - Не перезаписывай FT-first baseline набор тест-кейсов.
 - Не считай UI канонической заменой текста ФТ.

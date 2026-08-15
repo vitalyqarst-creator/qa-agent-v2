@@ -1,4 +1,4 @@
 interface:
   display_name: "FT UI Automation Prep"
   short_description: "Проверяет принятый FT-first baseline в UI и готовит automation-ready версию"
-  default_prompt: "Используй $ft-ui-automation-prep после принятого practical v0.9 baseline: пройди тест-кейсы обычным UI-маршрутом, собери Playwright evidence по ui-evidence-policy.md и выпусти automation-ready версию, не перезаписывая FT-first baseline."
+  default_prompt: "Используй $ft-ui-automation-prep после принятого practical v1 baseline: пройди тест-кейсы обычным UI-маршрутом, собери Playwright evidence по ui-evidence-policy.md и выпусти automation-ready версию, не перезаписывая FT-first baseline."

@@ -65,6 +65,15 @@ Resolver должен читать JSON-блок ниже как канонич�
         "references/qa/coverage-runtime-checklist.md"
       ]
     },
+    "practical_v1_core": {
+      "rationale": "Default production route: matrix before TC, two concise independent reviews, without workflow manifests or controller receipts.",
+      "paths": [
+        "skills/ft-practical-route/SKILL.md",
+        "references/agent/practical-test-case-route-v1.md",
+        "references/qa/test-case-runtime-format.md",
+        "references/qa/coverage-runtime-checklist.md"
+      ]
+    },
     "practical_v09_scope_state_details": {
       "rationale": "Load only while creating or changing normalized obligations and workflow state.",
       "paths": [
@@ -89,11 +98,10 @@ Resolver должен читать JSON-блок ниже как канонич�
       ]
     },
     "writer_core": {
-      "rationale": "Minimum runtime contract for writing test cases when the FT package and scope are already confirmed.",
+      "rationale": "Minimum practical v1 writer contract for a confirmed scope.",
       "paths": [
         "skills/ft-test-case-writer/SKILL.md",
-        "references/agent/writer-runtime-workflow.md",
-        "references/agent/writer-runtime-contract.md",
+        "references/agent/practical-test-case-route-v1.md",
         "references/qa/test-case-runtime-format.md",
         "references/qa/coverage-runtime-checklist.md"
       ]
@@ -200,11 +208,10 @@ Resolver должен читать JSON-блок ниже как канонич�
       ]
     },
     "source_locator_core": {
-      "rationale": "Instruction context for locating an FT package and creating its practical v0.9 source manifest.",
+      "rationale": "Instruction context for locating an FT package for practical v1.",
       "paths": [
         "skills/ft-source-locator/SKILL.md",
-        "references/agent/practical-test-case-route-v0.9.md",
-        "references/agent/practical-v0.9-ba-decision-registry-format.md"
+        "references/agent/practical-test-case-route-v1.md"
       ]
     },
     "source_locator_rare_artifacts": {
@@ -216,16 +223,11 @@ Resolver должен читать JSON-блок ниже как канонич�
       ]
     },
     "scope_manual_core": {
-      "rationale": "Scope analyzer context for a user-provided manual scope in practical v0.9.",
+      "rationale": "Scope analyzer context for a user-provided manual scope in practical v1.",
       "paths": [
         "skills/ft-scope-analyzer/SKILL.md",
-        "references/agent/practical-test-case-route-v0.9.md",
-        "references/agent/practical-v0.9-scope-obligations-format.md",
-        "references/agent/practical-v0.9-workflow-state-format.md",
-        "references/agent/practical-v0.9-ba-decision-registry-format.md",
-        "references/agent/scope-decomposition-policy.md",
-        "references/agent/source-parity-check-format.md",
-        "references/agent/dictionary-inventory-format.md"
+        "references/agent/practical-test-case-route-v1.md",
+        "references/agent/scope-decomposition-policy.md"
       ]
     },
     "scope_table_artifacts": {
@@ -241,27 +243,20 @@ Resolver должен читать JSON-блок ниже как канонич�
       ]
     },
     "scope_agent_proposed_core": {
-      "rationale": "Scope analyzer context for proposing candidate external scopes before practical v0.9 work.",
+      "rationale": "Scope analyzer context for proposing candidate external scopes before practical v1 work.",
       "paths": [
         "skills/ft-scope-analyzer/SKILL.md",
-        "references/agent/practical-test-case-route-v0.9.md",
-        "references/agent/scope-options-format.md",
-        "references/agent/scope-selection-prompts-format.md",
+        "references/agent/practical-test-case-route-v1.md",
         "references/agent/scope-decomposition-policy.md"
       ]
     },
     "reviewer_core": {
-      "rationale": "Reviewer context needed by iteration to understand review modes and findings contracts.",
+      "rationale": "Reviewer context for independent practical v1 matrix and TC review.",
       "paths": [
         "skills/ft-test-case-reviewer/SKILL.md",
-        "references/agent/reviewer-general-workflow.md",
-        "references/agent/runtime-quality-rule-cards.md",
-        "references/agent/reviewer-output-format.md",
+        "references/agent/practical-test-case-route-v1.md",
         "references/qa/review-findings-format.md",
-        "references/qa/traceability-matrix-format.md",
         "references/qa/test-design-review-rubric.md",
-        "references/agent/test-design-defect-taxonomy.md",
-        "references/agent/negative-ui-calibration-policy.md",
         "references/qa/test-case-runtime-format.md",
         "references/qa/coverage-runtime-checklist.md",
         "references/qa/traceability-rules.md"
@@ -446,6 +441,17 @@ Resolver должен читать JSON-блок ниже как канонич�
   },
   "scenarios": [
     {
+      "id": "practical.v1",
+      "phase": "practical",
+      "mode": "v1",
+      "scope_profile": "any",
+      "required_groups": ["global_core", "practical_v1_core"],
+      "conditional_groups": [],
+      "audit_only_groups": ["audit_only_history", "governance_audit_only"],
+      "budget_limit_kib": 110,
+      "rationale": "Default production route: compact source scope and matrix, independent matrix review, TC, independent TC review and at most one revision per phase."
+    },
+    {
       "id": "practical.v0_9",
       "phase": "practical",
       "mode": "v0_9",
@@ -454,7 +460,7 @@ Resolver должен читать JSON-блок ниже как канонич�
       "conditional_groups": ["practical_v09_scope_state_details", "practical_v09_review_details"],
       "audit_only_groups": ["audit_only_history", "governance_audit_only"],
       "budget_limit_kib": 120,
-      "rationale": "Default compact practical route. It has no legacy state summaries, self-checks, WQG or dispatch receipts."
+      "rationale": "Legacy route for explicitly resumed practical-v0.9 scopes. It is not selected for new ordinary work."
     },
     {
       "id": "source_locator.discovery",
@@ -608,7 +614,7 @@ Resolver должен читать JSON-блок ниже как канонич�
       "conditional_groups": ["scope_table_artifacts", "scope_ui_artifacts"],
       "audit_only_groups": ["audit_only_history", "governance_audit_only"],
       "budget_limit_kib": 160,
-      "rationale": "Manual scope selection and practical v0.9 obligation analysis when the user already provides the intended section or boundary."
+      "rationale": "Manual scope selection for practical v1 when the user provides the intended section or boundary."
     },
     {
       "id": "scope.agent_proposed",
@@ -619,7 +625,7 @@ Resolver должен читать JSON-блок ниже как канонич�
       "conditional_groups": ["scope_manual_core"],
       "audit_only_groups": ["audit_only_history", "governance_audit_only"],
       "budget_limit_kib": 140,
-      "rationale": "Candidate-scope proposal before the user confirms one external scope for practical v0.9."
+      "rationale": "Candidate-scope proposal before the user confirms one external scope for practical v1."
     },
     {
       "id": "ui_automation_prep.accepted_baseline",

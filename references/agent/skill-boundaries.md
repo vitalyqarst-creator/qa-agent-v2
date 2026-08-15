@@ -31,10 +31,9 @@
 - для большого ФТ сначала предложить внешние candidate scope-ы по разделам/подразделам;
 - определить релевантный раздел или подраздел для выбранного внешнего scope;
 - сузить scope;
-- создать `source-parity-check.md` для подтвержденного scope, если доступны DOCX и PDF основного ФТ;
-- создать `source-row-inventory.md` для подтвержденного scope, если source parity содержит таблицы/строки или scope основан на таблице полей/действий;
-- разделить выбранный внешний scope на внутренние рабочие пакеты, если он неоднородный;
-- сформировать `coverage gaps`.
+- зафиксировать границы, source refs, visual bindings и существенные gaps в
+  `source-scope.md`;
+- создать единый файл вопросов БА, если вопрос меняет test intent.
 
 Не входит:
 
@@ -48,10 +47,8 @@
 
 - писать новые тест-кейсы по подтвержденному scope.
 - править существующий набор тест-кейсов по findings artifact.
-- использовать `source-parity-check.md` как обязательный вход для сохранения requirement IDs при наличии DOCX+PDF.
-- использовать `source-row-inventory.md` как независимый вход, чтобы не терять строки источника до атомаризации.
-- учитывать findings по режимам `traceability`, `structure`, `test-design`.
-- использовать traceability matrix как входной артефакт для правок покрытия.
+- использовать принятую matrix, source refs и решения БА как входы для
+  покрытия и правок.
 
 Не входит:
 
@@ -65,9 +62,8 @@
 
 - review существующих кейсов;
 - выполнять review-mode `traceability`, `structure`, `test-design` и режим `full` по умолчанию;
-- проверять, что mandatory IDs из `source-parity-check.md` сохранены в ledger/matrix и тест-кейсах;
-- проверять, что все in-scope rows из `source-row-inventory.md` сохранены в writer-side inventory и связаны с `ATOM-*`, `GAP-*` или явным out-of-scope решением;
-- строить отдельную traceability matrix по атомарным утверждениям ФТ;
+- проверять matrix до TC и TC после принятия matrix в независимой верхнеуровневой сессии;
+- проверять, что source refs и коды требований сохранены в matrix и тест-кейсах;
 - findings по coverage, atomarity, traceability, structure, expected results и test design;
 - structured findings artifact и human summary.
 
@@ -80,7 +76,7 @@
 
 ### `ft-ui-automation-prep`
 
-- запускаться только после accepted practical v0.9 baseline с approved final TC review;
+- запускаться только после accepted practical v1 baseline с `tc-accepted` final review;
 - проходить утвержденные ручные кейсы в реальном UI;
 - использовать package-level UI operational notes из `fts/<ft-slug>/work/ui-automation-prep/UI-AGENT-NOTES.md`, если они есть;
 - собирать Playwright evidence и индекс артефактов;
@@ -105,4 +101,3 @@
 
 - быть источником доменных QA-правил;
 - подменять writer/reviewer/source/scope skill-и.
-

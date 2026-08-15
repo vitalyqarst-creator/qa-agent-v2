@@ -76,13 +76,22 @@ The JSON block is canonical. Tests and architecture audit parse it directly.
       "verification_gates": ["scope-contract.md exists", "coverage gaps are linked to source evidence"]
     },
     {
-      "id": "test_cases.practical_v0_9",
-      "task_type": "Default compact macro-stage route for ordinary FT test-case writing: source package manifest, normalized source obligations, Russian matrix, mandatory separate-session matrix review, canonical test cases and final separate-session TC review. It reaches an accepted baseline or an honest external blocker without legacy self-check and receipt artefacts.",
+      "id": "test_cases.practical_v1",
+      "task_type": "Default route for ordinary FT test-case writing: compact source scope and BA questions, Russian matrix, separate-session matrix review, canonical test cases and separate-session TC review. It reaches baseline or review-failed without controller receipts or repair loops.",
+      "skill_chain": ["ft-practical-route"],
+      "instruction_scenarios": [
+        {"skill": "ft-practical-route", "scenario": "practical.v1"}
+      ],
+      "verification_gates": ["source-scope.md identifies scope, source refs, visual bindings and applicable BA decisions", "scope-clarification-requests.md exists, including when it has no questions", "test-design-matrix.md is Russian and is accepted by a distinct top-level reviewer session before TC writing", "test-case file is visible as draft before final review", "TC review is performed by a distinct top-level reviewer session", "one complete writer revision and one finding-closure check per phase at most", "no manifests, attestations, receipts or repair loops are created"]
+    },
+    {
+      "id": "test_cases.legacy_practical_v0_9",
+      "task_type": "Resume an already started practical-v0.9 scope when the user explicitly requests that legacy route.",
       "skill_chain": ["ft-practical-route"],
       "instruction_scenarios": [
         {"skill": "ft-practical-route", "scenario": "practical.v0_9"}
       ],
-      "verification_gates": ["source-package-manifest.json binds DOCX/XHTML/PDF and existing AGENT-NOTES.md", "scope-obligations.json contains one source-backed OBL per independent assertion", "test-design-matrix.md has Russian compact headers and one OBL per row", "one-pass validator-report.json is clean for its declared dependency closure", "matrix review has immutable manifest, controller-owned separate-session attestation and result from a distinct top-level Codex session", "final TC review has the same independent-review evidence", "one targeted writer revision per phase at most; controller/validator findings do not consume it", "no benchmark/sharding/bridge/legacy self-check artefacts are created"]
+      "verification_gates": ["legacy v0.9 scope already exists", "user explicitly requested v0.9 continuation"]
     },
     {
       "id": "writer.initial_simple",
@@ -226,9 +235,9 @@ The JSON block is canonical. Tests and architecture audit parse it directly.
     },
     {
       "prompt": "Напиши тест-кейсы по выбранному scope ФТ и доведи scope до accepted baseline или честного blocker-а.",
-      "expected_route_id": "test_cases.practical_v0_9",
+      "expected_route_id": "test_cases.practical_v1",
       "expected_skill_chain": ["ft-practical-route"],
-      "expected_instruction_scenarios": ["practical.v0_9"]
+      "expected_instruction_scenarios": ["practical.v1"]
     },
     {
       "prompt": "Подготовь accepted baseline к UI automation.",
