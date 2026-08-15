@@ -53,6 +53,7 @@ from test_case_agent.practical_v09 import (
     validate_source_package_manifest,
     validate_scope_obligations,
     validate_matrix_file_state_contract,
+    validate_matrix,
     validate_matrix_state_and_primary_oracle_contract,
     validate_scope,
     verify_review_result,
@@ -4743,6 +4744,55 @@ class PracticalV09Tests(unittest.TestCase):
             self.assertIn(
                 "matrix-review-required-before-test-cases",
                 finding_ids,
+            )
+
+    def test_validator_allows_source_limited_internal_check_with_open_gap(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            fixture = PracticalV09Fixture(Path(raw))
+            obligations = json.loads(fixture.obligations.read_text(encoding="utf-8"))
+            obligations["execution_setups"][0]["availability"] = "needs-future-clarification"
+            obligations["obligations"][0]["statement"] = (
+                "Система проверяет отсутствие дубля значения в рамках текущего объекта."
+            )
+            obligations["clarifications"] = [{
+                "id": "GAP-001",
+                "status": "open",
+                "requires_business_answer": True,
+                "affected_obligation_ids": ["OBL-001"],
+            }]
+            fixture.matrix.write_text(
+                fixture.matrix.read_text(encoding="utf-8")
+                .replace(
+                    "Открывается раздел «Партнеры».",
+                    "ФТ не задаёт наблюдаемый результат проверки; нужен ответ GAP-001.",
+                )
+                .replace(
+                    "| Positive | High | ready |",
+                    "| Negative | High | needs-future-clarification |",
+                )
+                + "\n## Решения о консолидации сценариев\n\n```json\n[]\n```\n",
+                encoding="utf-8",
+            )
+            findings, _, _ = validate_matrix(
+                fixture.matrix,
+                fixture.root,
+                obligations,
+                workflow_state=None,
+            )
+            self.assertNotIn(
+                "matrix-internal-oracle-needs-observable-coverage",
+                [item.id for item in findings if item.blocking],
+            )
+            obligations["clarifications"] = []
+            findings, _, _ = validate_matrix(
+                fixture.matrix,
+                fixture.root,
+                obligations,
+                workflow_state=None,
+            )
+            self.assertIn(
+                "matrix-internal-oracle-needs-observable-coverage",
+                [item.id for item in findings if item.blocking],
             )
 
     def test_validator_requires_source_message_literal_in_matrix_and_tc(self) -> None:
