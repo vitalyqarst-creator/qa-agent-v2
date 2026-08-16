@@ -40,6 +40,12 @@ Before writing `TC-*`, check whether the scope contains:
 - For conditional visibility, check the positive branch and the inverse branch when inverse behavior follows from the requirement; otherwise record a gap.
 - For a closed list, check expected values and absence of extra values only when closed-set behavior follows from the source.
 - For numeric/date/length/mask rules, load the deep coverage reference for the relevant scenario.
+- Для ограничения с явной границей включай саму границу и ближайший
+  недопустимый класс, если оба следуют из источника. Для правила уникальности,
+  зависящего от владельца/контекста, различай тот же и иной владелец/контекст.
+  Для документированного мультивыбора различай один и несколько элементов;
+  для нескольких явно названных способов поиска — каждый способ. Эти варианты
+  можно параметризовать только при одинаковых действии и oracle.
 - For common field rules, first apply `coverage-class-catalog.md` quick matrix:
   digits-only, text/letters, dictionary/autocomplete, date and requiredness.
 - For numeric-only, exact length, repeatable/action-created blocks, checkbox-list, and generated documents, use `Coverage Obligation Table`; do not stop at one generic TC.
@@ -48,6 +54,10 @@ Before writing `TC-*`, check whether the scope contains:
 - For 3+ independent factors with multiple values, pairwise/combinatorial coverage is mandatory; choose `2-way | 3-way | t-way`, prove coverage strength, or record a gap.
 - For reusable baseline and negative transition, use a concrete fixture or `fixture-catalog.md`.
 - For successful create/save, record concrete system key, `absent`/`existing` state and cleanup/isolated run; a DaData response proves neither system absence nor uniqueness. For source-backed cancel/close without save, assert no creation/no saved change after a follow-up observation.
+- Если ФТ описывает edit вместе с create/save/cancel/close, не подменяй его
+  create-сценарием: отдельно проверь сохранение изменения после повторного
+  открытия и отдельно отсутствие изменения после отмены/закрытия. Объединение
+  create и edit допустимо только при одном entry-state, действии и oracle.
 - Record coverage metrics for applicable dimensions; missing metrics mean unfinished design work.
 
 ## Deep Coverage Triggers

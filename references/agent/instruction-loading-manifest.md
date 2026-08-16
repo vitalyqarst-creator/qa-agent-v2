@@ -70,6 +70,7 @@ Resolver должен читать JSON-блок ниже как канонич�
       "paths": [
         "skills/ft-practical-route/SKILL.md",
         "references/agent/practical-test-case-route-v1.md",
+        "references/agent/practical-v1-clarification-requests-format.md",
         "references/qa/test-case-runtime-format.md",
         "references/qa/coverage-runtime-checklist.md"
       ]
@@ -227,6 +228,7 @@ Resolver должен читать JSON-блок ниже как канонич�
       "paths": [
         "skills/ft-scope-analyzer/SKILL.md",
         "references/agent/practical-test-case-route-v1.md",
+        "references/agent/practical-v1-clarification-requests-format.md",
         "references/agent/scope-decomposition-policy.md"
       ]
     },
