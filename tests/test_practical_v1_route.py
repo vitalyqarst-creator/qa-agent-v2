@@ -75,9 +75,13 @@ class PracticalV1RouteTests(unittest.TestCase):
         self.assertIn("Не проси пользователя", route)
         self.assertIn("сначала сообщить `node-id`", route)
         self.assertIn("checked-no-new-information", route)
+        self.assertIn("Проверка ограничена двумя попытками", route)
+        self.assertIn("`visual-check-failed`", route)
+        self.assertIn("Результат предыдущего\nзапуска не наследуется", route)
         self.assertIn("После анализа релевантной Figma-записи не оставляй", route)
         self.assertIn("иначе сам найди", scope_skill)
-        self.assertIn("`not_checked` после анализа недопустим", scope_skill)
+        self.assertIn("`not_checked` после анализа", scope_skill)
+        self.assertIn("недопустим", scope_skill)
         self.assertIn("известный `node-id` необязателен", reviewer_skill)
 
     def test_phase_skills_keep_targeted_preflight_and_reviewer_scope(self) -> None:

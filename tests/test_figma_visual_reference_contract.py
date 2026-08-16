@@ -30,15 +30,19 @@ class FigmaVisualReferenceContractTests(unittest.TestCase):
         self.assertIn("необязательный визуальный источник", locator)
         self.assertIn("не открывает Figma и не\n   анализирует scope", locator)
 
-    def test_scope_uses_available_figma_but_optional_access_failure_is_not_blocking(self) -> None:
+    def test_scope_uses_available_figma_and_bounds_a_failed_visual_check(self) -> None:
         scope = self.read("skills/ft-scope-analyzer/SKILL.md")
         route = self.read("references/agent/practical-test-case-route-v1.md")
 
         self.assertIn("Не требуй `node-id`", scope)
-        self.assertIn("Недоступная Figma\n   не блокирует работу", scope)
-        self.assertIn("`not_checked` после анализа недопустим", scope)
+        self.assertIn("не более двух попыток", scope)
+        self.assertIn("`visual-check-failed`", scope)
+        self.assertIn("`not_checked` после анализа", scope)
+        self.assertIn("недопустим", scope)
+        self.assertIn("Figma была\n   единственным источником", scope)
         self.assertIn("Figma уточняет только UI-шаги", route)
         self.assertIn("checked-and-used", route)
+        self.assertIn("не доказывает недоступность файла", route)
 
     def test_mockup_inventory_template_has_russian_visible_headers(self) -> None:
         template = self.read("references/agent/mockup-visual-inventory-format.md")
