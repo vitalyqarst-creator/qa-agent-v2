@@ -1,7 +1,0 @@
-{
-  "browser": {
-    "contextOptions": {
-      "storageState": "output/playwright/auth/formrunner-zhidkov.json"
-    }
-  }
-}

@@ -1,88 +1,37 @@
-# FT Test Case Agent
+# QA Test Case Runtime v1
 
-Source-first агент для подготовки трассируемых тест-кейсов по DOCX с
-обязательным XHTML-представлением и опциональной PDF-сверкой.
+Отдельная минимальная среда для подготовки тест-кейсов по ФТ. Открывайте в Codex именно эту папку:
 
-## Production runtime
+`C:\Users\Пользователь\Documents\Виталя\GitProjects\qa-agent-v2-runtime-v1`
 
-Публичный runtime намеренно решает одну задачу: получает уже независимо
-квалифицированный и hash-bound пакет выбранного scope, детерминированно строит
-shadow-набор тест-кейсов и отправляет его ровно одному независимому reviewer.
-Model-writer, внутренние retry, hard model timeout и запись в canonical здесь
-отсутствуют.
+## Что здесь есть
 
-```powershell
-ft-agent run `
-  --config fts/<ft-slug>/work/<handoff>/run-config.json `
-  --output-dir fts/<ft-slug>/work/iterations/<new-attempt-id>
-```
+- четыре runtime skill-а: source locator, scope analyzer, writer, independent reviewer;
+- обязательная подготовка конкретных тестовых данных до matrix и TC;
+- валидаторы fixture catalog и production TC;
+- FT-пакеты в `fts/`.
 
-Config schema v2 содержит только шесть полей: `schema_version`, `registry`,
-`ft_root`, `scope`, `source_evidence` и `obligations`. Output directory обязан
-быть новым. Runner повторно проверяет registry boundary, source hashes,
-accepted source receipt, obligations и текущий canonical baseline; source и
-canonical никогда не изменяются.
+Каждый FT-пакет создаётся пустым: в него попадают только собственные источники, support, mockups, work и test-cases. Он не наследует содержимое репозитория разработки.
 
-Успешные terminal statuses:
+## Чего здесь нет
 
-- `accepted-shadow` — весь набор исполним;
-- `accepted-with-calibration-pending` — reviewer принял исполнимую часть, а UI-
-  calibration candidates явно оставлены pending; promotion запрещён.
+- `evals`, benchmark, historical canary и release-артефактов;
+- legacy iteration, sharding и автоматических бесконечных review-циклов;
+- UI-prep как автоматического продолжения после выпуска TC.
 
-После успешного запуска актуальный результат для просмотра указан в
-`terminal-summary.json` → `publication_candidate.path`. Это shadow-файл текущего
-run; `test-cases/*.md` не перезаписывается внутри `ft-agent run`.
+## Обычная работа
 
-Полный runtime-контракт: [lean-v2-iteration.md](references/agent/lean-v2-iteration.md).
+1. Создайте пустой пакет: `python scripts/create_ft_package.py fts/<проект>/<FT>`.
+2. Поместите в него только исходные материалы данного ФТ: DOCX/XHTML/PDF в `source/`, нужные справочники и утверждённые ответы БА в `support/`, приложенные макеты в `mockups/`.
+3. Откройте эту runtime-папку в Codex.
+4. Дайте короткую задачу: «Начни practical route для FT-пакета `<полный путь>`. Сначала выполни `ft-source-locator`».
+5. После scope analysis агент обязан подготовить конкретные данные или честно оставить неполные обязанности в `coverage-gaps.md` и вопросах к БА.
+6. В `test-cases/` попадают только исполнимые TC.
 
-## Честная граница bundle
-
-Production bundle не является полным маршрутом «raw FT + название scope →
-тест-кейсы». Discovery ФТ, выбор scope, extraction, source qualification и
-independent source review пока выполняются в полной development/qualification
-среде. Bundle начинается только с принятого prepared package. Это сознательная
-граница, а не скрытая автоматизация.
-
-Instruction context runtime задан файлами
-[production-instruction-loading.md](references/agent/production-instruction-loading.md)
-и [production-global-rules.md](references/agent/production-global-rules.md).
-
-## Установка и проверка
+Перед каждым выпуском используйте:
 
 ```powershell
-uv sync --no-dev
-python scripts/probe_environment.py
-ft-agent --help
-python scripts/resolve_instruction_context.py `
-  --manifest references/agent/production-instruction-loading.md `
-  --scenario iteration.deterministic_production `
-  --fail-on-budget
+python scripts/validate_fixture_catalog.py <путь-к-fixture-catalog.json>
+python scripts/validate_runtime_tc.py <путь-к-test-cases.md>
+python scripts/validate_runtime_tree.py
 ```
-
-Production installation экспортирует только команду `ft-agent run`. Tests,
-benchmarks, реальные FT inputs, work/history, UI automation и qualification
-controllers в bundle не входят.
-
-Сборка профилей описана в [release/README.md](release/README.md).
-
-## Development repository
-
-Полная рабочая копия дополнительно содержит `AGENTS.md`, `skills/`,
-`references/`, qualification scripts, тесты и локальные FT-пакеты в `fts/`.
-Они нужны для подготовки accepted source package, архитектурных проверок и
-регрессий, но не загружаются production runtime.
-
-Release-регрессия в полной development-среде запускается командой
-`python -m unittest tests.test_release_bundle`.
-
-Канонический полный запуск и быстрый agent-layer профиль:
-
-```powershell
-.\.venv\Scripts\python.exe scripts/run_tests.py
-.\.venv\Scripts\python.exe scripts/run_tests.py --suite agent-layer-fast
-.\.venv\Scripts\python.exe scripts/run_tests.py --suite artifact-validator-sharded
-```
-
-Raw `unittest discover` не является каноническим полным запуском; команда
-`.\.venv\Scripts\python.exe -m unittest discover -s tests` приведена только для
-диагностики controlled-discovery расхождений.

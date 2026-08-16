@@ -1,29 +1,8 @@
 [project]
-name = "ft-test-case-agent"
-version = "0.1.0"
-description = "Agent-first toolkit for reading functional requirements documents and preparing manual test cases."
-readme = "README.md"
+name = "qa-test-case-runtime"
+version = "1.0.0"
+description = "Lean runtime contracts for producing executable test cases from functional requirements."
 requires-python = ">=3.11"
-dependencies = [
-    "openai-codex>=0.1.0b2",
-    "openpyxl>=3.1",
-    "pillow>=11.3.0",
-    "pydantic>=2.0.0",
-    "pypdf>=3.17.0",
-    "python-docx>=1.2.0",
-]
 
-[dependency-groups]
-dev = [
-    "pytest>=8.0",
-]
-
-[project.scripts]
-ft-agent = "test_case_agent.cli:main"
-
-[build-system]
-requires = ["setuptools>=68", "wheel"]
-build-backend = "setuptools.build_meta"
-
-[tool.setuptools.packages.find]
-include = ["test_case_agent*"]
+[tool.unittest]
+start-directory = "tests"

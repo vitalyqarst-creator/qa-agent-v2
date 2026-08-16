@@ -1,3 +1,0 @@
-- next_skill: `ft-scope-analyzer / source-fidelity compilation`.
-- required_inputs: этот source selection, `AGENT-NOTES.md`, bounded parity и scope artifacts.
-- blocked_reasons: none.

@@ -1,3 +1,0 @@
-- DOCX source of truth: `source/FT4AutoFinFinal.docx`.
-- XHTML extraction source: `source/FT4AutoFinFinal.xhtml`.
-- PDF structural cross-check: `source/FT4AutoFinFinal.pdf`, страницы 26-27.

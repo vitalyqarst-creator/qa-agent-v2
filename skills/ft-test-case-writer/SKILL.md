@@ -1,177 +1,25 @@
 ---
 name: ft-test-case-writer
-description: Writes new manual test cases for an already selected and bounded requirement fragment, or revises an existing suite by structured findings. In revision mode it must account for the reviewer's `review_mode` and use the traceability matrix when available.
+description: Материализует тестовые данные, создаёт matrix и canonical TC.
 ---
 
 # FT Test Case Writer
 
-Use this skill only when these are already defined:
+До работы прочитай `AGENTS.md`, `references/runtime/test-data-fixtures.md`, `references/runtime/test-design-matrix.md` и `references/runtime/test-case-runtime.md`.
 
-- target FT package;
-- scope boundaries;
-- main FT source and related materials;
-- work mode: `initial_draft`, `revision_from_findings`, or remediation.
+## Fixture gate
 
-If the package, source, or scope is not selected yet, use `ft-source-locator` and `ft-scope-analyzer` first.
+1. Прочитай `test-data-plan.md`.
+2. Найди локальные fixtures; при необходимости материализуй provider fixture и запиши `work/test-data/<scope>/fixtures/fixture-catalog.json` с конкретными runtime literals. Для DaData используй `scripts/capture_dadata_fixture.py`, а не описание будущего запроса.
+3. Если integration fixture нельзя получить, не заменяй её placeholder-текстом. Оставь обязанность в `coverage-gaps.md` и вопросе к БА.
+4. Запусти `scripts/validate_fixture_catalog.py`.
 
-## Default practical mode
+## Matrix
 
-For ordinary user work “write test cases for this FT/scope”, use
-`practical_v0_6` from
-[../../references/agent/practical-test-case-route-v0.6.md](../../references/agent/practical-test-case-route-v0.6.md).
+Создай `work/practical/<scope>/test-design-matrix.md` только для обязанностей с данными и наблюдаемым результатом. Не создавай canonical TC до независимого matrix verdict `matrix-accepted`.
 
-In this mode the writer optimizes for a useful released baseline, not for
-benchmark-grade process evidence:
+## Canonical TC
 
-- write `test-design-matrix.md` and the canonical test-case file;
-- create `dictionary-inventory.md`, `fixture-catalog.md` or BA-question files
-  only when the current scope needs them;
-- do not create source assertions, source assertion review prompts, semantic
-  bridge projections, immutable attempts, sharding artifacts, benchmark configs,
-  large obligation ledgers, final-format-review packages or session-cycle
-  snapshots;
-- do not stop the whole scope merely because some executable detail is unknown;
-  release those cases with `candidate-ui-calibration`, `blocked-observability`
-  or `needs-test-data` when the FT obligation itself is clear.
+После `matrix-accepted` создай `test-cases/<section>-<scope>.md` по `references/runtime/test-case-runtime.md` и проверь его `scripts/validate_runtime_tc.py`. Перед выпуском вручную сверь каждое интеграционное значение в TC с `runtime_data` соответствующей fixture: в TC идут литералы, не идентификатор fixture и не описание snapshot.
 
-Use session-based, prepared-package, source-qualified or immutable runner routes
-only when explicitly requested by the user or by an already selected route.
-
-## Входы
-
-- FT package path `fts/<ft-slug>/...`;
-- main FT document;
-- `source-selection.md` with `xhtml_available: yes` and main FT XHTML;
-- PDF version of the main FT for structural cross-check, when present;
-- `source-parity-check.md`, when the main FT is available as DOCX and PDF;
-- `source-row-inventory.md`, when the handoff requires row-level/table parity;
-- `dictionary-inventory.md`, when source/support already references a dictionary or fixed value list;
-- `mockup-visual-inventory.md`, when the confirmed UI scope contains a mockup / screen image / `mockups/`;
-- `figma-visual-discovery.md`, when the scope has a registered Figma visual reference; use only recorded visible labels and interaction hints, never Figma as a requirement source;
-- selected section, subsection, or narrow requirement fragment;
-- package-specific `AGENT-NOTES.md`, when present;
-- mode: `initial_draft`, `revision_from_findings`, or remediation;
-- for `revision_from_findings`: existing test-case suite, structured findings artifact, review round number, `review_mode`, and traceability matrix when available.
-
-If a verified `stage-package.json` is provided, use the prepared fast path: read only the four package files, do not repeat source discovery/extraction, and access the full source only through the targeted fallback contract from [prepared-stage-package-format.md](../../references/agent/prepared-stage-package-format.md).
-
-For source-first packages, follow the accepted exact-digest contract; conflicts return `blocked-input`.
-
-## Выходы
-
-- canonical test-case file: `fts/<ft-slug>/test-cases/<section-id>-<scope-slug>.md`;
-- for `practical_v0_6`: compact `test-design-matrix.md` in `fts/<ft-slug>/work/practical/<section-id>-<scope-slug>/`;
-- for `initial_draft`: split test-design artifacts in `fts/<ft-slug>/work/test-design/<section-id>-<scope-slug>/`;
-- when `dictionary-source` / reference-list rows exist: `dictionary-inventory.md` next to split test-design artifacts before TDDT/plan/TC;
-- for revision in a session-based cycle: `fts/<ft-slug>/work/review-cycles/<scope-slug>/outputs/writer-rN-response.md`;
-- traceability matrix and mandatory `.xlsx` duplicate when writer creates or updates the matrix;
-- `coverage-obligation-table.md`, `coverage-metrics.md`, `fixture-catalog.md` when applicable, coverage gaps, open questions, `test-design-review.md`, Writer Quality Gate, and writer self-check in the appropriate split artifacts;
-- `writer-session-log.md` and `agent-decision-log.md` when required by the stage workflow;
-- `workflow-state.yaml` with `ready-for-review` only after successful gates;
-- `prompt.writer-to-reviewer.round-N.md` in the current handoff folder.
-
-## Runtime Contract Anchors
-
-- If a PDF version of the main FT is available for structural cross-check, use it to verify section structure, requirement codes, and source order; do not use PDF as a replacement for the main FT text.
-- Before `initial_draft`, check `source-selection.md`: without `xhtml_available: yes`, return `blocked-input`; take tables/lists from XHTML, treat DOCX as source of truth, and do not let PDF/mockups replace the main FT.
-- If sources do not define behavior, do not invent behavior; record it in `coverage gaps` or UI calibration candidates by the runtime contract.
-- In `revision_from_findings`, use the structured findings artifact and traceability matrix artifact; process findings according to `review_mode`.
-- For traceability findings and writer response, preserve `traceability_ref = ATOM-*`.
-- Handoff by review mode: `traceability` closes coverage gaps; `structure` aligns template, order, grouping, and continuous numbering; `test-design` adds or corrects checks and expected results.
-- In `practical_v0_6`, the compact `test-design-matrix.md` is the coverage proof; do not build a large atomic ledger unless an explicit legacy/development route requires it. In legacy `initial_draft`, writer builds the atomic requirements ledger first, then test cases with canonical fields and writer self-check.
-- If writer creates or updates a matrix, a `.xlsx` duplicate of the traceability matrix is mandatory.
-- Check smell markers from canonical QA references: test-case-forbidden-formulation-smell, test-case-abstract-oracle-smell, test-case-input-restriction-transition-oracle-smell, test-case-unsupported-numeric-validation-feedback-smell, test-case-mechanical-field-step-smell.
-
-## Workflow
-
-Follow the runtime workflow: [../../references/agent/writer-runtime-workflow.md](../../references/agent/writer-runtime-workflow.md).
-
-Load deep workflow only for the actual scenario:
-
-- process artifacts, logs, artifact-write strategy: [../../references/agent/writer-process-workflow.md](../../references/agent/writer-process-workflow.md);
-- table-heavy / row-level parity writing: [../../references/agent/writer-table-workflow.md](../../references/agent/writer-table-workflow.md);
-- revision by findings: [../../references/agent/writer-revision-workflow.md](../../references/agent/writer-revision-workflow.md);
-- validator, Writer Quality Gate, or style remediation: [../../references/agent/writer-remediation-workflow.md](../../references/agent/writer-remediation-workflow.md).
-
-Minimum runtime rules:
-
-1. Do not expand scope while writing.
-2. Do not invent system behavior, fields, statuses, buttons, integrations, or expected results.
-3. One `TC-*` covers one check and one main expected result.
-4. Preserve requirement codes literally, for example `GSR 22`.
-5. Do not turn pure source gaps into fake executable `TC-*`. If the FT obligation is real but data, UI reaction or observability is missing, write a clearly marked `candidate-ui-calibration`, `blocked-observability` or `needs-test-data` case by practical route v0.6.
-6. If source/support defines a dictionary, create/update `dictionary-inventory.md` and link `DICT-*`; branch examples from the FT do not replace the full dictionary.
-6a. Production files under `fts/**/test-cases/*.md` must be self-contained runtime TC artifacts: no setup profile references in `Предусловия`, no stand/environment wording, no package-name leakage such as `AutoFin`, and no embedded diagnostic/design sections. Use split/work artifacts for diagnostics.
-7. For `practical_v0_6`, hand off to reviewer when the canonical file and `test-design-matrix.md` are internally consistent and current-scope blockers are either fixed or marked with an allowed TC status. For legacy/session routes, do not set `stage_status: ready-for-review` until source/parity/mockup/table/dictionary inputs, Writer Quality Gate, and validator blockers are closed.
-8. Before `ready-for-review`, check canonical TC for unresolved generic fixture/test-data/oracle smells: `Минимальный валидный набор данных`, `валидные данные`, `валидная заявка`, `значение из тестовых данных принято/не принимается`. These formulations are allowed only when a concrete reproducible baseline, literal/parameter, or linked fixture artifact is adjacent; otherwise fix the TC or record `GAP-*` / `unclear`.
-8a. `Предусловия`: воспроизводимые setup steps = numbered action setup or fixture/API/profile; passive state only after the action that creates it.
-9. Before `ready-for-review`, `semantic-review-ready`, and final handoff, check each `TC-*` by [../../references/qa/test-case-runtime-format.md](../../references/qa/test-case-runtime-format.md): `Трассировка` is mandatory, optional source fields are allowed only when they add non-duplicating navigation or real source evidence. If `TC-*` uses `DICT-*`, the same id must appear in `Трассировка`; a synthetic quote cannot be presented as an FT quote.
-10. Do not mix TC schemas: a metadata table does not replace parser-supported bold metadata fields from `test-case-format.md` (`**Название:**`, `**Тип:**`, `**Приоритет:**`, `**package_id:**`, `**Трассировка:**`); table-only metadata such as `| Поле | Значение |` / `| package_id | WP-01 |` is invalid. Do not duplicate runtime headings with inline/bold fields.
-11. After any change to `TC-*`, `ATOM-*`, `GAP-*`, `DICT-*`, or `package_id`, synchronize canonical TC, ledger, traceability matrix, Test-design Decision Table, Package Test Design Plan, coverage artifacts, and writer response. Status `fixed` is allowed only after all affected artifacts are checked, not only the canonical file.
-12. Writer-ready handoff (`ready-for-review`, `writer-draft-ready`, `semantic-review-ready`) is allowed only when current-scope validator warning/error from canonical TC, active test-design dir, and cycle outputs is either fixed, recorded as a valid `false-positive`/waiver with id/path/evidence/rationale, or unrelated to the current scope. Writer self-check and Writer Quality Gate must link to scoped validator evidence or runner validator gate evidence; do not expect reviewer to handle an obvious current-scope validator blocker after handoff.
-12a. For source-backed negative/requiredness restrictions with unknown UI reaction, remediation cannot simply replace one unsupported UI mechanism with another: preserve the obligation and create a candidate TC by `negative-ui-calibration-policy.md`, or a narrow `GAP-*` / `unclear` if a candidate is impossible.
-13. If an applicable dimension requires mandatory coverage classes (`numeric-format`, `exact-length`, dependency transitions, repeatable blocks, checkbox-list, generated document mapping), decompose them in `Coverage Obligation Table`, `Package Test Design Plan`, and `coverage-metrics.md` before `TC-*`.
-14. If writer cannot prepare a verifiable result without new scope/source decisions, use `blocked-input`.
-15. Before writer-ready handoff, run `artifact-shape-preflight` from `writer-output-format.md` and `writer-quality-gate-format.md`: split artifacts must use exact canonical headings/table columns without alias columns and without neighboring duplicates such as `# X` + `## X`; `writer-quality-gate.md` must have `gate_item | status | evidence | affected_package | required_action | blocks_ready_for_review`; canonical TC file must not duplicate split artifact tables. On any such defect, set `blocked-input` or fix artifacts before review handoff.
-16. Do not use non-canonical status aliases in writer-side artifacts: `Writer Quality Gate` and `Test Design Review` accept only `pass | fail | blocked | needs-rewrite`; `Coverage Obligation Table` accepts only `covered | gap | unclear | blocked | not-applicable | n/a`. `pass-with-gap`, `pass-with-gaps`, `planned`, `ok`, `yes`, `passed`, `failed`, and local variants are validator defects.
-17. `writer-self-check.md` must not contain empty sections. Every heading section, including `Artifact Write Evidence`, must have evidence, a table/list, a link to session log / split artifact, or explicit `not-applicable` with reason.
-18. `placeholder-sentinel-normalization`: in traceability-bearing split-artifact tables and reviewer matrices, do not use placeholder `-` / `N/A` in link or traceability columns. Write an explicit sentinel: `not_applicable:covered`, `not_covered:<GAP-ID>`, `unclear:<GAP-ID>`, `no_requirement_code:<source_ref>`, or `none_required:<reason>`.
-
-## Test-design Applicability Matrix Rule
-
-In `initial_draft`, build `Test-design applicability matrix` after the atomic requirements ledger and before finalizing test cases. See short runtime rules in [../../references/qa/coverage-runtime-checklist.md](../../references/qa/coverage-runtime-checklist.md); deep remediation uses [../../references/qa/coverage-checklist.md](../../references/qa/coverage-checklist.md).
-
-Rules:
-
-- every applicable coverage dimension must have linked `ATOM-*` and linked `TC-*` or `GAP-*`;
-- `applicable = unclear` always requires linked `GAP-*`;
-- `applicable = no` requires a source-based reason;
-- linked `TC-*` must actually cover the dimension, not merely look similar.
-
-## Canonical References
-
-- Skill map: [../README.md](../README.md)
-- Instruction contract index: [../../references/agent/instruction-contract-index.md](../../references/agent/instruction-contract-index.md)
-- Task-start routing: [../../references/agent/task-start-skill-routing-format.md](../../references/agent/task-start-skill-routing-format.md)
-- Writer runtime workflow: [../../references/agent/writer-runtime-workflow.md](../../references/agent/writer-runtime-workflow.md)
-- Writer runtime contract: [../../references/agent/writer-runtime-contract.md](../../references/agent/writer-runtime-contract.md)
-- Writer process workflow: [../../references/agent/writer-process-workflow.md](../../references/agent/writer-process-workflow.md)
-- Writer table workflow: [../../references/agent/writer-table-workflow.md](../../references/agent/writer-table-workflow.md)
-- Writer revision workflow: [../../references/agent/writer-revision-workflow.md](../../references/agent/writer-revision-workflow.md)
-- Writer remediation workflow: [../../references/agent/writer-remediation-workflow.md](../../references/agent/writer-remediation-workflow.md)
-- Workflow state: [../../references/agent/workflow-state-format.md](../../references/agent/workflow-state-format.md)
-- Session log format: [../../references/agent/session-log-format.md](../../references/agent/session-log-format.md)
-- Agent decision log format: [../../references/agent/agent-decision-log-format.md](../../references/agent/agent-decision-log-format.md)
-- Artifact write strategy: [../../references/agent/artifact-write-strategy-format.md](../../references/agent/artifact-write-strategy-format.md)
-- Writer output format: [../../references/agent/writer-output-format.md](../../references/agent/writer-output-format.md)
-- Writer table artifacts format: [../../references/agent/writer-table-artifacts-format.md](../../references/agent/writer-table-artifacts-format.md)
-- Dictionary inventory format: [../../references/agent/dictionary-inventory-format.md](../../references/agent/dictionary-inventory-format.md)
-- Writer handoff format: [../../references/agent/writer-handoff-format.md](../../references/agent/writer-handoff-format.md)
-- Writer revision output format: [../../references/agent/writer-revision-output-format.md](../../references/agent/writer-revision-output-format.md)
-- Source parity check format: [../../references/agent/source-parity-check-format.md](../../references/agent/source-parity-check-format.md)
-- Source-first assertion contract: [../../references/agent/source-assertions-format.md](../../references/agent/source-assertions-format.md)
-- Mockup visual inventory format: [../../references/agent/mockup-visual-inventory-format.md](../../references/agent/mockup-visual-inventory-format.md)
-- Figma visual discovery policy: [../../references/agent/figma-visual-discovery-policy.md](../../references/agent/figma-visual-discovery-policy.md)
-- Test case runtime format: [../../references/qa/test-case-runtime-format.md](../../references/qa/test-case-runtime-format.md)
-- Test case format: [../../references/qa/test-case-format.md](../../references/qa/test-case-format.md)
-- Review findings format: [../../references/qa/review-findings-format.md](../../references/qa/review-findings-format.md)
-- Traceability matrix format: [../../references/qa/traceability-matrix-format.md](../../references/qa/traceability-matrix-format.md)
-- Coverage runtime checklist: [../../references/qa/coverage-runtime-checklist.md](../../references/qa/coverage-runtime-checklist.md)
-- Coverage checklist: [../../references/qa/coverage-checklist.md](../../references/qa/coverage-checklist.md)
-- Coverage obligation table format: [../../references/agent/coverage-obligation-table-format.md](../../references/agent/coverage-obligation-table-format.md)
-- Test-design coverage metrics format: [../../references/agent/test-design-coverage-metrics-format.md](../../references/agent/test-design-coverage-metrics-format.md)
-- Fixture catalog format: [../../references/agent/fixture-catalog-format.md](../../references/agent/fixture-catalog-format.md)
-- Risk / Priority Map format: [../../references/agent/risk-priority-map-format.md](../../references/agent/risk-priority-map-format.md)
-- Experience-based coverage format: [../../references/agent/experience-based-coverage-format.md](../../references/agent/experience-based-coverage-format.md)
-- State model coverage format: [../../references/agent/state-model-coverage-format.md](../../references/agent/state-model-coverage-format.md)
-- Traceability rules: [../../references/qa/traceability-rules.md](../../references/qa/traceability-rules.md)
-- Skill boundaries: [../../references/agent/skill-boundaries.md](../../references/agent/skill-boundaries.md)
-
-## Ограничения
-
-- Do not select a new FT package or answer “what should we take” instead of `ft-source-locator`.
-- Do not define scope from scratch instead of `ft-scope-analyzer`.
-- Do not review an existing suite instead of `ft-test-case-reviewer`.
-- Do not run writer-reviewer orchestration instead of `ft-test-case-iteration`.
-- Do not audit the agent layer instead of `agent-architecture-auditor`.
-- Do not duplicate shared QA rules in this skill; add or change canonical references.
+Не создавай internal IDs, gaps, fixtures или просьбы о данных в production TC. Не выполняй больше одной revision без нового решения пользователя.

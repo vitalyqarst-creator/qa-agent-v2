@@ -1,1 +1,0 @@
-Diagnostic only. Do not edit files. Do not write artifacts. Run this command and then reply with only exit code plus whether budget status passed: python scripts/resolve_instruction_context.py --scenario reviewer.structure_preflight --budget-report --fail-on-budget

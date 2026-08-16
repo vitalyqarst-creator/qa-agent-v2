@@ -1,2 +1,0 @@
-- `scope_slug`: `questionnaire-upload-transfer-v7`
-- Основной FT: `source/FT4AutoFinFinal.docx`

@@ -1,3 +1,0 @@
-- Найдено gaps: `1`
-- Blocking gaps: `0`
-- Активный downstream: `ft-test-case-reviewer` для gap review.

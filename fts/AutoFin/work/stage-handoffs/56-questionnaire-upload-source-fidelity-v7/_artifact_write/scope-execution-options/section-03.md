@@ -1,4 +1,0 @@
-- writer/reviewer live invocation;
-- ручное исправление V6 draft;
-- promotion или запись production test cases;
-- exact byte fixture без source-backed policy.
