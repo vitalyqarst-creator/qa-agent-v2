@@ -19,25 +19,26 @@ class FigmaVisualReferenceContractTests(unittest.TestCase):
         self.assertIn("optional_visual_reference", source_selection)
         self.assertIn("ФТ остаётся источником поведения", source_selection)
         self.assertIn("Не сохраняй Figma token", source_selection)
+        self.assertIn("node-id` необязателен", source_selection)
+        self.assertIn("сам ищет\nстраницу/фрейм", source_selection)
         self.assertIn("локальные макеты и доступные Figma-узлы", agents)
 
     def test_locator_registers_figma_without_opening_or_scoping_it(self) -> None:
         locator = self.read("skills/ft-source-locator/SKILL.md")
 
         self.assertIn("figma-design-index.md", locator)
-        self.assertIn("необязательные визуальные источники", locator)
-        self.assertIn("не открывай scope", locator)
+        self.assertIn("необязательный визуальный источник", locator)
+        self.assertIn("не открывает Figma и не\n   анализирует scope", locator)
 
     def test_scope_uses_available_figma_but_optional_access_failure_is_not_blocking(self) -> None:
         scope = self.read("skills/ft-scope-analyzer/SKILL.md")
-        route = self.read("references/agent/practical-test-case-route-v0.9.md")
+        route = self.read("references/agent/practical-test-case-route-v1.md")
 
-        self.assertIn("Figma — необязательный источник", scope)
-        self.assertIn("не является\n   `blocked-input`", scope)
-        self.assertIn("scope-obligations.json", scope)
-        self.assertIn("visual_evidence_check", scope)
-        self.assertIn("visual binding", route)
-        self.assertIn("не оставляй его название или положение в UI-калибровке", route)
+        self.assertIn("Не требуй `node-id`", scope)
+        self.assertIn("Недоступная Figma\n   не блокирует работу", scope)
+        self.assertIn("`not_checked` после анализа недопустим", scope)
+        self.assertIn("Figma уточняет только UI-шаги", route)
+        self.assertIn("checked-and-used", route)
 
     def test_mockup_inventory_template_has_russian_visible_headers(self) -> None:
         template = self.read("references/agent/mockup-visual-inventory-format.md")

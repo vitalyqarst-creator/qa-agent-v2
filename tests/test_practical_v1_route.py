@@ -58,6 +58,20 @@ class PracticalV1RouteTests(unittest.TestCase):
         self.assertIn("корректная test-строка данных не нарушает другое применимое", content)
         self.assertIn("параметризованной строки явно записано", content)
 
+    def test_relevant_figma_is_checked_without_requiring_a_node_id(self) -> None:
+        route = ROUTE_PATH.read_text(encoding="utf-8")
+        scope_skill = SCOPE_SKILL_PATH.read_text(encoding="utf-8")
+        reviewer_skill = REVIEWER_SKILL_PATH.read_text(encoding="utf-8")
+
+        self.assertIn("`node-id` необязателен", route)
+        self.assertIn("Не проси пользователя", route)
+        self.assertIn("сначала сообщить `node-id`", route)
+        self.assertIn("checked-no-new-information", route)
+        self.assertIn("После анализа релевантной Figma-записи не оставляй", route)
+        self.assertIn("иначе сам найди", scope_skill)
+        self.assertIn("`not_checked` после анализа недопустим", scope_skill)
+        self.assertIn("известный `node-id` необязателен", reviewer_skill)
+
     def test_phase_skills_keep_targeted_preflight_and_reviewer_scope(self) -> None:
         scope_skill = SCOPE_SKILL_PATH.read_text(encoding="utf-8")
         writer_skill = WRITER_SKILL_PATH.read_text(encoding="utf-8")

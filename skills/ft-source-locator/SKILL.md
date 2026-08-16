@@ -32,7 +32,11 @@ support-файлы и макеты. Не создавай test design или т�
 2. Выбери DOCX и matching XHTML из `source/`; DOCX задаёт смысл, XHTML
    обязателен для извлечения структуры.
 3. Найди PDF для structural/visual cross-check, `AGENT-NOTES.md`, support,
-   утверждённые ответы БА, макеты и доступный Figma index.
+   утверждённые ответы БА, макеты и доступный
+   `support/figma/figma-design-index.md`. Зарегистрируй Figma как
+   необязательный визуальный источник; source locator не открывает Figma и не
+   анализирует scope — это делает `ft-scope-analyzer` только для релевантного
+   scope.
 4. Если нужен handoff, создай `source-selection.md` с путями к фактически
    выбранным входам, их ролью и кратким объяснением приоритета. Не хешируй
    файлы и не создавай manifests, obligations, workflow state или receipts.
