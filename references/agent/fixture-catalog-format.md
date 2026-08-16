@@ -1,6 +1,9 @@
 # Fixture Catalog Format
 
-`fixture-catalog.md` - split artifact в `work/test-design/<scope-slug>/`, который хранит воспроизводимые baseline-состояния и тестовые сущности, используемые несколькими `TC-*` или критичные для negative transition checks.
+`fixture-catalog.md` — artifact в
+`work/practical-v1/<scope-slug>/`, который хранит воспроизводимые
+baseline-состояния и тестовые сущности, используемые несколькими `TC-*` или
+критичные для negative transition checks.
 
 Artifact обязателен, если writer использует именованные baseline-данные вроде `валидная заявка`, `валидный работодатель`, `валидный пользователь`, `валидное состояние раздела`, либо если negative case проверяет отказ перехода/сохранения и должен доказать, что остальные обязательные условия валидны.
 
@@ -69,7 +72,10 @@ lifecycle:
 - External-dynamic fixture создаётся и проверяется до writer; writer и runtime TC
   не обращаются к внешнему API для поиска тестового значения.
 - Позитивный external-dynamic fixture хранит точный запрос, предложение и нужные
-  компоненты. Негативный считается воспроизводимым только при сохранённом ответе
+  компоненты. Для каждого компонента укажи exact component path и verified
+  literal из receipt; не выводи фактический адрес из юридического адреса или
+  иное свойство из сходного по смыслу поля provider-а. Негативный считается
+  воспроизводимым только при сохранённом ответе
   `suggestions=[]` и совпадающем SHA-256; вымышленная «несуществующая» строка не
   доказывает отсутствие подсказок.
 - TC содержит `FX-DADATA-*`, точный запрос и ожидаемые литералы, поэтому остаётся
@@ -84,6 +90,28 @@ lifecycle:
   пользователя. Изменение ответа сначала требует reconciliation fixture; дефект
   продукта создаётся только после подтверждения расхождения с ФТ на новом
   валидном fixture.
+
+## Local Binary Fixture
+
+`FX-FILE-*` — локальный файл для проверки разрешённого формата или размера. Он
+создаётся до matrix review только adapter-ом
+`scripts/create_binary_file_fixture.py` и содержит:
+
+```yaml
+fixture_id: FX-FILE-PDF-001
+provider: local-binary-fixture
+file:
+  path: test-data/fixtures/FX-FILE-PDF-001/fixture.pdf
+  format: pdf
+  size_bytes: 1048576
+  sha256: <64 hex>
+verification:
+  receipt_path: test-data/fixtures/FX-FILE-PDF-001/FX-FILE-PDF-001.receipt.json
+  status: generated
+```
+
+Указание размера «примерно 1 МБ» не допускается. Если ФТ не определяет
+единицу измерения лимита, catalog не создаёт граничный fixture до решения БА.
 
 ## Optional Synthetic Fixture
 

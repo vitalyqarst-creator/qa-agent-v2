@@ -17,9 +17,17 @@ REVIEWER_SKILL_PATH = ROOT_DIR / "skills" / "ft-test-case-reviewer" / "SKILL.md"
 class PracticalV1RouteTests(unittest.TestCase):
     def test_default_route_preserves_design_before_test_case_order(self) -> None:
         content = ROUTE_PATH.read_text(encoding="utf-8")
-        self.assertIn("source scope → matrix → independent matrix review", content)
+        self.assertIn("matrix draft → test-data plan/materialization → independent matrix review", content)
         self.assertIn("Только после `matrix-accepted` writer создаёт тест-кейсы", content)
         self.assertIn("Отдельная верхнеуровневая Codex-сессия", content)
+
+    def test_route_materializes_data_before_matrix_review(self) -> None:
+        content = ROUTE_PATH.read_text(encoding="utf-8")
+        self.assertIn("до matrix review", content)
+        self.assertIn("test-data-source-plan.json", content)
+        self.assertIn("component path и\nпроверенное literal-значение", content)
+        self.assertIn("локальный generator с размером\nв байтах", content)
+        self.assertIn("`TDP-*`", content)
 
     def test_default_route_has_bounded_reviews_without_controller_artifacts(self) -> None:
         content = ROUTE_PATH.read_text(encoding="utf-8")

@@ -11,7 +11,8 @@
 проверяются тест-кейсы.
 
 ```text
-source scope → matrix → independent matrix review → one matrix revision
+source scope → matrix draft → test-data plan/materialization → independent matrix review
+→ one matrix revision (и узкое обновление data plan при необходимости)
 → test cases → independent TC review → one TC revision → baseline
 ```
 
@@ -58,6 +59,9 @@ DOCX задаёт бизнес-требования, XHTML — машиночи�
   вопросов содержит явную строку «Вопросов к БА не выявлено»; для каждого
   вопроса используй [краткий формат вопросов БА](practical-v1-clarification-requests-format.md);
 - `test-design-matrix.md`;
+- `test-data-source-plan.json` и `fixture-catalog.md`, если хотя бы одна
+  строка matrix зависит от provider-а, синтетического значения, файла или
+  состояния среды;
 - `matrix-review.md` и, при наличии замечаний, `matrix-revision.md`;
 - `test-cases-review.md` и, при наличии замечаний, `test-cases-revision.md`.
 
@@ -149,7 +153,32 @@ test intent, а не технический шаг. Обязательные с�
 - у параметризованной строки явно записано, почему варианты имеют одно
   действие и одну реакцию.
 
-## 3. Независимое matrix review
+## 3. Планирование и материализация тестовых данных
+
+После self-check черновика matrix controller определяет, нужны ли внешние,
+синтетические, файловые или стендовые данные. Если нужны, он до matrix review
+создаёт и проверяет `test-data-source-plan.json` и `fixture-catalog.md` по
+[политике источников тестовых данных](test-data-source-planning-policy.md).
+Это один короткий pre-review gate, а не отдельный review-цикл.
+
+Для каждого provider-backed свойства plan содержит точный component path и
+проверенное literal-значение. Перед сохранением fixture controller сверяет
+семантику provider-а: отсутствие точного свойства, например отдельного
+фактического адреса у ответа организации, создаёт/дополняет `BAQ-*` или
+`GAP-*` и переводит только затронутую зависимость в `blocked`. Юридический
+адрес, случайное имя или сходное поле не подменяют отсутствующее свойство.
+
+Для требований к файлам controller использует локальный generator с размером
+в байтах. Не создавай «40 МБ» fixture, пока источник или БА не определили
+точное количество байт. Для роли, состояния объекта или его отсутствия plan
+фиксирует точную требуемую подготовку и очистку, но не выдумывает логин,
+URL, пользователя или ID объекта.
+
+Matrix reviewer получает matrix вместе с plan и catalog. Если matrix не
+содержит data-dependent строк, в scope достаточно краткой отметки
+`test-data plan: not required`.
+
+## 4. Независимое matrix review
 
 Matrix review проводит отдельная верхнеуровневая Codex-сессия, не subagent и
 не writer. Reviewer использует `source-scope.md` как навигацию, но независимо
@@ -172,9 +201,15 @@ Reviewer возвращает короткий `matrix-review.md`:
   проверяет, что Figma не использована как источник бизнес-правила;
 - сверку множества кодов `source-scope.md` с matrix: каждый код покрыт строкой
   или точным `GAP-*`.
+- plan и fixture catalog: все provider-backed literals и файлы доказаны до
+  writer, каждое требуемое свойство имеет component path/verified literal, а
+  недоступная семантика provider-а отражена точным `BAQ-*`/`GAP-*`, а не
+  placeholder-данными.
 
 При `matrix-changes-required` writer один раз исправляет все findings в
-`matrix-revision.md`. Reviewer в той же отдельной сессии или новой независимой
+`matrix-revision.md`. Если это изменяет данные, источники или связанные
+сценарии, он одновременно узко обновляет plan/catalog; это не вторая revision.
+Reviewer в той же отдельной сессии или новой независимой
 сессии проверяет только их закрытие. Если после этой проверки осталась ровно
 одна локальная неточность уже найденного finding, reviewer указывает точную
 замену; writer выполняет один `micro-closure`, а reviewer проверяет только эту
@@ -183,7 +218,7 @@ Reviewer возвращает короткий `matrix-review.md`:
 содержательном finding reviewer фиксирует `review-failed`. Новые автоматические
 циклы запрещены.
 
-## 4. Написание тест-кейсов
+## 5. Написание тест-кейсов
 
 Только после `matrix-accepted` writer создаёт тест-кейсы по принятой matrix.
 Один TC проверяет один основной бизнес-результат. В одном TC допустим набор
@@ -206,7 +241,13 @@ Reviewer возвращает короткий `matrix-review.md`:
 Не вызывай provider из шага TC и не выдавай синтетическое значение за
 существующую организацию или банковский реквизит.
 
-## 5. Независимое TC review и выпуск
+Если matrix требует test-data plan, writer не начинает draft TC без валидного
+plan/catalog. `needs-test-data` допустим только со ссылкой на конкретный
+`TDP-*`, перечнем требуемых свойств и понятной подготовкой среды; запрещены
+placeholder-значения (`A`, `B`, `N/A`, «валидные данные`) вместо конкретных
+literals или точного условия подготовки.
+
+## 6. Независимое TC review и выпуск
 
 Отдельная верхнеуровневая Codex-сессия reviewer-а читает источники, принятую
 matrix и draft TC. Она формирует `test-cases-review.md` с ID сессии, verdict
