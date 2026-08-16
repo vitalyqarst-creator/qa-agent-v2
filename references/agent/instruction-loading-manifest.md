@@ -66,7 +66,8 @@ Resolver должен читать JSON-блок ниже как канонич�
         "references/agent/scope-clarification-requests-format.md",
         "references/agent/source-parity-check-format.md",
         "references/agent/dictionary-inventory-format.md",
-        "references/agent/mockup-visual-inventory-format.md"
+        "references/agent/mockup-visual-inventory-format.md",
+        "references/agent/figma-visual-discovery-policy.md"
       ]
     },
     "writer_prepared_package_core": {
@@ -133,7 +134,8 @@ Resolver должен читать JSON-блок ниже как канонич�
     "writer_ui_artifacts": {
       "rationale": "UI writer references used only when the confirmed scope has mockups or screen images.",
       "paths": [
-        "references/agent/mockup-visual-inventory-format.md"
+        "references/agent/mockup-visual-inventory-format.md",
+        "references/agent/figma-visual-discovery-policy.md"
       ]
     },
     "writer_revision_artifacts": {
@@ -223,7 +225,8 @@ Resolver должен читать JSON-блок ниже как канонич�
     "scope_ui_artifacts": {
       "rationale": "Scope analyzer references for UI scopes with mockups or screen images.",
       "paths": [
-        "references/agent/mockup-visual-inventory-format.md"
+        "references/agent/mockup-visual-inventory-format.md",
+        "references/agent/figma-visual-discovery-policy.md"
       ]
     },
     "scope_agent_proposed_core": {

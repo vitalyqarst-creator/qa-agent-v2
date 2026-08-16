@@ -47,6 +47,7 @@ only when explicitly requested by the user or by an already selected route.
 - `source-row-inventory.md`, when the handoff requires row-level/table parity;
 - `dictionary-inventory.md`, when source/support already references a dictionary or fixed value list;
 - `mockup-visual-inventory.md`, when the confirmed UI scope contains a mockup / screen image / `mockups/`;
+- `figma-visual-discovery.md`, when the scope has a registered Figma visual reference; use only recorded visible labels and interaction hints, never Figma as a requirement source;
 - selected section, subsection, or narrow requirement fragment;
 - package-specific `AGENT-NOTES.md`, when present;
 - mode: `initial_draft`, `revision_from_findings`, or remediation;
@@ -103,7 +104,7 @@ Minimum runtime rules:
 6a. Production files under `fts/**/test-cases/*.md` must be self-contained runtime TC artifacts: no setup profile references in `Предусловия`, no stand/environment wording, no package-name leakage such as `AutoFin`, and no embedded diagnostic/design sections. Use split/work artifacts for diagnostics.
 7. For `practical_v0_6`, hand off to reviewer when the canonical file and `test-design-matrix.md` are internally consistent and current-scope blockers are either fixed or marked with an allowed TC status. For legacy/session routes, do not set `stage_status: ready-for-review` until source/parity/mockup/table/dictionary inputs, Writer Quality Gate, and validator blockers are closed.
 8. Before `ready-for-review`, check canonical TC for unresolved generic fixture/test-data/oracle smells: `Минимальный валидный набор данных`, `валидные данные`, `валидная заявка`, `значение из тестовых данных принято/не принимается`. These formulations are allowed only when a concrete reproducible baseline, literal/parameter, or linked fixture artifact is adjacent; otherwise fix the TC or record `GAP-*` / `unclear`.
-8a. `Предусловия`: reproducible setup steps = numbered action setup or fixture/API/profile; passive state only after the action that creates it.
+8a. `Предусловия`: воспроизводимые setup steps = numbered action setup or fixture/API/profile; passive state only after the action that creates it.
 9. Before `ready-for-review`, `semantic-review-ready`, and final handoff, check each `TC-*` by [../../references/qa/test-case-runtime-format.md](../../references/qa/test-case-runtime-format.md): `Трассировка` is mandatory, optional source fields are allowed only when they add non-duplicating navigation or real source evidence. If `TC-*` uses `DICT-*`, the same id must appear in `Трассировка`; a synthetic quote cannot be presented as an FT quote.
 10. Do not mix TC schemas: a metadata table does not replace parser-supported bold metadata fields from `test-case-format.md` (`**Название:**`, `**Тип:**`, `**Приоритет:**`, `**package_id:**`, `**Трассировка:**`); table-only metadata such as `| Поле | Значение |` / `| package_id | WP-01 |` is invalid. Do not duplicate runtime headings with inline/bold fields.
 11. After any change to `TC-*`, `ATOM-*`, `GAP-*`, `DICT-*`, or `package_id`, synchronize canonical TC, ledger, traceability matrix, Test-design Decision Table, Package Test Design Plan, coverage artifacts, and writer response. Status `fixed` is allowed only after all affected artifacts are checked, not only the canonical file.
@@ -150,6 +151,7 @@ Rules:
 - Source parity check format: [../../references/agent/source-parity-check-format.md](../../references/agent/source-parity-check-format.md)
 - Source-first assertion contract: [../../references/agent/source-assertions-format.md](../../references/agent/source-assertions-format.md)
 - Mockup visual inventory format: [../../references/agent/mockup-visual-inventory-format.md](../../references/agent/mockup-visual-inventory-format.md)
+- Figma visual discovery policy: [../../references/agent/figma-visual-discovery-policy.md](../../references/agent/figma-visual-discovery-policy.md)
 - Test case runtime format: [../../references/qa/test-case-runtime-format.md](../../references/qa/test-case-runtime-format.md)
 - Test case format: [../../references/qa/test-case-format.md](../../references/qa/test-case-format.md)
 - Review findings format: [../../references/qa/review-findings-format.md](../../references/qa/review-findings-format.md)

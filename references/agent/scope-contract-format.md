@@ -38,6 +38,7 @@
 - Если `source-parity-check.md` содержит row-level/table parity или scope основан на таблице полей/действий, рядом со `scope-contract.md` должен быть создан `source-row-inventory.md` до handoff к writer/reviewer.
 - Если complexity/source rows выявляют validation/format ограничения или обязательность, создай рядом соответствующий oracle inventory: `negative-oracle-inventory.md` / `requiredness-oracle-inventory.md`; строки `candidate_tc_required` передавай writer-у как candidate TC с `oracle_status = ui-calibration-required`, а строки `gap_required` / `clarification_required` связывай с `scope-coverage-gaps.md` через `Scope Obligation ID(s)`.
 - Если подтвержденный UI scope содержит источник типа `mockup` или путь `mockups/*`, рядом со `scope-contract.md` должен быть создан `mockup-visual-inventory.md` по `references/agent/mockup-visual-inventory-format.md`. Недостаточно перечислить файл макета: его визуальное содержимое должно быть открыто и зафиксировано. Если макет нельзя открыть, не переводите scope в `ready-for-next-stage`; используйте `blocked-input`.
+- Если source-selection содержит `figma-visual-reference`, рядом создай `figma-visual-discovery.md` по `figma-visual-discovery-policy.md`. Это best-effort visual discovery: статус `unavailable` не блокирует scope и не заменяет обязательный local mockup inventory, если local mockup также есть.
 - `Scope Complexity Assessment` обязателен для каждого подтвержденного scope, даже если scope простой.
 - `Внутренние Рабочие Пакеты` обязательны для каждого подтвержденного scope. Даже простой scope должен иметь минимум один пакет `WP-01`.
 - Не используй формулировку `не требуются` для внутренних рабочих пакетов. Если scope простой, создай один легкий пакет `WP-01` с focus = весь подтвержденный scope и `split_required = no`.
@@ -71,6 +72,7 @@
 Для UI scope с mockup добавь:
 
 - Mockup visual inventory: `fts/<ft-slug>/work/stage-handoffs/NN-<scope-slug>/mockup-visual-inventory.md`
+- Figma visual discovery: `fts/<ft-slug>/work/stage-handoffs/NN-<scope-slug>/figma-visual-discovery.md`, если Figma-ссылка зарегистрирована
 
 ## Что Не Входит В Scope
 
@@ -80,7 +82,7 @@
 
 | source | type | usage_rule |
 | --- | --- | --- |
-| `...` | `main-ft-docx | main-ft-xhtml | pdf | support | related-ft | mockup` | `...` |
+| `...` | `main-ft-docx | main-ft-xhtml | pdf | support | related-ft | mockup | figma-visual-reference` | `...` |
 
 ## Scope Complexity Assessment
 

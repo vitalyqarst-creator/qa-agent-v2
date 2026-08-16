@@ -18,6 +18,10 @@ starting a heavy source contract:
   `fts/<ft-slug>/work/practical/<section-id>-<scope-slug>/`;
 - include relevant FT text/table rows/PDF pages, support files, mockups,
   dictionaries, open questions and candidate UI-calibration points;
+- when source selection contains `figma-visual-reference`, run the bounded
+  Figma visual discovery after confirming the scope and before the matrix;
+  create `figma-visual-discovery.md`, but do not block the route if the visual
+  source is unavailable;
 - route next to `ft-test-case-writer`, not to `source_assertion_review` or
   `ft-test-case-iteration`.
 
@@ -238,6 +242,7 @@ gap.
 - Формат Requiredness Oracle Inventory: [../../references/agent/requiredness-oracle-inventory-format.md](../../references/agent/requiredness-oracle-inventory-format.md)
 - Negative UI calibration policy: [../../references/agent/negative-ui-calibration-policy.md](../../references/agent/negative-ui-calibration-policy.md)
 - Формат mockup visual inventory: [../../references/agent/mockup-visual-inventory-format.md](../../references/agent/mockup-visual-inventory-format.md)
+- Figma visual discovery: [../../references/agent/figma-visual-discovery-policy.md](../../references/agent/figma-visual-discovery-policy.md)
 - Handoff-модель и numbered naming: [../../references/agent/stage-handoff-model.md](../../references/agent/stage-handoff-model.md)
 - Границы skill-ов: [../../references/agent/skill-boundaries.md](../../references/agent/skill-boundaries.md)
 - Source parsing quality: [../../references/agent/source-parsing-quality.md](../../references/agent/source-parsing-quality.md)

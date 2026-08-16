@@ -15,7 +15,7 @@ example benchmark, sharding, semantic bridge, source-qualified immutable
 1. `ft-source-locator`
    - Select the FT package.
    - Register the main DOCX, mandatory XHTML, PDF cross-check, support files,
-     mockups and package `AGENT-NOTES.md`.
+     mockups, available Figma visual references and package `AGENT-NOTES.md`.
    - Create only the source-selection / scope-options artifacts needed for the
      next step.
 
@@ -26,7 +26,10 @@ example benchmark, sharding, semantic bridge, source-qualified immutable
    - The brief must contain:
      - scope boundary and source references;
      - relevant FT text / table rows / PDF pages;
-     - relevant mockups and support references;
+      - relevant mockups and support references;
+      - `figma-visual-discovery.md`, when a Figma visual reference is
+        registered: discover relevant screens autonomously under the bounded
+        browser policy;
      - dictionary values required by the scope;
      - open questions and assumptions;
      - candidate UI-calibration points.
@@ -47,9 +50,12 @@ example benchmark, sharding, semantic bridge, source-qualified immutable
      route.
 
 4. `ft-test-case-reviewer`
-   - Run one independent practical review over the FT/PDF context,
+   - Run one independent practical review in a distinct top-level Codex session
+     over the FT/PDF context,
      `scope-brief.md`, `test-design-matrix.md` and canonical test cases.
-   - Produce `review-findings.md` in the practical scope folder.
+   - Produce `review-findings.md` in the practical scope folder. The writer
+     session must not write the reviewer verdict, claim independent review or
+     use a subagent as the final reviewer.
    - Classify findings as:
      - `blocking` when the test case is materially wrong or misleading;
      - `nonblocking` when the issue is wording, grouping or minor priority;
@@ -121,6 +127,9 @@ Before handing off to reviewer, the writer checks every canonical file:
 - `Предусловия` first open the relevant form/card/screen/section before entering
   a block;
 - `Тестовые данные` contain concrete values or a clear `needs-test-data` reason;
+  include only the data, actor and initial state required by this particular TC;
+  do not copy every scope-level fixture dependency into unrelated navigation or
+  display checks;
 - steps are executable user actions or checks, not restatements of `BSR-*`,
   `ATOM-*`, `ASSERT-*`, hashes, source rows or abstract obligations;
 - expected result is observable in UI/API/document output or explicitly marked
@@ -133,6 +142,8 @@ Before handing off to reviewer, the writer checks every canonical file:
 - if DaData or another integration is in scope, test cases use a fixed verified
   fixture with exact query/input and exact expected suggestion/result; do not ask
   the tester to call a live service during test execution.
+- an accepted canonical file has no `draft` marker in its title, header or
+  release status. The reviewer verifies the published header before acceptance.
 
 ## Business-analyst questions
 
@@ -171,3 +182,7 @@ The practical reviewer must block:
 
 The reviewer should not require heavy process artifacts when the matrix,
 scope brief and canonical test cases are sufficient to prove coverage.
+
+For registered external Figma sources apply
+`references/agent/figma-visual-discovery-policy.md`. A failed visual discovery
+is a documented fallback, not a blocker for the practical route.

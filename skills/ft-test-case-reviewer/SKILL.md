@@ -157,6 +157,7 @@ addition to compiler-contract-v3 `source_assertion_review`.
 - `source-parity-check.md`, если для основного ФТ доступны DOCX и PDF;
 - `dictionary-inventory.md`, если source/support или split artifacts содержат `dictionary-source` / reference-list rows;
 - `mockup-visual-inventory.md`, если подтвержденный UI scope содержит mockup / screen image / `mockups/`;
+- `figma-visual-discovery.md`, если scope содержит зарегистрированную Figma visual reference; проверяй только документированные UI hints и FT-first обработку conflicts;
 - `review_mode = full | traceability | structure | test-design`;
 - для pre-writer source-first: `review_mode = source_assertion_review`, manifest v4 `source-assertions.json`, полный `source-row-inventory.md`, source parity/gaps и mockup inventory;
 - при необходимости связанные материалы FT-пакета для уточнения трассировки;
@@ -275,6 +276,7 @@ Rules:
 - Формат traceability matrix: [../../references/qa/traceability-matrix-format.md](../../references/qa/traceability-matrix-format.md)
 - Формат source parity check: [../../references/agent/source-parity-check-format.md](../../references/agent/source-parity-check-format.md)
 - Формат mockup visual inventory: [../../references/agent/mockup-visual-inventory-format.md](../../references/agent/mockup-visual-inventory-format.md)
+- Figma visual discovery: [../../references/agent/figma-visual-discovery-policy.md](../../references/agent/figma-visual-discovery-policy.md)
 - Negative UI calibration policy: [../../references/agent/negative-ui-calibration-policy.md](../../references/agent/negative-ui-calibration-policy.md)
 - Legacy traceability matrix report: [../../references/agent/traceability-legacy-matrix-report-2026-05-25.md](../../references/agent/traceability-legacy-matrix-report-2026-05-25.md)
 - Strict validator debt report: [../../references/agent/strict-debt-report-2026-05-25.md](../../references/agent/strict-debt-report-2026-05-25.md)

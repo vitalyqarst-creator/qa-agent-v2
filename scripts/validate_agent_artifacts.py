@@ -1334,6 +1334,10 @@ def iter_mockup_visual_inventories(root: Path) -> list[Path]:
     return iter_named_markdown(root, MOCKUP_VISUAL_INVENTORY_NAME)
 
 
+def iter_figma_visual_discoveries(root: Path) -> list[Path]:
+    return iter_named_markdown(root, FIGMA_VISUAL_DISCOVERY_NAME)
+
+
 def iter_dictionary_inventories(root: Path) -> list[Path]:
     return iter_named_markdown(root, DICTIONARY_INVENTORY_NAME)
 
@@ -2413,6 +2417,26 @@ def workflow_requires_mockup_visual_inventory(
     return False
 
 
+def workflow_requires_figma_visual_discovery(
+    state: dict[str, Any],
+    workflow_path: Path,
+    root: Path,
+    ft_root: Path,
+) -> bool:
+    source_paths = [
+        *resolve_workflow_artifacts_by_name(state, workflow_path, root, ft_root, "source-selection.md"),
+        *workflow_scope_contract_paths(state, workflow_path, root, ft_root),
+    ]
+    for source_path in dedupe_paths(source_paths):
+        try:
+            content = source_path.read_text(encoding="utf-8")
+        except UnicodeDecodeError:
+            continue
+        if FIGMA_VISUAL_SOURCE_RE.search(content):
+            return True
+    return False
+
+
 def workflow_mockup_visual_inventory_paths(
     state: dict[str, Any],
     workflow_path: Path,
@@ -2425,6 +2449,21 @@ def workflow_mockup_visual_inventory_paths(
         root,
         ft_root,
         MOCKUP_VISUAL_INVENTORY_NAME,
+    )
+
+
+def workflow_figma_visual_discovery_paths(
+    state: dict[str, Any],
+    workflow_path: Path,
+    root: Path,
+    ft_root: Path,
+) -> list[Path]:
+    return resolve_workflow_artifacts_by_name(
+        state,
+        workflow_path,
+        root,
+        ft_root,
+        FIGMA_VISUAL_DISCOVERY_NAME,
     )
 
 
@@ -6288,6 +6327,7 @@ DICTIONARY_INVENTORY_ALLOWED_STATUSES = (
 )
 
 MOCKUP_VISUAL_INVENTORY_NAME = "mockup-visual-inventory.md"
+FIGMA_VISUAL_DISCOVERY_NAME = "figma-visual-discovery.md"
 NEGATIVE_ORACLE_INVENTORY_NAME = "negative-oracle-inventory.md"
 REQUIREDNESS_ORACLE_INVENTORY_NAME = "requiredness-oracle-inventory.md"
 ORACLE_INVENTORY_NAMES = {NEGATIVE_ORACLE_INVENTORY_NAME, REQUIREDNESS_ORACLE_INVENTORY_NAME}
@@ -6425,6 +6465,21 @@ MOCKUP_SOURCE_RE = re.compile(
     r"\bmockup\b|mockups?[\\/]|макет|макеты|\.(?:png|jpe?g|webp)\b",
     re.IGNORECASE,
 )
+FIGMA_VISUAL_SOURCE_RE = re.compile(
+    r"https?://(?:www\.)?figma\.com/(?:design|file)/|figma-visual-reference",
+    re.IGNORECASE,
+)
+FIGMA_VISUAL_DISCOVERY_REQUIRED_TERMS = {
+    "figma_file_url",
+    "discovery_status",
+    "access_mode",
+    "scope_slug",
+    "search_terms",
+    "проверенные фреймы",
+    "пригодные ui-подсказки",
+    "резервный источник",
+    "not_used_as_requirement_source",
+}
 NEGATIVE_ORACLE_SCOPE_RE = re.compile(
     r"\b(?:validation_domains|validation|numeric|digits?|date[-_ ]?time|email|e-mail|length|"
     r"allowed[-_ ]?values?|dictionary|reference[-_ ]?list|mask|invalid|negative)\b|"
@@ -16283,6 +16338,119 @@ def validate_mockup_visual_inventory(path: Path, root: Path) -> tuple[list[Findi
     return findings, checks
 
 
+def validate_figma_visual_discovery(path: Path, root: Path) -> tuple[list[Finding], list[Check]]:
+    findings: list[Finding] = []
+    checks: list[Check] = []
+    display_path = rel(path, root)
+
+    try:
+        content = path.read_text(encoding="utf-8")
+    except UnicodeDecodeError as exc:
+        findings.append(
+            Finding(
+                id="figma-visual-discovery-not-utf8",
+                severity="warning",
+                category="mockup",
+                title="Figma visual discovery is not UTF-8",
+                details=str(exc),
+                path=display_path,
+                evidence=[],
+                recommended_action="Save figma-visual-discovery.md as UTF-8 Markdown.",
+            )
+        )
+        checks.append(Check("figma-visual-discovery", "warn", "Figma visual discovery is not UTF-8.", display_path))
+        return findings, checks
+
+    normalized = content.lower()
+    missing_terms = sorted(
+        term for term in FIGMA_VISUAL_DISCOVERY_REQUIRED_TERMS if term.lower() not in normalized
+    )
+    if missing_terms:
+        findings.append(
+            Finding(
+                id="figma-visual-discovery-missing-required-items",
+                severity="warning",
+                category="mockup",
+                title="Figma visual discovery misses required items",
+                details=(
+                    "The artifact must record access mode, bounded search, examined frames, usable UI hints, "
+                    "fallback and the guard against Figma-derived requirements."
+                ),
+                path=display_path,
+                evidence=missing_terms,
+                recommended_action="Rewrite the artifact using figma-visual-discovery-policy.md.",
+            )
+        )
+
+    status_match = re.search(
+        r"(?im)^\|\s*discovery_status\s*\|\s*`?(available|partial|unavailable)\b",
+        content,
+    )
+    if not status_match:
+        findings.append(
+            Finding(
+                id="figma-visual-discovery-invalid-status",
+                severity="warning",
+                category="mockup",
+                title="Figma visual discovery has no valid status",
+                details="discovery_status must be available, partial or unavailable.",
+                path=display_path,
+                evidence=[],
+                recommended_action="Record a valid discovery_status in the Metadata table.",
+            )
+        )
+    elif status_match.group(1) in {"available", "partial"}:
+        frame_section = extract_markdown_section(content, "Проверенные фреймы") or ""
+        has_frame_evidence = any(
+            line.startswith("|")
+            and "страница_или_слой" not in line.lower()
+            and "---" not in line
+            for line in frame_section.splitlines()
+        )
+        if not has_frame_evidence:
+            findings.append(
+                Finding(
+                    id="figma-visual-discovery-available-without-frame-evidence",
+                    severity="warning",
+                    category="mockup",
+                    title="Available Figma discovery has no examined frame evidence",
+                    details="available or partial discovery must contain at least one concrete examined-frame row.",
+                    path=display_path,
+                    evidence=[],
+                    recommended_action="Add an examined frame or downgrade discovery_status to unavailable.",
+                )
+            )
+
+    no_requirement_guard = re.search(
+        r"(?im)^\|\s*not_used_as_requirement_source\s*\|\s*`?(?:no|false)",
+        content,
+    )
+    if no_requirement_guard:
+        findings.append(
+            Finding(
+                id="figma-visual-discovery-missing-requirement-source-guard",
+                severity="warning",
+                category="mockup",
+                title="Figma discovery may be used as a requirement source",
+                details="Figma can refine visible UI details only; FT and approved materials define requirements.",
+                path=display_path,
+                evidence=[no_requirement_guard.group(0).strip()],
+                recommended_action="Set not_used_as_requirement_source to yes and record conflicts separately.",
+            )
+        )
+
+    has_findings = any(finding.id.startswith("figma-visual-discovery") for finding in findings)
+    checks.append(
+        Check(
+            "figma-visual-discovery",
+            "warn" if has_findings else "pass",
+            "Figma visual discovery has issues." if has_findings else "Figma visual discovery contract passed.",
+            display_path,
+        )
+    )
+    return findings, checks
+
+
 def ready_for_review_blocking_test_case_findings(
     path: Path,
     root: Path,
@@ -18163,6 +18331,45 @@ def validate_workflow_state(
                     )
                 )
 
+        scope_requires_figma_discovery = workflow_requires_figma_visual_discovery(state, path, root, ft_root)
+        if scope_requires_figma_discovery and state.get("current_stage") in {"ft-scope-analyzer", "ft-test-case-writer"}:
+            figma_paths = workflow_figma_visual_discovery_paths(state, path, root, ft_root)
+            if not figma_paths:
+                findings.append(
+                    Finding(
+                        id="workflow-state-figma-visual-reference-without-discovery",
+                        severity="warning",
+                        category="mockup",
+                        title="Registered Figma visual reference has no discovery artifact",
+                        details=(
+                            "Figma visual discovery is best effort, but the scope must record whether useful visual "
+                            "hints were found or the route fell back to other sources."
+                        ),
+                        path=display_path,
+                        evidence=[*required_input_values[:10], *latest_artifact_values[:10]],
+                        recommended_action=(
+                            "Create and link figma-visual-discovery.md with discovery_status=available, partial or unavailable."
+                        ),
+                    )
+                )
+                checks.append(
+                    Check(
+                        "workflow-state-figma-visual-discovery",
+                        "warn",
+                        "Figma visual discovery is missing.",
+                        display_path,
+                    )
+                )
+            else:
+                checks.append(
+                    Check(
+                        "workflow-state-figma-visual-discovery",
+                        "pass",
+                        "Figma visual discovery resolves.",
+                        display_path,
+                    )
+                )
+
         final_status = workflow_final_status(state) or state.get("stage_status")
         if final_status in {"signed-off", "round-cap-reached"}:
             required_final_aliases = set(REQUIRED_FINAL_ARTIFACT_ALIASES)
@@ -19676,6 +19883,7 @@ def validate(
     source_table_normalizations = iter_source_table_normalizations(root)
     dictionary_inventories = iter_dictionary_inventories(root)
     mockup_visual_inventories = iter_mockup_visual_inventories(root)
+    figma_visual_discoveries = iter_figma_visual_discoveries(root)
     scope_selection_prompts = iter_named_markdown(root, "scope-selection-prompts.md")
     oracle_inventories = [
         *iter_named_markdown(root, NEGATIVE_ORACLE_INVENTORY_NAME),
@@ -19700,6 +19908,7 @@ def validate(
         source_table_normalizations = []
         dictionary_inventories = []
         mockup_visual_inventories = []
+        figma_visual_discoveries = []
         scope_selection_prompts = []
         oracle_inventories = []
     if root_is_standalone_source_table_normalization:
@@ -19993,6 +20202,11 @@ def validate(
         findings.extend(path_findings)
         checks.extend(path_checks)
 
+    for path in figma_visual_discoveries:
+        path_findings, path_checks = validate_figma_visual_discovery(path, root)
+        findings.extend(path_findings)
+        checks.extend(path_checks)
+
     for path in scope_selection_prompts:
         path_findings, path_checks = validate_scope_selection_prompts_artifact(path, root)
         findings.extend(path_findings)
@@ -20061,6 +20275,7 @@ def validate(
             "active_text_artifacts_checked": len(active_text_artifacts),
             "generated_source_basis_artifacts_checked": len(generated_source_basis_artifacts),
             "mockup_visual_inventories_checked": len(mockup_visual_inventories),
+            "figma_visual_discoveries_checked": len(figma_visual_discoveries),
             "scope_selection_prompts_checked": len(scope_selection_prompts),
             "ui_evidence_indexes_checked": len(iter_named_markdown(root, "ui-evidence-index.md")),
             "ui_validation_reports_checked": len(iter_named_markdown(root, "ui-validation-report.md")),
@@ -20100,6 +20315,7 @@ def text_report(report: dict[str, Any]) -> str:
         f"- active text artifacts: {summary['active_text_artifacts_checked']}",
         f"- generated source-basis artifacts: {summary['generated_source_basis_artifacts_checked']}",
         f"- mockup visual inventories: {summary['mockup_visual_inventories_checked']}",
+        f"- Figma visual discoveries: {summary['figma_visual_discoveries_checked']}",
         f"- UI evidence indexes: {summary['ui_evidence_indexes_checked']}",
         f"- UI validation reports: {summary['ui_validation_reports_checked']}",
         (

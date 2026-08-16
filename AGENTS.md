@@ -11,7 +11,7 @@
 ## Глобальные правила
 
 - Не выдумывай поведение системы, статусы, поля, кнопки и интеграции, которых нет в документах.
-- Приоритет имеет текст требований, а не макет, если между ними есть расхождение.
+- Приоритет имеет текст требований, а не макет, если между ними есть расхождение. Внешняя Figma-ссылка — такой же визуальный input: она может уточнять видимые подписи и механику действий, но не является источником бизнес-правил.
 - Перед shell-командами определяй runtime-среду: ОС, shell, Python/stdout/stderr encoding и пробу кириллицы. Используй `scripts/probe_environment.py` или уже сохраненный результат probe. Не предполагай Bash или PowerShell заранее; каноническая shell/UTF-8 policy хранится в `references/agent/runtime-environment-encoding-policy.md`.
 - Для PowerShell не используй Bash heredoc `python <<'PY'`; многострочную логику выноси в UTF-8 `.py`/helper. Для Bash heredoc допустим только после подтверждения Bash. Для unknown shell используй короткие ASCII-only команды или UTF-8 helper files.
 - Русские search strings не передавай через risky inline commands; читай/ищи через UTF-8 файлы/helpers/normalized sources. BSR/DIT/GSR codes and row numbers are anchors, not replacements for checking Russian requirement text.

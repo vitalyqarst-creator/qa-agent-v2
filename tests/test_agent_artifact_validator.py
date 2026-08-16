@@ -565,6 +565,45 @@ class AgentArtifactValidatorTests(unittest.TestCase):
             encoding="utf-8",
         )
 
+    def write_valid_figma_visual_discovery(self, path: Path, *, status: str = "available") -> None:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(
+            "\n".join(
+                [
+                    "# Figma Visual Discovery",
+                    "",
+                    "## Метаданные",
+                    "",
+                    "| item | value | evidence |",
+                    "| --- | --- | --- |",
+                    "| figma_file_url | `https://www.figma.com/design/demo/Partners` | `source-selection.md` |",
+                    f"| discovery_status | `{status}` | `browser` |",
+                    "| access_mode | `browser-view-only` | `figma-access.md` |",
+                    "| scope_slug | `partners-directory` | `scope-contract.md` |",
+                    "| search_terms | `Партнёры`; `Добавление партнёра` | `FT headings` |",
+                    "",
+                    "## Проверенные фреймы",
+                    "",
+                    "| страница_или_слой | ссылка_на_фрейм_или_файл | наблюдаемые_элементы | скриншот | релевантность | ограничение |",
+                    "| --- | --- | --- | --- | --- |",
+                    "| `Партнёры` | `https://www.figma.com/design/demo/Partners` | `+ ДОБАВИТЬ` | `none` | `UI labels` | `view-only` |",
+                    "",
+                    "## Пригодные UI-подсказки",
+                    "",
+                    "| элемент | наблюдаемая_подпись_или_расположение | допустимое_использование | ссылка_на_ФТ | ограничение |",
+                    "| --- | --- | --- | --- |",
+                    "| `Добавить` | `+ ДОБАВИТЬ` | `step label` | `section 9.3.1` | `not a requirement` |",
+                    "",
+                    "## Резервный источник и решение",
+                    "",
+                    "- Резервный источник: `PDF`",
+                    "- not_used_as_requirement_source: `yes`",
+                    "- Writer use: `visible labels only`",
+                ]
+            ),
+            encoding="utf-8",
+        )
+
     def append_safe_artifact_write_strategy(self, path: Path) -> None:
         path.write_text(
             path.read_text(encoding="utf-8")
@@ -12971,6 +13010,106 @@ class AgentArtifactValidatorTests(unittest.TestCase):
         payload = json.loads(result.stdout)
         finding_ids = {finding["id"] for finding in payload["findings"]}
         self.assertIn("workflow-state-ui-scope-missing-mockup-visual-inventory", finding_ids)
+
+    def test_scope_with_figma_reference_without_discovery_warns(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            (fixture_root / "scope-contract.md").write_text(
+                "# Scope Contract\n\n- figma: `https://www.figma.com/design/demo/Partners`\n",
+                encoding="utf-8",
+            )
+            (fixture_root / "workflow-state.yaml").write_text(
+                "\n".join(
+                    [
+                        "ft_slug: ft-sample",
+                        "scope_slug: partners-directory",
+                        "current_stage: ft-scope-analyzer",
+                        "stage_status: ready-for-next-stage",
+                        "current_round: 0",
+                        "next_skill: ft-test-case-writer",
+                        "required_inputs:",
+                        "  - scope-contract.md",
+                        "latest_artifacts:",
+                        "  scope_contract: scope-contract.md",
+                        "coverage_gaps:",
+                        "  total: 0",
+                        "  blocking: 0",
+                        "open_questions: []",
+                        "blocking_reasons: []",
+                        "accepted_risks: []",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            result = self.run_validator(
+                "--root",
+                str(fixture_root),
+                "--json",
+                "--fail-on",
+                "warning",
+            )
+
+        self.assertEqual(result.returncode, 1)
+        payload = json.loads(result.stdout)
+        finding_ids = {finding["id"] for finding in payload["findings"]}
+        self.assertIn("workflow-state-figma-visual-reference-without-discovery", finding_ids)
+
+    def test_scope_with_unavailable_figma_discovery_does_not_block(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            (fixture_root / "scope-contract.md").write_text(
+                "# Scope Contract\n\n- figma: `https://www.figma.com/design/demo/Partners`\n",
+                encoding="utf-8",
+            )
+            self.write_valid_figma_visual_discovery(
+                fixture_root / "figma-visual-discovery.md",
+                status="unavailable",
+            )
+            (fixture_root / "workflow-state.yaml").write_text(
+                "\n".join(
+                    [
+                        "ft_slug: ft-sample",
+                        "scope_slug: partners-directory",
+                        "current_stage: ft-scope-analyzer",
+                        "stage_status: ready-for-next-stage",
+                        "current_round: 0",
+                        "next_skill: ft-test-case-writer",
+                        "required_inputs:",
+                        "  - scope-contract.md",
+                        "latest_artifacts:",
+                        "  scope_contract: scope-contract.md",
+                        "  figma_visual_discovery: figma-visual-discovery.md",
+                        "coverage_gaps:",
+                        "  total: 0",
+                        "  blocking: 0",
+                        "open_questions: []",
+                        "blocking_reasons: []",
+                        "accepted_risks: []",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            result = self.run_validator(
+                "--root",
+                str(fixture_root),
+                "--json",
+                "--fail-on",
+                "warning",
+            )
+
+        payload = json.loads(result.stdout)
+        finding_ids = {finding["id"] for finding in payload["findings"]}
+        self.assertNotIn("workflow-state-figma-visual-reference-without-discovery", finding_ids)
+        self.assertFalse(
+            any(
+                finding_id.startswith("figma-visual-discovery")
+                and finding["severity"] == "error"
+                for finding_id, finding in {finding["id"]: finding for finding in payload["findings"]}.items()
+            )
+        )
+        self.assertEqual(1, payload["summary"]["figma_visual_discoveries_checked"])
 
     def test_writer_ready_for_review_ui_mockup_scope_without_visual_inventory_errors(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:

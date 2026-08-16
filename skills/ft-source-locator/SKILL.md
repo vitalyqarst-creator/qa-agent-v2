@@ -21,7 +21,7 @@ description: Находит нужный FT-пакет, основное ФТ, s
 - matching XHTML-версия основного ФТ в `source/` как обязательный machine-readable extraction source;
 - `main_ft_xhtml` и `xhtml_available: yes | no`;
 - список PDF-версий основного ФТ для сверки структуры, если они есть в FT-пакете;
-- список support-файлов и макетов;
+- список support-файлов, макетов и зарегистрированных Figma visual references;
 - package-specific `AGENT-NOTES.md` из выбранного input root и package root `fts/<ft-slug>/`, если он есть;
 - `source-selection.md` в фактической stage-handoff папке; для новых handoff-папок это `fts/<ft-slug>/work/stage-handoffs/NN-<scope-slug>/`;
 - структура `source-selection.md` определяется `source-selection-format.md`;
@@ -43,7 +43,7 @@ description: Находит нужный FT-пакет, основное ФТ, s
    Если пользователь просит проверить JSON вместо XHTML, используй `docx-json-projection` только как diagnostic/evaluation route по `source-json-projection.md`: JSON не заменяет обязательный XHTML в production workflow, пока multi-scope parity evaluation не докажет критерии переключения.
 5. Отдельно найди PDF-версию основного ФТ для сверки структуры разделов. Ищи ее сначала в `source/`, затем в связанных материалах того же FT-пакета.
 6. Если PDF-версия найдена, передай ее следующему skill-у как вход для structural/visual cross-check; PDF не заменяет DOCX или XHTML.
-7. Проверь `AGENT-NOTES.md` в выбранном input root и в package root `fts/<ft-slug>/`; найденные notes передай как обязательный package-specific context.
+7. Проверь `AGENT-NOTES.md` в выбранном input root и в package root `fts/<ft-slug>/`; найденные notes передай как обязательный package-specific context. Если пользователь, notes или support-material дают Figma URL, зарегистрируй его как `figma-visual-reference`, но не анализируй фреймы на этой стадии.
 8. Если PDF-версия не найдена, явно зафиксируй отсутствие PDF для сверки структуры, а не игнорируй это молча.
 9. Если XHTML отсутствует, создай `source-selection.md` с секцией `Machine-Readable XHTML Source`, укажи `selection_status: blocked-input`, `xhtml_available: no`, `blocking_reason: missing main-ft-xhtml`, попроси добавить XHTML-версию основного ФТ в `source/` и не передавай задачу в `ft-scope-analyzer`.
 10. Если выбор неоднозначен, сформулируй короткий список вариантов и чего именно не хватает для уверенного выбора.

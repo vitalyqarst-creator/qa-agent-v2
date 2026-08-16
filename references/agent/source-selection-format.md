@@ -18,7 +18,7 @@
 2. Main FT XHTML - mandatory primary machine-readable extraction source.
 3. Main FT PDF - structural/visual cross-check only.
 4. Support files - clarification within confirmed scope only.
-5. Mockups - UI/visual hints only, not source of business rules.
+5. Mockups and registered Figma visual references - UI/visual hints only, not source of business rules.
 6. AGENT-NOTES - package context only.
 7. Existing test cases / previous work artifacts - historical context only when explicitly allowed, not requirement source.
 
@@ -131,6 +131,8 @@ PDF не является machine-readable substitute for XHTML.
 - mockups;
 - package notes;
 - UI notes, если уже известны.
+- внешние Figma visual references, если ссылка была дана пользователем, есть в
+  `AGENT-NOTES.md` или в support-материале.
 
 Для каждого файла укажи:
 
@@ -142,7 +144,15 @@ PDF не является machine-readable substitute for XHTML.
 
 `must_use_downstream: yes` означает обязательную загрузку для уже подтвержденного scope или для всех scope-ов пакета. До выбора scope support/mockups по умолчанию получают `no`: они зарегистрированы как кандидаты, а релевантность определяет `ft-scope-analyzer`. Package notes остаются обязательными.
 
-Support/mockups не должны расширять FT scope без явного подтверждения. Mockups не задают business rules, requiredness, validation, allowed values или expected results.
+Для Figma-ссылки используй `role: figma-visual-reference`, укажи URL в `path`,
+а в `limitations` — известный режим доступа (`api-read | browser-view-only |
+unknown`). Source locator лишь регистрирует ссылку; поиск релевантных фреймов
+выполняет scope analyzer по `figma-visual-discovery-policy.md` после выбора
+scope.
+
+Support/mockups/Figma не должны расширять FT scope без явного подтверждения.
+Они не задают business rules, requiredness, validation, allowed values или
+expected results.
 
 ### Source Quality
 
