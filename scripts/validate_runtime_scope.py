@@ -67,10 +67,11 @@ RESOLVED_EXCLUSION_RE = re.compile(
     re.IGNORECASE,
 )
 TABLE_ROW_REFERENCE_RE = re.compile(
-    r"Таблица\s+(\d+)\s*,\s*строка\s+[«\"](.+?)[»\"](?:\s*,\s*примечание)?(?=\s*(?:;|$))",
+    r"Таблица\s+(\d+)\s*,\s*строка\s+(?:«(.+)»|\"([^\"]+)\")(?:\s*,\s*примечание)?(?=\s*(?:;|$))",
     re.IGNORECASE,
 )
 TABLE_REFERENCE_RE = re.compile(r"\bТаблица\s+(\d+)\b", re.IGNORECASE)
+ABBREVIATED_TABLE_REFERENCE_RE = re.compile(r"\bтабл\.\s*\d+\b", re.IGNORECASE)
 TABLE_LABEL_RE = re.compile(r"^Таблица\s+(\d+)\b", re.IGNORECASE)
 LOCAL_VISUAL_RE = re.compile(r"`([^`\n]+\.(?:png|jpe?g|webp|svg))`", re.IGNORECASE)
 LOCAL_VISUAL_LABEL_RE = re.compile(r"\bРисунок\s+\d+\b", re.IGNORECASE)
@@ -131,6 +132,13 @@ def resolve_declared_path(package_root: Path, value: str) -> Path:
 
 def normalized_source_text(value: str) -> str:
     return " ".join(value.replace("\u00a0", " ").split()).casefold()
+
+
+def table_row_references(value: str) -> list[tuple[str, str]]:
+    return [
+        (match.group(1), match.group(2) or match.group(3))
+        for match in TABLE_ROW_REFERENCE_RE.finditer(value)
+    ]
 
 
 def xhtml_table_rows(path: Path) -> dict[int, set[str]]:
@@ -301,9 +309,11 @@ def validate(package_root: Path, scope_dir: Path) -> list[str]:
             source_value = row[inventory_source_index]
             statement_value = row[inventory_statement_index]
             source_codes = {anchor for anchor in extract_anchors(source_value) if anchor.startswith("CODE:")}
-            row_matches = TABLE_ROW_REFERENCE_RE.findall(source_value)
+            row_matches = table_row_references(source_value)
             for table_number, row_name in row_matches:
                 row_references.append((inventory_id, int(table_number), row_name))
+            if ABBREVIATED_TABLE_REFERENCE_RE.search(source_value):
+                errors.append(f"{inventory_id}: use canonical 'Таблица N, строка «…»' instead of an abbreviated table reference")
             referenced_tables = {int(value) for value in TABLE_REFERENCE_RE.findall(source_value)}
             row_anchored_tables = {int(value) for value, _row_name in row_matches}
             for table_number in sorted(referenced_tables - row_anchored_tables):

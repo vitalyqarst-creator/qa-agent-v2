@@ -21,7 +21,7 @@ from scripts.runtime_traceability import extract_anchors
 from scripts.validate_fixture_catalog import validate as validate_catalog
 from scripts.validate_runtime_matrix import validate as validate_matrix, validate_projection as validate_matrix_projection
 from scripts.validate_runtime_review import validate as validate_review
-from scripts.validate_runtime_scope import validate as validate_scope
+from scripts.validate_runtime_scope import table_row_references, validate as validate_scope
 from scripts.validate_runtime_source import validate as validate_source
 from scripts.validate_runtime_tc import validate as validate_tc, validate_projection as validate_tc_projection
 from scripts.validate_runtime_tree import validate as validate_tree
@@ -556,6 +556,22 @@ class RuntimeContractTests(unittest.TestCase):
             (scope / "workflow-state.yaml").write_text("stage: ft-scope-analyzer\n", encoding="utf-8")
             errors = validate_scope(package, scope)
             self.assertTrue(any("without the exact first-column row name" in error for error in errors))
+
+            (scope / "source-row-inventory.md").write_text(
+                VALID_INVENTORY.replace(
+                    "AS.38; Таблица 7, строка «Сохранить»",
+                    "AS.38; строка «Сохранить»; табл. 7",
+                ),
+                encoding="utf-8",
+            )
+            errors = validate_scope(package, scope)
+            self.assertTrue(any("instead of an abbreviated table reference" in error for error in errors))
+
+    def test_table_row_parser_supports_nested_source_quotes(self) -> None:
+        self.assertEqual(
+            [("3", "Виждет «Партнер»")],
+            table_row_references("AS.11; Таблица 3, строка «Виждет «Партнер»», примечание"),
+        )
 
     def test_scope_validator_rejects_compound_table_properties_and_broad_ba_question(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
