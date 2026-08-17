@@ -31,7 +31,9 @@
 Перед каждым выпуском используйте:
 
 ```powershell
+python scripts/validate_runtime_scope.py <FT-пакет> <scope-handoff>
 python scripts/validate_fixture_catalog.py <путь-к-fixture-catalog.json>
-python scripts/validate_runtime_tc.py <путь-к-test-cases.md>
+python scripts/validate_runtime_matrix.py <путь-к-matrix.md> --source-inventory <путь-к-source-row-inventory.md> --coverage-gaps <путь-к-coverage-gaps.md>
+python scripts/validate_runtime_tc.py <путь-к-test-cases.md> --matrix <путь-к-matrix.md>
 python scripts/validate_runtime_tree.py
 ```

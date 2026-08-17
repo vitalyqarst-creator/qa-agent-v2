@@ -5,6 +5,11 @@ import json
 import re
 from pathlib import Path
 
+try:
+    from scripts.runtime_traceability import anchor_label, extract_anchors, find_markdown_table
+except ModuleNotFoundError:  # Direct invocation: python scripts/validate_runtime_tc.py
+    from runtime_traceability import anchor_label, extract_anchors, find_markdown_table
+
 
 TC_HEADING_RE = re.compile(r"^##\s+(TC-[A-Za-z0-9.-]+)\s*$", re.MULTILINE)
 NUMBER_RE = re.compile(r"\*\*Сквозной номер:\*\*\s*`TC-(\d{3,})`")
@@ -133,11 +138,65 @@ def validate(content: str) -> list[str]:
     return errors
 
 
+def validate_projection(content: str, matrix_content: str) -> list[str]:
+    errors: list[str] = []
+    matrix = find_markdown_table(
+        matrix_content,
+        ("ID", "Источник требования", "Проверка", "Профили тест-дизайна", "Решение"),
+    )
+    if matrix is None or not matrix.rows:
+        return ["TC projection cannot be checked without matrix rows"]
+    source_index = matrix.index("Источник требования")
+    decision_index = matrix.index("Решение")
+    matrix_id_index = matrix.index("ID")
+    required_anchors: set[str] = set()
+    all_matrix_anchors: set[str] = set()
+    executable_rows: dict[str, set[str]] = {}
+    all_matrix_ids: set[str] = set()
+    for row in matrix.rows:
+        matrix_id = row[matrix_id_index].strip()
+        all_matrix_ids.add(matrix_id)
+        anchors = extract_anchors(row[source_index])
+        all_matrix_anchors.update(anchors)
+        if row[decision_index] == "TC":
+            required_anchors.update(anchors)
+            executable_rows[matrix_id] = anchors
+
+    tc_traceability_values = [value for name, value in FIELD_RE.findall(content) if name == "Трассировка"]
+    tc_traceability = "\n".join(tc_traceability_values)
+    tc_anchors = extract_anchors(tc_traceability)
+    referenced_matrix_ids: set[str] = set()
+    for traceability in tc_traceability_values:
+        linked_ids = {
+            matrix_id
+            for matrix_id in all_matrix_ids
+            if re.search(rf"(?<![A-Za-z0-9_.-]){re.escape(matrix_id)}(?![A-Za-z0-9_.-])", traceability)
+        }
+        referenced_matrix_ids.update(linked_ids)
+        traceability_anchors = extract_anchors(traceability)
+        for matrix_id in linked_ids:
+            if matrix_id not in executable_rows:
+                errors.append(f"test case links non-executable matrix row {matrix_id}")
+                continue
+            for missing in sorted(executable_rows[matrix_id] - traceability_anchors):
+                errors.append(f"test case linked to {matrix_id} omits {anchor_label(missing)}")
+    for matrix_id in sorted(executable_rows.keys() - referenced_matrix_ids):
+        errors.append(f"test cases do not project executable matrix row {matrix_id}")
+    for missing in sorted(required_anchors - tc_anchors):
+        errors.append(f"test cases do not project matrix obligation {anchor_label(missing)}")
+    for extra in sorted(tc_anchors - all_matrix_anchors):
+        errors.append(f"test-case traceability is absent from the matrix: {anchor_label(extra)}")
+    return errors
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Validate lean runtime test cases.")
     parser.add_argument("test_cases", type=Path)
+    parser.add_argument("--matrix", type=Path, required=True)
     args = parser.parse_args()
-    errors = validate(args.test_cases.read_text(encoding="utf-8"))
+    content = args.test_cases.read_text(encoding="utf-8")
+    errors = validate(content)
+    errors.extend(validate_projection(content, args.matrix.read_text(encoding="utf-8")))
     print(json.dumps({"valid": not errors, "errors": errors}, ensure_ascii=False))
     return 0 if not errors else 1
 

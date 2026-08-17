@@ -30,6 +30,8 @@ REQUIRED_PATHS = (
     "scripts/validate_fixture_catalog.py",
     "scripts/validate_runtime_tc.py",
     "scripts/validate_runtime_matrix.py",
+    "scripts/validate_runtime_scope.py",
+    "scripts/runtime_traceability.py",
     "scripts/validate_runtime_review.py",
     "scripts/runtime_review_dispatch.py",
 )

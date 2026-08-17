@@ -10,10 +10,12 @@ from unittest.mock import patch
 from scripts.capture_dadata_fixture import capture_fixture
 from scripts.create_ft_package import PACKAGE_DIRS, create_package
 from scripts.runtime_review_dispatch import create_dispatch, sha256, validate_dispatch
+from scripts.runtime_traceability import extract_anchors
 from scripts.validate_fixture_catalog import validate as validate_catalog
-from scripts.validate_runtime_matrix import validate as validate_matrix
+from scripts.validate_runtime_matrix import validate as validate_matrix, validate_projection as validate_matrix_projection
 from scripts.validate_runtime_review import validate as validate_review
-from scripts.validate_runtime_tc import validate as validate_tc
+from scripts.validate_runtime_scope import validate as validate_scope
+from scripts.validate_runtime_tc import validate as validate_tc, validate_projection as validate_tc_projection
 from scripts.validate_runtime_tree import validate as validate_tree
 
 
@@ -29,7 +31,7 @@ VALID_TC = """## TC-9.3.2-001
 
 **Приоритет:** High
 
-**Трассировка:** `AS.38`; Таблица 7.
+**Трассировка:** `M-001`; `AS.38`; Таблица 7.
 
 **Предусловия:**
 
@@ -55,8 +57,23 @@ VALID_MATRIX = """# Матрица
 
 | ID | Источник требования | Проверка | Профили тест-дизайна | Предусловие/исходное состояние | Конкретные тестовые данные | Ожидаемый результат | Решение |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| M-001 | AS.38; Таблица 7 | Сохранить карточку | базовый, жизненный-цикл-создания | Открыта форма добавления | `Наименование` = `ПАО СБЕРБАНК` | Карточка сохранена | TC |
-| M-002 | Таблица 7 / неизвестный oracle | Проверить неизвестную реакцию | допустимые-классы | Открыта форма | Не определены | Требуется уточнение результата | coverage-gap |
+| M-001 | SR-001; AS.38; Таблица 7 | Сохранить карточку | базовый, жизненный-цикл-создания | Открыта форма добавления | `Наименование` = `ПАО СБЕРБАНК` | Карточка сохранена | TC |
+| GAP-001 | SR-002; AS.39 | Проверить неизвестную реакцию | допустимые-классы | Открыта форма | Не определены | Требуется уточнение результата | coverage-gap |
+"""
+
+VALID_INVENTORY = """# Инвентарь
+
+| ID | Источник | Утверждение для покрытия |
+| --- | --- | --- |
+| SR-001 | AS.38; Таблица 7 | Карточка сохраняется |
+| SR-002 | AS.39 | Реакция на ограничение должна быть определена |
+"""
+
+VALID_GAPS = """# Пробелы покрытия
+
+| ID | Источник | Ограничение |
+| --- | --- | --- |
+| GAP-001 | AS.39 | Не определён наблюдаемый результат |
 """
 
 
@@ -138,6 +155,107 @@ class RuntimeContractTests(unittest.TestCase):
         self.assertEqual([], validate_matrix(VALID_MATRIX))
         invalid = VALID_MATRIX.replace("базовый, жизненный-цикл-создания", "")
         self.assertTrue(any("no test-design profile" in error for error in validate_matrix(invalid)))
+
+    def test_requirement_ranges_expand_to_individual_traceability_anchors(self) -> None:
+        self.assertTrue({"CODE:AS.6", "CODE:AS.7", "CODE:AS.8"}.issubset(extract_anchors("AS.6-AS.8")))
+
+    def test_matrix_projection_preserves_inventory_and_coverage_gaps(self) -> None:
+        self.assertEqual([], validate_matrix_projection(VALID_MATRIX, VALID_INVENTORY, VALID_GAPS))
+        missing_gap = VALID_MATRIX.replace("GAP-001", "M-002", 1)
+        self.assertTrue(any("GAP-001" in error for error in validate_matrix_projection(missing_gap, VALID_INVENTORY, VALID_GAPS)))
+        missing_source = VALID_MATRIX.replace("AS.38; Таблица 7", "Таблица 7", 1)
+        self.assertTrue(any("AS.38" in error for error in validate_matrix_projection(missing_source, VALID_INVENTORY, VALID_GAPS)))
+        missing_inventory_row = VALID_MATRIX.replace("SR-002; AS.39", "AS.39", 1)
+        self.assertTrue(any("SR-002" in error for error in validate_matrix_projection(missing_inventory_row, VALID_INVENTORY, VALID_GAPS)))
+
+    def test_tc_projection_requires_every_executable_matrix_source(self) -> None:
+        self.assertEqual([], validate_tc_projection(VALID_TC, VALID_MATRIX))
+        expanded = VALID_MATRIX.replace(
+            "| GAP-001 | SR-002; AS.39 | Проверить неизвестную реакцию | допустимые-классы | Открыта форма | Не определены | Требуется уточнение результата | coverage-gap |",
+            "| M-002 | SR-002; AS.39 | Проверить второе правило | базовый | Открыта форма | Не требуются. | Второе правило выполнено | TC |",
+        )
+        errors = validate_tc_projection(VALID_TC, expanded)
+        self.assertTrue(any("M-002" in error for error in errors))
+        self.assertTrue(any("AS.39" in error for error in errors))
+
+    def test_tc_projection_requires_matrix_row_and_its_primary_source_in_same_tc(self) -> None:
+        missing_matrix_id = VALID_TC.replace("`M-001`; ", "")
+        self.assertTrue(any("M-001" in error for error in validate_tc_projection(missing_matrix_id, VALID_MATRIX)))
+        missing_primary_source = VALID_TC.replace("`AS.38`; ", "")
+        self.assertTrue(any("linked to M-001 omits AS.38" in error for error in validate_tc_projection(missing_primary_source, VALID_MATRIX)))
+
+    def test_scope_validator_rejects_answered_question_and_omitted_gap(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            (root / "AGENTS.md").write_text("# Runtime\n", encoding="utf-8")
+            (root / "scripts").mkdir()
+            package = root / "fts" / "Project" / "FT"
+            support = package / "support"
+            support.mkdir(parents=True)
+            answers = support / "answers.md"
+            answers.write_text(
+                "### CLR-OLD\n"
+                "related_ft_reference: AS.7\n"
+                "question: Как выполняется подтверждение вторым сотрудником?\n"
+                "response_status: answered\n"
+                "residual_missing: none\n",
+                encoding="utf-8",
+            )
+            locator = package / "work" / "stage-handoffs" / "00-ft"
+            locator.mkdir(parents=True)
+            (locator / "workflow-state.yaml").write_text(
+                "support_sources:\n"
+                "  - path: fts/Project/FT/support/answers.md\n"
+                "    role: approved_ba_answers\n",
+                encoding="utf-8",
+            )
+            scope = package / "work" / "stage-handoffs" / "01-scope"
+            scope.mkdir()
+            (scope / "source-row-inventory.md").write_text(VALID_INVENTORY, encoding="utf-8")
+            (scope / "coverage-gaps.md").write_text(VALID_GAPS, encoding="utf-8")
+            (scope / "scope-clarification-requests.md").write_text(
+                "# Вопросы\n\n## CLR-001 — подтверждение\n\n"
+                "**Вопрос:** Как выполняется подтверждение вторым сотрудником?\n\n"
+                "**Основание в ФТ:** AS.7.\n\n"
+                "**Влияние на покрытие:** Проверка невозможна.\n\n"
+                "**Текущее состояние:** Ответ не получен.\n",
+                encoding="utf-8",
+            )
+            (scope / "scope-brief.md").write_text("# Границы\n\nРаздел подтверждён.\n", encoding="utf-8")
+            (scope / "test-data-plan.md").write_text("# План данных\n\nДанные не требуются.\n", encoding="utf-8")
+            (scope / "prompt.scope-to-writer.md").write_text(
+                "Не создавай matrix-строки для GAP-001.\n",
+                encoding="utf-8",
+            )
+            (scope / "workflow-state.yaml").write_text("stage: ft-scope-analyzer\n", encoding="utf-8")
+            errors = validate_scope(package, scope)
+            self.assertTrue(any("approved answer" in error for error in errors))
+            self.assertTrue(any("fully answered" in error for error in errors))
+            self.assertTrue(any("omit coverage-gap" in error for error in errors))
+            self.assertTrue(any("Russian wording" in error for error in errors))
+
+    def test_scope_validator_accepts_compact_russian_handoff(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            (root / "AGENTS.md").write_text("# Runtime\n", encoding="utf-8")
+            (root / "scripts").mkdir()
+            package = root / "fts" / "Project" / "FT"
+            scope = package / "work" / "stage-handoffs" / "01-scope"
+            scope.mkdir(parents=True)
+            (scope / "source-row-inventory.md").write_text(VALID_INVENTORY, encoding="utf-8")
+            (scope / "coverage-gaps.md").write_text("# Пробелы покрытия\n\nПробелы отсутствуют.\n", encoding="utf-8")
+            (scope / "scope-clarification-requests.md").write_text(
+                "# Вопросы к БА\n\nОткрытые вопросы отсутствуют.\n", encoding="utf-8"
+            )
+            (scope / "scope-brief.md").write_text("# Границы\n\nРаздел подтверждён.\n", encoding="utf-8")
+            (scope / "test-data-plan.md").write_text(
+                "# План тестовых данных\n\nКонкретные данные определены источником.\n", encoding="utf-8"
+            )
+            (scope / "prompt.scope-to-writer.md").write_text(
+                "Создай матрицу по всем строкам инвентаря.\n", encoding="utf-8"
+            )
+            (scope / "workflow-state.yaml").write_text("stage: ft-scope-analyzer\n", encoding="utf-8")
+            self.assertEqual([], validate_scope(package, scope))
 
     def test_review_record_is_bound_to_current_artifact_digest(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:

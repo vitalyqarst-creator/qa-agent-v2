@@ -13,6 +13,8 @@ Review выполняется только в отдельной верхнеу�
 
 ## Matrix review
 
+До содержательного review заново запусти matrix-validator с `--source-inventory` и `--coverage-gaps`; неполная проекция блокирует review.
+
 Сверь matrix заново с DOCX/XHTML/PDF, `scope-brief.md`, questions и `fixture-catalog.json`.
 
 Блокируй matrix, если:
@@ -29,6 +31,8 @@ Review выполняется только в отдельной верхнеу�
 Вердикт: только `matrix-accepted` или `matrix-changes-required` с конечным списком findings.
 
 ## TC review
+
+До содержательного review заново запусти TC-validator с `--matrix`; неполная проекция принятой матрицы блокирует review.
 
 Проверь canonical TC по matrix, источникам и fixture catalog. Обязательно блокируй:
 

@@ -5,6 +5,11 @@ import json
 import re
 from pathlib import Path
 
+try:
+    from scripts.runtime_traceability import anchor_label, extract_anchors, find_markdown_table
+except ModuleNotFoundError:  # Direct invocation: python scripts/validate_runtime_matrix.py
+    from runtime_traceability import anchor_label, extract_anchors, find_markdown_table
+
 
 REQUIRED_HEADERS = (
     "ID",
@@ -104,11 +109,72 @@ def validate(content: str) -> list[str]:
     return errors
 
 
+def validate_projection(content: str, inventory_content: str, gaps_content: str) -> list[str]:
+    errors: list[str] = []
+    inventory = find_markdown_table(inventory_content, ("ID", "Источник", "Утверждение для покрытия"))
+    matrix = find_markdown_table(content, REQUIRED_HEADERS)
+    if inventory is None or not inventory.rows:
+        return ["source-row-inventory has no required source rows table"]
+    if matrix is None or not matrix.rows:
+        return ["matrix projection cannot be checked without matrix rows"]
+
+    inventory_anchors: set[str] = set()
+    inventory_ids: set[str] = set()
+    inventory_id_index = inventory.index("ID")
+    inventory_source_index = inventory.index("Источник")
+    for row in inventory.rows:
+        inventory_id = row[inventory_id_index].strip()
+        if not inventory_id:
+            errors.append("source-row-inventory contains an empty ID")
+            continue
+        inventory_ids.add(inventory_id)
+        inventory_anchors.update(extract_anchors(row[inventory_source_index]))
+
+    matrix_source_index = matrix.index("Источник требования")
+    matrix_decision_index = matrix.index("Решение")
+    matrix_id_index = matrix.index("ID")
+    matrix_anchors: set[str] = set()
+    matrix_rows_by_id: dict[str, tuple[str, ...]] = {}
+    for row in matrix.rows:
+        matrix_source = row[matrix_source_index]
+        matrix_anchors.update(extract_anchors(matrix_source))
+        matrix_rows_by_id[row[matrix_id_index]] = row
+    matrix_sources = "\n".join(row[matrix_source_index] for row in matrix.rows)
+    for inventory_id in sorted(inventory_ids):
+        if not re.search(rf"(?<![A-Za-z0-9_.-]){re.escape(inventory_id)}(?![A-Za-z0-9_.-])", matrix_sources):
+            errors.append(f"matrix does not project source-row inventory item {inventory_id}")
+    for missing in sorted(inventory_anchors - matrix_anchors):
+        errors.append(f"matrix does not project source obligation {anchor_label(missing)}")
+
+    gaps = find_markdown_table(gaps_content, ("ID", "Источник"))
+    if "GAP-" in gaps_content and (gaps is None or not gaps.rows):
+        errors.append("coverage-gaps contains GAP IDs but has no required table")
+    elif gaps is not None:
+        for gap_row in gaps.rows:
+            gap_id = gap_row[gaps.index("ID")]
+            matrix_row = matrix_rows_by_id.get(gap_id)
+            if matrix_row is None:
+                errors.append(f"matrix omits unresolved obligation {gap_id}")
+            elif matrix_row[matrix_decision_index] != "coverage-gap":
+                errors.append(f"{gap_id}: matrix decision must be coverage-gap")
+    return errors
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Validate the compact runtime test-design matrix.")
     parser.add_argument("matrix", type=Path)
+    parser.add_argument("--source-inventory", type=Path, required=True)
+    parser.add_argument("--coverage-gaps", type=Path, required=True)
     args = parser.parse_args()
-    errors = validate(args.matrix.read_text(encoding="utf-8"))
+    content = args.matrix.read_text(encoding="utf-8")
+    errors = validate(content)
+    errors.extend(
+        validate_projection(
+            content,
+            args.source_inventory.read_text(encoding="utf-8"),
+            args.coverage_gaps.read_text(encoding="utf-8"),
+        )
+    )
     print(json.dumps({"valid": not errors, "errors": errors}, ensure_ascii=False))
     return 0 if not errors else 1
 
