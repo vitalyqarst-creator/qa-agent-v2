@@ -64,6 +64,11 @@ POSTCONDITION_LOGIN_RE = re.compile(r"^\d+\.\s+Войти\s+пользовате
 POSTCONDITION_NAVIGATION_RE = re.compile(r"^\d+\.\s+(?:Открыть|Перейти)\b", re.IGNORECASE | re.MULTILINE)
 POSTCONDITION_FIND_RE = re.compile(r"^\d+\.\s+Найти\b", re.IGNORECASE | re.MULTILINE)
 OPAQUE_DELEGATE_STEP_RE = re.compile(r"^\d+\.\s+Выполнить\b", re.IGNORECASE | re.MULTILINE)
+QUOTED_CONTROL_RE = re.compile(
+    r"(?:кнопк\w*\s+)?(?:«([^»]+)»|`([^`]+)`)(?=\s+(?:видим\w*|доступ\w*))|"
+    r"(?:кнопк\w*|действи\w*)\s+(?:«([^»]+)»|`([^`]+)`)",
+    re.IGNORECASE,
+)
 
 
 def sections(block: str) -> dict[str, str]:
@@ -81,6 +86,35 @@ def has_parameter_table(value: str) -> bool:
     following = value[header.end() :].splitlines()
     table_lines = [line for line in following if line.strip().startswith("|")]
     return len(table_lines) >= 2
+
+
+def hover_revealed_controls(matrix_rows: list[list[str]], check_index: int, result_index: int) -> set[str]:
+    controls: set[str] = set()
+    for row in matrix_rows:
+        if not re.search(r"\bНавести\b", row[check_index], re.IGNORECASE):
+            continue
+        for match in QUOTED_CONTROL_RE.finditer(row[result_index]):
+            label = next((group for group in match.groups() if group), "").strip().casefold()
+            if label:
+                controls.add(label)
+    return controls
+
+
+def missing_hover_prerequisites(block: str, controls: set[str]) -> list[str]:
+    missing: list[str] = []
+    tc_sections = sections(block)
+    for section_name in ("Предусловия", "Шаги", "Постусловия"):
+        lines = [line.strip() for line in tc_sections.get(section_name, "").splitlines() if NUMBERED_LINE_RE.match(line)]
+        for index, line in enumerate(lines):
+            line_folded = line.casefold()
+            for control in controls:
+                quoted = (f"«{control}»", f"`{control}`")
+                if "нажать" not in line_folded or not any(value in line_folded for value in quoted):
+                    continue
+                previous = lines[index - 1].casefold() if index else ""
+                if "навести" not in line_folded and "навести" not in previous:
+                    missing.append(f"{section_name}: {control}")
+    return missing
 
 
 def validate(content: str) -> list[str]:
@@ -212,9 +246,12 @@ def validate_projection(content: str, matrix_content: str) -> list[str]:
     if matrix is None or not matrix.rows:
         return ["TC projection cannot be checked without matrix rows"]
     source_index = matrix.index("Источник требования")
+    check_index = matrix.index("Проверка")
     profile_index = matrix.index("Профили тест-дизайна")
     decision_index = matrix.index("Решение")
     matrix_id_index = matrix.index("ID")
+    result_index = matrix.index("Ожидаемый результат")
+    hover_controls = hover_revealed_controls(matrix.rows, check_index, result_index)
     required_anchors: set[str] = set()
     all_matrix_anchors: set[str] = set()
     executable_rows: dict[str, set[str]] = {}
@@ -256,6 +293,8 @@ def validate_projection(content: str, matrix_content: str) -> list[str]:
             preconditions = sections(block).get("Предусловия", "")
             if not LOGIN_PRECONDITION_RE.search(preconditions):
                 errors.append(f"{tc_id}: role-based matrix row requires an explicit login precondition")
+        for missing in missing_hover_prerequisites(block, hover_controls):
+            errors.append(f"{tc_id}: hover-revealed control requires an explicit hover immediately before click ({missing})")
         for matrix_id in linked_ids:
             if matrix_id not in executable_rows:
                 errors.append(f"test case links non-executable matrix row {matrix_id}")

@@ -562,6 +562,27 @@ class RuntimeContractTests(unittest.TestCase):
         )
         self.assertEqual([], validate_tc(measured))
 
+    def test_hover_revealed_control_requires_hover_before_every_click(self) -> None:
+        hover_matrix = VALID_MATRIX.replace(
+            "Сохранить карточку | базовый, жизненный-цикл-создания",
+            "Навести курсор на карточку | базовый, жизненный-цикл-создания",
+        ).replace(
+            "Карточка сохранена | TC",
+            "Доступна кнопка «Редактировать» | TC",
+        )
+        without_hover = VALID_TC.replace(
+            "1. В поле `Наименование партнёра` ввести `ПАО СБЕРБАНК`.\n2. Нажать `СОХРАНИТЬ`.",
+            "1. Нажать «Редактировать».",
+        )
+        errors = validate_tc_projection(without_hover, hover_matrix)
+        self.assertTrue(any("hover-revealed control" in error for error in errors))
+
+        with_hover = without_hover.replace(
+            "1. Нажать «Редактировать».",
+            "1. Навести курсор на карточку партнёра.\n2. Нажать «Редактировать».",
+        )
+        self.assertEqual([], validate_tc_projection(with_hover, hover_matrix))
+
     def test_runtime_matrix_requires_profiles_and_valid_decisions(self) -> None:
         self.assertEqual([], validate_matrix(VALID_MATRIX))
         invalid = VALID_MATRIX.replace("базовый, жизненный-цикл-создания", "")
