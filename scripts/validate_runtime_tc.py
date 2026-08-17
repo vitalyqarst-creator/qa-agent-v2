@@ -66,6 +66,9 @@ POSTCONDITION_FIND_RE = re.compile(r"^\d+\.\s+Найти\b", re.IGNORECASE | re.
 OPAQUE_DELEGATE_STEP_RE = re.compile(r"^\d+\.\s+Выполнить\b", re.IGNORECASE | re.MULTILINE)
 LOOKUP_LINE_RE = re.compile(r"^\d+\.\s+Найти\b", re.IGNORECASE)
 UI_LOOKUP_RE = re.compile(r"\b(?:кнопк\w*|пол[ея]\b|раздел\w*|вкладк\w*|ссылк\w*|действи\w*)\b", re.IGNORECASE)
+OBJECT_OBSERVATION_RE = re.compile(r"\b(?:виджет\w*|блок\w*|карточк\w*|партн[её]р\w*|реквизит\w*|объект\w*)\b", re.IGNORECASE)
+VISIBILITY_RESULT_RE = re.compile(r"\b(?:отображ\w*|видим\w*|отсутств\w*|открыт\w*)\b", re.IGNORECASE)
+IDENTITY_REFERENCE_RE = re.compile(r"\b(?:найденн\w*|выбранн\w*|указанн\w*|подготовленн\w*|этого|этот|этой)\b", re.IGNORECASE)
 QUOTED_CONTROL_RE = re.compile(
     r"(?:кнопк\w*\s+)?(?:«([^»]+)»|`([^`]+)`)(?=\s+(?:видим\w*|доступ\w*))|"
     r"(?:видим\w*|доступ\w*)(?:\s+и\s+(?:видим\w*|доступ\w*))?\s+(?:кнопк\w*\s+)?(?:«([^»]+)»|`([^`]+)`)|"
@@ -206,11 +209,21 @@ def validate(content: str) -> list[str]:
             errors.append(f"{tc_id}: duplicate test-data keys require a parameter table: {duplicate_keys}")
         if PROCESS_PLACEHOLDER_RE.search(data):
             errors.append(f"{tc_id}: process placeholder in test data")
+        expected = tc_sections["Итоговый ожидаемый результат"]
+        data_values = [value.strip().casefold() for _key, value in data_pairs if len(value.strip()) >= 3]
+        if (
+            data_values
+            and OBJECT_OBSERVATION_RE.search(expected)
+            and VISIBILITY_RESULT_RE.search(expected)
+            and not IDENTITY_REFERENCE_RE.search(expected)
+            and not any(value in expected.casefold() for value in data_values)
+        ):
+            errors.append(f"{tc_id}: object visibility/opening result must identify the observed test-data object")
         precondition_actions = {normalize_action(line) for line in preconditions.splitlines() if PRECONDITION_ITEM_RE.match(line)}
         step_actions = {normalize_action(line) for line in steps.splitlines() if NUMBERED_LINE_RE.match(line)}
         if precondition_actions & step_actions:
             errors.append(f"{tc_id}: setup action is duplicated in steps")
-        if " или " in tc_sections["Итоговый ожидаемый результат"].lower():
+        if " или " in expected.lower():
             errors.append(f"{tc_id}: expected result must be deterministic")
         status_match = STATUS_RE.search(block)
         status = status_match.group(1).strip().strip("`") if status_match else "ready"

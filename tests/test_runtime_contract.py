@@ -602,6 +602,19 @@ class RuntimeContractTests(unittest.TestCase):
         )
         self.assertEqual([], validate_tc(exact))
 
+    def test_visibility_result_identifies_the_observed_object(self) -> None:
+        generic = VALID_TC.replace(
+            "Карточка партнёра сохранена.",
+            "Карточка партнёра отображается в списке.",
+        )
+        self.assertTrue(any("must identify the observed test-data object" in error for error in validate_tc(generic)))
+
+        exact = generic.replace(
+            "Карточка партнёра отображается в списке.",
+            "Карточка партнёра `ПАО СБЕРБАНК` отображается в списке.",
+        )
+        self.assertEqual([], validate_tc(exact))
+
     def test_runtime_matrix_requires_profiles_and_valid_decisions(self) -> None:
         self.assertEqual([], validate_matrix(VALID_MATRIX))
         invalid = VALID_MATRIX.replace("базовый, жизненный-цикл-создания", "")
