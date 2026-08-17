@@ -64,6 +64,27 @@ REQUIRED_REFERENCE_CONSUMERS = {
     ),
 }
 
+REQUIRED_POLICY_MARKERS = {
+    "AGENTS.md": (
+        "needs-test-data",
+        "не является `coverage-gap`",
+    ),
+    "skills/ft-test-case-writer/SKILL.md": (
+        "доступны writer-у только для чтения",
+        "work/practical/<scope>/test-design-matrix.md",
+        "blocked-data-preparation",
+    ),
+    "skills/ft-test-case-reviewer/SKILL.md": (
+        "Отсутствие стендовой записи",
+        "готовность исполнения",
+    ),
+    "references/runtime/test-design-matrix.md": (
+        "| Готовность |",
+        "нет-бизнес-результата",
+        "workflow-state.yaml",
+    ),
+}
+
 
 def validate(root: Path) -> list[str]:
     errors: list[str] = []
@@ -81,6 +102,14 @@ def validate(root: Path) -> list[str]:
         for reference in required_references:
             if reference not in content:
                 errors.append(f"runtime consumer {relative_path} does not load {reference}")
+    for relative_path, markers in REQUIRED_POLICY_MARKERS.items():
+        path = root / relative_path
+        if not path.is_file():
+            continue
+        content = path.read_text(encoding="utf-8")
+        for marker in markers:
+            if marker not in content:
+                errors.append(f"runtime policy {relative_path} is missing required marker {marker!r}")
     matrix_reference = root / "references/runtime/test-design-matrix.md"
     if matrix_reference.is_file() and "dadata" in matrix_reference.read_text(encoding="utf-8").casefold():
         errors.append("generic test-design matrix reference contains provider-specific DaData rule")

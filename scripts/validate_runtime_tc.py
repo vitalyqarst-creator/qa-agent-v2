@@ -8,9 +8,11 @@ from pathlib import Path
 try:
     from scripts.runtime_traceability import anchor_label, extract_anchors, find_markdown_table
     from scripts.runtime_session_registry import canonical_scope, find_package_root, validate_topology
+    from scripts.validate_runtime_matrix import validate_layout as validate_matrix_layout
 except ModuleNotFoundError:  # Direct invocation: python scripts/validate_runtime_tc.py
     from runtime_traceability import anchor_label, extract_anchors, find_markdown_table
     from runtime_session_registry import canonical_scope, find_package_root, validate_topology
+    from validate_runtime_matrix import validate_layout as validate_matrix_layout
 
 
 TC_HEADING_RE = re.compile(r"^##\s+(TC-[A-Za-z0-9.-]+)\s*$", re.MULTILINE)
@@ -131,12 +133,34 @@ def validate(content: str) -> list[str]:
             errors.append(f"{tc_id}: expected result must be deterministic")
         status_match = STATUS_RE.search(block)
         status = status_match.group(1).strip().strip("`") if status_match else "ready"
-        if status not in {"ready", "candidate-ui-calibration"}:
+        if status not in {"ready", "needs-test-data", "candidate-ui-calibration"}:
             errors.append(f"{tc_id}: unsupported canonical execution status {status}")
         if status == "candidate-ui-calibration" and not CONFIRMATION_RE.search(block):
             errors.append(f"{tc_id}: candidate-ui-calibration requires 'Требуется подтверждение'")
     if numbers and numbers != list(range(1, len(numbers) + 1)):
         errors.append("sequential TC numbers are not continuous from TC-001")
+    return errors
+
+
+def validate_layout(test_cases_path: Path, matrix_path: Path, package_root: Path) -> list[str]:
+    errors = validate_matrix_layout(matrix_path, package_root)
+    expected_tc_root = (package_root / "test-cases").resolve()
+    try:
+        test_cases_path.resolve().relative_to(expected_tc_root)
+    except ValueError:
+        errors.append(f"test cases must be stored under {expected_tc_root}")
+    state_path = matrix_path.parent / "workflow-state.yaml"
+    if not state_path.is_file():
+        return errors
+    state = state_path.read_text(encoding="utf-8")
+    try:
+        tc_relative = test_cases_path.resolve().relative_to(package_root.resolve()).as_posix()
+    except ValueError:
+        return errors
+    if not re.search(r"(?m)^test_case_status:\s*completed\s*$", state):
+        errors.append("writer workflow-state is missing completed test-case status")
+    if not re.search(rf"(?m)^test_cases:\s*[\"']?{re.escape(tc_relative)}[\"']?\s*$", state):
+        errors.append("writer workflow-state does not reference the validated test-case file")
     return errors
 
 
@@ -203,6 +227,7 @@ def main() -> int:
     if package_root is None:
         errors.append("cannot locate FT package root for session topology validation")
     else:
+        errors.extend(validate_layout(args.test_cases, args.matrix, package_root))
         errors.extend(validate_topology(package_root, "writer", canonical_scope(args.matrix.parent.name)))
     print(json.dumps({"valid": not errors, "errors": errors}, ensure_ascii=False))
     return 0 if not errors else 1

@@ -39,6 +39,7 @@ FORBIDDEN_PROCESS_WORDS = {
     "writer": "этап написания тест-кейсов",
 }
 QUESTION_HEADING_RE = re.compile(r"^##\s+(CLR-[A-Za-z0-9.-]+)\b", re.MULTILINE)
+ANY_QUESTION_HEADING_RE = re.compile(r"^##\s+([^\n]+)$", re.MULTILINE)
 RESIDUAL_EXPLANATION = "**Почему существующий ответ не закрывает вопрос:**"
 TOKEN_STOPWORDS = {
     "данны",
@@ -86,6 +87,25 @@ QUESTION_EXTRA_BEHAVIOR_RE = re.compile(
     r"\bпомимо\b|\b(?:како(?:е|й|ва)|что)\s+ещ[её]\b|\bдополнительн\w*\s+(?:поведени\w*|результат\w*)",
     re.IGNORECASE,
 )
+DATA_PROVISION_QUESTION_RE = re.compile(
+    r"(?:предостав|созда|подготов|выда)[^\n]{0,120}"
+    r"(?:стенд|тестов\w*\s+сред|уч[её]тн\w*\s+запис|логин|url|credentials|fixture|фикстур|"
+    r"готов\w*\s+(?:партн[её]р|реквизит|сущност|запис))",
+    re.IGNORECASE,
+)
+MISSING_ENVIRONMENT_GAP_RE = re.compile(
+    r"(?:нет|отсутств\w*)[^\n|]{0,80}(?:fixture|фикстур|готов\w*\s+)?"
+    r"(?:партн[её]р\w*|реквизит\w*|сущност\w*|запис\w*|уч[её]тн\w*|логин\w*|url\b|credentials\b)|"
+    r"(?:созда|подготов|предостав)[^\n|]{0,100}"
+    r"(?:стендов\w*\s+)?(?:партн[её]р\w*|реквизит\w*|сущност\w*|запис\w*|уч[её]тн\w*)",
+    re.IGNORECASE,
+)
+ALLOWED_GAP_CLASSES = {
+    "неоднозначность-требования",
+    "противоречие-источников",
+    "нет-бизнес-результата",
+    "нет-точки-наблюдения",
+}
 
 
 def runtime_root(package_root: Path) -> Path:
@@ -399,14 +419,20 @@ def validate(package_root: Path, scope_dir: Path) -> list[str]:
             )
 
     gaps_content = (scope_dir / "coverage-gaps.md").read_text(encoding="utf-8")
-    gaps = find_markdown_table(gaps_content, ("ID", "Связанная обязанность", "Источник"))
+    gaps = find_markdown_table(
+        gaps_content,
+        ("ID", "Связанная обязанность", "Источник", "Класс", "Недостаток источника", "Что требуется для закрытия"),
+    )
     gap_ids: list[str] = []
     if "GAP-" in gaps_content:
         if gaps is None or not gaps.rows:
-            errors.append("coverage-gaps contains GAP IDs but has no table with ID, Связанная обязанность and Источник")
+            errors.append("coverage-gaps contains GAP IDs but has no typed source-level gap table")
         else:
             gap_id_index = gaps.index("ID")
             linked_source_index = gaps.index("Связанная обязанность")
+            gap_class_index = gaps.index("Класс")
+            gap_deficit_index = gaps.index("Недостаток источника")
+            gap_resolution_index = gaps.index("Что требуется для закрытия")
             for row in gaps.rows:
                 gap_id = row[gap_id_index].strip()
                 gap_ids.append(gap_id)
@@ -417,6 +443,14 @@ def validate(package_root: Path, scope_dir: Path) -> list[str]:
                     errors.append(f"{gap_id}: coverage gap must link exactly one atomic SR obligation")
                 elif linked_sources[0] not in active_inventory_ids:
                     errors.append(f"{gap_id}: linked source obligation {linked_sources[0]} is absent from active inventory")
+                gap_class = row[gap_class_index].strip()
+                if gap_class not in ALLOWED_GAP_CLASSES:
+                    errors.append(f"{gap_id}: unsupported coverage-gap class {gap_class!r}")
+                gap_details = " | ".join((row[gap_deficit_index], row[gap_resolution_index]))
+                if MISSING_ENVIRONMENT_GAP_RE.search(gap_details):
+                    errors.append(
+                        f"{gap_id}: missing environment data is execution readiness, not a coverage gap"
+                    )
 
     prompt = (scope_dir / "prompt.scope-to-writer.md").read_text(encoding="utf-8")
     combined_scope_text = "\n".join(
@@ -432,6 +466,9 @@ def validate(package_root: Path, scope_dir: Path) -> list[str]:
                 errors.append(f"writer prompt does not carry {gap_id}")
 
     questions_content = (scope_dir / "scope-clarification-requests.md").read_text(encoding="utf-8")
+    for heading in ANY_QUESTION_HEADING_RE.findall(questions_content):
+        if not heading.startswith("CLR-"):
+            errors.append(f"clarification question heading must use CLR-* ID, got {heading!r}")
     support_files = approved_support_paths(package_root)
     support_contents = [(path, path.read_text(encoding="utf-8")) for path in support_files]
     for question_id, block in question_blocks(questions_content):
@@ -439,6 +476,10 @@ def validate(package_root: Path, scope_dir: Path) -> list[str]:
         if QUESTION_EXTRA_BEHAVIOR_RE.search(current_question):
             errors.append(
                 f"{question_id}: question asks for behavior beyond the source-backed result instead of only missing facts"
+            )
+        if DATA_PROVISION_QUESTION_RE.search(current_question):
+            errors.append(
+                f"{question_id}: environment or test-data provisioning belongs in test-data-plan, not BA questions"
             )
         codes = sorted(anchor.removeprefix("CODE:") for anchor in extract_anchors(block) if anchor.startswith("CODE:"))
         if not codes:

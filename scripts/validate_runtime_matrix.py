@@ -22,6 +22,7 @@ REQUIRED_HEADERS = (
     "Конкретные тестовые данные",
     "Ожидаемый результат",
     "Решение",
+    "Готовность",
 )
 ALLOWED_PROFILES = {
     "базовый",
@@ -39,8 +40,29 @@ ALLOWED_PROFILES = {
     "файл",
 }
 ALLOWED_DECISIONS = {"TC", "coverage-gap"}
+ALLOWED_TC_READINESS = {"ready", "needs-test-data", "candidate-ui-calibration"}
+ALLOWED_GAP_CLASSES = {
+    "неоднозначность-требования",
+    "противоречие-источников",
+    "нет-бизнес-результата",
+    "нет-точки-наблюдения",
+}
 EMPTY_RE = re.compile(r"^(?:-|—|n/?a|не определен[оы]?|требу(?:ется|ются))\.?$", re.IGNORECASE)
 SOURCE_ROW_TOKEN_RE = re.compile(r"(?<![A-Za-z0-9_.-])SR-\d{2,}(?![A-Za-z0-9_.-])")
+CONCRETE_DATA_RE = re.compile(r"`[^`\n]+`\s*=\s*`[^`\n]+`")
+MISSING_ENVIRONMENT_DATA_RE = re.compile(
+    r"(?:fixture|фикстур)\w*\s+(?:отсутств\w*|нет)|"
+    r"(?:нет|отсутств\w*)\s+(?:готов\w*\s+)?(?:партн[её]р\w*|реквизит\w*|сущност\w*|запис\w*|рол\w*|уч[её]тн\w*)|"
+    r"данн\w*\s+(?:будут|должны\s+быть)\s+подготовлен\w*",
+    re.IGNORECASE,
+)
+MISSING_ENVIRONMENT_GAP_RE = re.compile(
+    r"(?:нет|отсутств\w*)[^\n|]{0,80}(?:fixture|фикстур|готов\w*\s+)?"
+    r"(?:партн[её]р\w*|реквизит\w*|сущност\w*|запис\w*|уч[её]тн\w*|логин\w*|url\b|credentials\b)|"
+    r"(?:созда|подготов|предостав)[^\n|]{0,100}"
+    r"(?:стендов\w*\s+)?(?:партн[её]р\w*|реквизит\w*|сущност\w*|запис\w*|уч[её]тн\w*)",
+    re.IGNORECASE,
+)
 
 
 def cells(line: str) -> list[str]:
@@ -106,9 +128,26 @@ def validate(content: str) -> list[str]:
         decision = row[index_by_name["Решение"]]
         if decision not in ALLOWED_DECISIONS:
             errors.append(f"{row_id}: decision must be TC or coverage-gap")
+        readiness = row[index_by_name["Готовность"]]
+        if decision == "TC" and readiness not in ALLOWED_TC_READINESS:
+            errors.append(
+                f"{row_id}: TC readiness must be ready, needs-test-data or candidate-ui-calibration"
+            )
+        if decision == "coverage-gap" and readiness != "blocked-observability":
+            errors.append(f"{row_id}: coverage-gap readiness must be blocked-observability")
+        if decision == "TC" and not row_id.startswith("M-"):
+            errors.append(f"{row_id}: TC decision must use an M-* ID")
+        if decision == "coverage-gap" and not row_id.startswith("GAP-"):
+            errors.append(f"{row_id}: coverage-gap decision must use a GAP-* ID")
         data = row[index_by_name["Конкретные тестовые данные"]]
         if decision == "TC" and (not data or EMPTY_RE.fullmatch(data)):
             errors.append(f"{row_id}: TC decision requires concrete data or 'Не требуются.'")
+        if decision == "TC" and data != "Не требуются." and not CONCRETE_DATA_RE.search(data):
+            errors.append(f"{row_id}: TC matrix row requires a concrete `field` = `value` literal")
+        if decision == "TC" and MISSING_ENVIRONMENT_DATA_RE.search(data):
+            errors.append(
+                f"{row_id}: missing environment binding requires needs-test-data, not absent test data"
+            )
     return errors
 
 
@@ -149,12 +188,25 @@ def validate_projection(content: str, inventory_content: str, gaps_content: str)
     for missing in sorted(inventory_anchors - matrix_anchors):
         errors.append(f"matrix does not project source obligation {anchor_label(missing)}")
 
-    gaps = find_markdown_table(gaps_content, ("ID", "Связанная обязанность", "Источник"))
+    gaps = find_markdown_table(
+        gaps_content,
+        ("ID", "Связанная обязанность", "Источник", "Класс", "Недостаток источника", "Что требуется для закрытия"),
+    )
     if "GAP-" in gaps_content and (gaps is None or not gaps.rows):
-        errors.append("coverage-gaps contains GAP IDs but has no table with ID, Связанная обязанность and Источник")
+        errors.append("coverage-gaps contains GAP IDs but has no typed source-level gap table")
     elif gaps is not None:
         for gap_row in gaps.rows:
             gap_id = gap_row[gaps.index("ID")]
+            gap_class = gap_row[gaps.index("Класс")]
+            if gap_class not in ALLOWED_GAP_CLASSES:
+                errors.append(f"{gap_id}: unsupported coverage-gap class {gap_class!r}")
+            gap_details = " | ".join(
+                gap_row[gaps.index(name)] for name in ("Недостаток источника", "Что требуется для закрытия")
+            )
+            if MISSING_ENVIRONMENT_GAP_RE.search(gap_details):
+                errors.append(
+                    f"{gap_id}: missing environment data is execution readiness, not a coverage gap"
+                )
             linked_sources = SOURCE_ROW_TOKEN_RE.findall(gap_row[gaps.index("Связанная обязанность")])
             if len(linked_sources) != 1:
                 errors.append(f"{gap_id}: coverage gap must link exactly one atomic SR obligation")
@@ -173,6 +225,29 @@ def validate_projection(content: str, inventory_content: str, gaps_content: str)
                     errors.append(
                         f"{gap_id}: matrix coverage-gap row must project only linked obligation {linked_sources[0]}"
                     )
+    return errors
+
+
+def validate_layout(matrix_path: Path, package_root: Path) -> list[str]:
+    errors: list[str] = []
+    scope = matrix_path.parent.name
+    expected = package_root / "work" / "practical" / scope / "test-design-matrix.md"
+    if matrix_path.resolve() != expected.resolve():
+        return [f"matrix must be stored at {expected}"]
+    state_path = matrix_path.parent / "workflow-state.yaml"
+    if not state_path.is_file():
+        return ["writer workflow-state.yaml is missing next to the matrix"]
+    state = state_path.read_text(encoding="utf-8")
+    expected_relative = f"work/practical/{scope}/test-design-matrix.md"
+    required_patterns = {
+        "writer role": r"(?m)^role:\s*writer\s*$",
+        "scope": rf"(?m)^scope:\s*[\"']?{re.escape(scope)}[\"']?\s*$",
+        "completed matrix status": r"(?m)^matrix_status:\s*completed\s*$",
+        "matrix path": rf"(?m)^test_design_matrix:\s*[\"']?{re.escape(expected_relative)}[\"']?\s*$",
+    }
+    for label, pattern in required_patterns.items():
+        if not re.search(pattern, state):
+            errors.append(f"writer workflow-state is missing {label}")
     return errors
 
 
@@ -195,6 +270,7 @@ def main() -> int:
     if package_root is None:
         errors.append("cannot locate FT package root for session topology validation")
     else:
+        errors.extend(validate_layout(args.matrix, package_root))
         errors.extend(validate_topology(package_root, "writer", canonical_scope(args.matrix.parent.name)))
     print(json.dumps({"valid": not errors, "errors": errors}, ensure_ascii=False))
     return 0 if not errors else 1
