@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import re
 from pathlib import Path
@@ -273,6 +274,27 @@ def validate_layout(test_cases_path: Path, matrix_path: Path, package_root: Path
         errors.append("writer workflow-state is missing completed test-case status")
     if not re.search(rf"(?m)^test_cases:\s*[\"']?{re.escape(tc_relative)}[\"']?\s*$", state):
         errors.append("writer workflow-state does not reference the validated test-case file")
+    review_path = package_root / "work" / "reviews" / matrix_path.parent.name / "tc-review.json"
+    if review_path.is_file():
+        try:
+            review = json.loads(review_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            review = None
+        if (
+            isinstance(review, dict)
+            and review.get("schema_version") == 1
+            and review.get("review_kind") == "tc"
+            and review.get("verdict") == "tc-changes-required"
+            and review.get("artifact_sha256") == hashlib.sha256(test_cases_path.read_bytes()).hexdigest()
+        ):
+            findings = review.get("findings")
+            if isinstance(findings, list) and any(
+                isinstance(finding, dict) and finding.get("origin_stage") in {"tc", "both"}
+                for finding in findings
+            ):
+                errors.append(
+                    "canonical TC bytes are unchanged after unresolved tc/both review findings"
+                )
     return errors
 
 

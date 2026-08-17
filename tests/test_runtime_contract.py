@@ -1309,6 +1309,44 @@ class RuntimeContractTests(unittest.TestCase):
             self.assertEqual([], validate_review(artifact, review_path, "tc"))
             self.assertEqual("matrix", tc_repair_stage(record["findings"]))
 
+    def test_tc_layout_rejects_noop_repair_with_tc_or_both_findings(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            package = root / "fts" / "Project" / "FT"
+            matrix_dir = package / "work" / "practical" / "9.3.1"
+            review_dir = package / "work" / "reviews" / "9.3.1"
+            tc_dir = package / "test-cases"
+            matrix_dir.mkdir(parents=True)
+            review_dir.mkdir(parents=True)
+            tc_dir.mkdir(parents=True)
+            matrix_path = matrix_dir / "test-design-matrix.md"
+            matrix_path.write_text(VALID_MATRIX, encoding="utf-8")
+            tc_path = tc_dir / "9.3.1-test-cases.md"
+            tc_path.write_text(VALID_TC, encoding="utf-8")
+            (matrix_dir / "workflow-state.yaml").write_text(
+                "role: writer\nscope: 9.3.1\nmatrix_status: completed\n"
+                'test_design_matrix: "work/practical/9.3.1/test-design-matrix.md"\n'
+                "test_case_status: completed\n"
+                'test_cases: "test-cases/9.3.1-test-cases.md"\n',
+                encoding="utf-8",
+            )
+            review = {
+                "schema_version": 1,
+                "review_kind": "tc",
+                "artifact_sha256": hashlib.sha256(tc_path.read_bytes()).hexdigest(),
+                "verdict": "tc-changes-required",
+                "findings": [{"id": "TC-R-001", "origin_stage": "both"}],
+            }
+            review_path = review_dir / "tc-review.json"
+            review_path.write_text(json.dumps(review), encoding="utf-8")
+
+            errors = validate_tc_layout(tc_path, matrix_path, package)
+            self.assertTrue(any("unchanged after unresolved tc/both" in error for error in errors))
+
+            review["findings"][0]["origin_stage"] = "matrix"
+            review_path.write_text(json.dumps(review), encoding="utf-8")
+            self.assertFalse(any("unchanged after unresolved" in error for error in validate_tc_layout(tc_path, matrix_path, package)))
+
     def test_historical_review_survives_runtime_role_replacement(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
             root = Path(temporary_directory)
