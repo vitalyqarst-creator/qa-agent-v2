@@ -46,8 +46,12 @@ PROCESS_PLACEHOLDER_RE = re.compile(
 )
 STATUS_RE = re.compile(r"\*\*Статус исполнения:\*\*\s*([^\n]+)")
 CONFIRMATION_RE = re.compile(r"\*\*Требуется подтверждение:\*\*\s*([^\n]+)")
-PRECONDITION_VERB_RE = re.compile(
-    r"^\d+\.\s+(?:Открыть|Перейти|Найти|Нажать|Выбрать|Ввести|Заполнить|Создать|Добавить|Подготовить|Установить|Очистить|Загрузить)\b",
+PRECONDITION_ITEM_RE = re.compile(
+    r"^\d+\.\s+(?:(?:Открыть|Перейти|Найти|Нажать|Выбрать|Ввести|Заполнить|Создать|Добавить|Подготовить|Очистить|Загрузить|Войти|Выполнить|Подтвердить)\b|(?:Пользователь|Партн[её]р|Реквизит|Объект|Запись|У\s+партн[её]ра)\b)",
+    re.IGNORECASE,
+)
+AMBIGUOUS_STATE_SETUP_RE = re.compile(
+    r"^\d+\.\s+(?:Установить|Перевести|Задать|Изменить|Привести)\b.*\bстатус",
     re.IGNORECASE,
 )
 
@@ -107,9 +111,13 @@ def validate(content: str) -> list[str]:
                 errors.append(f"{tc_id}: internal marker in {section_name}")
         preconditions = tc_sections["Предусловия"]
         if preconditions != "Не требуются." and not all(
-            PRECONDITION_VERB_RE.match(line) for line in preconditions.splitlines() if line.strip()
+            PRECONDITION_ITEM_RE.match(line) for line in preconditions.splitlines() if line.strip()
         ):
-            errors.append(f"{tc_id}: preconditions must be numbered setup actions or 'Не требуются.'")
+            errors.append(f"{tc_id}: preconditions must be numbered setup actions/state conditions or 'Не требуются.'")
+        if any(AMBIGUOUS_STATE_SETUP_RE.match(line) for line in preconditions.splitlines() if line.strip()):
+            errors.append(
+                f"{tc_id}: ambiguous one-line state setup; declare the concrete initial state or list the full source-backed transition"
+            )
         steps = tc_sections["Шаги"]
         if not NUMBERED_LINE_RE.search(steps):
             errors.append(f"{tc_id}: steps must be numbered")
@@ -125,7 +133,7 @@ def validate(content: str) -> list[str]:
             errors.append(f"{tc_id}: duplicate test-data keys require a parameter table: {duplicate_keys}")
         if PROCESS_PLACEHOLDER_RE.search(data):
             errors.append(f"{tc_id}: process placeholder in test data")
-        precondition_actions = {normalize_action(line) for line in preconditions.splitlines() if PRECONDITION_VERB_RE.match(line)}
+        precondition_actions = {normalize_action(line) for line in preconditions.splitlines() if PRECONDITION_ITEM_RE.match(line)}
         step_actions = {normalize_action(line) for line in steps.splitlines() if NUMBERED_LINE_RE.match(line)}
         if precondition_actions & step_actions:
             errors.append(f"{tc_id}: setup action is duplicated in steps")

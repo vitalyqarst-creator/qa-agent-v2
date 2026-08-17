@@ -479,6 +479,20 @@ class RuntimeContractTests(unittest.TestCase):
         self.assertIn("не придумывает путь результата", topology)
         self.assertIn("нейтральным транспортным конвертом", agents)
 
+    def test_tc_rejects_hybrid_state_setup_and_accepts_declarative_state(self) -> None:
+        ambiguous = VALID_TC.replace(
+            "1. Открыть карточку добавления партнёра.",
+            "1. Установить для партнёра статус «Скрыт» архивированием.",
+        )
+        errors = validate_tc(ambiguous)
+        self.assertTrue(any("ambiguous one-line state setup" in error for error in errors))
+
+        declarative = VALID_TC.replace(
+            "1. Открыть карточку добавления партнёра.",
+            "1. Партнёр с ИНН `7707083893` находится в статусе `Скрыт`.",
+        )
+        self.assertEqual([], validate_tc(declarative))
+
     def test_runtime_matrix_requires_profiles_and_valid_decisions(self) -> None:
         self.assertEqual([], validate_matrix(VALID_MATRIX))
         invalid = VALID_MATRIX.replace("базовый, жизненный-цикл-создания", "")
