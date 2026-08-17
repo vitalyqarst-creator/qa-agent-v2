@@ -10,3 +10,11 @@
 | `ft-test-case-reviewer` | Matrix или готовые TC | Независимый verdict и ограниченный список findings |
 
 Других default-маршрутов нет.
+
+## Канонические runtime references
+
+- `references/runtime/test-data-fixtures.md` — выбор и материализация тестовых данных;
+- `references/runtime/test-design-profiles.md` — универсальные правила покрытия, атомарности и параметризации;
+- `references/runtime/test-design-matrix.md` — компактный формат matrix;
+- `references/runtime/test-case-runtime.md` — production-формат TC;
+- `references/runtime/review-record.md` — независимость и SHA-256-актуальность review.

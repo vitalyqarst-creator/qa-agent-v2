@@ -7,7 +7,7 @@
 ## Приоритет источников
 
 1. Уже сохранённая локальная fixture текущего FT-пакета.
-2. Фактический provider интеграции, явно названный в ФТ: например DaData для DaData.
+2. Фактический provider интеграции, явно названный в ФТ.
 3. Проектный справочник или официальный публичный источник для статических значений.
 4. Синтетический генератор для автономных данных формата: ФИО, телефон, e-mail, свободный текст, даты, уникальные имена. `api.randomdatatools.ru` допустим только в этом пункте.
 
@@ -21,19 +21,19 @@ Web search разрешён только для поиска авторитет�
 
 ```json
 {
-  "fixture_id": "FX-PARTNER-DADATA-001",
-  "purpose": "Подсказка организации и автозаполнение карточки партнёра",
+  "fixture_id": "FX-PROVIDER-001",
+  "purpose": "Подсказка и связанные значения для проверяемой интеграции",
   "source_type": "provider",
-  "provider": "DaData",
+  "provider": "<provider из ФТ>",
   "request": {"query": "...", "endpoint": "..."},
-  "runtime_data": {"suggestion": "...", "inn": "..."},
-  "snapshot_path": "fixtures/FX-PARTNER-DADATA-001.response.json",
+  "runtime_data": {"suggestion": "...", "related_value": "..."},
+  "snapshot_path": "fixtures/FX-PROVIDER-001.response.json",
   "snapshot_sha256": "<64 hex>",
   "verified_at": "YYYY-MM-DDTHH:MM:SSZ"
 }
 ```
 
-Секреты и токены в catalog/snapshot не записываются. Для DaData сначала захвати воспроизводимую подсказку штатной командой `scripts/capture_dadata_fixture.py`; она использует только `DADATA_API_KEY` из окружения и сохраняет token-free snapshot.
+Секреты и токены в catalog/snapshot не записываются. Используй адаптер фактического provider-а, если он есть в runtime. Для DaData доступен `scripts/capture_dadata_fixture.py`; он применяется только когда DaData прямо указан в материалах FT-пакета, использует `DADATA_API_KEY` из окружения и сохраняет token-free snapshot.
 
 ```text
 python scripts/capture_dadata_fixture.py --kind party --query <запрос> --fixture-id <FX-ID> --purpose <цель> --fixture-root <work/test-data/<scope>/fixtures>

@@ -10,6 +10,8 @@ from unittest.mock import patch
 from scripts.capture_dadata_fixture import capture_fixture
 from scripts.create_ft_package import PACKAGE_DIRS, create_package
 from scripts.validate_fixture_catalog import validate as validate_catalog
+from scripts.validate_runtime_matrix import validate as validate_matrix
+from scripts.validate_runtime_review import validate as validate_review
 from scripts.validate_runtime_tc import validate as validate_tc
 from scripts.validate_runtime_tree import validate as validate_tree
 
@@ -48,6 +50,14 @@ VALID_TC = """## TC-9.3.2-001
 - Не требуются.
 """
 
+VALID_MATRIX = """# Матрица
+
+| ID | Источник требования | Проверка | Профили тест-дизайна | Предусловие/исходное состояние | Конкретные тестовые данные | Ожидаемый результат | Решение |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| M-001 | AS.38; Таблица 7 | Сохранить карточку | базовый, жизненный-цикл-создания | Открыта форма добавления | `Наименование` = `ПАО СБЕРБАНК` | Карточка сохранена | TC |
+| M-002 | Таблица 7 / неизвестный oracle | Проверить неизвестную реакцию | допустимые-классы | Открыта форма | Не определены | Требуется уточнение результата | coverage-gap |
+"""
+
 
 class RuntimeContractTests(unittest.TestCase):
     def test_valid_runtime_test_case_passes(self) -> None:
@@ -77,6 +87,85 @@ class RuntimeContractTests(unittest.TestCase):
             "1. Открыть карточку добавления партнёра.",
         )
         self.assertTrue(any("duplicated" in error for error in validate_tc(invalid)))
+
+    def test_duplicate_test_data_keys_require_parameter_table(self) -> None:
+        invalid = VALID_TC.replace(
+            "- `Наименование партнёра` = `ПАО СБЕРБАНК`.",
+            "- `Наименование партнёра` = `ПАО СБЕРБАНК`.\n- `Наименование партнёра` = `ООО РОМАШКА`.",
+        )
+        self.assertTrue(any("duplicate test-data keys" in error for error in validate_tc(invalid)))
+
+    def test_parameter_table_is_accepted_for_repeated_field_variants(self) -> None:
+        parameterized = VALID_TC.replace(
+            "- `Наименование партнёра` = `ПАО СБЕРБАНК`.",
+            "| Вариант | Поле | Значение |\n| --- | --- | --- |\n| P1 | Наименование партнёра | ПАО СБЕРБАНК |\n| P2 | Наименование партнёра | ООО РОМАШКА |",
+        )
+        self.assertEqual([], validate_tc(parameterized))
+
+    def test_process_placeholder_in_test_data_is_rejected(self) -> None:
+        invalid = VALID_TC.replace("`ПАО СБЕРБАНК`.", "`edit TC`.", 1)
+        self.assertTrue(any("process placeholder" in error for error in validate_tc(invalid)))
+
+    def test_candidate_ui_calibration_requires_explicit_confirmation(self) -> None:
+        candidate = VALID_TC.replace(
+            "**Приоритет:** High",
+            "**Приоритет:** High\n\n**Статус исполнения:** candidate-ui-calibration",
+        )
+        self.assertTrue(any("requires 'Требуется подтверждение'" in error for error in validate_tc(candidate)))
+        candidate = candidate.replace(
+            "**Статус исполнения:** candidate-ui-calibration",
+            "**Статус исполнения:** candidate-ui-calibration\n\n**Требуется подтверждение:** Уточнить точный вид подсветки поля.",
+        )
+        self.assertEqual([], validate_tc(candidate))
+
+    def test_runtime_matrix_requires_profiles_and_valid_decisions(self) -> None:
+        self.assertEqual([], validate_matrix(VALID_MATRIX))
+        invalid = VALID_MATRIX.replace("базовый, жизненный-цикл-создания", "")
+        self.assertTrue(any("no test-design profile" in error for error in validate_matrix(invalid)))
+
+    def test_review_record_is_bound_to_current_artifact_digest(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            artifact = root / "test-design-matrix.md"
+            artifact.write_text(VALID_MATRIX, encoding="utf-8")
+            record = {
+                "schema_version": 1,
+                "review_kind": "matrix",
+                "artifact_path": "test-design-matrix.md",
+                "artifact_sha256": hashlib.sha256(artifact.read_bytes()).hexdigest(),
+                "reviewer_session_type": "codex-thread",
+                "reviewer_session_id": "12345678-1234-1234-1234-123456789abc",
+                "reviewed_at": "2026-08-17T00:00:00Z",
+                "verdict": "matrix-accepted",
+                "findings": [],
+            }
+            review_path = root / "matrix-review.json"
+            review_path.write_text(json.dumps(record), encoding="utf-8")
+            review_path.with_suffix(".md").write_text("# Review\n", encoding="utf-8")
+            self.assertEqual([], validate_review(artifact, review_path, "matrix", require_accepted=True))
+            artifact.write_text(VALID_MATRIX + "\n", encoding="utf-8")
+            self.assertTrue(any("stale" in error for error in validate_review(artifact, review_path, "matrix", True)))
+
+    def test_subagent_cannot_be_recorded_as_independent_reviewer(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            artifact = root / "test-design-matrix.md"
+            artifact.write_text(VALID_MATRIX, encoding="utf-8")
+            record = {
+                "schema_version": 1,
+                "review_kind": "matrix",
+                "artifact_path": "test-design-matrix.md",
+                "artifact_sha256": hashlib.sha256(artifact.read_bytes()).hexdigest(),
+                "reviewer_session_type": "codex-task",
+                "reviewer_session_id": "12345678-1234-1234-1234-123456789abc",
+                "reviewed_at": "2026-08-17T00:00:00Z",
+                "verdict": "matrix-accepted",
+                "findings": [],
+            }
+            review_path = root / "matrix-review.json"
+            review_path.write_text(json.dumps(record), encoding="utf-8")
+            review_path.with_suffix(".md").write_text("# Review\n", encoding="utf-8")
+            self.assertTrue(any("codex-thread" in error for error in validate_review(artifact, review_path, "matrix")))
 
     def test_provider_fixture_requires_existing_snapshot_and_digest(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
