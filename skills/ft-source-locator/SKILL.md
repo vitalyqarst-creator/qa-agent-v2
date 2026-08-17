@@ -13,4 +13,6 @@ description: Выбирает и регистрирует источники о�
 4. Запиши компактный русскоязычный `source-selection.md` и `workflow-state.yaml` в `work/stage-handoffs/00-<ft>/`. Пути, SHA-256, URL и имена файлов сохраняй без перевода.
 5. Временные PDF-рендеры создавай только в системном временном каталоге и удали созданный каталог. Затем обязательно запусти `python scripts/validate_runtime_source.py <package-root> <source-handoff-dir>`. Без `valid=true` этап не завершён.
 
+Если пользователь добавил support-файл после появления вопросов или downstream-артефактов, повторно используй ту же source-locator-сессию и выполни только регистрацию позднего support: добавь файл с точной ролью и SHA-256 в существующие `AGENT-NOTES.md`, `source-selection.md` и `workflow-state.yaml`, не перечитывая и не переанализируя primary sources. Для такой ограниченной операции запусти `python scripts/validate_runtime_source.py <package-root> <source-handoff-dir> --support-update`. Этот режим не разрешает пропускать новый support-файл и не создаёт новый source stage; он лишь не считает уже существующие scope/matrix/TC ошибкой source locator-а.
+
 Не создавай scope, matrix, fixtures, вопросы БА или TC.

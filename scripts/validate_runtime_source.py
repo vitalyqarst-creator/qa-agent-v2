@@ -87,7 +87,7 @@ def sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def validate(package_root: Path, handoff_dir: Path) -> list[str]:
+def validate(package_root: Path, handoff_dir: Path, allow_downstream: bool = False) -> list[str]:
     package_root = package_root.resolve()
     handoff_dir = handoff_dir.resolve()
     errors: list[str] = []
@@ -188,21 +188,22 @@ def validate(package_root: Path, handoff_dir: Path) -> list[str]:
         if url not in workflow or url not in selection:
             errors.append("Figma URL from AGENT-NOTES.md is not registered in workflow and source selection")
 
-    allowed_work_files = {
-        (package_root / "work" / "runtime-session-registry.json").resolve(),
-        selection_path,
-        workflow_path,
-    }
-    work_root = package_root / "work"
-    if work_root.is_dir():
-        for path in work_root.rglob("*"):
-            if path.is_file() and path.resolve() not in allowed_work_files:
-                errors.append(f"source stage created downstream or extra work artifact: {path.relative_to(package_root).as_posix()}")
-    test_case_root = package_root / "test-cases"
-    if test_case_root.is_dir():
-        for path in test_case_root.rglob("*"):
-            if path.is_file():
-                errors.append(f"source stage created a test-case artifact: {path.relative_to(package_root).as_posix()}")
+    if not allow_downstream:
+        allowed_work_files = {
+            (package_root / "work" / "runtime-session-registry.json").resolve(),
+            selection_path,
+            workflow_path,
+        }
+        work_root = package_root / "work"
+        if work_root.is_dir():
+            for path in work_root.rglob("*"):
+                if path.is_file() and path.resolve() not in allowed_work_files:
+                    errors.append(f"source stage created downstream or extra work artifact: {path.relative_to(package_root).as_posix()}")
+        test_case_root = package_root / "test-cases"
+        if test_case_root.is_dir():
+            for path in test_case_root.rglob("*"):
+                if path.is_file():
+                    errors.append(f"source stage created a test-case artifact: {path.relative_to(package_root).as_posix()}")
 
     registry, registry_errors = load_registry(package_root)
     errors.extend(registry_errors)
@@ -216,7 +217,7 @@ def validate(package_root: Path, handoff_dir: Path) -> list[str]:
             except ValueError:
                 errors.append("source-locator recorded_at is not a valid UTC timestamp")
     repo_tmp = repo_root / "tmp"
-    if locator_time is not None and repo_tmp.is_dir():
+    if not allow_downstream and locator_time is not None and repo_tmp.is_dir():
         threshold = locator_time.astimezone(timezone.utc).timestamp()
         for path in repo_tmp.rglob("*"):
             if path.is_file() and path.stat().st_mtime >= threshold:
@@ -228,8 +229,13 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Validate runtime source selection and source-stage cleanliness.")
     parser.add_argument("package_root", type=Path)
     parser.add_argument("handoff_dir", type=Path)
+    parser.add_argument(
+        "--support-update",
+        action="store_true",
+        help="Validate a late support-only registration without rejecting existing downstream artifacts.",
+    )
     args = parser.parse_args()
-    errors = validate(args.package_root, args.handoff_dir)
+    errors = validate(args.package_root, args.handoff_dir, allow_downstream=args.support_update)
     print(json.dumps({"valid": not errors, "errors": errors}, ensure_ascii=False))
     return 0 if not errors else 1
 

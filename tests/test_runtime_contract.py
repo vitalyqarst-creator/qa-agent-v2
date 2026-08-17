@@ -222,6 +222,21 @@ class RuntimeContractTests(unittest.TestCase):
             errors = validate_source(package, handoff)
             self.assertTrue(any("repository-local temporary file" in error for error in errors))
 
+    def test_late_support_update_allows_existing_downstream_but_still_requires_registration(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            package, handoff = create_valid_source_stage(root)
+            downstream = package / "work" / "stage-handoffs" / "9.3.1" / "scope-brief.md"
+            downstream.parent.mkdir(parents=True)
+            downstream.write_text("# Scope\n", encoding="utf-8")
+            self.assertTrue(any("downstream" in error for error in validate_source(package, handoff)))
+            self.assertEqual([], validate_source(package, handoff, allow_downstream=True))
+
+            late_support = package / "support" / "answers.md"
+            late_support.write_text("# Answers\n", encoding="utf-8")
+            errors = validate_source(package, handoff, allow_downstream=True)
+            self.assertTrue(any("local FT input is not registered" in error for error in errors))
+
     def test_session_topology_requires_distinct_top_level_roles(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
             root = Path(temporary_directory)
