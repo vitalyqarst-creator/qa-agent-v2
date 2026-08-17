@@ -7,8 +7,10 @@ from pathlib import Path
 
 try:
     from scripts.runtime_traceability import anchor_label, extract_anchors, find_markdown_table
+    from scripts.runtime_session_registry import canonical_scope, find_package_root, validate_topology
 except ModuleNotFoundError:  # Direct invocation: python scripts/validate_runtime_tc.py
     from runtime_traceability import anchor_label, extract_anchors, find_markdown_table
+    from runtime_session_registry import canonical_scope, find_package_root, validate_topology
 
 
 TC_HEADING_RE = re.compile(r"^##\s+(TC-[A-Za-z0-9.-]+)\s*$", re.MULTILINE)
@@ -197,6 +199,11 @@ def main() -> int:
     content = args.test_cases.read_text(encoding="utf-8")
     errors = validate(content)
     errors.extend(validate_projection(content, args.matrix.read_text(encoding="utf-8")))
+    package_root = find_package_root(args.matrix)
+    if package_root is None:
+        errors.append("cannot locate FT package root for session topology validation")
+    else:
+        errors.extend(validate_topology(package_root, "writer", canonical_scope(args.matrix.parent.name)))
     print(json.dumps({"valid": not errors, "errors": errors}, ensure_ascii=False))
     return 0 if not errors else 1
 

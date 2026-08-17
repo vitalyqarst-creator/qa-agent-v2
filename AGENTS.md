@@ -8,13 +8,17 @@
 
 ## Единственный default route
 
-1. `ft-source-locator` — выбрать DOCX, XHTML, PDF, support и макеты.
-2. `ft-scope-analyzer` — подтвердить один внешний scope, извлечь обязанности, составить `test-data-plan.md` и вопросы к БА.
-3. `ft-test-case-writer` — сначала материализовать нужные fixtures, применить универсальные профили тест-дизайна и создать `test-design-matrix.md`.
+Одна controller-сессия управляет всем FT-пакетом и не выполняет semantic stages. До первого этапа она читает `references/runtime/session-topology.md`, создаёт `work/runtime-session-registry.json` и регистрирует фактические top-level Codex thread ID всех ролей.
+
+1. Отдельный `ft-source-locator` на пакет — выбрать DOCX, XHTML, PDF, support и макеты.
+2. Отдельный `ft-scope-analyzer` на каждый scope — подтвердить один внешний scope, извлечь обязанности, составить `test-data-plan.md` и вопросы к БА.
+3. Отдельный `ft-test-case-writer` на каждый scope — сначала материализовать нужные fixtures, применить универсальные профили тест-дизайна и создать `test-design-matrix.md`.
 4. Независимый matrix reviewer в **отдельной верхнеуровневой Codex-сессии**. Review связывается с SHA-256 matrix; при замечаниях — одна ограниченная правка и новый review.
 5. Writer создаёт canonical TC только по принятой текущей версии matrix и фактически доступным fixtures.
 6. Независимый TC reviewer в **отдельной верхнеуровневой Codex-сессии**. Review связывается с SHA-256 TC; при замечаниях — одна ограниченная правка и новый review.
 7. Если после этой правки остаётся material defect, остановись и запроси решение пользователя. Не запускай дополнительные циклы, `ft-test-case-iteration`, benchmark, sharding или UI-prep.
+
+Ограниченные правки matrix и TC выполняет исходная writer-сессия того же scope. Не создавай отдельные сессии для revision, fixtures или validator-ов. Analyzer/writer одного scope нельзя использовать для другого scope; matrix reviewer и TC reviewer всегда различаются между собой и со всеми semantic roles.
 
 `AGENT-NOTES.md` в корне FT-пакета обязателен. DOCX — источник смысла, XHTML — обязательный машиночитаемый источник, PDF — только визуальная/структурная сверка. Макеты и Figma уточняют UI-термины и путь, но не создают требования.
 
@@ -22,9 +26,9 @@
 
 Активный `source-row-inventory.md` атомарен: один `SR-*` описывает одну проверяемую обязанность, даже если несколько обязанностей имеют один код ФТ. Отменённые или замещённые утверждённым ответом требования фиксируются отдельно как применённые исключения и не проецируются в matrix. Визуальная сверка выполняется для каждого включённого UI-уровня; один макет на весь scope недостаточен, если в нём несколько экранов или карточных уровней.
 
-## Controller-owned review dispatch
+## Controller-owned session dispatch
 
-Для каждого matrix/TC review controller выполняет двухфазный запуск по `references/runtime/review-record.md`: отдельный top-level thread через встроенные `list_projects` / `create_thread`, регистрация фактического thread ID командой `scripts/runtime_review_dispatch.py create`, затем operational follow-up через `send_message_to_thread` и ожидание через `wait_threads`. Reviewer не начинает работу без controller-owned dispatch receipt. Subagent, fork и review в writer-сессии запрещены. Если отдельный thread создать нельзя, route останавливается; same-session fallback не допускается.
+Для source locator, analyzer и writer controller выполняет dispatch по `references/runtime/session-topology.md`: отдельный top-level thread через встроенные `list_projects` / `create_thread`, регистрация фактического thread ID командой `scripts/runtime_session_registry.py record`, operational follow-up через `send_message_to_thread` и ожидание через `wait_threads`. Для каждого matrix/TC review дополнительно действует двухфазный запуск по `references/runtime/review-record.md`; `runtime_review_dispatch.py create` автоматически связывает reviewer с session registry. Subagent, fork и выполнение нескольких semantic roles в одной сессии запрещены. Если отдельный thread создать нельзя, route останавливается; same-session fallback не допускается.
 
 ## Тестовые данные — обязательный gate
 

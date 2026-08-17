@@ -5,7 +5,7 @@ description: Материализует тестовые данные, созд�
 
 # FT Test Case Writer
 
-До работы прочитай `AGENTS.md`, `references/runtime/test-data-fixtures.md`, `references/runtime/test-design-profiles.md`, `references/runtime/test-design-matrix.md`, `references/runtime/test-case-runtime.md` и `references/runtime/review-record.md`.
+До работы прочитай `AGENTS.md`, `references/runtime/session-topology.md`, `references/runtime/test-data-fixtures.md`, `references/runtime/test-design-profiles.md`, `references/runtime/test-design-matrix.md`, `references/runtime/test-case-runtime.md` и `references/runtime/review-record.md`. До чтения handoff проверь, что текущая сессия зарегистрирована writer-ом выбранного scope: `runtime_session_registry.py verify --through writer --scope <scope> --expected-role writer --expected-thread-id <own-threadId>`. Matrix, TC и обе разрешённые revision выполняй только в этой writer-сессии.
 
 ## Fixture gate
 
@@ -22,4 +22,4 @@ description: Материализует тестовые данные, созд�
 
 После проверки актуального `matrix-accepted` создай `test-cases/<section>-<scope>.md` по `references/runtime/test-case-runtime.md`. В `Трассировка` каждого TC укажи исполнимую `M-*` строку принятой матрицы и повтори её первичные коды/строки ФТ. Проверь файл командой `python scripts/validate_runtime_tc.py <test-cases.md> --matrix <test-design-matrix.md>`. Перед передачей в review вручную сверь каждое интеграционное значение в TC с `runtime_data` соответствующей fixture: в TC идут литералы, не идентификатор fixture и не описание snapshot. После revision TC снова запускай validator; прежний TC review после изменения считается устаревшим.
 
-Не создавай internal IDs, gaps, fixtures или просьбы о данных в production TC. Не выполняй больше одной revision без нового решения пользователя.
+Не создавай internal IDs, gaps, fixtures или просьбы о данных в production TC. Не выполняй больше одной revision без нового решения пользователя и не создавай для revision новую writer-сессию.

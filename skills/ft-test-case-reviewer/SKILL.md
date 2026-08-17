@@ -5,11 +5,11 @@ description: Независимо проверяет matrix или canonical т�
 
 # FT Test Case Reviewer
 
-До review прочитай `AGENTS.md`, `references/runtime/test-data-fixtures.md`, `references/runtime/test-design-profiles.md`, `references/runtime/test-design-matrix.md`, `references/runtime/test-case-runtime.md` и `references/runtime/review-record.md`.
+До review прочитай `AGENTS.md`, `references/runtime/session-topology.md`, `references/runtime/test-data-fixtures.md`, `references/runtime/test-design-profiles.md`, `references/runtime/test-design-matrix.md`, `references/runtime/test-case-runtime.md` и `references/runtime/review-record.md`.
 
 Review выполняется только в отдельной верхнеуровневой Codex-сессии. Итог сохрани в `work/reviews/<scope>/<matrix|tc>-review.md`: ссылка/идентификатор сессии, verdict и конечный список findings. Рядом создай `<matrix|tc>-review.json`, связанный с SHA-256 проверенного artifact, и проверь его `scripts/validate_runtime_review.py`. Не создавай attestation, immutable snapshot, dispatch receipt или технический transcript.
 
-Начинай review только после operational prompt controller-а с путём dispatch receipt. Первым действием проверь receipt командой `scripts/runtime_review_dispatch.py verify` из `review-record.md`. Если receipt отсутствует, stale, относится к другому artifact/prompt/thread или не требует `codex-thread`, остановись без чтения review inputs и без verdict. Reviewer не создаёт и не заменяет dispatch receipt.
+Начинай review только после operational prompt controller-а с путём dispatch receipt. Первым действием проверь receipt командой `scripts/runtime_review_dispatch.py verify` из `review-record.md`: она также подтверждает роль текущей сессии в package registry. Если receipt отсутствует, stale, относится к другому artifact/prompt/thread или не требует `codex-thread`, остановись без чтения review inputs и без verdict. Reviewer не создаёт и не заменяет dispatch receipt. Повторное review после разрешённой правки выполняй в этой же reviewer-сессии; не переходи между matrix и TC review.
 
 ## Matrix review
 

@@ -8,8 +8,10 @@ from pathlib import Path
 
 try:
     from scripts.runtime_traceability import extract_anchors, find_markdown_table
+    from scripts.runtime_session_registry import canonical_scope, validate_topology
 except ModuleNotFoundError:  # Direct invocation: python scripts/validate_runtime_scope.py
     from runtime_traceability import extract_anchors, find_markdown_table
+    from runtime_session_registry import canonical_scope, validate_topology
 
 
 REQUIRED_FILES = (
@@ -257,10 +259,13 @@ def strip_allowed_technical_fragments(content: str) -> str:
 
 def validate(package_root: Path, scope_dir: Path) -> list[str]:
     errors: list[str] = []
+    errors.extend(validate_topology(package_root, "scope-analyzer", canonical_scope(scope_dir.name)))
+    missing_files: list[str] = []
     for name in REQUIRED_FILES:
         if not (scope_dir / name).is_file():
-            errors.append(f"missing scope artifact: {name}")
-    if errors:
+            missing_files.append(f"missing scope artifact: {name}")
+    errors.extend(missing_files)
+    if missing_files:
         return errors
 
     inventory_content = (scope_dir / "source-row-inventory.md").read_text(encoding="utf-8")

@@ -5,7 +5,7 @@ description: Выбирает и регистрирует источники о�
 
 # FT Source Locator
 
-Используй только для регистрации входных материалов.
+Используй только для регистрации входных материалов. До чтения FT-пакета прочитай `references/runtime/session-topology.md` и проверь controller-owned registry командой `runtime_session_registry.py verify --through source-locator --expected-role source-locator --expected-thread-id <own-threadId>`. При ошибке остановись.
 
 1. Проверь `AGENT-NOTES.md` в корне FT-пакета и прочитай его. Без файла остановись как `blocked-input`.
 2. Найди основной DOCX, соответствующий XHTML и PDF. Без DOCX или XHTML остановись как `blocked-input`.

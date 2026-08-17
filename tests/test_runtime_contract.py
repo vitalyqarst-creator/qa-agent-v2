@@ -10,6 +10,7 @@ from unittest.mock import patch
 from scripts.capture_dadata_fixture import capture_fixture
 from scripts.create_ft_package import PACKAGE_DIRS, create_package
 from scripts.runtime_review_dispatch import create_dispatch, sha256, validate_dispatch
+from scripts.runtime_session_registry import initialize_registry, record_role, validate_topology
 from scripts.runtime_traceability import extract_anchors
 from scripts.validate_fixture_catalog import validate as validate_catalog
 from scripts.validate_runtime_matrix import validate as validate_matrix, validate_projection as validate_matrix_projection
@@ -80,8 +81,22 @@ VALID_GAPS = """# Пробелы покрытия
 | GAP-001 | SR-002 | AS.39 | Не определён наблюдаемый результат |
 """
 
+CONTROLLER_THREAD = "00000000-0000-4000-8000-000000000001"
+LOCATOR_THREAD = "00000000-0000-4000-8000-000000000002"
+ANALYZER_THREAD = "00000000-0000-4000-8000-000000000003"
+WRITER_THREAD = "00000000-0000-4000-8000-000000000004"
+MATRIX_REVIEWER_THREAD = "12345678-1234-1234-1234-123456789abc"
+
+
+def create_session_topology(root: Path, scope: str) -> None:
+    initialize_registry(root, CONTROLLER_THREAD, "local")
+    record_role(root, "source-locator", LOCATOR_THREAD, "local")
+    record_role(root, "scope-analyzer", ANALYZER_THREAD, "local", scope)
+    record_role(root, "writer", WRITER_THREAD, "local", scope)
+
 
 def create_matrix_dispatch(root: Path, artifact: Path, thread_id: str = "12345678-1234-1234-1234-123456789abc") -> Path:
+    create_session_topology(root, "reviews")
     prompt = root / "matrix-review-prompt.md"
     prompt.write_text("Проведи независимое review matrix.\n", encoding="utf-8")
     return create_dispatch(
@@ -120,9 +135,77 @@ def create_scope_locator(package: Path) -> None:
         "  - path: fts/Project/FT/mockups/form.png\n",
         encoding="utf-8",
     )
+    initialize_registry(package, CONTROLLER_THREAD, "local")
+    record_role(package, "source-locator", LOCATOR_THREAD, "local")
+    record_role(package, "scope-analyzer", ANALYZER_THREAD, "local", "scope")
 
 
 class RuntimeContractTests(unittest.TestCase):
+    def test_session_topology_requires_distinct_top_level_roles(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            create_session_topology(root, "9.3.1-partners")
+            self.assertEqual([], validate_topology(root, "writer", "9.3.1-partners"))
+            self.assertEqual(
+                [],
+                validate_topology(
+                    root,
+                    "writer",
+                    "9.3.1-partners",
+                    "writer",
+                    WRITER_THREAD,
+                ),
+            )
+
+    def test_session_topology_rejects_role_reuse(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            initialize_registry(root, CONTROLLER_THREAD, "local")
+            with self.assertRaisesRegex(ValueError, "already assigned"):
+                record_role(root, "source-locator", CONTROLLER_THREAD, "local")
+
+    def test_writer_session_cannot_be_shared_between_scopes(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            create_session_topology(root, "9.3.1-partners")
+            record_role(
+                root,
+                "scope-analyzer",
+                "00000000-0000-4000-8000-000000000005",
+                "local",
+                "9.3.2-card",
+            )
+            with self.assertRaisesRegex(ValueError, "already assigned"):
+                record_role(root, "writer", WRITER_THREAD, "local", "9.3.2-card")
+
+    def test_registered_writer_is_reused_for_bounded_revision(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            create_session_topology(root, "9.3.1-partners")
+            first = record_role(root, "writer", WRITER_THREAD, "local", "9.3.1-partners")
+            second = record_role(root, "writer", WRITER_THREAD, "local", "9.3.1-partners")
+            self.assertEqual(first, second)
+
+    def test_matrix_and_tc_reviewers_cannot_share_a_session(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            artifact = root / "test-design-matrix.md"
+            artifact.write_text(VALID_MATRIX, encoding="utf-8")
+            create_matrix_dispatch(root, artifact, MATRIX_REVIEWER_THREAD)
+            prompt = root / "tc-review-prompt.md"
+            prompt.write_text("Проведи независимое review тест-кейсов.\n", encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "already assigned"):
+                create_dispatch(
+                    root,
+                    artifact,
+                    prompt,
+                    root / "reviews",
+                    "tc",
+                    MATRIX_REVIEWER_THREAD,
+                    "local",
+                    "2026-08-17T00:02:00Z",
+                )
+
     def test_valid_runtime_test_case_passes(self) -> None:
         self.assertEqual([], validate_tc(VALID_TC))
 

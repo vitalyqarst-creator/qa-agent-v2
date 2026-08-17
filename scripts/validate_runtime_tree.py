@@ -25,6 +25,7 @@ REQUIRED_PATHS = (
     "references/runtime/test-design-matrix.md",
     "references/runtime/test-case-runtime.md",
     "references/runtime/review-record.md",
+    "references/runtime/session-topology.md",
     "scripts/create_ft_package.py",
     "scripts/capture_dadata_fixture.py",
     "scripts/validate_fixture_catalog.py",
@@ -34,18 +35,27 @@ REQUIRED_PATHS = (
     "scripts/runtime_traceability.py",
     "scripts/validate_runtime_review.py",
     "scripts/runtime_review_dispatch.py",
+    "scripts/runtime_session_registry.py",
 )
 
 REQUIRED_REFERENCE_CONSUMERS = {
-    "AGENTS.md": ("references/runtime/test-design-profiles.md", "references/runtime/review-record.md"),
+    "AGENTS.md": (
+        "references/runtime/test-design-profiles.md",
+        "references/runtime/review-record.md",
+        "references/runtime/session-topology.md",
+    ),
+    "skills/ft-source-locator/SKILL.md": ("references/runtime/session-topology.md",),
+    "skills/ft-scope-analyzer/SKILL.md": ("references/runtime/session-topology.md",),
     "skills/ft-test-case-writer/SKILL.md": (
         "references/runtime/test-design-profiles.md",
         "references/runtime/review-record.md",
+        "references/runtime/session-topology.md",
     ),
     "skills/ft-test-case-reviewer/SKILL.md": (
         "references/runtime/test-data-fixtures.md",
         "references/runtime/test-design-profiles.md",
         "references/runtime/review-record.md",
+        "references/runtime/session-topology.md",
     ),
 }
 
@@ -72,7 +82,14 @@ def validate(root: Path) -> list[str]:
     agents_path = root / "AGENTS.md"
     if agents_path.is_file():
         agents_content = agents_path.read_text(encoding="utf-8")
-        for marker in ("create_thread", "send_message_to_thread", "wait_threads", "runtime_review_dispatch.py"):
+        for marker in (
+            "create_thread",
+            "send_message_to_thread",
+            "wait_threads",
+            "runtime_review_dispatch.py",
+            "runtime_session_registry.py",
+            "references/runtime/session-topology.md",
+        ):
             if marker not in agents_content:
                 errors.append(f"AGENTS.md does not enforce controller-owned review dispatch via {marker}")
     return errors

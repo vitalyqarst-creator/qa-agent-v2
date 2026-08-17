@@ -9,6 +9,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+try:
+    from scripts.runtime_session_registry import canonical_scope, record_role, validate_topology
+except ModuleNotFoundError:  # Direct invocation: python scripts/runtime_review_dispatch.py
+    from runtime_session_registry import canonical_scope, record_role, validate_topology
+
 
 THREAD_ID_RE = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", re.IGNORECASE)
 DIGEST_RE = re.compile(r"^[0-9a-f]{64}$", re.IGNORECASE)
@@ -104,6 +109,16 @@ def validate_dispatch(
     dispatched_at = payload.get("dispatched_at")
     if not isinstance(dispatched_at, str) or not TIMESTAMP_RE.fullmatch(dispatched_at):
         errors.append("dispatched_at must use UTC YYYY-MM-DDTHH:MM:SSZ")
+    scope = canonical_scope(dispatch_path.parent.name)
+    errors.extend(
+        validate_topology(
+            package_root,
+            f"{kind}-reviewer",
+            scope,
+            f"{kind}-reviewer",
+            thread_id if isinstance(thread_id, str) else None,
+        )
+    )
     return errors
 
 
@@ -129,6 +144,15 @@ def create_dispatch(
         raise ValueError(f"review prompt does not exist: {review_prompt}")
     relative_to_package(review_dir, package_root)
     review_dir.mkdir(parents=True, exist_ok=True)
+
+    scope = canonical_scope(review_dir.name)
+    record_role(
+        package_root,
+        f"{kind}-reviewer",
+        reviewer_thread_id,
+        reviewer_host_id,
+        scope,
+    )
 
     artifact_digest = sha256(artifact)
     output = review_dir / f"{kind}-review-dispatch-{artifact_digest[:12]}.json"
