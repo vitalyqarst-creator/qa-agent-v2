@@ -9,6 +9,8 @@ description: Независимо проверяет matrix или canonical т�
 
 Review выполняется только в отдельной верхнеуровневой Codex-сессии. Итог сохрани в `work/reviews/<scope>/<matrix|tc>-review.md`: ссылка/идентификатор сессии, verdict и конечный список findings. Рядом создай `<matrix|tc>-review.json`, связанный с SHA-256 проверенного artifact, и проверь его `scripts/validate_runtime_review.py`. Не создавай attestation, immutable snapshot, dispatch receipt или технический transcript.
 
+Начинай review только после operational prompt controller-а с путём dispatch receipt. Первым действием проверь receipt командой `scripts/runtime_review_dispatch.py verify` из `review-record.md`. Если receipt отсутствует, stale, относится к другому artifact/prompt/thread или не требует `codex-thread`, остановись без чтения review inputs и без verdict. Reviewer не создаёт и не заменяет dispatch receipt.
+
 ## Matrix review
 
 Сверь matrix заново с DOCX/XHTML/PDF, `scope-brief.md`, questions и `fixture-catalog.json`.

@@ -31,6 +31,7 @@ REQUIRED_PATHS = (
     "scripts/validate_runtime_tc.py",
     "scripts/validate_runtime_matrix.py",
     "scripts/validate_runtime_review.py",
+    "scripts/runtime_review_dispatch.py",
 )
 
 REQUIRED_REFERENCE_CONSUMERS = {
@@ -66,6 +67,12 @@ def validate(root: Path) -> list[str]:
     matrix_reference = root / "references/runtime/test-design-matrix.md"
     if matrix_reference.is_file() and "dadata" in matrix_reference.read_text(encoding="utf-8").casefold():
         errors.append("generic test-design matrix reference contains provider-specific DaData rule")
+    agents_path = root / "AGENTS.md"
+    if agents_path.is_file():
+        agents_content = agents_path.read_text(encoding="utf-8")
+        for marker in ("create_thread", "send_message_to_thread", "wait_threads", "runtime_review_dispatch.py"):
+            if marker not in agents_content:
+                errors.append(f"AGENTS.md does not enforce controller-owned review dispatch via {marker}")
     return errors
 
 

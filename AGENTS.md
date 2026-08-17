@@ -18,6 +18,10 @@
 
 `AGENT-NOTES.md` в корне FT-пакета обязателен. DOCX — источник смысла, XHTML — обязательный машиночитаемый источник, PDF — только визуальная/структурная сверка. Макеты и Figma уточняют UI-термины и путь, но не создают требования.
 
+## Controller-owned review dispatch
+
+Для каждого matrix/TC review controller выполняет двухфазный запуск по `references/runtime/review-record.md`: отдельный top-level thread через встроенные `list_projects` / `create_thread`, регистрация фактического thread ID командой `scripts/runtime_review_dispatch.py create`, затем operational follow-up через `send_message_to_thread` и ожидание через `wait_threads`. Reviewer не начинает работу без controller-owned dispatch receipt. Subagent, fork и review в writer-сессии запрещены. Если отдельный thread создать нельзя, route останавливается; same-session fallback не допускается.
+
 ## Тестовые данные — обязательный gate
 
 До matrix и writer прочитай `references/runtime/test-data-fixtures.md` и `references/runtime/test-design-profiles.md`.

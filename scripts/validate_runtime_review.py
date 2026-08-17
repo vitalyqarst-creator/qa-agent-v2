@@ -7,6 +7,9 @@ import re
 from pathlib import Path
 from typing import Any
 
+from scripts.runtime_review_dispatch import load_json as load_dispatch_json
+from scripts.runtime_review_dispatch import validate_dispatch
+
 
 THREAD_ID_RE = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", re.IGNORECASE)
 DIGEST_RE = re.compile(r"^[0-9a-f]{64}$", re.IGNORECASE)
@@ -46,6 +49,7 @@ def validate(artifact: Path, record_path: Path, kind: str, require_accepted: boo
     if record.get("review_kind") != kind:
         errors.append(f"review_kind must be {kind}")
     declared_path = record.get("artifact_path")
+    package_root: Path | None = None
     if not isinstance(declared_path, str) or not declared_path.strip():
         errors.append("artifact_path is required")
     else:
@@ -53,6 +57,12 @@ def validate(artifact: Path, record_path: Path, kind: str, require_accepted: boo
         normalized_declared = Path(declared_path).as_posix().lstrip("./").casefold()
         if not normalized_artifact.endswith(normalized_declared):
             errors.append("artifact_path does not identify the checked artifact")
+        elif Path(declared_path).is_absolute() or ".." in Path(declared_path).parts:
+            errors.append("artifact_path must be package-relative")
+        else:
+            package_root = artifact.resolve()
+            for _part in Path(declared_path).parts:
+                package_root = package_root.parent
 
     if not artifact.is_file():
         errors.append(f"artifact does not exist: {artifact}")
@@ -85,6 +95,50 @@ def validate(artifact: Path, record_path: Path, kind: str, require_accepted: boo
         errors.append("changes-required verdict requires findings")
     if require_accepted and verdict != f"{kind}-accepted":
         errors.append(f"current artifact does not have {kind}-accepted verdict")
+
+    dispatch_relative = record.get("dispatch_path")
+    dispatch_digest = record.get("dispatch_sha256")
+    if not isinstance(dispatch_relative, str) or not dispatch_relative.strip():
+        errors.append("dispatch_path is required")
+    elif Path(dispatch_relative).is_absolute() or ".." in Path(dispatch_relative).parts:
+        errors.append("dispatch_path must be package-relative")
+    elif package_root is not None:
+        dispatch_path = (package_root / dispatch_relative).resolve()
+        try:
+            dispatch_path.relative_to(package_root.resolve())
+        except ValueError:
+            errors.append("dispatch_path escapes the FT package")
+        else:
+            if not dispatch_path.is_file():
+                errors.append(f"dispatch receipt does not exist: {dispatch_relative}")
+            elif not isinstance(dispatch_digest, str) or not DIGEST_RE.fullmatch(dispatch_digest):
+                errors.append("dispatch_sha256 must be a 64-character SHA-256")
+            elif hashlib.sha256(dispatch_path.read_bytes()).hexdigest() != dispatch_digest.lower():
+                errors.append("dispatch receipt SHA-256 mismatch")
+            else:
+                dispatch, dispatch_load_errors = load_dispatch_json(dispatch_path)
+                if dispatch_load_errors:
+                    errors.extend(dispatch_load_errors)
+                else:
+                    assert dispatch is not None
+                    prompt_relative = dispatch.get("review_prompt_path")
+                    if not isinstance(prompt_relative, str) or Path(prompt_relative).is_absolute() or ".." in Path(prompt_relative).parts:
+                        errors.append("dispatch review_prompt_path must be package-relative")
+                    else:
+                        prompt_path = (package_root / prompt_relative).resolve()
+                        errors.extend(
+                            validate_dispatch(
+                                package_root,
+                                artifact,
+                                prompt_path,
+                                dispatch_path,
+                                kind,
+                                session_id if isinstance(session_id, str) else None,
+                            )
+                        )
+                        dispatched_at = dispatch.get("dispatched_at")
+                        if isinstance(dispatched_at, str) and isinstance(reviewed_at, str) and reviewed_at < dispatched_at:
+                            errors.append("reviewed_at precedes controller dispatch")
     return errors
 
 

@@ -9,6 +9,7 @@ from unittest.mock import patch
 
 from scripts.capture_dadata_fixture import capture_fixture
 from scripts.create_ft_package import PACKAGE_DIRS, create_package
+from scripts.runtime_review_dispatch import create_dispatch, sha256, validate_dispatch
 from scripts.validate_fixture_catalog import validate as validate_catalog
 from scripts.validate_runtime_matrix import validate as validate_matrix
 from scripts.validate_runtime_review import validate as validate_review
@@ -57,6 +58,21 @@ VALID_MATRIX = """# Матрица
 | M-001 | AS.38; Таблица 7 | Сохранить карточку | базовый, жизненный-цикл-создания | Открыта форма добавления | `Наименование` = `ПАО СБЕРБАНК` | Карточка сохранена | TC |
 | M-002 | Таблица 7 / неизвестный oracle | Проверить неизвестную реакцию | допустимые-классы | Открыта форма | Не определены | Требуется уточнение результата | coverage-gap |
 """
+
+
+def create_matrix_dispatch(root: Path, artifact: Path, thread_id: str = "12345678-1234-1234-1234-123456789abc") -> Path:
+    prompt = root / "matrix-review-prompt.md"
+    prompt.write_text("Проведи независимое review matrix.\n", encoding="utf-8")
+    return create_dispatch(
+        root,
+        artifact,
+        prompt,
+        root / "reviews",
+        "matrix",
+        thread_id,
+        "local",
+        "2026-08-17T00:00:00Z",
+    )
 
 
 class RuntimeContractTests(unittest.TestCase):
@@ -128,14 +144,17 @@ class RuntimeContractTests(unittest.TestCase):
             root = Path(temporary_directory)
             artifact = root / "test-design-matrix.md"
             artifact.write_text(VALID_MATRIX, encoding="utf-8")
+            dispatch_path = create_matrix_dispatch(root, artifact)
             record = {
                 "schema_version": 1,
                 "review_kind": "matrix",
                 "artifact_path": "test-design-matrix.md",
                 "artifact_sha256": hashlib.sha256(artifact.read_bytes()).hexdigest(),
+                "dispatch_path": dispatch_path.relative_to(root).as_posix(),
+                "dispatch_sha256": sha256(dispatch_path),
                 "reviewer_session_type": "codex-thread",
                 "reviewer_session_id": "12345678-1234-1234-1234-123456789abc",
-                "reviewed_at": "2026-08-17T00:00:00Z",
+                "reviewed_at": "2026-08-17T00:01:00Z",
                 "verdict": "matrix-accepted",
                 "findings": [],
             }
@@ -151,14 +170,17 @@ class RuntimeContractTests(unittest.TestCase):
             root = Path(temporary_directory)
             artifact = root / "test-design-matrix.md"
             artifact.write_text(VALID_MATRIX, encoding="utf-8")
+            dispatch_path = create_matrix_dispatch(root, artifact)
             record = {
                 "schema_version": 1,
                 "review_kind": "matrix",
                 "artifact_path": "test-design-matrix.md",
                 "artifact_sha256": hashlib.sha256(artifact.read_bytes()).hexdigest(),
+                "dispatch_path": dispatch_path.relative_to(root).as_posix(),
+                "dispatch_sha256": sha256(dispatch_path),
                 "reviewer_session_type": "codex-task",
                 "reviewer_session_id": "12345678-1234-1234-1234-123456789abc",
-                "reviewed_at": "2026-08-17T00:00:00Z",
+                "reviewed_at": "2026-08-17T00:01:00Z",
                 "verdict": "matrix-accepted",
                 "findings": [],
             }
@@ -166,6 +188,62 @@ class RuntimeContractTests(unittest.TestCase):
             review_path.write_text(json.dumps(record), encoding="utf-8")
             review_path.with_suffix(".md").write_text("# Review\n", encoding="utf-8")
             self.assertTrue(any("codex-thread" in error for error in validate_review(artifact, review_path, "matrix")))
+
+    def test_controller_dispatch_binds_artifact_prompt_and_thread(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            artifact = root / "test-design-matrix.md"
+            artifact.write_text(VALID_MATRIX, encoding="utf-8")
+            dispatch_path = create_matrix_dispatch(root, artifact)
+            prompt = root / "matrix-review-prompt.md"
+            self.assertEqual([], validate_dispatch(root, artifact, prompt, dispatch_path, "matrix", "12345678-1234-1234-1234-123456789abc"))
+            prompt.write_text("Изменённый prompt.\n", encoding="utf-8")
+            self.assertTrue(any("prompt SHA-256 mismatch" in error for error in validate_dispatch(root, artifact, prompt, dispatch_path, "matrix")))
+
+    def test_review_record_rejects_thread_id_not_owned_by_dispatch(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            artifact = root / "test-design-matrix.md"
+            artifact.write_text(VALID_MATRIX, encoding="utf-8")
+            dispatch_path = create_matrix_dispatch(root, artifact)
+            record = {
+                "schema_version": 1,
+                "review_kind": "matrix",
+                "artifact_path": "test-design-matrix.md",
+                "artifact_sha256": hashlib.sha256(artifact.read_bytes()).hexdigest(),
+                "dispatch_path": dispatch_path.relative_to(root).as_posix(),
+                "dispatch_sha256": sha256(dispatch_path),
+                "reviewer_session_type": "codex-thread",
+                "reviewer_session_id": "87654321-4321-4321-4321-cba987654321",
+                "reviewed_at": "2026-08-17T00:01:00Z",
+                "verdict": "matrix-accepted",
+                "findings": [],
+            }
+            review_path = root / "matrix-review.json"
+            review_path.write_text(json.dumps(record), encoding="utf-8")
+            review_path.with_suffix(".md").write_text("# Review\n", encoding="utf-8")
+            self.assertTrue(any("differs from the review record" in error for error in validate_review(artifact, review_path, "matrix")))
+
+    def test_review_record_without_controller_dispatch_is_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            artifact = root / "test-design-matrix.md"
+            artifact.write_text(VALID_MATRIX, encoding="utf-8")
+            record = {
+                "schema_version": 1,
+                "review_kind": "matrix",
+                "artifact_path": "test-design-matrix.md",
+                "artifact_sha256": hashlib.sha256(artifact.read_bytes()).hexdigest(),
+                "reviewer_session_type": "codex-thread",
+                "reviewer_session_id": "12345678-1234-1234-1234-123456789abc",
+                "reviewed_at": "2026-08-17T00:01:00Z",
+                "verdict": "matrix-accepted",
+                "findings": [],
+            }
+            review_path = root / "matrix-review.json"
+            review_path.write_text(json.dumps(record), encoding="utf-8")
+            review_path.with_suffix(".md").write_text("# Review\n", encoding="utf-8")
+            self.assertTrue(any("dispatch_path is required" in error for error in validate_review(artifact, review_path, "matrix")))
 
     def test_provider_fixture_requires_existing_snapshot_and_digest(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
