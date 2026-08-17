@@ -468,6 +468,17 @@ class RuntimeContractTests(unittest.TestCase):
         self.assertIn("недостижим ему", reviewer)
         self.assertIn("логического покрытия другой строкой matrix", reviewer)
 
+    def test_controller_operational_prompts_are_semantically_neutral(self) -> None:
+        root = Path(__file__).resolve().parents[1]
+        topology = (root / "references" / "runtime" / "session-topology.md").read_text(encoding="utf-8")
+        agents = (root / "AGENTS.md").read_text(encoding="utf-8")
+
+        self.assertIn("только транспортный конверт этапа", topology)
+        self.assertIn("не пересказывает findings", topology)
+        self.assertIn("не вводит дополнительные решения", topology)
+        self.assertIn("не придумывает путь результата", topology)
+        self.assertIn("нейтральным транспортным конвертом", agents)
+
     def test_runtime_matrix_requires_profiles_and_valid_decisions(self) -> None:
         self.assertEqual([], validate_matrix(VALID_MATRIX))
         invalid = VALID_MATRIX.replace("базовый, жизненный-цикл-создания", "")

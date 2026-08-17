@@ -34,6 +34,8 @@
 
 Для source locator, analyzer и writer controller выполняет dispatch по `references/runtime/session-topology.md`: отдельный top-level thread через встроенные `list_projects` / `create_thread`, регистрация фактического thread ID командой `scripts/runtime_session_registry.py record`, operational follow-up через `send_message_to_thread` и ожидание через `wait_threads`. Для стандартного dispatch не ищи документацию в интернете: нужные операции и порядок уже заданы каноническим reference. Для каждого matrix/TC review дополнительно действует двухфазный запуск по `references/runtime/review-record.md`; `runtime_review_dispatch.py create` автоматически связывает reviewer с session registry. Subagent, fork и выполнение нескольких semantic roles в одной сессии запрещены. Если отдельный thread создать нельзя, route останавливается; same-session fallback не допускается.
 
+Operational prompt controller-а остаётся нейтральным транспортным конвертом по `session-topology.md`: controller не добавляет собственные трактовки требований, findings, статусов готовности, путей результата или правил тест-дизайна.
+
 ## Тестовые данные и готовность исполнения
 
 До matrix и writer прочитай `references/runtime/test-data-fixtures.md` и `references/runtime/test-design-profiles.md`.
