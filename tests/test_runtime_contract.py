@@ -615,6 +615,19 @@ class RuntimeContractTests(unittest.TestCase):
         )
         self.assertEqual([], validate_tc(exact))
 
+    def test_edit_prefill_result_lists_concrete_literals(self) -> None:
+        generic = VALID_TC.replace(
+            "Карточка партнёра сохранена.",
+            "Открыто окно редактирования с заданными значениями.",
+        )
+        self.assertTrue(any("edit-form prefill result" in error for error in validate_tc(generic)))
+
+        exact = generic.replace(
+            "Открыто окно редактирования с заданными значениями.",
+            "Открыто окно редактирования: поле `Наименование партнёра` содержит `ПАО СБЕРБАНК`.",
+        )
+        self.assertEqual([], validate_tc(exact))
+
     def test_runtime_matrix_requires_profiles_and_valid_decisions(self) -> None:
         self.assertEqual([], validate_matrix(VALID_MATRIX))
         invalid = VALID_MATRIX.replace("базовый, жизненный-цикл-создания", "")
