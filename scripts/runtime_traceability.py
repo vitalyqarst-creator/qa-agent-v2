@@ -15,11 +15,21 @@ PROCESS_PREFIXES = {
     "M",
     "OBL",
     "PDF",
+    "FIGURE",
+    "PAGE",
+    "ROW",
+    "SECTION",
     "SETUP",
     "SRC",
     "SR",
+    "TABLE",
     "TC",
     "UCLR",
+    "РАЗДЕЛ",
+    "РИСУНОК",
+    "СТРАНИЦА",
+    "СТРОКА",
+    "ТАБЛИЦА",
 }
 RANGE_RE = re.compile(
     r"\b([A-ZА-ЯЁ][A-ZА-ЯЁ0-9_-]{0,15})\.(\d+)\s*[-–—]\s*(?:([A-ZА-ЯЁ][A-ZА-ЯЁ0-9_-]{0,15})\.)?(\d+)\b"

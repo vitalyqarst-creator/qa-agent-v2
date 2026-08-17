@@ -67,6 +67,10 @@ VALID_INVENTORY = """# Инвентарь
 | --- | --- | --- |
 | SR-001 | AS.38; Таблица 7 | Карточка сохраняется |
 | SR-002 | AS.39 | Реакция на ограничение должна быть определена |
+
+## Применённые исключения
+
+Исключения отсутствуют.
 """
 
 VALID_GAPS = """# Пробелы покрытия
@@ -233,6 +237,7 @@ class RuntimeContractTests(unittest.TestCase):
             self.assertTrue(any("fully answered" in error for error in errors))
             self.assertTrue(any("omit coverage-gap" in error for error in errors))
             self.assertTrue(any("Russian wording" in error for error in errors))
+            self.assertTrue(any("visual cross-check" in error for error in errors))
 
     def test_scope_validator_accepts_compact_russian_handoff(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
@@ -247,7 +252,14 @@ class RuntimeContractTests(unittest.TestCase):
             (scope / "scope-clarification-requests.md").write_text(
                 "# Вопросы к БА\n\nОткрытые вопросы отсутствуют.\n", encoding="utf-8"
             )
-            (scope / "scope-brief.md").write_text("# Границы\n\nРаздел подтверждён.\n", encoding="utf-8")
+            (scope / "scope-brief.md").write_text(
+                "# Границы\n\nРаздел подтверждён.\n\n"
+                "## Визуальная сверка\n\n"
+                "| UI-уровень | Визуальный источник | Результат сверки |\n"
+                "| --- | --- | --- |\n"
+                "| Форма добавления | Рисунок 4 | Подтверждены подписи и путь открытия. |\n",
+                encoding="utf-8",
+            )
             (scope / "test-data-plan.md").write_text(
                 "# План тестовых данных\n\nКонкретные данные определены источником.\n", encoding="utf-8"
             )
@@ -256,6 +268,35 @@ class RuntimeContractTests(unittest.TestCase):
             )
             (scope / "workflow-state.yaml").write_text("stage: ft-scope-analyzer\n", encoding="utf-8")
             self.assertEqual([], validate_scope(package, scope))
+
+    def test_scope_validator_rejects_aggregated_and_cancelled_active_source_rows(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            (root / "AGENTS.md").write_text("# Runtime\n", encoding="utf-8")
+            (root / "scripts").mkdir()
+            package = root / "fts" / "Project" / "FT"
+            scope = package / "work" / "stage-handoffs" / "01-scope"
+            scope.mkdir(parents=True)
+            invalid_inventory = VALID_INVENTORY.replace(
+                "| SR-001 | AS.38; Таблица 7 | Карточка сохраняется |",
+                "| SR-001 | AS.38-AS.39; Таблица 7 | Операции не будет; строка не образует проверяемого поведения. |",
+            )
+            (scope / "source-row-inventory.md").write_text(invalid_inventory, encoding="utf-8")
+            (scope / "coverage-gaps.md").write_text("# Пробелы покрытия\n\nПробелы отсутствуют.\n", encoding="utf-8")
+            (scope / "scope-clarification-requests.md").write_text("# Вопросы\n\nВопросы отсутствуют.\n", encoding="utf-8")
+            (scope / "scope-brief.md").write_text(
+                "# Границы\n\n## Визуальная сверка\n\n"
+                "| UI-уровень | Визуальный источник | Результат сверки |\n"
+                "| --- | --- | --- |\n"
+                "| Список | Макет отсутствует | Использован только текст ФТ. |\n",
+                encoding="utf-8",
+            )
+            (scope / "test-data-plan.md").write_text("# План данных\n\nДанные не требуются.\n", encoding="utf-8")
+            (scope / "prompt.scope-to-writer.md").write_text("Создай матрицу по активным строкам.\n", encoding="utf-8")
+            (scope / "workflow-state.yaml").write_text("stage: ft-scope-analyzer\n", encoding="utf-8")
+            errors = validate_scope(package, scope)
+            self.assertTrue(any("atomic requirement code" in error for error in errors))
+            self.assertTrue(any("applied exclusions" in error for error in errors))
 
     def test_review_record_is_bound_to_current_artifact_digest(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:

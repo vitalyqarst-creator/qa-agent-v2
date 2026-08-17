@@ -53,6 +53,14 @@ OMIT_GAP_RE = re.compile(
     r"не\s+(?:создава(?:й|ть)|включа(?:й|ть))[^\n]{0,100}(?:matrix|матриц)[^\n]{0,80}(?:строк|обязан|gap|пробел)",
     re.IGNORECASE,
 )
+SOURCE_ROW_ID_RE = re.compile(r"^SR-\d{2,}$")
+RESOLVED_EXCLUSION_RE = re.compile(
+    r"не\s+образует\s+проверяемого\s+поведения|"
+    r"не\s+является\s+проверяемой\s+обязанностью|"
+    r"не\s+проверяется\s+по\s+утвержд[её]нному\s+ответу|"
+    r"(?:операци[яи]|функциональност[ьи])\s+не\s+будет",
+    re.IGNORECASE,
+)
 
 
 def runtime_root(package_root: Path) -> Path:
@@ -149,6 +157,35 @@ def validate(package_root: Path, scope_dir: Path) -> list[str]:
     inventory = find_markdown_table(inventory_content, ("ID", "Источник", "Утверждение для покрытия"))
     if inventory is None or not inventory.rows:
         errors.append("source-row-inventory has no required source rows table")
+    else:
+        inventory_id_index = inventory.index("ID")
+        inventory_source_index = inventory.index("Источник")
+        inventory_statement_index = inventory.index("Утверждение для покрытия")
+        seen_inventory_ids: set[str] = set()
+        for row in inventory.rows:
+            inventory_id = row[inventory_id_index].strip()
+            if not SOURCE_ROW_ID_RE.fullmatch(inventory_id):
+                errors.append(f"source-row-inventory has invalid active row ID {inventory_id!r}")
+            elif inventory_id in seen_inventory_ids:
+                errors.append(f"source-row-inventory has duplicate active row ID {inventory_id}")
+            seen_inventory_ids.add(inventory_id)
+            source_codes = {
+                anchor for anchor in extract_anchors(row[inventory_source_index]) if anchor.startswith("CODE:")
+            }
+            if len(source_codes) > 1:
+                errors.append(f"{inventory_id}: active source row must contain one atomic requirement code")
+            if RESOLVED_EXCLUSION_RE.search(row[inventory_statement_index]):
+                errors.append(f"{inventory_id}: resolved or cancelled behavior belongs in applied exclusions, not active inventory")
+    if not re.search(r"^##\s+Примен[её]нные исключения\s*$", inventory_content, re.MULTILINE):
+        errors.append("source-row-inventory must contain an explicit 'Применённые исключения' section")
+
+    scope_brief_content = (scope_dir / "scope-brief.md").read_text(encoding="utf-8")
+    visual_check = find_markdown_table(
+        scope_brief_content,
+        ("UI-уровень", "Визуальный источник", "Результат сверки"),
+    )
+    if visual_check is None or not visual_check.rows:
+        errors.append("scope-brief must contain a visual cross-check row for every included UI level")
 
     gaps_content = (scope_dir / "coverage-gaps.md").read_text(encoding="utf-8")
     gaps = find_markdown_table(gaps_content, ("ID", "Источник"))

@@ -20,6 +20,8 @@
 
 Классификация support-файлов в `AGENT-NOTES.md` обязательна: source locator не понижает приоритет файла, явно названного источником утверждённых ответов. До создания вопроса к БА scope analyzer ищет ответ по коду требования и смыслу во всех таких файлах. Если ответ называет источник данных или поручает агенту найти значения, это задача подготовки данных, а не новый вопрос БА.
 
+Активный `source-row-inventory.md` атомарен: один `SR-*` описывает одну проверяемую обязанность, даже если несколько обязанностей имеют один код ФТ. Отменённые или замещённые утверждённым ответом требования фиксируются отдельно как применённые исключения и не проецируются в matrix. Визуальная сверка выполняется для каждого включённого UI-уровня; один макет на весь scope недостаточен, если в нём несколько экранов или карточных уровней.
+
 ## Controller-owned review dispatch
 
 Для каждого matrix/TC review controller выполняет двухфазный запуск по `references/runtime/review-record.md`: отдельный top-level thread через встроенные `list_projects` / `create_thread`, регистрация фактического thread ID командой `scripts/runtime_review_dispatch.py create`, затем operational follow-up через `send_message_to_thread` и ожидание через `wait_threads`. Reviewer не начинает работу без controller-owned dispatch receipt. Subagent, fork и review в writer-сессии запрещены. Если отдельный thread создать нельзя, route останавливается; same-session fallback не допускается.
