@@ -54,6 +54,7 @@ AMBIGUOUS_STATE_SETUP_RE = re.compile(
     r"^\d+\.\s+(?:Установить|Перевести|Задать|Изменить|Привести)\b.*\bстатус",
     re.IGNORECASE,
 )
+LOGIN_PRECONDITION_RE = re.compile(r"^\d+\.\s+Войти\s+пользовател", re.IGNORECASE | re.MULTILINE)
 
 
 def sections(block: str) -> dict[str, str]:
@@ -181,11 +182,13 @@ def validate_projection(content: str, matrix_content: str) -> list[str]:
     if matrix is None or not matrix.rows:
         return ["TC projection cannot be checked without matrix rows"]
     source_index = matrix.index("Источник требования")
+    profile_index = matrix.index("Профили тест-дизайна")
     decision_index = matrix.index("Решение")
     matrix_id_index = matrix.index("ID")
     required_anchors: set[str] = set()
     all_matrix_anchors: set[str] = set()
     executable_rows: dict[str, set[str]] = {}
+    row_profiles: dict[str, str] = {}
     all_matrix_ids: set[str] = set()
     for row in matrix.rows:
         matrix_id = row[matrix_id_index].strip()
@@ -195,12 +198,22 @@ def validate_projection(content: str, matrix_content: str) -> list[str]:
         if row[decision_index] == "TC":
             required_anchors.update(anchors)
             executable_rows[matrix_id] = anchors
+            row_profiles[matrix_id] = row[profile_index].casefold()
 
-    tc_traceability_values = [value for name, value in FIELD_RE.findall(content) if name == "Трассировка"]
+    tc_matches = list(TC_HEADING_RE.finditer(content))
+    tc_traceability_values: list[str] = []
+    tc_blocks: list[tuple[str, str, str]] = []
+    for index, match in enumerate(tc_matches):
+        tc_id = match.group(1)
+        block = content[match.end() : tc_matches[index + 1].start() if index + 1 < len(tc_matches) else len(content)]
+        fields = {name: value.strip() for name, value in FIELD_RE.findall(block)}
+        traceability = fields.get("Трассировка", "")
+        tc_traceability_values.append(traceability)
+        tc_blocks.append((tc_id, block, traceability))
     tc_traceability = "\n".join(tc_traceability_values)
     tc_anchors = extract_anchors(tc_traceability)
     referenced_matrix_ids: set[str] = set()
-    for traceability in tc_traceability_values:
+    for tc_id, block, traceability in tc_blocks:
         linked_ids = {
             matrix_id
             for matrix_id in all_matrix_ids
@@ -208,6 +221,11 @@ def validate_projection(content: str, matrix_content: str) -> list[str]:
         }
         referenced_matrix_ids.update(linked_ids)
         traceability_anchors = extract_anchors(traceability)
+        linked_profiles = {row_profiles.get(matrix_id, "") for matrix_id in linked_ids}
+        if any("ролевой-доступ" in profiles for profiles in linked_profiles):
+            preconditions = sections(block).get("Предусловия", "")
+            if not LOGIN_PRECONDITION_RE.search(preconditions):
+                errors.append(f"{tc_id}: role-based matrix row requires an explicit login precondition")
         for matrix_id in linked_ids:
             if matrix_id not in executable_rows:
                 errors.append(f"test case links non-executable matrix row {matrix_id}")

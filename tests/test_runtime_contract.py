@@ -506,6 +506,20 @@ class RuntimeContractTests(unittest.TestCase):
         )
         self.assertEqual([], validate_tc(declarative))
 
+    def test_role_based_matrix_projection_requires_explicit_login(self) -> None:
+        role_matrix = VALID_MATRIX.replace(
+            "базовый, жизненный-цикл-создания",
+            "базовый, ролевой-доступ",
+        )
+        errors = validate_tc_projection(VALID_TC, role_matrix)
+        self.assertTrue(any("explicit login precondition" in error for error in errors))
+
+        with_login = VALID_TC.replace(
+            "1. Открыть карточку добавления партнёра.",
+            "1. Войти пользователем с ролью `Администратор`.\n2. Открыть карточку добавления партнёра.",
+        )
+        self.assertEqual([], validate_tc_projection(with_login, role_matrix))
+
     def test_runtime_matrix_requires_profiles_and_valid_decisions(self) -> None:
         self.assertEqual([], validate_matrix(VALID_MATRIX))
         invalid = VALID_MATRIX.replace("базовый, жизненный-цикл-создания", "")
