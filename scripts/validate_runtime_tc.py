@@ -66,6 +66,7 @@ POSTCONDITION_FIND_RE = re.compile(r"^\d+\.\s+Найти\b", re.IGNORECASE | re.
 OPAQUE_DELEGATE_STEP_RE = re.compile(r"^\d+\.\s+Выполнить\b", re.IGNORECASE | re.MULTILINE)
 QUOTED_CONTROL_RE = re.compile(
     r"(?:кнопк\w*\s+)?(?:«([^»]+)»|`([^`]+)`)(?=\s+(?:видим\w*|доступ\w*))|"
+    r"(?:видим\w*|доступ\w*)(?:\s+и\s+(?:видим\w*|доступ\w*))?\s+(?:кнопк\w*\s+)?(?:«([^»]+)»|`([^`]+)`)|"
     r"(?:кнопк\w*|действи\w*)\s+(?:«([^»]+)»|`([^`]+)`)",
     re.IGNORECASE,
 )

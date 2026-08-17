@@ -583,6 +583,12 @@ class RuntimeContractTests(unittest.TestCase):
         )
         self.assertEqual([], validate_tc_projection(with_hover, hover_matrix))
 
+        postfix_matrix = hover_matrix.replace(
+            "Доступна кнопка «Редактировать»",
+            "Кнопка видима и доступна «Редактировать»",
+        )
+        self.assertTrue(any("hover-revealed control" in error for error in validate_tc_projection(without_hover, postfix_matrix)))
+
     def test_runtime_matrix_requires_profiles_and_valid_decisions(self) -> None:
         self.assertEqual([], validate_matrix(VALID_MATRIX))
         invalid = VALID_MATRIX.replace("базовый, жизненный-цикл-создания", "")
