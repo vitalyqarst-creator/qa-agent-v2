@@ -55,6 +55,14 @@ AMBIGUOUS_STATE_SETUP_RE = re.compile(
     re.IGNORECASE,
 )
 LOGIN_PRECONDITION_RE = re.compile(r"^\d+\.\s+Войти\s+пользовател", re.IGNORECASE | re.MULTILINE)
+PREPARED_USER_RE = re.compile(r"^\d+\.\s+Подготовить\s+пользовател", re.IGNORECASE | re.MULTILINE)
+INLINE_POSTCONDITION_ACTOR_RE = re.compile(
+    r"^\d+\.\s+(?!Войти\b).*\bпользовател(?:ем|ь)\s+(?:с|без)\s+роль",
+    re.IGNORECASE | re.MULTILINE,
+)
+POSTCONDITION_LOGIN_RE = re.compile(r"^\d+\.\s+Войти\s+пользовател", re.IGNORECASE | re.MULTILINE)
+POSTCONDITION_NAVIGATION_RE = re.compile(r"^\d+\.\s+(?:Открыть|Перейти)\b", re.IGNORECASE | re.MULTILINE)
+POSTCONDITION_FIND_RE = re.compile(r"^\d+\.\s+Найти\b", re.IGNORECASE | re.MULTILINE)
 
 
 def sections(block: str) -> dict[str, str]:
@@ -119,6 +127,10 @@ def validate(content: str) -> list[str]:
             errors.append(
                 f"{tc_id}: ambiguous one-line state setup; declare the concrete initial state or list the full source-backed transition"
             )
+        if PREPARED_USER_RE.search(preconditions):
+            errors.append(
+                f"{tc_id}: preparing a user does not establish the current actor; use an explicit login when the actor is needed"
+            )
         steps = tc_sections["Шаги"]
         if not NUMBERED_LINE_RE.search(steps):
             errors.append(f"{tc_id}: steps must be numbered")
@@ -146,6 +158,19 @@ def validate(content: str) -> list[str]:
             errors.append(f"{tc_id}: unsupported canonical execution status {status}")
         if status == "candidate-ui-calibration" and not CONFIRMATION_RE.search(block):
             errors.append(f"{tc_id}: candidate-ui-calibration requires 'Требуется подтверждение'")
+        postconditions = tc_sections["Постусловия"]
+        empty_postconditions = postconditions in {"Не требуются.", "- Не требуются."}
+        if not empty_postconditions and not all(
+            NUMBERED_LINE_RE.fullmatch(line) for line in postconditions.splitlines() if line.strip()
+        ):
+            errors.append(f"{tc_id}: non-empty postconditions must be numbered executable actions")
+        if INLINE_POSTCONDITION_ACTOR_RE.search(postconditions):
+            errors.append(f"{tc_id}: actor switch in postconditions must be a separate explicit login action")
+        if POSTCONDITION_LOGIN_RE.search(postconditions):
+            if not POSTCONDITION_NAVIGATION_RE.search(postconditions) or not POSTCONDITION_FIND_RE.search(postconditions):
+                errors.append(
+                    f"{tc_id}: postcondition actor switch requires renewed navigation and object lookup before cleanup"
+                )
     if numbers and numbers != list(range(1, len(numbers) + 1)):
         errors.append("sequential TC numbers are not continuous from TC-001")
     return errors

@@ -520,6 +520,32 @@ class RuntimeContractTests(unittest.TestCase):
         )
         self.assertEqual([], validate_tc_projection(with_login, role_matrix))
 
+    def test_user_preparation_does_not_replace_login(self) -> None:
+        invalid = VALID_TC.replace(
+            "1. Открыть карточку добавления партнёра.",
+            "1. Подготовить пользователя с ролью `Администратор`.\n2. Открыть карточку добавления партнёра.",
+        )
+        self.assertTrue(any("does not establish the current actor" in error for error in validate_tc(invalid)))
+
+    def test_postcondition_actor_switch_requires_login_navigation_and_lookup(self) -> None:
+        inline = VALID_TC.replace(
+            "- Не требуются.",
+            "1. Нажать `Вернуть из архива` пользователем с ролью `Администратор`.",
+        )
+        self.assertTrue(any("separate explicit login" in error for error in validate_tc(inline)))
+
+        incomplete = VALID_TC.replace(
+            "- Не требуются.",
+            "1. Войти пользователем с ролью `Администратор`.\n2. Нажать `Вернуть из архива`.",
+        )
+        self.assertTrue(any("renewed navigation and object lookup" in error for error in validate_tc(incomplete)))
+
+        complete = VALID_TC.replace(
+            "- Не требуются.",
+            "1. Войти пользователем с ролью `Администратор`.\n2. Открыть список партнёров.\n3. Найти партнёра с ИНН `7707083893`.\n4. Нажать `Вернуть из архива`.",
+        )
+        self.assertEqual([], validate_tc(complete))
+
     def test_runtime_matrix_requires_profiles_and_valid_decisions(self) -> None:
         self.assertEqual([], validate_matrix(VALID_MATRIX))
         invalid = VALID_MATRIX.replace("базовый, жизненный-цикл-создания", "")
