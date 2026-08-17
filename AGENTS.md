@@ -28,6 +28,8 @@
 
 ## Controller-owned session dispatch
 
+В начале каждого нового turn controller до dispatch запускает `runtime_session_registry.py controller-check` со своим фактическим thread ID. Если agent-layer обновился, проверка останавливает маршрут: controller перечитывает текущие `AGENTS.md` и `references/runtime/session-topology.md`, выполняет `acknowledge-runtime`, повторяет проверку и только затем продолжает. Semantic role также не проходит свой registry self-check при неактуальном runtime commit.
+
 Для source locator, analyzer и writer controller выполняет dispatch по `references/runtime/session-topology.md`: отдельный top-level thread через встроенные `list_projects` / `create_thread`, регистрация фактического thread ID командой `scripts/runtime_session_registry.py record`, operational follow-up через `send_message_to_thread` и ожидание через `wait_threads`. Для стандартного dispatch не ищи документацию в интернете: нужные операции и порядок уже заданы каноническим reference. Для каждого matrix/TC review дополнительно действует двухфазный запуск по `references/runtime/review-record.md`; `runtime_review_dispatch.py create` автоматически связывает reviewer с session registry. Subagent, fork и выполнение нескольких semantic roles в одной сессии запрещены. Если отдельный thread создать нельзя, route останавливается; same-session fallback не допускается.
 
 ## Тестовые данные — обязательный gate

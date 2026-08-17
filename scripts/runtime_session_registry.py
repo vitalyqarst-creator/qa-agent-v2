@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -22,6 +23,7 @@ STAGE_REQUIREMENTS = {
     "matrix-reviewer": ("scope-analyzer", "writer", "matrix-reviewer"),
     "tc-reviewer": ("scope-analyzer", "writer", "matrix-reviewer", "tc-reviewer"),
 }
+REGISTRY_SCHEMA_VERSION = 2
 
 
 def utc_now() -> str:
@@ -30,6 +32,36 @@ def utc_now() -> str:
 
 def registry_path(package_root: Path) -> Path:
     return package_root.resolve() / "work" / "runtime-session-registry.json"
+
+
+def runtime_root(package_root: Path) -> Path | None:
+    for candidate in (package_root.resolve(), *package_root.resolve().parents):
+        if (candidate / "AGENTS.md").is_file() and (candidate / "scripts").is_dir():
+            return candidate
+    return None
+
+
+def runtime_code_commit(package_root: Path) -> str:
+    root = runtime_root(package_root)
+    if root is None:
+        return "unversioned"
+    completed = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=root,
+        check=False,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+    )
+    commit = completed.stdout.strip().casefold()
+    return commit if completed.returncode == 0 and re.fullmatch(r"[0-9a-f]{40}", commit) else "unversioned"
+
+
+def runtime_acknowledgement(package_root: Path) -> dict[str, str]:
+    return {
+        "code_commit": runtime_code_commit(package_root),
+        "acknowledged_at": utc_now(),
+    }
 
 
 def find_package_root(path: Path) -> Path | None:
@@ -91,12 +123,60 @@ def initialize_registry(package_root: Path, controller_thread_id: str, controlle
             raise ValueError("FT package already belongs to another controller session")
         return path
     payload: dict[str, Any] = {
-        "schema_version": 1,
+        "schema_version": REGISTRY_SCHEMA_VERSION,
+        "runtime": runtime_acknowledgement(package_root),
         "controller": controller,
         "source_locator": None,
         "scopes": {},
     }
     return write_registry(package_root, payload)
+
+
+def acknowledge_runtime(package_root: Path, controller_thread_id: str) -> Path:
+    payload, errors = load_registry(package_root)
+    if errors:
+        raise ValueError(errors[0])
+    assert payload is not None
+    controller = payload.get("controller")
+    if not isinstance(controller, dict) or controller.get("session_id") != controller_thread_id:
+        raise ValueError("only the registered controller session may acknowledge a runtime update")
+    payload["schema_version"] = REGISTRY_SCHEMA_VERSION
+    payload["runtime"] = runtime_acknowledgement(package_root)
+    return write_registry(package_root, payload)
+
+
+def validate_runtime_acknowledgement(package_root: Path, payload: dict[str, Any]) -> list[str]:
+    errors: list[str] = []
+    if payload.get("schema_version") != REGISTRY_SCHEMA_VERSION:
+        errors.append(
+            "session registry runtime contract is stale; controller must reread AGENTS.md and "
+            "references/runtime/session-topology.md, then run acknowledge-runtime"
+        )
+        return errors
+    runtime = payload.get("runtime")
+    if not isinstance(runtime, dict):
+        return ["session registry has no acknowledged runtime contract"]
+    recorded_commit = runtime.get("code_commit")
+    current_commit = runtime_code_commit(package_root)
+    if recorded_commit != current_commit:
+        errors.append(
+            f"runtime code commit changed from {recorded_commit!r} to {current_commit!r}; "
+            "controller must reread the runtime contract and run acknowledge-runtime"
+        )
+    return errors
+
+
+def validate_controller(package_root: Path, expected_thread_id: str) -> list[str]:
+    payload, load_errors = load_registry(package_root)
+    if load_errors:
+        return load_errors
+    assert payload is not None
+    errors = validate_record("controller", payload.get("controller"))
+    controller = payload.get("controller")
+    if isinstance(controller, dict) and controller.get("session_id") != expected_thread_id:
+        errors.append("current thread is not the registered controller")
+    errors.extend(validate_runtime_acknowledgement(package_root, payload))
+    return errors
 
 
 def all_role_records(payload: dict[str, Any]) -> list[tuple[str, dict[str, Any]]]:
@@ -194,8 +274,7 @@ def validate_topology(
         return load_errors
     assert payload is not None
     errors: list[str] = []
-    if payload.get("schema_version") != 1:
-        errors.append("session registry schema_version must be 1")
+    errors.extend(validate_runtime_acknowledgement(package_root, payload))
     errors.extend(validate_record("controller", payload.get("controller")))
     errors.extend(validate_record(PACKAGE_ROLE, payload.get("source_locator")))
 
@@ -266,6 +345,14 @@ def main() -> int:
     verify_parser.add_argument("--expected-role", choices=(PACKAGE_ROLE, *SCOPE_ROLES))
     verify_parser.add_argument("--expected-thread-id")
 
+    controller_parser = subparsers.add_parser("controller-check")
+    controller_parser.add_argument("--package-root", type=Path, required=True)
+    controller_parser.add_argument("--expected-thread-id", required=True)
+
+    acknowledge_parser = subparsers.add_parser("acknowledge-runtime")
+    acknowledge_parser.add_argument("--package-root", type=Path, required=True)
+    acknowledge_parser.add_argument("--controller-thread-id", required=True)
+
     args = parser.parse_args()
     try:
         if args.command == "init":
@@ -276,6 +363,14 @@ def main() -> int:
             path = record_role(args.package_root, args.role, args.thread_id, args.host_id, args.scope)
             print(json.dumps({"recorded": True, "path": str(path)}, ensure_ascii=False))
             return 0
+        if args.command == "acknowledge-runtime":
+            path = acknowledge_runtime(args.package_root, args.controller_thread_id)
+            print(json.dumps({"acknowledged": True, "path": str(path)}, ensure_ascii=False))
+            return 0
+        if args.command == "controller-check":
+            errors = validate_controller(args.package_root, args.expected_thread_id)
+            print(json.dumps({"valid": not errors, "errors": errors}, ensure_ascii=False))
+            return 0 if not errors else 1
         errors = validate_topology(
             args.package_root,
             args.through,

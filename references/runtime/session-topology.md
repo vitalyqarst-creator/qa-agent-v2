@@ -17,6 +17,20 @@ Controller — одна верхнеуровневая Codex-сессия на �
 
 До запуска semantic role controller создаёт `work/runtime-session-registry.json` и регистрирует фактический `threadId`/`hostId`, полученные от Codex Desktop. Допустим только `codex-thread`; subagent, fork и выдуманный ID запрещены. Операции Codex Desktop и их порядок уже перечислены ниже и в `AGENTS.md`: controller не выполняет web search документации перед стандартным dispatch. Если встроенная операция недоступна, route останавливается.
 
+В начале каждого следующего turn controller проверяет, что открытая сессия работает по текущему commit agent-layer:
+
+```text
+python scripts/runtime_session_registry.py controller-check --package-root <FT-package> --expected-thread-id <controller-threadId>
+```
+
+Если проверка сообщает об изменившемся runtime commit, controller сначала перечитывает текущие `AGENTS.md` и этот файл, затем явно подтверждает новую версию и повторяет `controller-check`:
+
+```text
+python scripts/runtime_session_registry.py acknowledge-runtime --package-root <FT-package> --controller-thread-id <controller-threadId>
+```
+
+До успешного `controller-check` создавать или продолжать semantic role запрещено. Обычный role self-check также проверяет runtime commit, поэтому пропустить это обновление молча нельзя.
+
 ```text
 python scripts/runtime_session_registry.py init --package-root <FT-package> --controller-thread-id <threadId> --controller-host-id <hostId>
 python scripts/runtime_session_registry.py record --package-root <FT-package> --role source-locator --thread-id <threadId> --host-id <hostId>

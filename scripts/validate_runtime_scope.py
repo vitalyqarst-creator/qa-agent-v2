@@ -70,10 +70,21 @@ TABLE_ROW_REFERENCE_RE = re.compile(
     r"Таблица\s+(\d+)\s*,\s*строка\s+[«\"](.+?)[»\"](?:\s*,\s*примечание)?(?=\s*(?:;|$))",
     re.IGNORECASE,
 )
+TABLE_REFERENCE_RE = re.compile(r"\bТаблица\s+(\d+)\b", re.IGNORECASE)
 TABLE_LABEL_RE = re.compile(r"^Таблица\s+(\d+)\b", re.IGNORECASE)
 LOCAL_VISUAL_RE = re.compile(r"`([^`\n]+\.(?:png|jpe?g|webp|svg))`", re.IGNORECASE)
 LOCAL_VISUAL_LABEL_RE = re.compile(r"\bРисунок\s+\d+\b", re.IGNORECASE)
 LOCAL_VISUAL_EXTENSION_RE = re.compile(r"\.(?:png|jpe?g|webp|svg)\b", re.IGNORECASE)
+INDEPENDENT_PROPERTY_PATTERNS = {
+    "обязательность": re.compile(r"\bобязатель\w*", re.IGNORECASE),
+    "редактируемость": re.compile(r"\b(?:не\s*)?редактир\w*|\bтолько\s+для\s+чтения\b", re.IGNORECASE),
+    "представление": re.compile(r"\bинформационн\w*\s+(?:блок\w*|виджет\w*)", re.IGNORECASE),
+    "ссылка или переход": re.compile(r"\bссылк\w*|\bпереход\w*", re.IGNORECASE),
+}
+QUESTION_EXTRA_BEHAVIOR_RE = re.compile(
+    r"\bпомимо\b|\b(?:како(?:е|й|ва)|что)\s+ещ[её]\b|\bдополнительн\w*\s+(?:поведени\w*|результат\w*)",
+    re.IGNORECASE,
+)
 
 
 def runtime_root(package_root: Path) -> Path:
@@ -287,14 +298,29 @@ def validate(package_root: Path, scope_dir: Path) -> list[str]:
                 errors.append(f"source-row-inventory has duplicate active row ID {inventory_id}")
             seen_inventory_ids.add(inventory_id)
             active_inventory_ids.add(inventory_id)
-            source_codes = {
-                anchor for anchor in extract_anchors(row[inventory_source_index]) if anchor.startswith("CODE:")
-            }
-            for table_number, row_name in TABLE_ROW_REFERENCE_RE.findall(row[inventory_source_index]):
+            source_value = row[inventory_source_index]
+            statement_value = row[inventory_statement_index]
+            source_codes = {anchor for anchor in extract_anchors(source_value) if anchor.startswith("CODE:")}
+            row_matches = TABLE_ROW_REFERENCE_RE.findall(source_value)
+            for table_number, row_name in row_matches:
                 row_references.append((inventory_id, int(table_number), row_name))
+            referenced_tables = {int(value) for value in TABLE_REFERENCE_RE.findall(source_value)}
+            row_anchored_tables = {int(value) for value, _row_name in row_matches}
+            for table_number in sorted(referenced_tables - row_anchored_tables):
+                errors.append(
+                    f"{inventory_id}: source cites table {table_number} without the exact first-column row name"
+                )
             if len(source_codes) > 1:
                 errors.append(f"{inventory_id}: active source row must contain one atomic requirement code")
-            if RESOLVED_EXCLUSION_RE.search(row[inventory_statement_index]):
+            matched_properties = [
+                name for name, pattern in INDEPENDENT_PROPERTY_PATTERNS.items() if pattern.search(statement_value)
+            ]
+            if len(matched_properties) > 1:
+                errors.append(
+                    f"{inventory_id}: active source row aggregates independent properties: "
+                    + ", ".join(matched_properties)
+                )
+            if RESOLVED_EXCLUSION_RE.search(statement_value):
                 errors.append(f"{inventory_id}: resolved or cancelled behavior belongs in applied exclusions, not active inventory")
     if row_references:
         xhtml_path = machine_readable_primary(package_root)
@@ -400,6 +426,10 @@ def validate(package_root: Path, scope_dir: Path) -> list[str]:
     support_contents = [(path, path.read_text(encoding="utf-8")) for path in support_files]
     for question_id, block in question_blocks(questions_content):
         current_question = question_text(block)
+        if QUESTION_EXTRA_BEHAVIOR_RE.search(current_question):
+            errors.append(
+                f"{question_id}: question asks for behavior beyond the source-backed result instead of only missing facts"
+            )
         codes = sorted(anchor.removeprefix("CODE:") for anchor in extract_anchors(block) if anchor.startswith("CODE:"))
         if not codes:
             errors.append(f"{question_id}: question has no requirement code")

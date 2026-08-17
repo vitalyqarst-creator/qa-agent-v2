@@ -10,7 +10,13 @@ from unittest.mock import patch
 from scripts.capture_dadata_fixture import capture_fixture
 from scripts.create_ft_package import PACKAGE_DIRS, create_package
 from scripts.runtime_review_dispatch import create_dispatch, sha256, validate_dispatch
-from scripts.runtime_session_registry import initialize_registry, record_role, validate_topology
+from scripts.runtime_session_registry import (
+    acknowledge_runtime,
+    initialize_registry,
+    record_role,
+    validate_controller,
+    validate_topology,
+)
 from scripts.runtime_traceability import extract_anchors
 from scripts.validate_fixture_catalog import validate as validate_catalog
 from scripts.validate_runtime_matrix import validate as validate_matrix, validate_projection as validate_matrix_projection
@@ -238,6 +244,16 @@ class RuntimeContractTests(unittest.TestCase):
             initialize_registry(root, CONTROLLER_THREAD, "local")
             with self.assertRaisesRegex(ValueError, "already assigned"):
                 record_role(root, "source-locator", CONTROLLER_THREAD, "local")
+
+    def test_controller_must_acknowledge_changed_runtime_commit(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            initialize_registry(root, CONTROLLER_THREAD, "local")
+            with patch("scripts.runtime_session_registry.runtime_code_commit", return_value="a" * 40):
+                errors = validate_controller(root, CONTROLLER_THREAD)
+                self.assertTrue(any("runtime code commit changed" in error for error in errors))
+                acknowledge_runtime(root, CONTROLLER_THREAD)
+                self.assertEqual([], validate_controller(root, CONTROLLER_THREAD))
 
     def test_writer_session_cannot_be_shared_between_scopes(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
@@ -509,6 +525,77 @@ class RuntimeContractTests(unittest.TestCase):
             (scope / "workflow-state.yaml").write_text("stage: ft-scope-analyzer\n", encoding="utf-8")
             errors = validate_scope(package, scope)
             self.assertTrue(any("does not exist in table 7" in error for error in errors))
+
+    def test_scope_validator_requires_exact_row_for_every_table_reference(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            (root / "AGENTS.md").write_text("# Runtime\n", encoding="utf-8")
+            (root / "scripts").mkdir()
+            package = root / "fts" / "Project" / "FT"
+            create_scope_locator(package)
+            scope = package / "work" / "stage-handoffs" / "01-scope"
+            scope.mkdir()
+            (scope / "source-row-inventory.md").write_text(
+                VALID_INVENTORY.replace("Таблица 7, строка «Сохранить»", "Таблица 7"),
+                encoding="utf-8",
+            )
+            (scope / "coverage-gaps.md").write_text(VALID_GAPS, encoding="utf-8")
+            (scope / "scope-clarification-requests.md").write_text("# Вопросы\n\nВопросы отсутствуют.\n", encoding="utf-8")
+            (scope / "scope-brief.md").write_text(
+                "# Границы\n\n## Визуальная сверка\n\n"
+                "| UI-уровень | Визуальный источник | Результат сверки |\n"
+                "| --- | --- | --- |\n"
+                "| Форма | `fts/Project/FT/mockups/form.png` | Подтверждена форма. |\n",
+                encoding="utf-8",
+            )
+            (scope / "test-data-plan.md").write_text("# План данных\n\nДанные не требуются.\n", encoding="utf-8")
+            (scope / "prompt.scope-to-writer.md").write_text(
+                "Для `GAP-001` создай строку матрицы с решением `coverage-gap`.\n",
+                encoding="utf-8",
+            )
+            (scope / "workflow-state.yaml").write_text("stage: ft-scope-analyzer\n", encoding="utf-8")
+            errors = validate_scope(package, scope)
+            self.assertTrue(any("without the exact first-column row name" in error for error in errors))
+
+    def test_scope_validator_rejects_compound_table_properties_and_broad_ba_question(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            (root / "AGENTS.md").write_text("# Runtime\n", encoding="utf-8")
+            (root / "scripts").mkdir()
+            package = root / "fts" / "Project" / "FT"
+            create_scope_locator(package)
+            scope = package / "work" / "stage-handoffs" / "01-scope"
+            scope.mkdir()
+            inventory = VALID_INVENTORY.replace(
+                "Карточка сохраняется",
+                "Поле обязательное, не редактируется и отображается информационным блоком со ссылкой",
+            )
+            (scope / "source-row-inventory.md").write_text(inventory, encoding="utf-8")
+            (scope / "coverage-gaps.md").write_text(VALID_GAPS, encoding="utf-8")
+            (scope / "scope-clarification-requests.md").write_text(
+                "# Вопросы к БА\n\n## CLR-001 Уточнение результата\n\n"
+                "**Вопрос:** Какой результат возникает помимо сохранения карточки?\n\n"
+                "**Основание в ФТ:** AS.38.\n\n"
+                "**Влияние на покрытие:** Нельзя завершить проверку.\n\n"
+                "**Текущее состояние:** Ответ не получен.\n",
+                encoding="utf-8",
+            )
+            (scope / "scope-brief.md").write_text(
+                "# Границы\n\n## Визуальная сверка\n\n"
+                "| UI-уровень | Визуальный источник | Результат сверки |\n"
+                "| --- | --- | --- |\n"
+                "| Форма | `fts/Project/FT/mockups/form.png` | Подтверждена форма. |\n",
+                encoding="utf-8",
+            )
+            (scope / "test-data-plan.md").write_text("# План данных\n\nДанные не требуются.\n", encoding="utf-8")
+            (scope / "prompt.scope-to-writer.md").write_text(
+                "Для `GAP-001` создай строку матрицы с решением `coverage-gap`.\n",
+                encoding="utf-8",
+            )
+            (scope / "workflow-state.yaml").write_text("stage: ft-scope-analyzer\n", encoding="utf-8")
+            errors = validate_scope(package, scope)
+            self.assertTrue(any("aggregates independent properties" in error for error in errors))
+            self.assertTrue(any("behavior beyond the source-backed result" in error for error in errors))
 
     def test_scope_validator_rejects_unregistered_or_missing_visual_paths(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
