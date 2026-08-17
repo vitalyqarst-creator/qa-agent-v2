@@ -14,6 +14,7 @@ from scripts.runtime_review_dispatch import validate_dispatch
 THREAD_ID_RE = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", re.IGNORECASE)
 DIGEST_RE = re.compile(r"^[0-9a-f]{64}$", re.IGNORECASE)
 REVIEWED_AT_RE = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$")
+TC_HEADING_RE = re.compile(r"^##\s+TC-[^\r\n]+$", re.MULTILINE)
 VERDICTS = {
     "matrix": {"matrix-accepted", "matrix-changes-required"},
     "tc": {"tc-accepted", "tc-changes-required"},
@@ -95,6 +96,21 @@ def validate(artifact: Path, record_path: Path, kind: str, require_accepted: boo
         errors.append("changes-required verdict requires findings")
     if require_accepted and verdict != f"{kind}-accepted":
         errors.append(f"current artifact does not have {kind}-accepted verdict")
+
+    if kind == "tc" and artifact.is_file():
+        tc_count = len(TC_HEADING_RE.findall(artifact.read_text(encoding="utf-8")))
+        if tc_count == 0:
+            errors.append("canonical TC artifact contains no TC headings")
+        if record.get("total_tc_count") != tc_count:
+            errors.append(f"total_tc_count must equal canonical TC count: {tc_count}")
+        if record.get("reviewed_tc_count") != tc_count:
+            errors.append(f"reviewed_tc_count must prove full-set review: {tc_count}")
+        if record.get("review_scope_complete") is not True:
+            errors.append("review_scope_complete must be true for TC review")
+        if summary_path.is_file():
+            summary = summary_path.read_text(encoding="utf-8")
+            if f"Проверено TC: {tc_count}/{tc_count}" not in summary:
+                errors.append(f"human review summary must contain: Проверено TC: {tc_count}/{tc_count}")
 
     dispatch_relative = record.get("dispatch_path")
     dispatch_digest = record.get("dispatch_sha256")

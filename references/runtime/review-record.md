@@ -62,6 +62,18 @@ python scripts/runtime_review_dispatch.py verify --package-root <FT-package> --a
 - `dispatch_path` указывает на controller-owned receipt текущего artifact; thread ID и hashes в receipt и review-record должны совпадать.
 - Writer не создаёт TC без успешной проверки принятой matrix. Набор TC не считается выпущенным без успешной проверки `tc-accepted` для текущих байтов файла.
 
+Для `review_kind: tc` запись дополнительно обязана содержать:
+
+```json
+{
+  "total_tc_count": 34,
+  "reviewed_tc_count": 34,
+  "review_scope_complete": true
+}
+```
+
+Оба счётчика должны совпадать с фактическим числом заголовков `## TC-...` в canonical-файле. В человекочитаемом отчёте обязательна строка `Проверено TC: 34/34` с фактическими значениями. Это исполнимое доказательство полного, не fail-fast review; заявление без совпадающих счётчиков валидатор не принимает.
+
 Проверка:
 
 ```text

@@ -1001,6 +1001,57 @@ class RuntimeContractTests(unittest.TestCase):
             artifact.write_text(VALID_MATRIX + "\n", encoding="utf-8")
             self.assertTrue(any("stale" in error for error in validate_review(artifact, review_path, "matrix", True)))
 
+    def test_tc_review_record_requires_proof_of_full_set_review(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            artifact = root / "test-cases.md"
+            artifact.write_text("# Набор\n\n## TC-001\n\n## TC-002\n", encoding="utf-8")
+            create_session_topology(root, "reviews")
+            record_role(root, "matrix-reviewer", MATRIX_REVIEWER_THREAD, "local", "reviews")
+            prompt = root / "tc-review-prompt.md"
+            prompt.write_text("Проведи независимое review тест-кейсов.\n", encoding="utf-8")
+            reviewer_thread = "22345678-1234-1234-1234-123456789abc"
+            dispatch_path = create_dispatch(
+                root,
+                artifact,
+                prompt,
+                root / "reviews",
+                "tc",
+                reviewer_thread,
+                "local",
+                "2026-08-17T00:00:00Z",
+            )
+            record = {
+                "schema_version": 1,
+                "review_kind": "tc",
+                "artifact_path": "test-cases.md",
+                "artifact_sha256": hashlib.sha256(artifact.read_bytes()).hexdigest(),
+                "dispatch_path": dispatch_path.relative_to(root).as_posix(),
+                "dispatch_sha256": sha256(dispatch_path),
+                "reviewer_session_type": "codex-thread",
+                "reviewer_session_id": reviewer_thread,
+                "reviewed_at": "2026-08-17T00:01:00Z",
+                "verdict": "tc-accepted",
+                "findings": [],
+                "total_tc_count": 2,
+                "reviewed_tc_count": 1,
+                "review_scope_complete": False,
+            }
+            review_path = root / "tc-review.json"
+            review_path.write_text(json.dumps(record), encoding="utf-8")
+            review_path.with_suffix(".md").write_text("# Review\n", encoding="utf-8")
+
+            errors = validate_review(artifact, review_path, "tc", require_accepted=True)
+            self.assertTrue(any("reviewed_tc_count" in error for error in errors))
+            self.assertTrue(any("review_scope_complete" in error for error in errors))
+            self.assertTrue(any("Проверено TC: 2/2" in error for error in errors))
+
+            record["reviewed_tc_count"] = 2
+            record["review_scope_complete"] = True
+            review_path.write_text(json.dumps(record), encoding="utf-8")
+            review_path.with_suffix(".md").write_text("# Review\n\nПроверено TC: 2/2\n", encoding="utf-8")
+            self.assertEqual([], validate_review(artifact, review_path, "tc", require_accepted=True))
+
     def test_subagent_cannot_be_recorded_as_independent_reviewer(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
             root = Path(temporary_directory)
