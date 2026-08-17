@@ -546,6 +546,22 @@ class RuntimeContractTests(unittest.TestCase):
         )
         self.assertEqual([], validate_tc(complete))
 
+    def test_opaque_execute_step_is_rejected_but_measured_baseline_is_allowed(self) -> None:
+        opaque = VALID_TC.replace(
+            "1. В поле `Наименование партнёра` ввести `ПАО СБЕРБАНК`.",
+            "1. Выполнить добавление партнёра с указанными данными.",
+        )
+        self.assertTrue(any("delegates an unspecified flow" in error for error in validate_tc(opaque)))
+
+        measured = VALID_TC.replace(
+            "1. В поле `Наименование партнёра` ввести `ПАО СБЕРБАНК`.\n2. Нажать `СОХРАНИТЬ`.",
+            "1. Зафиксировать исходное число карточек N.\n2. Нажать `Добавить`.\n3. В поле `Наименование партнёра` ввести `ПАО СБЕРБАНК`.\n4. Нажать `СОХРАНИТЬ`.\n5. Повторно определить число карточек.",
+        ).replace(
+            "Карточка партнёра сохранена.",
+            "После сохранения число карточек равно N+1.",
+        )
+        self.assertEqual([], validate_tc(measured))
+
     def test_runtime_matrix_requires_profiles_and_valid_decisions(self) -> None:
         self.assertEqual([], validate_matrix(VALID_MATRIX))
         invalid = VALID_MATRIX.replace("базовый, жизненный-цикл-создания", "")

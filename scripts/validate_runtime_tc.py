@@ -63,6 +63,7 @@ INLINE_POSTCONDITION_ACTOR_RE = re.compile(
 POSTCONDITION_LOGIN_RE = re.compile(r"^\d+\.\s+Войти\s+пользовател", re.IGNORECASE | re.MULTILINE)
 POSTCONDITION_NAVIGATION_RE = re.compile(r"^\d+\.\s+(?:Открыть|Перейти)\b", re.IGNORECASE | re.MULTILINE)
 POSTCONDITION_FIND_RE = re.compile(r"^\d+\.\s+Найти\b", re.IGNORECASE | re.MULTILINE)
+OPAQUE_DELEGATE_STEP_RE = re.compile(r"^\d+\.\s+Выполнить\b", re.IGNORECASE | re.MULTILINE)
 
 
 def sections(block: str) -> dict[str, str]:
@@ -134,6 +135,10 @@ def validate(content: str) -> list[str]:
         steps = tc_sections["Шаги"]
         if not NUMBERED_LINE_RE.search(steps):
             errors.append(f"{tc_id}: steps must be numbered")
+        if OPAQUE_DELEGATE_STEP_RE.search(steps):
+            errors.append(
+                f"{tc_id}: a step starting with 'Выполнить' delegates an unspecified flow; list the observable user actions explicitly"
+            )
         data = tc_sections["Тестовые данные"]
         if data != "Не требуются." and FORBIDDEN_DATA_RE.search(data):
             errors.append(f"{tc_id}: test data are a dependency note, not concrete values")
