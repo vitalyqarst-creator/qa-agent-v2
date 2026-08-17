@@ -63,6 +63,18 @@ MISSING_ENVIRONMENT_GAP_RE = re.compile(
     r"(?:стендов\w*\s+)?(?:партн[её]р\w*|реквизит\w*|сущност\w*|запис\w*|уч[её]тн\w*)",
     re.IGNORECASE,
 )
+ONLY_ROLE_VISIBILITY_RE = re.compile(
+    r"(?:видим\w*\s+и\s+доступ\w*|доступ\w*\s+и\s+видим\w*)\s+только",
+    re.IGNORECASE,
+)
+NEGATIVE_ACTOR_RE = re.compile(
+    r"(?:без\s+(?:роли|права)|не\s+име\w*\s+(?:роль|прав))",
+    re.IGNORECASE,
+)
+ABSENCE_ORACLE_RE = re.compile(
+    r"(?:не\s+отображ\w*|не\s+видим\w*|отсутств\w*)",
+    re.IGNORECASE,
+)
 
 
 def cells(line: str) -> list[str]:
@@ -162,17 +174,22 @@ def validate_projection(content: str, inventory_content: str, gaps_content: str)
 
     inventory_anchors: set[str] = set()
     inventory_ids: set[str] = set()
+    inventory_statements: dict[str, str] = {}
     inventory_id_index = inventory.index("ID")
     inventory_source_index = inventory.index("Источник")
+    inventory_statement_index = inventory.index("Утверждение для покрытия")
     for row in inventory.rows:
         inventory_id = row[inventory_id_index].strip()
         if not inventory_id:
             errors.append("source-row-inventory contains an empty ID")
             continue
         inventory_ids.add(inventory_id)
+        inventory_statements[inventory_id] = row[inventory_statement_index]
         inventory_anchors.update(extract_anchors(row[inventory_source_index]))
 
     matrix_source_index = matrix.index("Источник требования")
+    matrix_check_index = matrix.index("Проверка")
+    matrix_expected_index = matrix.index("Ожидаемый результат")
     matrix_decision_index = matrix.index("Решение")
     matrix_id_index = matrix.index("ID")
     matrix_anchors: set[str] = set()
@@ -181,6 +198,17 @@ def validate_projection(content: str, inventory_content: str, gaps_content: str)
         matrix_source = row[matrix_source_index]
         matrix_anchors.update(extract_anchors(matrix_source))
         matrix_rows_by_id[row[matrix_id_index]] = row
+        linked_inventory_ids = SOURCE_ROW_TOKEN_RE.findall(matrix_source)
+        source_requires_absence = any(
+            ONLY_ROLE_VISIBILITY_RE.search(inventory_statements.get(inventory_id, ""))
+            for inventory_id in linked_inventory_ids
+        )
+        if source_requires_absence and NEGATIVE_ACTOR_RE.search(row[matrix_check_index]):
+            if not ABSENCE_ORACLE_RE.search(row[matrix_expected_index]):
+                errors.append(
+                    f"{row[matrix_id_index]}: source says the element is visible and available only to the role; "
+                    "negative-role expected result must require element absence, not generic unavailability"
+                )
     matrix_sources = "\n".join(row[matrix_source_index] for row in matrix.rows)
     for inventory_id in sorted(inventory_ids):
         if not re.search(rf"(?<![A-Za-z0-9_.-]){re.escape(inventory_id)}(?![A-Za-z0-9_.-])", matrix_sources):

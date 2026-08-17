@@ -479,6 +479,24 @@ class RuntimeContractTests(unittest.TestCase):
         self.assertIn("недостижим ему", reviewer)
         self.assertIn("логического покрытия другой строкой matrix", reviewer)
 
+    def test_matrix_projection_preserves_exact_negative_role_visibility(self) -> None:
+        inventory = VALID_INVENTORY.replace(
+            "Карточка сохраняется",
+            "Кнопка видима и доступна только пользователю с ролью Администратор",
+        )
+        matrix = VALID_MATRIX.replace(
+            "Сохранить карточку",
+            "Навести курсор пользователем без роли Администратор",
+        ).replace(
+            "Карточка сохранена",
+            "Архивирование недоступно",
+        )
+        errors = validate_matrix_projection(matrix, inventory, VALID_GAPS)
+        self.assertTrue(any("must require element absence" in error for error in errors))
+
+        matrix = matrix.replace("Архивирование недоступно", "Кнопка Архивировать отсутствует")
+        self.assertEqual([], validate_matrix_projection(matrix, inventory, VALID_GAPS))
+
     def test_controller_operational_prompts_are_semantically_neutral(self) -> None:
         root = Path(__file__).resolve().parents[1]
         topology = (root / "references" / "runtime" / "session-topology.md").read_text(encoding="utf-8")
