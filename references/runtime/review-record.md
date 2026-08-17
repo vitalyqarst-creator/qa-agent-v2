@@ -13,7 +13,7 @@ Matrix и canonical TC проверяются в разных верхнеуро
 
 Controller не меняет review inputs между созданием receipt и завершением reviewer. Reviewer изменяет только `<matrix|tc>-review.md` и `<matrix|tc>-review.json`. При вызове `create_thread` controller не переопределяет model/thinking, если пользователь явно этого не запросил.
 
-Controller не использует subagent, fork, analyzer, другой reviewer или текущую writer-сессию как независимый reviewer. После revision controller возвращает re-review в уже зарегистрированную reviewer-сессию того же вида. Если thread API недоступен или пользователь ещё не разрешил создание отдельных сессий, route останавливается до получения возможности/разрешения. Разрешение запрашивается один раз на текущий practical route.
+Controller не использует subagent, fork, analyzer, другой reviewer или текущую writer-сессию как независимый reviewer. После revision controller возвращает re-review в уже зарегистрированную reviewer-сессию того же вида только при неизменном commit agent-layer. Если runtime commit изменился, новый receipt создаётся для новой верхнеуровневой reviewer-сессии, чтобы она заново загрузила текущие инструкции. Если thread API недоступен или пользователь ещё не разрешил создание отдельных сессий, route останавливается до получения возможности/разрешения. Разрешение запрашивается один раз на текущий practical route.
 
 Bootstrap prompt:
 

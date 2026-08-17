@@ -9,7 +9,7 @@ Controller — одна верхнеуровневая Codex-сессия на �
 - Для каждого scope — свой `writer` в отдельной верхнеуровневой сессии. Этот же writer создаёт matrix, выполняет разрешённую правку matrix, пишет TC и выполняет разрешённую правку TC.
 - Для каждого scope — отдельные `matrix-reviewer` и `tc-reviewer`. Они отличаются от controller, locator, analyzer, writer и друг от друга.
 
-Новые сессии для fixture materialization, запуска validator-а и каждой revision не создаются. Повторная работа по тому же scope возвращается в ранее зарегистрированную analyzer/writer/reviewer-сессию соответствующей роли.
+Новые сессии для fixture materialization, запуска validator-а и каждой revision не создаются, пока commit agent-layer не изменился. Повторная работа по тому же scope возвращается в ранее зарегистрированную analyzer/writer/reviewer-сессию соответствующей роли только при совпадении `runtime_commit`. После обновления agent-layer controller создаёт новую верхнеуровневую сессию для каждой реально вызываемой semantic role и заменяет её stale-запись в registry; существующие артефакты переиспользуются, полный этап не повторяется без содержательной причины.
 
 Один analyzer или writer нельзя использовать для двух scope: перенос контекста между разделами ухудшает независимость и увеличивает риск скрытого смешения требований.
 
@@ -29,7 +29,7 @@ python scripts/runtime_session_registry.py controller-check --package-root <FT-p
 python scripts/runtime_session_registry.py acknowledge-runtime --package-root <FT-package> --controller-thread-id <controller-threadId>
 ```
 
-До успешного `controller-check` создавать или продолжать semantic role запрещено. Обычный role self-check также проверяет runtime commit, поэтому пропустить это обновление молча нельзя.
+До успешного `controller-check` создавать или продолжать semantic role запрещено. Обычный role self-check также проверяет runtime commit текущей semantic role. Старую semantic role нельзя подтвердить после изменения кода: для следующего вызова этой роли нужна новая верхнеуровневая сессия, чтобы инструкции гарантированно загрузились заново.
 
 ```text
 python scripts/runtime_session_registry.py init --package-root <FT-package> --controller-thread-id <threadId> --controller-host-id <hostId>

@@ -311,6 +311,36 @@ class RuntimeContractTests(unittest.TestCase):
             second = record_role(root, "writer", WRITER_THREAD, "local", "9.3.1-partners")
             self.assertEqual(first, second)
 
+    def test_stale_semantic_role_requires_a_fresh_session_after_runtime_update(self) -> None:
+        fresh_writer = "00000000-0000-4000-8000-000000000005"
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            with patch("scripts.runtime_session_registry.runtime_code_commit", return_value="a" * 40):
+                create_session_topology(root, "9.3.1-partners")
+            with patch("scripts.runtime_session_registry.runtime_code_commit", return_value="b" * 40):
+                acknowledge_runtime(root, CONTROLLER_THREAD)
+                errors = validate_topology(
+                    root,
+                    "writer",
+                    "9.3.1-partners",
+                    "writer",
+                    WRITER_THREAD,
+                )
+                self.assertTrue(any("fresh top-level session" in error for error in errors))
+                with self.assertRaisesRegex(ValueError, "fresh top-level session"):
+                    record_role(root, "writer", WRITER_THREAD, "local", "9.3.1-partners")
+                record_role(root, "writer", fresh_writer, "local", "9.3.1-partners")
+                self.assertEqual(
+                    [],
+                    validate_topology(
+                        root,
+                        "writer",
+                        "9.3.1-partners",
+                        "writer",
+                        fresh_writer,
+                    ),
+                )
+
     def test_matrix_and_tc_reviewers_cannot_share_a_session(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
             root = Path(temporary_directory)

@@ -23,7 +23,7 @@ STAGE_REQUIREMENTS = {
     "matrix-reviewer": ("scope-analyzer", "writer", "matrix-reviewer"),
     "tc-reviewer": ("scope-analyzer", "writer", "matrix-reviewer", "tc-reviewer"),
 }
-REGISTRY_SCHEMA_VERSION = 2
+REGISTRY_SCHEMA_VERSION = 3
 
 
 def utc_now() -> str:
@@ -77,7 +77,7 @@ def canonical_scope(value: str) -> str:
     return SCOPE_PREFIX_RE.sub("", value.strip())
 
 
-def session_record(thread_id: str, host_id: str) -> dict[str, str]:
+def session_record(thread_id: str, host_id: str, code_commit: str) -> dict[str, str]:
     if not THREAD_ID_RE.fullmatch(thread_id):
         raise ValueError("session thread id must be a UUID returned by Codex create_thread")
     if not host_id.strip():
@@ -86,6 +86,7 @@ def session_record(thread_id: str, host_id: str) -> dict[str, str]:
         "session_type": "codex-thread",
         "session_id": thread_id,
         "host_id": host_id.strip(),
+        "runtime_commit": code_commit,
         "recorded_at": utc_now(),
     }
 
@@ -112,7 +113,7 @@ def write_registry(package_root: Path, payload: dict[str, Any]) -> Path:
 
 def initialize_registry(package_root: Path, controller_thread_id: str, controller_host_id: str) -> Path:
     path = registry_path(package_root)
-    controller = session_record(controller_thread_id, controller_host_id)
+    controller = session_record(controller_thread_id, controller_host_id, runtime_code_commit(package_root))
     if path.exists():
         payload, errors = load_registry(package_root)
         if errors:
@@ -209,7 +210,8 @@ def record_role(
     if errors:
         raise ValueError(errors[0])
     assert payload is not None
-    record = session_record(thread_id, host_id)
+    current_commit = runtime_code_commit(package_root)
+    record = session_record(thread_id, host_id, current_commit)
 
     if role == PACKAGE_ROLE:
         if scope is not None:
@@ -233,9 +235,16 @@ def record_role(
         raise ValueError(f"unsupported runtime role: {role}")
 
     if isinstance(current, dict):
-        if current.get("session_id") != thread_id or current.get("host_id") != host_id.strip():
+        same_session = current.get("session_id") == thread_id and current.get("host_id") == host_id.strip()
+        if current.get("runtime_commit") != current_commit:
+            if same_session:
+                raise ValueError(
+                    f"{role} session was created for another runtime commit; create a fresh top-level session"
+                )
+        elif not same_session:
             raise ValueError(f"{role} is already assigned to another session; reuse the original session")
-        return registry_path(package_root)
+        else:
+            return registry_path(package_root)
 
     for assigned_role, assigned in all_role_records(payload):
         if assigned.get("session_id") == thread_id:
@@ -243,6 +252,19 @@ def record_role(
 
     target[key] = record
     return write_registry(package_root, payload)
+
+
+def validate_role_runtime(package_root: Path, label: str, record: Any) -> list[str]:
+    if not isinstance(record, dict):
+        return []
+    recorded_commit = record.get("runtime_commit")
+    current_commit = runtime_code_commit(package_root)
+    if recorded_commit != current_commit:
+        return [
+            f"{label} session belongs to runtime commit {recorded_commit!r}, current commit is {current_commit!r}; "
+            "controller must create and register a fresh top-level session for this role"
+        ]
+    return []
 
 
 def validate_record(label: str, record: Any) -> list[str]:
@@ -319,6 +341,8 @@ def validate_topology(
                 errors.append(f"unsupported expected role: {expected_role}")
             if isinstance(expected_record, dict) and expected_record.get("session_id") != expected_thread_id:
                 errors.append(f"current thread is not registered as {expected_role}")
+            elif isinstance(expected_record, dict):
+                errors.extend(validate_role_runtime(package_root, expected_role, expected_record))
     return errors
 
 
