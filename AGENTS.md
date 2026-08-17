@@ -36,6 +36,8 @@
 
 Operational prompt controller-а остаётся нейтральным транспортным конвертом по `session-topology.md`: controller не добавляет собственные трактовки требований, findings, статусов готовности, путей результата или правил тест-дизайна.
 
+При возобновлении route controller переиспользует валидные существующие артефакты и начинает с первого невалидного/отсутствующего этапа; новый route не означает повторный source locator или полный анализ с нуля.
+
 ## Тестовые данные и готовность исполнения
 
 До matrix и writer прочитай `references/runtime/test-data-fixtures.md` и `references/runtime/test-design-profiles.md`.

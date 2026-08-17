@@ -234,8 +234,17 @@ def main() -> int:
         action="store_true",
         help="Validate a late support-only registration without rejecting existing downstream artifacts.",
     )
+    parser.add_argument(
+        "--resume-existing",
+        action="store_true",
+        help="Revalidate an unchanged existing source selection while preserving downstream artifacts.",
+    )
     args = parser.parse_args()
-    errors = validate(args.package_root, args.handoff_dir, allow_downstream=args.support_update)
+    errors = validate(
+        args.package_root,
+        args.handoff_dir,
+        allow_downstream=args.support_update or args.resume_existing,
+    )
     print(json.dumps({"valid": not errors, "errors": errors}, ensure_ascii=False))
     return 0 if not errors else 1
 

@@ -21,6 +21,16 @@ python scripts/validate_runtime_source.py <FT-package> <source-handoff-dir>
 
 Validator проверяет registry, роли, пути, hashes, полноту регистрации локальных входов, отсутствие преждевременных downstream-артефактов и оставленных временных файлов. Самопроверка текстом или только `validate_runtime_tree.py` её не заменяет.
 
+## Возобновление существующего route
+
+Если source selection уже завершён, входные hashes не менялись, а downstream-артефакты существуют, новый practical route не создаёт source stage заново. Controller переиспользует существующие source artifacts и проверяет их без удаления downstream:
+
+```text
+python scripts/validate_runtime_source.py <FT-package> <source-handoff-dir> --resume-existing
+```
+
+Этот режим ничего не регистрирует и не разрешает незарегистрированный новый input. Он только подтверждает, что исторический source selection по-прежнему соответствует текущим файлам.
+
 ## Поздний support после вопросов БА
 
 Новый support-файл, предоставленный после scope analysis, регистрирует та же source-locator-сессия в существующих `AGENT-NOTES.md`, `source-selection.md` и `workflow-state.yaml`. Primary и visual selection не пересматриваются, semantic stages не выполняются. Поскольку downstream-артефакты к этому моменту ожидаемы, используется ограниченная проверка:

@@ -246,7 +246,7 @@ class RuntimeContractTests(unittest.TestCase):
             root = Path(temporary_directory)
             package, handoff = create_valid_source_stage(root)
             downstream = package / "work" / "stage-handoffs" / "9.3.1" / "scope-brief.md"
-            downstream.parent.mkdir(parents=True)
+            downstream.parent.mkdir(parents=True, exist_ok=True)
             downstream.write_text("# Scope\n", encoding="utf-8")
             self.assertTrue(any("downstream" in error for error in validate_source(package, handoff)))
             self.assertEqual([], validate_source(package, handoff, allow_downstream=True))
@@ -255,6 +255,17 @@ class RuntimeContractTests(unittest.TestCase):
             late_support.write_text("# Answers\n", encoding="utf-8")
             errors = validate_source(package, handoff, allow_downstream=True)
             self.assertTrue(any("local FT input is not registered" in error for error in errors))
+
+    def test_existing_source_selection_can_be_reused_with_downstream_artifacts(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            package, handoff = create_valid_source_stage(root)
+            downstream = package / "test-cases" / "existing.md"
+            downstream.parent.mkdir(parents=True, exist_ok=True)
+            downstream.write_text("# Existing\n", encoding="utf-8")
+
+            self.assertTrue(any("test-case artifact" in error for error in validate_source(package, handoff)))
+            self.assertEqual([], validate_source(package, handoff, allow_downstream=True))
 
     def test_session_topology_requires_distinct_top_level_roles(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
@@ -478,6 +489,8 @@ class RuntimeContractTests(unittest.TestCase):
         self.assertIn("не вводит дополнительные решения", topology)
         self.assertIn("не придумывает путь результата", topology)
         self.assertIn("нейтральным транспортным конвертом", agents)
+        self.assertIn("первого отсутствующего, stale или невалидного артефакта", topology)
+        self.assertIn("новый route не означает повторный source locator", agents)
 
     def test_tc_rejects_hybrid_state_setup_and_accepts_declarative_state(self) -> None:
         ambiguous = VALID_TC.replace(

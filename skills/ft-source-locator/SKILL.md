@@ -15,4 +15,6 @@ description: Выбирает и регистрирует источники о�
 
 Если пользователь добавил support-файл после появления вопросов или downstream-артефактов, повторно используй ту же source-locator-сессию и выполни только регистрацию позднего support: добавь файл с точной ролью и SHA-256 в существующие `AGENT-NOTES.md`, `source-selection.md` и `workflow-state.yaml`, не перечитывая и не переанализируя primary sources. Для такой ограниченной операции запусти `python scripts/validate_runtime_source.py <package-root> <source-handoff-dir> --support-update`. Этот режим не разрешает пропускать новый support-файл и не создаёт новый source stage; он лишь не считает уже существующие scope/matrix/TC ошибкой source locator-а.
 
+Если controller возобновляет новый practical route на существующем пакете без новых inputs, source locator не запускается повторно. Существующий выбор источников проверяется controller-ом через `--resume-existing`; эта проверка не является semantic stage.
+
 Не создавай scope, matrix, fixtures, вопросы БА или TC.
