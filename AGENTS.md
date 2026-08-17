@@ -10,7 +10,7 @@
 
 Одна controller-сессия управляет всем FT-пакетом и не выполняет semantic stages. До первого этапа она читает `references/runtime/session-topology.md`, создаёт `work/runtime-session-registry.json` и регистрирует фактические top-level Codex thread ID всех ролей.
 
-1. Отдельный `ft-source-locator` на пакет — выбрать DOCX, XHTML, PDF, support и макеты.
+1. Отдельный `ft-source-locator` на пакет — выбрать DOCX, XHTML, PDF, support и макеты; переход разрешён только после `validate_runtime_source.py`.
 2. Отдельный `ft-scope-analyzer` на каждый scope — подтвердить один внешний scope, извлечь обязанности, составить `test-data-plan.md` и вопросы к БА.
 3. Отдельный `ft-test-case-writer` на каждый scope — сначала материализовать нужные fixtures, применить универсальные профили тест-дизайна и создать `test-design-matrix.md`.
 4. Независимый matrix reviewer в **отдельной верхнеуровневой Codex-сессии**. Review связывается с SHA-256 matrix; при замечаниях — одна ограниченная правка и новый review.
@@ -28,7 +28,7 @@
 
 ## Controller-owned session dispatch
 
-Для source locator, analyzer и writer controller выполняет dispatch по `references/runtime/session-topology.md`: отдельный top-level thread через встроенные `list_projects` / `create_thread`, регистрация фактического thread ID командой `scripts/runtime_session_registry.py record`, operational follow-up через `send_message_to_thread` и ожидание через `wait_threads`. Для каждого matrix/TC review дополнительно действует двухфазный запуск по `references/runtime/review-record.md`; `runtime_review_dispatch.py create` автоматически связывает reviewer с session registry. Subagent, fork и выполнение нескольких semantic roles в одной сессии запрещены. Если отдельный thread создать нельзя, route останавливается; same-session fallback не допускается.
+Для source locator, analyzer и writer controller выполняет dispatch по `references/runtime/session-topology.md`: отдельный top-level thread через встроенные `list_projects` / `create_thread`, регистрация фактического thread ID командой `scripts/runtime_session_registry.py record`, operational follow-up через `send_message_to_thread` и ожидание через `wait_threads`. Для стандартного dispatch не ищи документацию в интернете: нужные операции и порядок уже заданы каноническим reference. Для каждого matrix/TC review дополнительно действует двухфазный запуск по `references/runtime/review-record.md`; `runtime_review_dispatch.py create` автоматически связывает reviewer с session registry. Subagent, fork и выполнение нескольких semantic roles в одной сессии запрещены. Если отдельный thread создать нельзя, route останавливается; same-session fallback не допускается.
 
 ## Тестовые данные — обязательный gate
 
@@ -57,7 +57,7 @@
 
 Все человекочитаемые рабочие артефакты — source selection, scope brief, matrix, gaps, вопросы БА и review — пиши на русском. Английские имена файлов, ссылки и согласованные metadata enum допустимы.
 
-Перед передачей этапов обязательно запускай проекционные валидаторы: scope handoff — `scripts/validate_runtime_scope.py`, matrix — `scripts/validate_runtime_matrix.py` вместе с inventory/gaps, TC — `scripts/validate_runtime_tc.py` вместе с принятой matrix. Схемная проверка одного файла без его входного artifact не считается достаточной.
+Перед передачей этапов обязательно запускай проекционные валидаторы: source selection — `scripts/validate_runtime_source.py`, scope handoff — `scripts/validate_runtime_scope.py`, matrix — `scripts/validate_runtime_matrix.py` вместе с inventory/gaps, TC — `scripts/validate_runtime_tc.py` вместе с принятой matrix. Схемная проверка одного файла без его входного artifact не считается достаточной.
 
 ## Review и выпуск
 

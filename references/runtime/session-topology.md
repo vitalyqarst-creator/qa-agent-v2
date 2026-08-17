@@ -15,7 +15,7 @@ Controller — одна верхнеуровневая Codex-сессия на �
 
 ## Controller-owned registry
 
-До запуска semantic role controller создаёт `work/runtime-session-registry.json` и регистрирует фактический `threadId`/`hostId`, полученные от Codex Desktop. Допустим только `codex-thread`; subagent, fork и выдуманный ID запрещены.
+До запуска semantic role controller создаёт `work/runtime-session-registry.json` и регистрирует фактический `threadId`/`hostId`, полученные от Codex Desktop. Допустим только `codex-thread`; subagent, fork и выдуманный ID запрещены. Операции Codex Desktop и их порядок уже перечислены ниже и в `AGENTS.md`: controller не выполняет web search документации перед стандартным dispatch. Если встроенная операция недоступна, route останавливается.
 
 ```text
 python scripts/runtime_session_registry.py init --package-root <FT-package> --controller-thread-id <threadId> --controller-host-id <hostId>

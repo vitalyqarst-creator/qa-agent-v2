@@ -21,6 +21,7 @@ REQUIRED_PATHS = (
     "skills/ft-test-case-writer/SKILL.md",
     "skills/ft-test-case-reviewer/SKILL.md",
     "references/runtime/test-data-fixtures.md",
+    "references/runtime/source-selection.md",
     "references/runtime/test-design-profiles.md",
     "references/runtime/test-design-matrix.md",
     "references/runtime/test-case-runtime.md",
@@ -29,6 +30,7 @@ REQUIRED_PATHS = (
     "scripts/create_ft_package.py",
     "scripts/capture_dadata_fixture.py",
     "scripts/validate_fixture_catalog.py",
+    "scripts/validate_runtime_source.py",
     "scripts/validate_runtime_tc.py",
     "scripts/validate_runtime_matrix.py",
     "scripts/validate_runtime_scope.py",
@@ -44,7 +46,10 @@ REQUIRED_REFERENCE_CONSUMERS = {
         "references/runtime/review-record.md",
         "references/runtime/session-topology.md",
     ),
-    "skills/ft-source-locator/SKILL.md": ("references/runtime/session-topology.md",),
+    "skills/ft-source-locator/SKILL.md": (
+        "references/runtime/session-topology.md",
+        "references/runtime/source-selection.md",
+    ),
     "skills/ft-scope-analyzer/SKILL.md": ("references/runtime/session-topology.md",),
     "skills/ft-test-case-writer/SKILL.md": (
         "references/runtime/test-design-profiles.md",

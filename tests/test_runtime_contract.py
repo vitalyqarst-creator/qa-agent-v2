@@ -16,6 +16,7 @@ from scripts.validate_fixture_catalog import validate as validate_catalog
 from scripts.validate_runtime_matrix import validate as validate_matrix, validate_projection as validate_matrix_projection
 from scripts.validate_runtime_review import validate as validate_review
 from scripts.validate_runtime_scope import validate as validate_scope
+from scripts.validate_runtime_source import validate as validate_source
 from scripts.validate_runtime_tc import validate as validate_tc, validate_projection as validate_tc_projection
 from scripts.validate_runtime_tree import validate as validate_tree
 
@@ -140,7 +141,81 @@ def create_scope_locator(package: Path) -> None:
     record_role(package, "scope-analyzer", ANALYZER_THREAD, "local", "scope")
 
 
+def create_valid_source_stage(root: Path) -> tuple[Path, Path]:
+    (root / ".git").mkdir()
+    package = root / "fts" / "Project" / "FT"
+    source = package / "source"
+    source.mkdir(parents=True)
+    inputs = {
+        "requirements.docx": (b"docx", "semantic_primary"),
+        "requirements.xhtml": (b"<html/>", "machine_readable_primary"),
+        "requirements.pdf": (b"pdf", "visual_structural_crosscheck_only"),
+    }
+    entries: list[tuple[str, str, str]] = []
+    for name, (content, role) in inputs.items():
+        path = source / name
+        path.write_bytes(content)
+        relative = path.relative_to(root).as_posix()
+        entries.append((relative, role, hashlib.sha256(content).hexdigest()))
+    (package / "support").mkdir()
+    (package / "mockups").mkdir()
+    (package / "test-cases").mkdir()
+    (package / "AGENT-NOTES.md").write_text(
+        "# Контекст\n\nrequirements.docx\nrequirements.xhtml\nrequirements.pdf\n",
+        encoding="utf-8",
+    )
+    initialize_registry(package, CONTROLLER_THREAD, "local")
+    record_role(package, "source-locator", LOCATOR_THREAD, "local")
+    handoff = package / "work" / "stage-handoffs" / "00-FT"
+    handoff.mkdir(parents=True)
+    selection_lines = ["# Выбор источников", ""]
+    workflow_lines = [
+        "stage: source-locator",
+        "status: completed",
+        'source_selection: "fts/Project/FT/work/stage-handoffs/00-FT/source-selection.md"',
+        "primary_sources:",
+    ]
+    for relative, role, digest in entries:
+        selection_lines.append(f"- `{relative}` `{digest}` `{role}`")
+        workflow_lines.extend(
+            [
+                f'  - path: "{relative}"',
+                f"    role: {role}",
+                f'    sha256: "{digest}"',
+            ]
+        )
+    workflow_lines.extend(["support_sources:", "visual_sources:"])
+    (handoff / "source-selection.md").write_text("\n".join(selection_lines) + "\n", encoding="utf-8")
+    (handoff / "workflow-state.yaml").write_text("\n".join(workflow_lines) + "\n", encoding="utf-8")
+    return package, handoff
+
+
 class RuntimeContractTests(unittest.TestCase):
+    def test_valid_source_stage_passes_projection_and_cleanliness_gate(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            package, handoff = create_valid_source_stage(Path(temporary_directory))
+            self.assertEqual([], validate_source(package, handoff))
+
+    def test_source_stage_rejects_stale_hash_and_downstream_artifacts(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            package, handoff = create_valid_source_stage(root)
+            (package / "source" / "requirements.docx").write_bytes(b"changed")
+            (package / "test-cases" / "premature.md").write_text("# premature\n", encoding="utf-8")
+            errors = validate_source(package, handoff)
+            self.assertTrue(any("SHA-256 mismatch" in error for error in errors))
+            self.assertTrue(any("test-case artifact" in error for error in errors))
+
+    def test_source_stage_rejects_repository_local_temporary_files(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            package, handoff = create_valid_source_stage(root)
+            rendered = root / "tmp" / "pdfs" / "source-locator" / "page-01.png"
+            rendered.parent.mkdir(parents=True)
+            rendered.write_bytes(b"png")
+            errors = validate_source(package, handoff)
+            self.assertTrue(any("repository-local temporary file" in error for error in errors))
+
     def test_session_topology_requires_distinct_top_level_roles(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
             root = Path(temporary_directory)
