@@ -50,6 +50,7 @@ def validate_dispatch(
     dispatch_path: Path,
     kind: str,
     expected_thread_id: str | None = None,
+    require_current_assignment: bool = True,
 ) -> list[str]:
     errors: list[str] = []
     payload, load_errors = load_json(dispatch_path)
@@ -109,16 +110,17 @@ def validate_dispatch(
     dispatched_at = payload.get("dispatched_at")
     if not isinstance(dispatched_at, str) or not TIMESTAMP_RE.fullmatch(dispatched_at):
         errors.append("dispatched_at must use UTC YYYY-MM-DDTHH:MM:SSZ")
-    scope = canonical_scope(dispatch_path.parent.name)
-    errors.extend(
-        validate_topology(
-            package_root,
-            f"{kind}-reviewer",
-            scope,
-            f"{kind}-reviewer",
-            thread_id if isinstance(thread_id, str) else None,
+    if require_current_assignment:
+        scope = canonical_scope(dispatch_path.parent.name)
+        errors.extend(
+            validate_topology(
+                package_root,
+                f"{kind}-reviewer",
+                scope,
+                f"{kind}-reviewer",
+                thread_id if isinstance(thread_id, str) else None,
+            )
         )
-    )
     return errors
 
 
@@ -155,7 +157,7 @@ def create_dispatch(
     )
 
     artifact_digest = sha256(artifact)
-    output = review_dir / f"{kind}-review-dispatch-{artifact_digest[:12]}.json"
+    output = review_dir / f"{kind}-review-dispatch-{artifact_digest[:12]}-{reviewer_thread_id[:8]}.json"
     stable_fields = {
         "schema_version": 1,
         "status": "dispatched",

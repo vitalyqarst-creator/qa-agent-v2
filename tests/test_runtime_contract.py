@@ -1052,6 +1052,50 @@ class RuntimeContractTests(unittest.TestCase):
             review_path.with_suffix(".md").write_text("# Review\n\nПроверено TC: 2/2\n", encoding="utf-8")
             self.assertEqual([], validate_review(artifact, review_path, "tc", require_accepted=True))
 
+    def test_historical_review_survives_runtime_role_replacement(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            artifact = root / "test-design-matrix.md"
+            artifact.write_text(VALID_MATRIX, encoding="utf-8")
+            first_dispatch = create_matrix_dispatch(root, artifact, MATRIX_REVIEWER_THREAD)
+            record = {
+                "schema_version": 1,
+                "review_kind": "matrix",
+                "artifact_path": "test-design-matrix.md",
+                "artifact_sha256": hashlib.sha256(artifact.read_bytes()).hexdigest(),
+                "dispatch_path": first_dispatch.relative_to(root).as_posix(),
+                "dispatch_sha256": sha256(first_dispatch),
+                "reviewer_session_type": "codex-thread",
+                "reviewer_session_id": MATRIX_REVIEWER_THREAD,
+                "reviewed_at": "2026-08-17T00:01:00Z",
+                "verdict": "matrix-accepted",
+                "findings": [],
+            }
+            review_path = root / "matrix-review.json"
+            review_path.write_text(json.dumps(record), encoding="utf-8")
+            review_path.with_suffix(".md").write_text("# Review\n", encoding="utf-8")
+
+            registry_path = root / "work" / "runtime-session-registry.json"
+            registry = json.loads(registry_path.read_text(encoding="utf-8"))
+            registry["scopes"]["reviews"]["matrix_reviewer"]["runtime_commit"] = "stale-runtime"
+            registry_path.write_text(json.dumps(registry), encoding="utf-8")
+            second_thread = "32345678-1234-1234-1234-123456789abc"
+            second_dispatch = create_dispatch(
+                root,
+                artifact,
+                root / "matrix-review-prompt.md",
+                root / "reviews",
+                "matrix",
+                second_thread,
+                "local",
+                "2026-08-17T00:02:00Z",
+            )
+
+            self.assertNotEqual(first_dispatch, second_dispatch)
+            self.assertTrue(first_dispatch.is_file())
+            self.assertTrue(second_dispatch.is_file())
+            self.assertEqual([], validate_review(artifact, review_path, "matrix", require_accepted=True))
+
     def test_subagent_cannot_be_recorded_as_independent_reviewer(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
             root = Path(temporary_directory)

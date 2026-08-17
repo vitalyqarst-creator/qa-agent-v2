@@ -6,7 +6,7 @@ Matrix и canonical TC проверяются в разных верхнеуро
 
 1. Controller создаёт operational prompt в `work/reviews/<scope>/<matrix|tc>-review-prompt.md`.
 2. Через встроенный Codex Desktop API controller вызывает `list_projects`, затем `create_thread` в local environment текущего проекта. Начальный bootstrap prompt запрещает читать artifacts и выполнять review до operational follow-up.
-3. Полученный от `create_thread` `threadId` controller регистрирует командой `scripts/runtime_review_dispatch.py create`. Команда одновременно закрепляет reviewer за scope в `runtime-session-registry.json`. Receipt имеет имя `<kind>-review-dispatch-<artifact-hash-prefix>.json`.
+3. Полученный от `create_thread` `threadId` controller регистрирует командой `scripts/runtime_review_dispatch.py create`. Команда одновременно закрепляет reviewer за scope в `runtime-session-registry.json`. Receipt имеет имя `<kind>-review-dispatch-<artifact-hash-prefix>-<reviewer-thread-prefix>.json`; поэтому повторный review неизменных байтов в новой сессии не перезаписывает историческое evidence.
 4. Только после успешной регистрации controller отправляет в созданную сессию operational prompt через `send_message_to_thread`, включая путь receipt.
 5. Reviewer первым действием запускает `scripts/runtime_review_dispatch.py verify`. При ошибке он останавливается без verdict.
 6. Controller ожидает завершения через `wait_threads`, сверяет фактические thread/host ID, проверяет неизменность SHA-256 receipt относительно значения, возвращённого командой `create`, и валидирует итоговый review-record.
@@ -45,7 +45,7 @@ python scripts/runtime_review_dispatch.py verify --package-root <FT-package> --a
   "review_kind": "matrix",
   "artifact_path": "work/practical/<scope>/test-design-matrix.md",
   "artifact_sha256": "<64 hex>",
-  "dispatch_path": "work/reviews/<scope>/matrix-review-dispatch-<hash-prefix>.json",
+  "dispatch_path": "work/reviews/<scope>/matrix-review-dispatch-<hash-prefix>-<thread-prefix>.json",
   "dispatch_sha256": "<64 hex>",
   "reviewer_session_type": "codex-thread",
   "reviewer_session_id": "<top-level thread id>",
@@ -59,6 +59,7 @@ python scripts/runtime_review_dispatch.py verify --package-root <FT-package> --a
 - Допустимые verdict: `matrix-accepted`, `matrix-changes-required`, `tc-accepted`, `tc-changes-required`.
 - Accepted verdict требует пустой `findings`; changes-required требует непустой конечный список findings.
 - Любое изменение проверенного artifact меняет SHA-256 и делает review устаревшим. После правки нужен новый review-record из отдельной сессии.
+- Обновление agent-layer само по себе не отменяет уже принятый review неизменного artifact. Проверка исторического review-record сверяет его собственные immutable receipt, thread ID и hashes, но не требует, чтобы та reviewer-сессия оставалась текущей ролью registry. Свежая сессия обязательна только при фактическом новом review.
 - `dispatch_path` указывает на controller-owned receipt текущего artifact; thread ID и hashes в receipt и review-record должны совпадать.
 - Writer не создаёт TC без успешной проверки принятой matrix. Набор TC не считается выпущенным без успешной проверки `tc-accepted` для текущих байтов файла.
 

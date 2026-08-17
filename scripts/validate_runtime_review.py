@@ -150,6 +150,7 @@ def validate(artifact: Path, record_path: Path, kind: str, require_accepted: boo
                                 dispatch_path,
                                 kind,
                                 session_id if isinstance(session_id, str) else None,
+                                require_current_assignment=False,
                             )
                         )
                         dispatched_at = dispatch.get("dispatched_at")
