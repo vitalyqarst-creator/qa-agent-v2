@@ -25,7 +25,11 @@ from scripts.validate_runtime_matrix import (
     validate_projection as validate_matrix_projection,
 )
 from scripts.validate_runtime_review import validate as validate_review
-from scripts.validate_runtime_scope import table_row_references, validate as validate_scope
+from scripts.validate_runtime_scope import (
+    table_row_references,
+    validate as validate_scope,
+    validate_test_data_plan,
+)
 from scripts.validate_runtime_source import validate as validate_source
 from scripts.validate_runtime_tc import (
     validate as validate_tc,
@@ -94,6 +98,13 @@ VALID_GAPS = """# Пробелы покрытия
 | ID | Связанная обязанность | Источник | Класс | Недостаток источника | Что требуется для закрытия |
 | --- | --- | --- | --- | --- | --- |
 | GAP-001 | SR-002 | AS.39 | нет-бизнес-результата | Не определён наблюдаемый результат | Ответ БА |
+"""
+
+VALID_DATA_PLAN = """# План тестовых данных
+
+| Группа проверок | Источник значений | Данные или контракт получения | Воспроизводимая подготовка | Готовность |
+| --- | --- | --- | --- | --- |
+| Сохранение карточки | первичный источник; стендовая подготовка | `Наименование` = `Проверка 001` | Создать запись с указанным наименованием. | needs-test-data |
 """
 
 CONTROLLER_THREAD = "00000000-0000-4000-8000-000000000001"
@@ -613,7 +624,7 @@ class RuntimeContractTests(unittest.TestCase):
                 encoding="utf-8",
             )
             (scope / "test-data-plan.md").write_text(
-                "# План тестовых данных\n\nКонкретные данные определены источником.\n", encoding="utf-8"
+                VALID_DATA_PLAN, encoding="utf-8"
             )
             (scope / "prompt.scope-to-writer.md").write_text(
                 "Создай матрицу по всем строкам инвентаря. Для `GAP-001` создай строку матрицы с решением `coverage-gap`.\n",
@@ -649,6 +660,84 @@ class RuntimeContractTests(unittest.TestCase):
             )
             errors = validate_scope(package, scope)
             self.assertTrue(any("must use CLR-* ID" in error for error in errors))
+
+    def test_test_data_plan_requires_provenance_and_provider_acquisition_contract(self) -> None:
+        invalid = """# План тестовых данных
+
+| Группа проверок | Источник значений | Данные или контракт получения | Воспроизводимая подготовка | Готовность |
+| --- | --- | --- | --- | --- |
+| Подсказка организации | внешний сервис: Provider | `Наименование` = `ООО Тест` | Выбрать подсказку. | needs-test-data |
+"""
+        errors = validate_test_data_plan(invalid)
+        self.assertTrue(any("must use 'Контракт получения:'" in error for error in errors))
+        self.assertTrue(any("requires readiness 'требуется получение данных'" in error for error in errors))
+
+        valid = invalid.replace(
+            "`Наименование` = `ООО Тест` | Выбрать подсказку. | needs-test-data",
+            "Контракт получения: запрос `Тест`; сохранить выбранное наименование и связанные реквизиты одной записи | Выбрать сохранённую подсказку. | требуется получение данных",
+        )
+        self.assertEqual([], validate_test_data_plan(valid))
+        self.assertTrue(validate_test_data_plan("# План\n\nЗначения будут подготовлены.\n"))
+
+    def test_scope_validator_rejects_gap_and_question_covered_by_nonblocking_working_assumption(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            (root / "AGENTS.md").write_text("# Runtime\n", encoding="utf-8")
+            (root / "scripts").mkdir()
+            package = root / "fts" / "Project" / "FT"
+            create_scope_locator(package)
+            support = package / "support"
+            support.mkdir(exist_ok=True)
+            answer = support / "working-assumption.md"
+            answer.write_text(
+                "### CLR-OLD\n"
+                "related_ft_reference: AS.39\n"
+                "question: Какая роль выполняет действие?\n"
+                "user_response: >-\n"
+                "  Пока использовать роль Администратор; после новой ролевой модели актуализировать проверку.\n"
+                "response_status: answered\n"
+                "response_type: working-assumption\n"
+                "blocking: no\n"
+                "residual_missing: Финальная ролевая модель появится позднее.\n",
+                encoding="utf-8",
+            )
+            locator = package / "work" / "stage-handoffs" / "00-ft" / "workflow-state.yaml"
+            locator.write_text(
+                locator.read_text(encoding="utf-8")
+                + "support_sources:\n"
+                + "  - path: fts/Project/FT/support/working-assumption.md\n"
+                + "    role: approved_ba_answers\n",
+                encoding="utf-8",
+            )
+            scope = package / "work" / "stage-handoffs" / "01-scope"
+            scope.mkdir()
+            (scope / "source-row-inventory.md").write_text(VALID_INVENTORY, encoding="utf-8")
+            (scope / "coverage-gaps.md").write_text(VALID_GAPS, encoding="utf-8")
+            (scope / "scope-clarification-requests.md").write_text(
+                "# Вопросы к БА\n\n## CLR-001 — роль\n\n"
+                "**Вопрос:** Какая роль выполняет действие?\n\n"
+                "**Основание в ФТ:** AS.39.\n\n"
+                "**Влияние на покрытие:** Нельзя определить доступ.\n\n"
+                "**Текущее состояние:** Ответ не получен.\n\n"
+                "**Почему существующий ответ не закрывает вопрос:** Нет финальной ролевой модели.\n",
+                encoding="utf-8",
+            )
+            (scope / "scope-brief.md").write_text(
+                "# Границы\n\n## Визуальная сверка\n\n"
+                "| UI-уровень | Визуальный источник | Результат сверки |\n"
+                "| --- | --- | --- |\n"
+                "| Форма | `fts/Project/FT/mockups/form.png` | Подтверждена форма. |\n",
+                encoding="utf-8",
+            )
+            (scope / "test-data-plan.md").write_text("# План данных\n\nДанные не требуются.\n", encoding="utf-8")
+            (scope / "prompt.scope-to-writer.md").write_text(
+                "Для `GAP-001` создай строку матрицы с решением `coverage-gap`.\n",
+                encoding="utf-8",
+            )
+            (scope / "workflow-state.yaml").write_text("stage: ft-scope-analyzer\n", encoding="utf-8")
+            errors = validate_scope(package, scope)
+            self.assertTrue(any("working assumption provides current behavior" in error for error in errors))
+            self.assertTrue(any("working assumption already provides current behavior" in error for error in errors))
 
     def test_scope_validator_rejects_invented_xhtml_table_row(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
@@ -963,6 +1052,10 @@ class RuntimeContractTests(unittest.TestCase):
             catalog_path = root / "fixture-catalog.json"
             catalog_path.write_text(json.dumps(catalog, ensure_ascii=False), encoding="utf-8")
             self.assertEqual([], validate_catalog(catalog_path))
+            catalog["fixtures"][0]["runtime_data"]["suggestion"] = "ООО ВЫДУМАННАЯ ОРГАНИЗАЦИЯ"
+            catalog_path.write_text(json.dumps(catalog, ensure_ascii=False), encoding="utf-8")
+            self.assertTrue(any("absent from provider snapshot" in error for error in validate_catalog(catalog_path)))
+            catalog["fixtures"][0]["runtime_data"]["suggestion"] = "ПАО СБЕРБАНК"
             catalog["fixtures"][0]["snapshot_sha256"] = "0" * 64
             catalog_path.write_text(json.dumps(catalog, ensure_ascii=False), encoding="utf-8")
             self.assertTrue(any("SHA-256 mismatch" in error for error in validate_catalog(catalog_path)))

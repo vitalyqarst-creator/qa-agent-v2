@@ -19,6 +19,19 @@ def has_secret(value: Any) -> bool:
     return False
 
 
+def scalar_values(value: Any) -> set[tuple[type, Any]]:
+    if isinstance(value, dict):
+        return set().union(*(scalar_values(item) for item in value.values()), set())
+    if isinstance(value, list):
+        return set().union(*(scalar_values(item) for item in value), set())
+    if value is None or isinstance(value, (dict, list)):
+        return set()
+    try:
+        return {(type(value), value)}
+    except TypeError:
+        return set()
+
+
 def validate(path: Path) -> list[str]:
     errors: list[str] = []
     try:
@@ -80,6 +93,15 @@ def validate(path: Path) -> list[str]:
                     else:
                         if has_secret(snapshot_payload):
                             errors.append(f"{label}: snapshot must not contain credentials or secrets")
+                        snapshot_values = scalar_values(snapshot_payload)
+                        runtime_values = scalar_values(fixture.get("runtime_data", {}))
+                        missing_runtime_values = runtime_values - snapshot_values
+                        if missing_runtime_values:
+                            visible = sorted(repr(value) for _kind, value in missing_runtime_values)
+                            errors.append(
+                                f"{label}: runtime_data contains values absent from provider snapshot: "
+                                + ", ".join(visible)
+                            )
     return errors
 
 

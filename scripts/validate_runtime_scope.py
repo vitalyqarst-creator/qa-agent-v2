@@ -41,6 +41,17 @@ FORBIDDEN_PROCESS_WORDS = {
 QUESTION_HEADING_RE = re.compile(r"^##\s+(CLR-[A-Za-z0-9.-]+)\b", re.MULTILINE)
 ANY_QUESTION_HEADING_RE = re.compile(r"^##\s+([^\n]+)$", re.MULTILINE)
 RESIDUAL_EXPLANATION = "**Почему существующий ответ не закрывает вопрос:**"
+WORKING_ASSUMPTION_STATUS_RE = re.compile(
+    r"^response_status:\s*(?:answered|resolved|approved)\s*$", re.IGNORECASE | re.MULTILINE
+)
+WORKING_ASSUMPTION_TYPE_RE = re.compile(
+    r"^response_type:\s*working-assumption\s*$", re.IGNORECASE | re.MULTILINE
+)
+NON_BLOCKING_RE = re.compile(r"^blocking:\s*no\s*$", re.IGNORECASE | re.MULTILINE)
+USER_RESPONSE_RE = re.compile(
+    r"^user_response:\s*(?:>[-+]?\s*\n(?:[ \t]+\S.*\n?)+|(?!(?:none|null|-)\s*$)\S.+)$",
+    re.IGNORECASE | re.MULTILINE,
+)
 TOKEN_STOPWORDS = {
     "данны",
     "должн",
@@ -106,6 +117,27 @@ ALLOWED_GAP_CLASSES = {
     "нет-бизнес-результата",
     "нет-точки-наблюдения",
 }
+TEST_DATA_PLAN_HEADERS = (
+    "Группа проверок",
+    "Источник значений",
+    "Данные или контракт получения",
+    "Воспроизводимая подготовка",
+    "Готовность",
+)
+ALLOWED_DATA_SOURCE_PREFIXES = (
+    "первичный источник",
+    "утверждённый ответ ба",
+    "утвержденный ответ ба",
+    "сохранённый ответ",
+    "сохраненный ответ",
+    "внешний сервис:",
+    "проектный справочник",
+    "официальный публичный источник",
+    "синтетический генератор",
+    "стендовая подготовка",
+    "не требуются",
+)
+ALLOWED_DATA_READINESS = {"ready", "готово", "needs-test-data", "требуется получение данных"}
 
 
 def runtime_root(package_root: Path) -> Path:
@@ -288,6 +320,88 @@ def duplicates_fully_answered_question(current_question: str, support: str, code
     return False
 
 
+def support_cards(content: str) -> list[str]:
+    cards = re.split(r"(?=^###\s+(?:U?CLR)-)", content, flags=re.MULTILINE)
+    return [card for card in cards if re.match(r"^###\s+(?:U?CLR)-", card)]
+
+
+def operational_working_assumption(card: str) -> bool:
+    return all(
+        pattern.search(card)
+        for pattern in (
+            WORKING_ASSUMPTION_STATUS_RE,
+            WORKING_ASSUMPTION_TYPE_RE,
+            NON_BLOCKING_RE,
+            USER_RESPONSE_RE,
+        )
+    )
+
+
+def operational_assumption_codes(card: str) -> set[str]:
+    if not operational_working_assumption(card):
+        return set()
+    requirement_match = re.search(r"^requirement_codes:\s*(.+?)\s*$", card, re.IGNORECASE | re.MULTILINE)
+    if requirement_match and requirement_match.group(1).strip() not in {"-", "none"}:
+        return {
+            anchor for anchor in extract_anchors(requirement_match.group(1)) if anchor.startswith("CODE:")
+        }
+    reference_match = re.search(r"^related_ft_reference:\s*(.+?)\s*$", card, re.IGNORECASE | re.MULTILINE)
+    if reference_match is None:
+        return set()
+    primary_parts = [
+        part
+        for part in reference_match.group(1).split(";")
+        if "cross-ref" not in part.casefold() and "cross ref" not in part.casefold()
+    ]
+    return {
+        anchor
+        for anchor in extract_anchors(";".join(primary_parts))
+        if anchor.startswith("CODE:")
+    }
+
+
+def validate_test_data_plan(content: str) -> list[str]:
+    if re.search(r"(?m)^Данные не требуются\.\s*$", content) and "|" not in content:
+        return []
+    table = find_markdown_table(content, TEST_DATA_PLAN_HEADERS)
+    if table is None or not table.rows:
+        return [
+            "test-data-plan must contain the source-compatible data table from test-data-fixtures.md "
+            "or the exact line 'Данные не требуются.'"
+        ]
+    errors: list[str] = []
+    group_index = table.index("Группа проверок")
+    source_index = table.index("Источник значений")
+    data_index = table.index("Данные или контракт получения")
+    readiness_index = table.index("Готовность")
+    for row in table.rows:
+        group = row[group_index].strip() or "<без группы>"
+        source = row[source_index].strip()
+        data = row[data_index].strip()
+        readiness = row[readiness_index].strip().casefold()
+        source_parts = [part.strip().strip("`").casefold() for part in source.split(";") if part.strip()]
+        if not source_parts or any(
+            not any(part.startswith(prefix) for prefix in ALLOWED_DATA_SOURCE_PREFIXES)
+            for part in source_parts
+        ):
+            errors.append(f"test-data-plan {group}: unsupported or missing value source {source!r}")
+        if readiness not in ALLOWED_DATA_READINESS:
+            errors.append(f"test-data-plan {group}: unsupported readiness {row[readiness_index]!r}")
+        external = any(part.startswith("внешний сервис:") for part in source_parts)
+        saved = any(part.startswith(("сохранённый ответ", "сохраненный ответ")) for part in source_parts)
+        if external and not saved:
+            if not data.casefold().startswith("контракт получения:"):
+                errors.append(
+                    f"test-data-plan {group}: external value without a saved response must use 'Контракт получения:'"
+                )
+            if readiness != "требуется получение данных":
+                errors.append(
+                    f"test-data-plan {group}: external value without a saved response requires readiness "
+                    "'требуется получение данных'"
+                )
+    return errors
+
+
 def strip_allowed_technical_fragments(content: str) -> str:
     content = re.sub(r"```.*?```", "", content, flags=re.DOTALL)
     content = re.sub(r"`[^`\n]*`", "", content)
@@ -418,6 +532,15 @@ def validate(package_root: Path, scope_dir: Path) -> list[str]:
                 )
             )
 
+    support_files = approved_support_paths(package_root)
+    support_contents = [(path, path.read_text(encoding="utf-8")) for path in support_files]
+    assumption_codes = {
+        code
+        for _path, support in support_contents
+        for card in support_cards(support)
+        for code in operational_assumption_codes(card)
+    }
+
     gaps_content = (scope_dir / "coverage-gaps.md").read_text(encoding="utf-8")
     gaps = find_markdown_table(
         gaps_content,
@@ -430,6 +553,7 @@ def validate(package_root: Path, scope_dir: Path) -> list[str]:
         else:
             gap_id_index = gaps.index("ID")
             linked_source_index = gaps.index("Связанная обязанность")
+            gap_source_index = gaps.index("Источник")
             gap_class_index = gaps.index("Класс")
             gap_deficit_index = gaps.index("Недостаток источника")
             gap_resolution_index = gaps.index("Что требуется для закрытия")
@@ -451,6 +575,16 @@ def validate(package_root: Path, scope_dir: Path) -> list[str]:
                     errors.append(
                         f"{gap_id}: missing environment data is execution readiness, not a coverage gap"
                     )
+                source_codes = {
+                    anchor for anchor in extract_anchors(row[gap_source_index]) if anchor.startswith("CODE:")
+                }
+                covered_assumptions = sorted(source_codes & assumption_codes)
+                if covered_assumptions:
+                    errors.append(
+                        f"{gap_id}: non-blocking working assumption provides current behavior for "
+                        + ", ".join(code.removeprefix("CODE:") for code in covered_assumptions)
+                        + "; record future update instead of a coverage gap"
+                    )
 
     prompt = (scope_dir / "prompt.scope-to-writer.md").read_text(encoding="utf-8")
     combined_scope_text = "\n".join(
@@ -465,12 +599,13 @@ def validate(package_root: Path, scope_dir: Path) -> list[str]:
             if gap_id not in prompt:
                 errors.append(f"writer prompt does not carry {gap_id}")
 
+    test_data_plan_content = (scope_dir / "test-data-plan.md").read_text(encoding="utf-8")
+    errors.extend(validate_test_data_plan(test_data_plan_content))
+
     questions_content = (scope_dir / "scope-clarification-requests.md").read_text(encoding="utf-8")
     for heading in ANY_QUESTION_HEADING_RE.findall(questions_content):
         if not heading.startswith("CLR-"):
             errors.append(f"clarification question heading must use CLR-* ID, got {heading!r}")
-    support_files = approved_support_paths(package_root)
-    support_contents = [(path, path.read_text(encoding="utf-8")) for path in support_files]
     for question_id, block in question_blocks(questions_content):
         current_question = question_text(block)
         if QUESTION_EXTRA_BEHAVIOR_RE.search(current_question):
@@ -485,6 +620,13 @@ def validate(package_root: Path, scope_dir: Path) -> list[str]:
         if not codes:
             errors.append(f"{question_id}: question has no requirement code")
             continue
+        provisional_codes = {f"CODE:{code}" for code in codes} & assumption_codes
+        if provisional_codes:
+            errors.append(
+                f"{question_id}: non-blocking working assumption already provides current behavior for "
+                + ", ".join(sorted(code.removeprefix("CODE:") for code in provisional_codes))
+                + "; preserve a future-update note instead of a BA question"
+            )
         matching_support: list[Path] = []
         for path, support in support_contents:
             for code in codes:
