@@ -401,6 +401,26 @@ class RuntimeContractTests(unittest.TestCase):
         )
         self.assertTrue(any("dependency note" in error for error in validate_tc(invalid)))
 
+    def test_writer_and_reviewer_require_execution_gates(self) -> None:
+        root = Path(__file__).resolve().parents[1]
+        runtime = (root / "references" / "runtime" / "test-case-runtime.md").read_text(encoding="utf-8")
+        writer = (root / "skills" / "ft-test-case-writer" / "SKILL.md").read_text(encoding="utf-8")
+        reviewer = (root / "skills" / "ft-test-case-reviewer" / "SKILL.md").read_text(encoding="utf-8")
+
+        for gate in (
+            "Наблюдаемость перехода",
+            "Восстановление состояния",
+            "Допустимость очистки",
+            "Конкретность идентичности и предзаполнения",
+        ):
+            self.assertIn(gate, runtime)
+        self.assertIn("обязательные gates", writer)
+        self.assertIn("переход, изменение значения или счётчика", reviewer)
+        self.assertIn("изменяющий состояние TC", reviewer)
+        self.assertIn("выдуманный cleanup", reviewer)
+        self.assertIn("проверки конкретной идентичности объекта", reviewer)
+        self.assertIn("невидим текущему актору", reviewer)
+
     def test_runtime_matrix_requires_profiles_and_valid_decisions(self) -> None:
         self.assertEqual([], validate_matrix(VALID_MATRIX))
         invalid = VALID_MATRIX.replace("базовый, жизненный-цикл-создания", "")
