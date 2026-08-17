@@ -31,7 +31,7 @@ VALID_TC = """## TC-9.3.2-001
 
 **Приоритет:** High
 
-**Трассировка:** `M-001`; `AS.38`; Таблица 7.
+**Трассировка:** `M-001`; `AS.38`; Таблица 7, строка «Сохранить».
 
 **Предусловия:**
 
@@ -57,7 +57,7 @@ VALID_MATRIX = """# Матрица
 
 | ID | Источник требования | Проверка | Профили тест-дизайна | Предусловие/исходное состояние | Конкретные тестовые данные | Ожидаемый результат | Решение |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| M-001 | SR-001; AS.38; Таблица 7 | Сохранить карточку | базовый, жизненный-цикл-создания | Открыта форма добавления | `Наименование` = `ПАО СБЕРБАНК` | Карточка сохранена | TC |
+| M-001 | SR-001; AS.38; Таблица 7, строка «Сохранить» | Сохранить карточку | базовый, жизненный-цикл-создания | Открыта форма добавления | `Наименование` = `ПАО СБЕРБАНК` | Карточка сохранена | TC |
 | GAP-001 | SR-002; AS.39 | Проверить неизвестную реакцию | допустимые-классы | Открыта форма | Не определены | Требуется уточнение результата | coverage-gap |
 """
 
@@ -65,7 +65,7 @@ VALID_INVENTORY = """# Инвентарь
 
 | ID | Источник | Утверждение для покрытия |
 | --- | --- | --- |
-| SR-001 | AS.38; Таблица 7 | Карточка сохраняется |
+| SR-001 | AS.38; Таблица 7, строка «Сохранить» | Карточка сохраняется |
 | SR-002 | AS.39 | Реакция на ограничение должна быть определена |
 
 ## Применённые исключения
@@ -93,6 +93,32 @@ def create_matrix_dispatch(root: Path, artifact: Path, thread_id: str = "1234567
         thread_id,
         "local",
         "2026-08-17T00:00:00Z",
+    )
+
+
+def create_scope_locator(package: Path) -> None:
+    source = package / "source"
+    source.mkdir(parents=True, exist_ok=True)
+    xhtml = source / "requirements.xhtml"
+    xhtml.write_text(
+        "<html><body><h1>Таблица 7 Требования</h1><table>"
+        "<tr><td>Название</td><td>Примечание</td></tr>"
+        "<tr><td>Сохранить</td><td>Карточка сохраняется</td></tr>"
+        "</table></body></html>",
+        encoding="utf-8",
+    )
+    mockups = package / "mockups"
+    mockups.mkdir(parents=True, exist_ok=True)
+    (mockups / "form.png").write_bytes(b"png")
+    locator = package / "work" / "stage-handoffs" / "00-ft"
+    locator.mkdir(parents=True, exist_ok=True)
+    (locator / "workflow-state.yaml").write_text(
+        "primary_sources:\n"
+        "  - path: fts/Project/FT/source/requirements.xhtml\n"
+        "    role: machine_readable_primary\n"
+        "visual_sources:\n"
+        "  - path: fts/Project/FT/mockups/form.png\n",
+        encoding="utf-8",
     )
 
 
@@ -245,9 +271,13 @@ class RuntimeContractTests(unittest.TestCase):
             (root / "AGENTS.md").write_text("# Runtime\n", encoding="utf-8")
             (root / "scripts").mkdir()
             package = root / "fts" / "Project" / "FT"
+            create_scope_locator(package)
             scope = package / "work" / "stage-handoffs" / "01-scope"
-            scope.mkdir(parents=True)
-            (scope / "source-row-inventory.md").write_text(VALID_INVENTORY, encoding="utf-8")
+            scope.mkdir()
+            (scope / "source-row-inventory.md").write_text(
+                VALID_INVENTORY.replace("строка «Сохранить»", "строка «Сохранить», примечание"),
+                encoding="utf-8",
+            )
             (scope / "coverage-gaps.md").write_text("# Пробелы покрытия\n\nПробелы отсутствуют.\n", encoding="utf-8")
             (scope / "scope-clarification-requests.md").write_text(
                 "# Вопросы к БА\n\nОткрытые вопросы отсутствуют.\n", encoding="utf-8"
@@ -257,7 +287,7 @@ class RuntimeContractTests(unittest.TestCase):
                 "## Визуальная сверка\n\n"
                 "| UI-уровень | Визуальный источник | Результат сверки |\n"
                 "| --- | --- | --- |\n"
-                "| Форма добавления | Рисунок 4 | Подтверждены подписи и путь открытия. |\n",
+                "| Форма добавления | `fts/Project/FT/mockups/form.png` | Подтверждены подписи и путь открытия. |\n",
                 encoding="utf-8",
             )
             (scope / "test-data-plan.md").write_text(
@@ -269,6 +299,69 @@ class RuntimeContractTests(unittest.TestCase):
             (scope / "workflow-state.yaml").write_text("stage: ft-scope-analyzer\n", encoding="utf-8")
             self.assertEqual([], validate_scope(package, scope))
 
+    def test_scope_validator_rejects_invented_xhtml_table_row(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            (root / "AGENTS.md").write_text("# Runtime\n", encoding="utf-8")
+            (root / "scripts").mkdir()
+            package = root / "fts" / "Project" / "FT"
+            create_scope_locator(package)
+            scope = package / "work" / "stage-handoffs" / "01-scope"
+            scope.mkdir()
+            (scope / "source-row-inventory.md").write_text(
+                VALID_INVENTORY.replace("строка «Сохранить»", "строка «Несуществующая кнопка»"),
+                encoding="utf-8",
+            )
+            (scope / "coverage-gaps.md").write_text("# Пробелы покрытия\n\nПробелы отсутствуют.\n", encoding="utf-8")
+            (scope / "scope-clarification-requests.md").write_text("# Вопросы\n\nВопросы отсутствуют.\n", encoding="utf-8")
+            (scope / "scope-brief.md").write_text(
+                "# Границы\n\n## Визуальная сверка\n\n"
+                "| UI-уровень | Визуальный источник | Результат сверки |\n"
+                "| --- | --- | --- |\n"
+                "| Форма | `fts/Project/FT/mockups/form.png` | Подтверждена форма. |\n",
+                encoding="utf-8",
+            )
+            (scope / "test-data-plan.md").write_text("# План данных\n\nДанные не требуются.\n", encoding="utf-8")
+            (scope / "prompt.scope-to-writer.md").write_text("Создай матрицу по активным строкам.\n", encoding="utf-8")
+            (scope / "workflow-state.yaml").write_text("stage: ft-scope-analyzer\n", encoding="utf-8")
+            errors = validate_scope(package, scope)
+            self.assertTrue(any("does not exist in table 7" in error for error in errors))
+
+    def test_scope_validator_rejects_unregistered_or_missing_visual_paths(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            (root / "AGENTS.md").write_text("# Runtime\n", encoding="utf-8")
+            (root / "scripts").mkdir()
+            package = root / "fts" / "Project" / "FT"
+            create_scope_locator(package)
+            unregistered = package / "mockups" / "alias.png"
+            unregistered.write_bytes(b"png")
+            scope = package / "work" / "stage-handoffs" / "01-scope"
+            scope.mkdir()
+            (scope / "source-row-inventory.md").write_text(VALID_INVENTORY, encoding="utf-8")
+            (scope / "coverage-gaps.md").write_text("# Пробелы покрытия\n\nПробелы отсутствуют.\n", encoding="utf-8")
+            (scope / "scope-clarification-requests.md").write_text("# Вопросы\n\nВопросы отсутствуют.\n", encoding="utf-8")
+            (scope / "scope-brief.md").write_text(
+                "# Границы\n\n## Визуальная сверка\n\n"
+                "| UI-уровень | Визуальный источник | Результат сверки |\n"
+                "| --- | --- | --- |\n"
+                "| Форма | `mockups/alias.png`; `mockups/missing.png` | Подтверждена форма. |\n",
+                encoding="utf-8",
+            )
+            (scope / "test-data-plan.md").write_text("# План данных\n\nДанные не требуются.\n", encoding="utf-8")
+            (scope / "prompt.scope-to-writer.md").write_text("Создай матрицу по активным строкам.\n", encoding="utf-8")
+            (scope / "workflow-state.yaml").write_text(
+                "stage: ft-scope-analyzer\n"
+                "visual_cross_check:\n"
+                "  local_mockups:\n"
+                "    - fts/Project/FT/mockups/not-there.png\n",
+                encoding="utf-8",
+            )
+            errors = validate_scope(package, scope)
+            self.assertTrue(any("not registered by source locator" in error and "alias.png" in error for error in errors))
+            self.assertTrue(any("does not exist" in error and "missing.png" in error for error in errors))
+            self.assertTrue(any("does not exist" in error and "not-there.png" in error for error in errors))
+
     def test_scope_validator_rejects_aggregated_and_cancelled_active_source_rows(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
             root = Path(temporary_directory)
@@ -278,8 +371,8 @@ class RuntimeContractTests(unittest.TestCase):
             scope = package / "work" / "stage-handoffs" / "01-scope"
             scope.mkdir(parents=True)
             invalid_inventory = VALID_INVENTORY.replace(
-                "| SR-001 | AS.38; Таблица 7 | Карточка сохраняется |",
-                "| SR-001 | AS.38-AS.39; Таблица 7 | Операции не будет; строка не образует проверяемого поведения. |",
+                "| SR-001 | AS.38; Таблица 7, строка «Сохранить» | Карточка сохраняется |",
+                "| SR-001 | AS.38-AS.39; Таблица 7, строка «Сохранить» | Операции не будет; строка не образует проверяемого поведения. |",
             )
             (scope / "source-row-inventory.md").write_text(invalid_inventory, encoding="utf-8")
             (scope / "coverage-gaps.md").write_text("# Пробелы покрытия\n\nПробелы отсутствуют.\n", encoding="utf-8")

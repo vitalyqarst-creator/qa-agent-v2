@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import xml.etree.ElementTree as ET
 from pathlib import Path
 
 try:
@@ -61,6 +62,14 @@ RESOLVED_EXCLUSION_RE = re.compile(
     r"(?:операци[яи]|функциональност[ьи])\s+не\s+будет",
     re.IGNORECASE,
 )
+TABLE_ROW_REFERENCE_RE = re.compile(
+    r"Таблица\s+(\d+)\s*,\s*строка\s+[«\"](.+?)[»\"](?:\s*,\s*примечание)?(?=\s*(?:;|$))",
+    re.IGNORECASE,
+)
+TABLE_LABEL_RE = re.compile(r"^Таблица\s+(\d+)\b", re.IGNORECASE)
+LOCAL_VISUAL_RE = re.compile(r"`([^`\n]+\.(?:png|jpe?g|webp|svg))`", re.IGNORECASE)
+LOCAL_VISUAL_LABEL_RE = re.compile(r"\bРисунок\s+\d+\b", re.IGNORECASE)
+LOCAL_VISUAL_EXTENSION_RE = re.compile(r"\.(?:png|jpe?g|webp|svg)\b", re.IGNORECASE)
 
 
 def runtime_root(package_root: Path) -> Path:
@@ -70,28 +79,127 @@ def runtime_root(package_root: Path) -> Path:
     raise ValueError("runtime root was not found above package root")
 
 
-def approved_support_paths(package_root: Path) -> list[Path]:
-    root = runtime_root(package_root)
+def locator_sections(package_root: Path) -> dict[str, list[dict[str, str]]]:
     locator_states = sorted((package_root / "work" / "stage-handoffs").glob("00-*/workflow-state.yaml"))
     if not locator_states:
-        return []
-    paths: list[Path] = []
-    current_path: str | None = None
+        return {}
+    sections: dict[str, list[dict[str, str]]] = {}
+    current_section: str | None = None
+    current_entry: dict[str, str] | None = None
     for line in locator_states[-1].read_text(encoding="utf-8").splitlines():
-        path_match = re.match(r"\s*-\s+path:\s*(.+?)\s*$", line)
-        if path_match:
-            current_path = path_match.group(1).strip().strip('"\'')
+        section_match = re.match(r"^([A-Za-z_][A-Za-z0-9_-]*):\s*$", line)
+        if section_match:
+            current_section = section_match.group(1)
+            current_entry = None
             continue
-        role_match = re.match(r"\s+role:\s*(.+?)\s*$", line)
-        if current_path and role_match:
-            role = role_match.group(1).strip().strip('"\'').casefold()
-            if "approved_ba" in role:
-                candidate = root / current_path
-                if not candidate.is_file():
-                    candidate = package_root / current_path
-                if candidate.is_file():
-                    paths.append(candidate)
-            current_path = None
+        path_match = re.match(r"\s*-\s+path:\s*(.+?)\s*$", line)
+        if current_section and path_match:
+            current_entry = {"path": path_match.group(1).strip().strip('"\'')}
+            sections.setdefault(current_section, []).append(current_entry)
+            continue
+        attribute_match = re.match(r"\s+([A-Za-z_][A-Za-z0-9_-]*):\s*(.+?)\s*$", line)
+        if current_entry is not None and attribute_match:
+            current_entry[attribute_match.group(1)] = attribute_match.group(2).strip().strip('"\'')
+    return sections
+
+
+def resolve_declared_path(package_root: Path, value: str) -> Path:
+    candidate = Path(value)
+    if candidate.is_absolute():
+        return candidate.resolve()
+    root = runtime_root(package_root)
+    root_relative = (root / candidate).resolve()
+    if root_relative.exists():
+        return root_relative
+    return (package_root / candidate).resolve()
+
+
+def normalized_source_text(value: str) -> str:
+    return " ".join(value.replace("\u00a0", " ").split()).casefold()
+
+
+def xhtml_table_rows(path: Path) -> dict[int, set[str]]:
+    tree = ET.parse(path)
+    current_table_number: int | None = None
+    result: dict[int, set[str]] = {}
+    for element in tree.iter():
+        tag = element.tag.rsplit("}", 1)[-1].casefold()
+        text = " ".join("".join(element.itertext()).replace("\u00a0", " ").split())
+        if tag in {"h1", "p"}:
+            label_match = TABLE_LABEL_RE.match(text)
+            if label_match:
+                current_table_number = int(label_match.group(1))
+        if tag != "table" or current_table_number is None:
+            continue
+        first_cells: list[str] = []
+        for row in (child for child in element.iter() if child.tag.rsplit("}", 1)[-1].casefold() == "tr"):
+            cells = [
+                child
+                for child in list(row)
+                if child.tag.rsplit("}", 1)[-1].casefold() in {"td", "th"}
+            ]
+            if cells:
+                first_cells.append(" ".join("".join(cells[0].itertext()).replace("\u00a0", " ").split()))
+        # The first row is the column header, not a requirement row.
+        result[current_table_number] = {normalized_source_text(value) for value in first_cells[1:] if value}
+        current_table_number = None
+    return result
+
+
+def machine_readable_primary(package_root: Path) -> Path | None:
+    for entry in locator_sections(package_root).get("primary_sources", []):
+        if "machine_readable_primary" in entry.get("role", "").casefold():
+            return resolve_declared_path(package_root, entry["path"])
+    return None
+
+
+def yaml_list_values(content: str, key: str) -> list[str]:
+    lines = content.splitlines()
+    values: list[str] = []
+    for index, line in enumerate(lines):
+        match = re.match(rf"^(\s*){re.escape(key)}:\s*$", line)
+        if not match:
+            continue
+        base_indent = len(match.group(1))
+        for nested in lines[index + 1 :]:
+            if nested.strip() and len(nested) - len(nested.lstrip()) <= base_indent:
+                break
+            item_match = re.match(r"\s*-\s+(.+?)\s*$", nested)
+            if item_match:
+                values.append(item_match.group(1).strip().strip('"\''))
+        break
+    return values
+
+
+def validate_visual_reference(
+    package_root: Path,
+    value: str,
+    registered_paths: set[str],
+    origin: str,
+) -> list[str]:
+    if value.casefold().startswith(("http://", "https://")):
+        return []
+    resolved = resolve_declared_path(package_root, value)
+    errors: list[str] = []
+    if not resolved.is_file():
+        return [f"{origin}: local visual path does not exist: {value}"]
+    canonical = resolved.as_posix().casefold()
+    if canonical not in registered_paths:
+        errors.append(f"{origin}: local visual path is not registered by source locator: {value}")
+    return errors
+
+
+def approved_support_paths(package_root: Path) -> list[Path]:
+    root = runtime_root(package_root)
+    paths: list[Path] = []
+    for entry in locator_sections(package_root).get("support_sources", []):
+        if "approved_ba" not in entry.get("role", "").casefold():
+            continue
+        candidate = root / entry["path"]
+        if not candidate.is_file():
+            candidate = package_root / entry["path"]
+        if candidate.is_file():
+            paths.append(candidate)
     return paths
 
 
@@ -155,6 +263,7 @@ def validate(package_root: Path, scope_dir: Path) -> list[str]:
 
     inventory_content = (scope_dir / "source-row-inventory.md").read_text(encoding="utf-8")
     inventory = find_markdown_table(inventory_content, ("ID", "Источник", "Утверждение для покрытия"))
+    row_references: list[tuple[str, int, str]] = []
     if inventory is None or not inventory.rows:
         errors.append("source-row-inventory has no required source rows table")
     else:
@@ -172,10 +281,29 @@ def validate(package_root: Path, scope_dir: Path) -> list[str]:
             source_codes = {
                 anchor for anchor in extract_anchors(row[inventory_source_index]) if anchor.startswith("CODE:")
             }
+            for table_number, row_name in TABLE_ROW_REFERENCE_RE.findall(row[inventory_source_index]):
+                row_references.append((inventory_id, int(table_number), row_name))
             if len(source_codes) > 1:
                 errors.append(f"{inventory_id}: active source row must contain one atomic requirement code")
             if RESOLVED_EXCLUSION_RE.search(row[inventory_statement_index]):
                 errors.append(f"{inventory_id}: resolved or cancelled behavior belongs in applied exclusions, not active inventory")
+    if row_references:
+        xhtml_path = machine_readable_primary(package_root)
+        if xhtml_path is None or not xhtml_path.is_file():
+            errors.append("source-row-inventory uses table rows but locator has no existing machine-readable primary XHTML")
+        else:
+            try:
+                table_rows = xhtml_table_rows(xhtml_path)
+            except (ET.ParseError, OSError) as exc:
+                errors.append(f"machine-readable primary XHTML cannot be parsed for table-row validation: {exc}")
+            else:
+                for inventory_id, table_number, row_name in row_references:
+                    if table_number not in table_rows:
+                        errors.append(f"{inventory_id}: source table {table_number} does not exist in primary XHTML")
+                    elif normalized_source_text(row_name) not in table_rows[table_number]:
+                        errors.append(
+                            f"{inventory_id}: source row {row_name!r} does not exist in table {table_number} of primary XHTML"
+                        )
     if not re.search(r"^##\s+Примен[её]нные исключения\s*$", inventory_content, re.MULTILINE):
         errors.append("source-row-inventory must contain an explicit 'Применённые исключения' section")
 
@@ -186,6 +314,44 @@ def validate(package_root: Path, scope_dir: Path) -> list[str]:
     )
     if visual_check is None or not visual_check.rows:
         errors.append("scope-brief must contain a visual cross-check row for every included UI level")
+    else:
+        visual_index = visual_check.index("Визуальный источник")
+        registered_visuals = {
+            resolve_declared_path(package_root, entry["path"]).as_posix().casefold()
+            for entry in locator_sections(package_root).get("visual_sources", [])
+            if entry.get("path")
+        }
+        for row_number, row in enumerate(visual_check.rows, start=1):
+            visual_source = row[visual_index]
+            declared_paths = LOCAL_VISUAL_RE.findall(visual_source)
+            visible_without_urls = re.sub(r"https?://\S+", "", visual_source)
+            if not declared_paths and (
+                LOCAL_VISUAL_LABEL_RE.search(visible_without_urls)
+                or LOCAL_VISUAL_EXTENSION_RE.search(visible_without_urls)
+            ):
+                errors.append(
+                    f"scope-brief visual cross-check row {row_number}: local visual must use an exact registered path in backticks"
+                )
+            for value in declared_paths:
+                errors.extend(
+                    validate_visual_reference(
+                        package_root,
+                        value,
+                        registered_visuals,
+                        f"scope-brief visual cross-check row {row_number}",
+                    )
+                )
+
+        workflow_content = (scope_dir / "workflow-state.yaml").read_text(encoding="utf-8")
+        for value in yaml_list_values(workflow_content, "local_mockups"):
+            errors.extend(
+                validate_visual_reference(
+                    package_root,
+                    value,
+                    registered_visuals,
+                    "workflow-state local_mockups",
+                )
+            )
 
     gaps_content = (scope_dir / "coverage-gaps.md").read_text(encoding="utf-8")
     gaps = find_markdown_table(gaps_content, ("ID", "Источник"))
