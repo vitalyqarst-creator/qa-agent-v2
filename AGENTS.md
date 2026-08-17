@@ -18,6 +18,8 @@
 6. Независимый TC reviewer в **отдельной верхнеуровневой Codex-сессии**. Review связывается с SHA-256 TC; при замечаниях — одна ограниченная правка и новый review.
 7. Если после этой правки остаётся material defect, остановись и запроси решение пользователя. Не запускай дополнительные циклы, `ft-test-case-iteration`, benchmark, sharding или UI-prep.
 
+TC reviewer обязан классифицировать каждый finding по происхождению: `matrix`, `tc` или `both`. Controller использует `repair_stage` штатного review-validator-а: дефект matrix/both возвращает route к matrix review перед любой новой версией TC; только чистый дефект проекции возвращает writer-у canonical TC. Controller не выводит происхождение замечания самостоятельно.
+
 Ограниченные правки matrix и TC выполняет исходная writer-сессия того же scope. Не создавай отдельные сессии для revision, fixtures или validator-ов. Analyzer/writer одного scope нельзя использовать для другого scope; matrix reviewer и TC reviewer всегда различаются между собой и со всеми semantic roles.
 
 `AGENT-NOTES.md` в корне FT-пакета обязателен. DOCX — источник смысла, XHTML — обязательный машиночитаемый источник, PDF — только визуальная/структурная сверка. Макеты и Figma уточняют UI-термины и путь, но не создают требования.

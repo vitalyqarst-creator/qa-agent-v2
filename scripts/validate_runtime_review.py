@@ -19,6 +19,21 @@ VERDICTS = {
     "matrix": {"matrix-accepted", "matrix-changes-required"},
     "tc": {"tc-accepted", "tc-changes-required"},
 }
+TC_FINDING_ORIGINS = {"matrix", "tc", "both"}
+
+
+def tc_repair_stage(findings: list[Any]) -> str | None:
+    """Return the first artifact that must be repaired for a valid TC review."""
+    origins = {
+        finding.get("origin_stage")
+        for finding in findings
+        if isinstance(finding, dict)
+    }
+    if origins & {"matrix", "both"}:
+        return "matrix"
+    if origins == {"tc"}:
+        return "tc"
+    return None
 
 
 def load_record(path: Path) -> tuple[dict[str, Any] | None, list[str]]:
@@ -94,6 +109,16 @@ def validate(artifact: Path, record_path: Path, kind: str, require_accepted: boo
         errors.append("accepted verdict requires an empty findings list")
     elif isinstance(verdict, str) and verdict.endswith("-changes-required") and not findings:
         errors.append("changes-required verdict requires findings")
+    if kind == "tc" and verdict == "tc-changes-required" and isinstance(findings, list):
+        for index, finding in enumerate(findings, start=1):
+            if not isinstance(finding, dict):
+                errors.append(f"TC finding {index} must be a JSON object")
+                continue
+            origin = finding.get("origin_stage")
+            if origin not in TC_FINDING_ORIGINS:
+                errors.append(
+                    f"TC finding {index} origin_stage must be one of: both, matrix, tc"
+                )
     if require_accepted and verdict != f"{kind}-accepted":
         errors.append(f"current artifact does not have {kind}-accepted verdict")
 
@@ -167,7 +192,18 @@ def main() -> int:
     parser.add_argument("--require-accepted", action="store_true")
     args = parser.parse_args()
     errors = validate(args.artifact, args.review_record, args.kind, args.require_accepted)
-    print(json.dumps({"valid": not errors, "errors": errors}, ensure_ascii=False))
+    record, _load_errors = load_record(args.review_record)
+    repair_stage = None
+    if not errors and args.kind == "tc" and record is not None and record.get("verdict") == "tc-changes-required":
+        findings = record.get("findings")
+        if isinstance(findings, list):
+            repair_stage = tc_repair_stage(findings)
+    print(
+        json.dumps(
+            {"valid": not errors, "errors": errors, "repair_stage": repair_stage},
+            ensure_ascii=False,
+        )
+    )
     return 0 if not errors else 1
 
 

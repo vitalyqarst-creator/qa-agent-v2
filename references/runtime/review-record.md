@@ -73,6 +73,25 @@ python scripts/runtime_review_dispatch.py verify --package-root <FT-package> --a
 }
 ```
 
+Каждый finding при `tc-changes-required` дополнительно содержит `origin_stage`:
+
+```json
+{
+  "id": "TC-R-001",
+  "severity": "material",
+  "affected_tc": ["TC-001"],
+  "origin_stage": "matrix",
+  "description": "Принятая matrix не содержит обязательную ветку покрытия.",
+  "required_correction": "Добавить ветку в matrix и заново спроецировать TC."
+}
+```
+
+- `matrix` — дефект уже присутствует в принятой matrix: отсутствует обязанность, неверно выбран профиль, данные, предусловие или oracle. Сначала исправляется matrix.
+- `tc` — matrix достаточна, а дефект возник только при её проекции в canonical TC. Исправляются TC.
+- `both` — содержательная ошибка есть и в matrix, и в TC. Сначала исправляется matrix.
+
+Reviewer классифицирует происхождение, а не только место проявления. Если любой finding имеет `origin_stage: matrix|both`, validator возвращает `repair_stage: matrix`; только набор из `origin_stage: tc` возвращает `repair_stage: tc`. Controller использует это поле как исполнимую маршрутизацию и не трактует findings самостоятельно.
+
 Оба счётчика должны совпадать с фактическим числом заголовков `## TC-...` в canonical-файле. В человекочитаемом отчёте обязательна строка `Проверено TC: 34/34` с фактическими значениями. Это исполнимое доказательство полного, не fail-fast review; заявление без совпадающих счётчиков валидатор не принимает.
 
 Проверка:

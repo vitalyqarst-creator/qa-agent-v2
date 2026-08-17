@@ -24,7 +24,7 @@ from scripts.validate_runtime_matrix import (
     validate_layout as validate_matrix_layout,
     validate_projection as validate_matrix_projection,
 )
-from scripts.validate_runtime_review import validate as validate_review
+from scripts.validate_runtime_review import tc_repair_stage, validate as validate_review
 from scripts.validate_runtime_scope import (
     table_row_references,
     validate as validate_scope,
@@ -491,6 +491,13 @@ class RuntimeContractTests(unittest.TestCase):
         self.assertIn("нейтральным транспортным конвертом", agents)
         self.assertIn("первого отсутствующего, stale или невалидного артефакта", topology)
         self.assertIn("новый route не означает повторный source locator", agents)
+        self.assertIn("repair_stage: matrix", topology)
+        self.assertIn("Controller не определяет происхождение дефекта сам", topology)
+
+        writer = (root / "skills" / "ft-test-case-writer" / "SKILL.md").read_text(encoding="utf-8")
+        reviewer = (root / "skills" / "ft-test-case-reviewer" / "SKILL.md").read_text(encoding="utf-8")
+        self.assertIn("origin_stage", reviewer)
+        self.assertIn("repair_stage: matrix", writer)
 
     def test_tc_rejects_hybrid_state_setup_and_accepts_declarative_state(self) -> None:
         ambiguous = VALID_TC.replace(
@@ -1225,6 +1232,64 @@ class RuntimeContractTests(unittest.TestCase):
             review_path.write_text(json.dumps(record), encoding="utf-8")
             review_path.with_suffix(".md").write_text("# Review\n\nПроверено TC: 2/2\n", encoding="utf-8")
             self.assertEqual([], validate_review(artifact, review_path, "tc", require_accepted=True))
+
+    def test_tc_changes_required_classifies_finding_origin_and_repair_stage(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            artifact = root / "test-cases.md"
+            artifact.write_text("# Набор\n\n## TC-001\n", encoding="utf-8")
+            create_session_topology(root, "reviews")
+            record_role(root, "matrix-reviewer", MATRIX_REVIEWER_THREAD, "local", "reviews")
+            prompt = root / "tc-review-prompt.md"
+            prompt.write_text("Проведи независимое review тест-кейсов.\n", encoding="utf-8")
+            reviewer_thread = "22345678-1234-1234-1234-123456789abc"
+            dispatch_path = create_dispatch(
+                root,
+                artifact,
+                prompt,
+                root / "reviews",
+                "tc",
+                reviewer_thread,
+                "local",
+                "2026-08-17T00:00:00Z",
+            )
+            finding = {
+                "id": "TC-R-001",
+                "severity": "material",
+                "affected_tc": ["TC-001"],
+                "description": "В принятой matrix отсутствует обязательная ветка.",
+                "required_correction": "Исправить matrix.",
+            }
+            record = {
+                "schema_version": 1,
+                "review_kind": "tc",
+                "artifact_path": "test-cases.md",
+                "artifact_sha256": hashlib.sha256(artifact.read_bytes()).hexdigest(),
+                "dispatch_path": dispatch_path.relative_to(root).as_posix(),
+                "dispatch_sha256": sha256(dispatch_path),
+                "reviewer_session_type": "codex-thread",
+                "reviewer_session_id": reviewer_thread,
+                "reviewed_at": "2026-08-17T00:01:00Z",
+                "verdict": "tc-changes-required",
+                "findings": [finding],
+                "total_tc_count": 1,
+                "reviewed_tc_count": 1,
+                "review_scope_complete": True,
+            }
+            review_path = root / "tc-review.json"
+            review_path.write_text(json.dumps(record, ensure_ascii=False), encoding="utf-8")
+            review_path.with_suffix(".md").write_text("# Review\n\nПроверено TC: 1/1\n", encoding="utf-8")
+
+            self.assertTrue(any("origin_stage" in error for error in validate_review(artifact, review_path, "tc")))
+            finding["origin_stage"] = "tc"
+            review_path.write_text(json.dumps(record, ensure_ascii=False), encoding="utf-8")
+            self.assertEqual([], validate_review(artifact, review_path, "tc"))
+            self.assertEqual("tc", tc_repair_stage(record["findings"]))
+
+            record["findings"].append({**finding, "id": "TC-R-002", "origin_stage": "matrix"})
+            review_path.write_text(json.dumps(record, ensure_ascii=False), encoding="utf-8")
+            self.assertEqual([], validate_review(artifact, review_path, "tc"))
+            self.assertEqual("matrix", tc_repair_stage(record["findings"]))
 
     def test_historical_review_survives_runtime_role_replacement(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
