@@ -55,6 +55,8 @@ OMIT_GAP_RE = re.compile(
     re.IGNORECASE,
 )
 SOURCE_ROW_ID_RE = re.compile(r"^SR-\d{2,}$")
+GAP_ID_RE = re.compile(r"^GAP-\d{2,}$")
+SOURCE_ROW_TOKEN_RE = re.compile(r"(?<![A-Za-z0-9_.-])SR-\d{2,}(?![A-Za-z0-9_.-])")
 RESOLVED_EXCLUSION_RE = re.compile(
     r"не\s+образует\s+проверяемого\s+поведения|"
     r"не\s+является\s+проверяемой\s+обязанностью|"
@@ -264,6 +266,7 @@ def validate(package_root: Path, scope_dir: Path) -> list[str]:
     inventory_content = (scope_dir / "source-row-inventory.md").read_text(encoding="utf-8")
     inventory = find_markdown_table(inventory_content, ("ID", "Источник", "Утверждение для покрытия"))
     row_references: list[tuple[str, int, str]] = []
+    active_inventory_ids: set[str] = set()
     if inventory is None or not inventory.rows:
         errors.append("source-row-inventory has no required source rows table")
     else:
@@ -278,6 +281,7 @@ def validate(package_root: Path, scope_dir: Path) -> list[str]:
             elif inventory_id in seen_inventory_ids:
                 errors.append(f"source-row-inventory has duplicate active row ID {inventory_id}")
             seen_inventory_ids.add(inventory_id)
+            active_inventory_ids.add(inventory_id)
             source_codes = {
                 anchor for anchor in extract_anchors(row[inventory_source_index]) if anchor.startswith("CODE:")
             }
@@ -354,13 +358,24 @@ def validate(package_root: Path, scope_dir: Path) -> list[str]:
             )
 
     gaps_content = (scope_dir / "coverage-gaps.md").read_text(encoding="utf-8")
-    gaps = find_markdown_table(gaps_content, ("ID", "Источник"))
+    gaps = find_markdown_table(gaps_content, ("ID", "Связанная обязанность", "Источник"))
     gap_ids: list[str] = []
     if "GAP-" in gaps_content:
         if gaps is None or not gaps.rows:
-            errors.append("coverage-gaps contains GAP IDs but has no required table")
+            errors.append("coverage-gaps contains GAP IDs but has no table with ID, Связанная обязанность and Источник")
         else:
-            gap_ids = [row[gaps.index("ID")].strip() for row in gaps.rows]
+            gap_id_index = gaps.index("ID")
+            linked_source_index = gaps.index("Связанная обязанность")
+            for row in gaps.rows:
+                gap_id = row[gap_id_index].strip()
+                gap_ids.append(gap_id)
+                if not GAP_ID_RE.fullmatch(gap_id):
+                    errors.append(f"coverage-gaps has invalid ID {gap_id!r}")
+                linked_sources = SOURCE_ROW_TOKEN_RE.findall(row[linked_source_index])
+                if len(linked_sources) != 1:
+                    errors.append(f"{gap_id}: coverage gap must link exactly one atomic SR obligation")
+                elif linked_sources[0] not in active_inventory_ids:
+                    errors.append(f"{gap_id}: linked source obligation {linked_sources[0]} is absent from active inventory")
 
     prompt = (scope_dir / "prompt.scope-to-writer.md").read_text(encoding="utf-8")
     combined_scope_text = "\n".join(

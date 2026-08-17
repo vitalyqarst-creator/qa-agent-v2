@@ -75,9 +75,9 @@ VALID_INVENTORY = """# Инвентарь
 
 VALID_GAPS = """# Пробелы покрытия
 
-| ID | Источник | Ограничение |
-| --- | --- | --- |
-| GAP-001 | AS.39 | Не определён наблюдаемый результат |
+| ID | Связанная обязанность | Источник | Ограничение |
+| --- | --- | --- | --- |
+| GAP-001 | SR-002 | AS.39 | Не определён наблюдаемый результат |
 """
 
 
@@ -197,6 +197,30 @@ class RuntimeContractTests(unittest.TestCase):
         self.assertTrue(any("AS.38" in error for error in validate_matrix_projection(missing_source, VALID_INVENTORY, VALID_GAPS)))
         missing_inventory_row = VALID_MATRIX.replace("SR-002; AS.39", "AS.39", 1)
         self.assertTrue(any("SR-002" in error for error in validate_matrix_projection(missing_inventory_row, VALID_INVENTORY, VALID_GAPS)))
+        aggregated_gap = VALID_MATRIX.replace(
+            "| GAP-001 | SR-002; AS.39",
+            "| GAP-001 | SR-001; SR-002; AS.39",
+        )
+        self.assertTrue(
+            any(
+                "must project only linked obligation SR-002" in error
+                for error in validate_matrix_projection(aggregated_gap, VALID_INVENTORY, VALID_GAPS)
+            )
+        )
+        malformed_gaps = VALID_GAPS.replace("| GAP-001 | SR-002 |", "| GAP-001 | SR-001; SR-002 |")
+        self.assertTrue(
+            any(
+                "must link exactly one atomic SR obligation" in error
+                for error in validate_matrix_projection(VALID_MATRIX, VALID_INVENTORY, malformed_gaps)
+            )
+        )
+        unknown_source_gap = VALID_GAPS.replace("| GAP-001 | SR-002 |", "| GAP-001 | SR-999 |")
+        self.assertTrue(
+            any(
+                "SR-999 is absent from active inventory" in error
+                for error in validate_matrix_projection(VALID_MATRIX, VALID_INVENTORY, unknown_source_gap)
+            )
+        )
 
     def test_tc_projection_requires_every_executable_matrix_source(self) -> None:
         self.assertEqual([], validate_tc_projection(VALID_TC, VALID_MATRIX))
@@ -278,7 +302,7 @@ class RuntimeContractTests(unittest.TestCase):
                 VALID_INVENTORY.replace("строка «Сохранить»", "строка «Сохранить», примечание"),
                 encoding="utf-8",
             )
-            (scope / "coverage-gaps.md").write_text("# Пробелы покрытия\n\nПробелы отсутствуют.\n", encoding="utf-8")
+            (scope / "coverage-gaps.md").write_text(VALID_GAPS, encoding="utf-8")
             (scope / "scope-clarification-requests.md").write_text(
                 "# Вопросы к БА\n\nОткрытые вопросы отсутствуют.\n", encoding="utf-8"
             )
@@ -294,7 +318,8 @@ class RuntimeContractTests(unittest.TestCase):
                 "# План тестовых данных\n\nКонкретные данные определены источником.\n", encoding="utf-8"
             )
             (scope / "prompt.scope-to-writer.md").write_text(
-                "Создай матрицу по всем строкам инвентаря.\n", encoding="utf-8"
+                "Создай матрицу по всем строкам инвентаря. Для `GAP-001` создай строку матрицы с решением `coverage-gap`.\n",
+                encoding="utf-8",
             )
             (scope / "workflow-state.yaml").write_text("stage: ft-scope-analyzer\n", encoding="utf-8")
             self.assertEqual([], validate_scope(package, scope))
@@ -375,7 +400,10 @@ class RuntimeContractTests(unittest.TestCase):
                 "| SR-001 | AS.38-AS.39; Таблица 7, строка «Сохранить» | Операции не будет; строка не образует проверяемого поведения. |",
             )
             (scope / "source-row-inventory.md").write_text(invalid_inventory, encoding="utf-8")
-            (scope / "coverage-gaps.md").write_text("# Пробелы покрытия\n\nПробелы отсутствуют.\n", encoding="utf-8")
+            (scope / "coverage-gaps.md").write_text(
+                VALID_GAPS.replace("| GAP-001 | SR-002 |", "| GAP-001 | SR-001; SR-002 |"),
+                encoding="utf-8",
+            )
             (scope / "scope-clarification-requests.md").write_text("# Вопросы\n\nВопросы отсутствуют.\n", encoding="utf-8")
             (scope / "scope-brief.md").write_text(
                 "# Границы\n\n## Визуальная сверка\n\n"
@@ -390,6 +418,7 @@ class RuntimeContractTests(unittest.TestCase):
             errors = validate_scope(package, scope)
             self.assertTrue(any("atomic requirement code" in error for error in errors))
             self.assertTrue(any("applied exclusions" in error for error in errors))
+            self.assertTrue(any("must link exactly one atomic SR obligation" in error for error in errors))
 
     def test_review_record_is_bound_to_current_artifact_digest(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:

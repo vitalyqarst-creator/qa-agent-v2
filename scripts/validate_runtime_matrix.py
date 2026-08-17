@@ -38,6 +38,7 @@ ALLOWED_PROFILES = {
 }
 ALLOWED_DECISIONS = {"TC", "coverage-gap"}
 EMPTY_RE = re.compile(r"^(?:-|—|n/?a|не определен[оы]?|требу(?:ется|ются))\.?$", re.IGNORECASE)
+SOURCE_ROW_TOKEN_RE = re.compile(r"(?<![A-Za-z0-9_.-])SR-\d{2,}(?![A-Za-z0-9_.-])")
 
 
 def cells(line: str) -> list[str]:
@@ -146,17 +147,30 @@ def validate_projection(content: str, inventory_content: str, gaps_content: str)
     for missing in sorted(inventory_anchors - matrix_anchors):
         errors.append(f"matrix does not project source obligation {anchor_label(missing)}")
 
-    gaps = find_markdown_table(gaps_content, ("ID", "Источник"))
+    gaps = find_markdown_table(gaps_content, ("ID", "Связанная обязанность", "Источник"))
     if "GAP-" in gaps_content and (gaps is None or not gaps.rows):
-        errors.append("coverage-gaps contains GAP IDs but has no required table")
+        errors.append("coverage-gaps contains GAP IDs but has no table with ID, Связанная обязанность and Источник")
     elif gaps is not None:
         for gap_row in gaps.rows:
             gap_id = gap_row[gaps.index("ID")]
+            linked_sources = SOURCE_ROW_TOKEN_RE.findall(gap_row[gaps.index("Связанная обязанность")])
+            if len(linked_sources) != 1:
+                errors.append(f"{gap_id}: coverage gap must link exactly one atomic SR obligation")
+                continue
+            if linked_sources[0] not in inventory_ids:
+                errors.append(f"{gap_id}: linked source obligation {linked_sources[0]} is absent from active inventory")
+                continue
             matrix_row = matrix_rows_by_id.get(gap_id)
             if matrix_row is None:
                 errors.append(f"matrix omits unresolved obligation {gap_id}")
             elif matrix_row[matrix_decision_index] != "coverage-gap":
                 errors.append(f"{gap_id}: matrix decision must be coverage-gap")
+            else:
+                projected_sources = set(SOURCE_ROW_TOKEN_RE.findall(matrix_row[matrix_source_index]))
+                if projected_sources != {linked_sources[0]}:
+                    errors.append(
+                        f"{gap_id}: matrix coverage-gap row must project only linked obligation {linked_sources[0]}"
+                    )
     return errors
 
 
