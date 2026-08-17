@@ -454,6 +454,20 @@ class RuntimeContractTests(unittest.TestCase):
         self.assertIn("проверь каждый TC", reviewer)
         self.assertIn("число проверенных TC", reviewer)
 
+    def test_matrix_roles_require_reachable_observation_points(self) -> None:
+        root = Path(__file__).resolve().parents[1]
+        profiles = (root / "references" / "runtime" / "test-design-profiles.md").read_text(encoding="utf-8")
+        matrix = (root / "references" / "runtime" / "test-design-matrix.md").read_text(encoding="utf-8")
+        writer = (root / "skills" / "ft-test-case-writer" / "SKILL.md").read_text(encoding="utf-8")
+        reviewer = (root / "skills" / "ft-test-case-reviewer" / "SKILL.md").read_text(encoding="utf-8")
+
+        self.assertIn("достижимость точки наблюдения", profiles)
+        self.assertIn("невидимость самого объекта", profiles)
+        self.assertIn("gate достижимости", matrix)
+        self.assertIn("достижимость каждой точки наблюдения", writer)
+        self.assertIn("недостижим ему", reviewer)
+        self.assertIn("логического покрытия другой строкой matrix", reviewer)
+
     def test_runtime_matrix_requires_profiles_and_valid_decisions(self) -> None:
         self.assertEqual([], validate_matrix(VALID_MATRIX))
         invalid = VALID_MATRIX.replace("базовый, жизненный-цикл-создания", "")
