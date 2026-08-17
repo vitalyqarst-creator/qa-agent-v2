@@ -64,6 +64,8 @@ POSTCONDITION_LOGIN_RE = re.compile(r"^\d+\.\s+Войти\s+пользовате
 POSTCONDITION_NAVIGATION_RE = re.compile(r"^\d+\.\s+(?:Открыть|Перейти)\b", re.IGNORECASE | re.MULTILINE)
 POSTCONDITION_FIND_RE = re.compile(r"^\d+\.\s+Найти\b", re.IGNORECASE | re.MULTILINE)
 OPAQUE_DELEGATE_STEP_RE = re.compile(r"^\d+\.\s+Выполнить\b", re.IGNORECASE | re.MULTILINE)
+LOOKUP_LINE_RE = re.compile(r"^\d+\.\s+Найти\b", re.IGNORECASE)
+UI_LOOKUP_RE = re.compile(r"\b(?:кнопк\w*|пол[ея]\b|раздел\w*|вкладк\w*|ссылк\w*|действи\w*)\b", re.IGNORECASE)
 QUOTED_CONTROL_RE = re.compile(
     r"(?:кнопк\w*\s+)?(?:«([^»]+)»|`([^`]+)`)(?=\s+(?:видим\w*|доступ\w*))|"
     r"(?:видим\w*|доступ\w*)(?:\s+и\s+(?:видим\w*|доступ\w*))?\s+(?:кнопк\w*\s+)?(?:«([^»]+)»|`([^`]+)`)|"
@@ -116,6 +118,22 @@ def missing_hover_prerequisites(block: str, controls: set[str]) -> list[str]:
                 if "навести" not in line_folded and "навести" not in previous:
                     missing.append(f"{section_name}: {control}")
     return missing
+
+
+def unqualified_object_lookups(block: str) -> list[str]:
+    tc_sections = sections(block)
+    values = [value.strip().casefold() for _key, value in DATA_PAIR_RE.findall(tc_sections.get("Тестовые данные", ""))]
+    values = [value for value in values if len(value) >= 3]
+    if not values:
+        return []
+    errors: list[str] = []
+    for section_name in ("Предусловия", "Шаги", "Постусловия"):
+        for line in tc_sections.get(section_name, "").splitlines():
+            if not LOOKUP_LINE_RE.match(line) or UI_LOOKUP_RE.search(line):
+                continue
+            if not any(value in line.casefold() for value in values):
+                errors.append(f"{section_name}: {line.strip()}")
+    return errors
 
 
 def validate(content: str) -> list[str]:
@@ -174,6 +192,8 @@ def validate(content: str) -> list[str]:
             errors.append(
                 f"{tc_id}: a step starting with 'Выполнить' delegates an unspecified flow; list the observable user actions explicitly"
             )
+        for lookup in unqualified_object_lookups(block):
+            errors.append(f"{tc_id}: object lookup must use a concrete literal from test data ({lookup})")
         data = tc_sections["Тестовые данные"]
         if data != "Не требуются." and FORBIDDEN_DATA_RE.search(data):
             errors.append(f"{tc_id}: test data are a dependency note, not concrete values")

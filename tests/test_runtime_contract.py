@@ -542,7 +542,7 @@ class RuntimeContractTests(unittest.TestCase):
 
         complete = VALID_TC.replace(
             "- Не требуются.",
-            "1. Войти пользователем с ролью `Администратор`.\n2. Открыть список партнёров.\n3. Найти партнёра с ИНН `7707083893`.\n4. Нажать `Вернуть из архива`.",
+            "1. Войти пользователем с ролью `Администратор`.\n2. Открыть список партнёров.\n3. Найти партнёра `ПАО СБЕРБАНК`.\n4. Нажать `Вернуть из архива`.",
         )
         self.assertEqual([], validate_tc(complete))
 
@@ -588,6 +588,19 @@ class RuntimeContractTests(unittest.TestCase):
             "Кнопка видима и доступна «Редактировать»",
         )
         self.assertTrue(any("hover-revealed control" in error for error in validate_tc_projection(without_hover, postfix_matrix)))
+
+    def test_object_lookup_requires_concrete_test_data_literal(self) -> None:
+        generic = VALID_TC.replace(
+            "1. Открыть карточку добавления партнёра.",
+            "1. Найти партнёра в статусе `Подтвержден`.",
+        )
+        self.assertTrue(any("object lookup must use a concrete literal" in error for error in validate_tc(generic)))
+
+        exact = generic.replace(
+            "1. Найти партнёра в статусе `Подтвержден`.",
+            "1. Найти партнёра `ПАО СБЕРБАНК` в статусе `Подтвержден`.",
+        )
+        self.assertEqual([], validate_tc(exact))
 
     def test_runtime_matrix_requires_profiles_and_valid_decisions(self) -> None:
         self.assertEqual([], validate_matrix(VALID_MATRIX))
