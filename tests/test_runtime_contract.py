@@ -420,6 +420,9 @@ class RuntimeContractTests(unittest.TestCase):
         self.assertIn("выдуманный cleanup", reviewer)
         self.assertIn("проверки конкретной идентичности объекта", reviewer)
         self.assertIn("невидим текущему актору", reviewer)
+        self.assertIn("не fail-fast проверкой", reviewer)
+        self.assertIn("проверь каждый TC", reviewer)
+        self.assertIn("число проверенных TC", reviewer)
 
     def test_runtime_matrix_requires_profiles_and_valid_decisions(self) -> None:
         self.assertEqual([], validate_matrix(VALID_MATRIX))
