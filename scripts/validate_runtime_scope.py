@@ -101,9 +101,11 @@ RESOLVED_EXCLUSION_RE = re.compile(
     r"не\s+образует\s+проверяемого\s+поведения|"
     r"не\s+является\s+проверяемой\s+обязанностью|"
     r"не\s+проверяется\s+по\s+утвержд[её]нному\s+ответу|"
-    r"(?:операци[яи]|функциональност[ьи])\s+не\s+будет",
+    r"(?:операци[яи]|функциональност[ьи])\s+не\s+будет|"
+    r"\bне\s+реализу\w*",
     re.IGNORECASE,
 )
+RESOLVED_GAP_RE = re.compile(r"^\s*Закрыт(?:о|а|ы)?(?:\s+[^:|]{1,60})?\s*:", re.IGNORECASE)
 TABLE_ROW_REFERENCE_RE = re.compile(
     r"Таблица\s+(\d+)\s*,\s*строка\s+(?:«(.+)»|\"([^\"]+)\")(?:\s*,\s*примечание)?(?=\s*(?:;|$))",
     re.IGNORECASE,
@@ -1271,6 +1273,7 @@ def validate(package_root: Path, scope_dir: Path) -> list[str]:
         ("ID", "Связанная обязанность", "Источник", "Класс", "Недостаток источника", "Что требуется для закрытия"),
     )
     gap_ids: list[str] = []
+    resolved_gap_ids: set[str] = set()
     gap_sources: dict[str, str] = {}
     if "GAP-" in gaps_content:
         if gaps is None or not gaps.rows:
@@ -1303,6 +1306,8 @@ def validate(package_root: Path, scope_dir: Path) -> list[str]:
                 if gap_class not in ALLOWED_GAP_CLASSES:
                     errors.append(f"{gap_id}: unsupported coverage-gap class {gap_class!r}")
                 gap_details = " | ".join((row[gap_deficit_index], row[gap_resolution_index]))
+                if RESOLVED_GAP_RE.search(row[gap_resolution_index]):
+                    resolved_gap_ids.add(gap_id)
                 if MISSING_ENVIRONMENT_GAP_RE.search(gap_details):
                     errors.append(
                         f"{gap_id}: missing environment data is execution readiness, not a coverage gap"
@@ -1355,17 +1360,31 @@ def validate(package_root: Path, scope_dir: Path) -> list[str]:
         errors.append("table-row coverage references unknown IDs: " + ", ".join(unknown_table_refs))
 
     prompt = (scope_dir / "prompt.scope-to-writer.md").read_text(encoding="utf-8")
+    unknown_prompt_source_rows = sorted(set(SOURCE_ROW_TOKEN_RE.findall(prompt)) - active_inventory_ids)
+    if unknown_prompt_source_rows:
+        errors.append(
+            "writer prompt references source rows absent from active inventory: "
+            + ", ".join(unknown_prompt_source_rows)
+        )
     combined_scope_text = "\n".join(
         (scope_dir / name).read_text(encoding="utf-8") for name in REQUIRED_FILES if name.endswith(".md")
     )
     if OMIT_GAP_RE.search(combined_scope_text):
         errors.append("scope handoff tells writer to omit coverage-gap obligations from the matrix")
-    if gap_ids:
+    unresolved_gap_ids = [gap_id for gap_id in gap_ids if gap_id not in resolved_gap_ids]
+    if unresolved_gap_ids:
         if "coverage-gap" not in prompt or "матриц" not in prompt.casefold():
             errors.append("writer prompt must preserve unresolved obligations in the matrix as coverage-gap")
-        for gap_id in gap_ids:
+        for gap_id in unresolved_gap_ids:
             if gap_id not in prompt:
                 errors.append(f"writer prompt does not carry {gap_id}")
+    for gap_id in sorted(resolved_gap_ids):
+        resolved_gap_as_matrix = re.compile(
+            rf"(?:{re.escape(gap_id)}[^\n]{{0,140}}coverage-gap|coverage-gap[^\n]{{0,140}}{re.escape(gap_id)})",
+            re.IGNORECASE,
+        )
+        if resolved_gap_as_matrix.search(prompt):
+            errors.append(f"writer prompt carries resolved {gap_id} as coverage-gap")
 
     test_data_plan_content = (scope_dir / "test-data-plan.md").read_text(encoding="utf-8")
     source_evidence = "\n".join([machine_source_text, *(support for _path, support in support_contents)])
@@ -1405,7 +1424,8 @@ def validate(package_root: Path, scope_dir: Path) -> list[str]:
         elif len(linked_gaps) == 1:
             linked_gap = next(iter(linked_gaps))
             if linked_gap not in gap_sources:
-                errors.append(f"{question_id}: clarification card references unknown coverage gap {linked_gap}")
+                if status not in {"ответ-получен", "отменён"}:
+                    errors.append(f"{question_id}: clarification card references unknown coverage gap {linked_gap}")
             elif canonical_source_reference(requirement_basis) != canonical_source_reference(
                 gap_sources[linked_gap]
             ):
@@ -1416,13 +1436,21 @@ def validate(package_root: Path, scope_dir: Path) -> list[str]:
             question_basis_anchors = precise_source_anchors(requirement_basis)
             for linked_gap in sorted(linked_gaps):
                 if linked_gap not in gap_sources:
-                    errors.append(f"{question_id}: clarification card references unknown coverage gap {linked_gap}")
+                    if status not in {"ответ-получен", "отменён"}:
+                        errors.append(f"{question_id}: clarification card references unknown coverage gap {linked_gap}")
                     continue
                 gap_anchors = precise_source_anchors(gap_sources[linked_gap])
                 if not gap_anchors or not gap_anchors.issubset(question_basis_anchors):
                     errors.append(
                         f"{question_id}: multi-gap FT basis must include the exact source anchor of {linked_gap}"
                     )
+        if status in {"ответ-получен", "отменён"}:
+            still_open = sorted(linked_gaps - resolved_gap_ids)
+            if still_open:
+                errors.append(
+                    f"{question_id}: answered or cancelled clarification still links open coverage gaps: "
+                    + ", ".join(still_open)
+                )
         if not answer:
             errors.append(f"{question_id}: clarification card has no editable 'Ответ БА' field")
         placeholder = bool(QUESTION_ANSWER_PLACEHOLDER_RE.fullmatch(answer.strip()))

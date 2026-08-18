@@ -1582,7 +1582,19 @@ class RuntimeContractTests(unittest.TestCase):
                 "`ожидает-ответа`", "`ответ-получен`"
             ).replace("_Введите ответ здесь._", "Сохранение блокируется, поле подсвечивается красным.")
             register.write_text(answered_question, encoding="utf-8")
+            errors = validate_scope(package, scope)
+            self.assertTrue(any("still links open coverage gaps" in error for error in errors))
+
+            gaps_path.write_text(
+                VALID_GAPS.replace("Ответ БА", "Закрыт: ответ БА применён."),
+                encoding="utf-8",
+            )
+            errors = validate_scope(package, scope)
+            self.assertTrue(any("carries resolved GAP-001 as coverage-gap" in error for error in errors))
+            writer_prompt.write_text("Создай матрицу по всем активным строкам инвентаря.\n", encoding="utf-8")
             self.assertEqual([], validate_scope(package, scope))
+            gaps_path.write_text(VALID_GAPS, encoding="utf-8")
+            writer_prompt.write_text(original_prompt, encoding="utf-8")
 
             register.write_text(
                 answered_question.replace(
@@ -1598,6 +1610,19 @@ class RuntimeContractTests(unittest.TestCase):
             errors = validate_scope(package, scope)
             self.assertTrue(any("duplicate IDs" in error for error in errors))
             register.write_text(EMPTY_CLARIFICATION_REGISTER, encoding="utf-8")
+
+            writer_prompt.write_text(original_prompt + " Передай SR-999 в следующий этап.\n", encoding="utf-8")
+            errors = validate_scope(package, scope)
+            self.assertTrue(any("absent from active inventory" in error and "SR-999" in error for error in errors))
+            writer_prompt.write_text(original_prompt, encoding="utf-8")
+
+            inventory_path.write_text(
+                original_inventory.replace("Карточка сохраняется", "Поведение не реализуется", 1),
+                encoding="utf-8",
+            )
+            errors = validate_scope(package, scope)
+            self.assertTrue(any("belongs in applied exclusions" in error for error in errors))
+            inventory_path.write_text(original_inventory, encoding="utf-8")
 
             inventory_path = scope / "source-row-inventory.md"
             inventory_path.write_text(
