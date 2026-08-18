@@ -2,13 +2,17 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import tempfile
 import unittest
+import zipfile
 from pathlib import Path
 from unittest.mock import patch
+from xml.etree import ElementTree as ET
 
 from scripts.capture_dadata_fixture import capture_fixture
 from scripts.create_ft_package import PACKAGE_DIRS, create_package
+from scripts.normalize_ft_source import normalize_docx
 from scripts.runtime_review_dispatch import create_dispatch, sha256, validate_dispatch
 from scripts.runtime_review_delta import artifact_index, enrich_review_record, write_revision_manifest
 from scripts.runtime_session_registry import (
@@ -30,6 +34,7 @@ from scripts.validate_runtime_scope import (
     table_row_references,
     validate as validate_scope,
     validate_test_data_plan,
+    xhtml_table_rows,
 )
 from scripts.validate_runtime_source import validate as validate_source
 from scripts.validate_runtime_tc import (
@@ -206,7 +211,6 @@ def create_valid_source_stage(root: Path) -> tuple[Path, Path]:
     inputs = {
         "requirements.docx": (b"docx", "semantic_primary"),
         "requirements.xhtml": (b"<html/>", "machine_readable_primary"),
-        "requirements.pdf": (b"pdf", "visual_structural_crosscheck_only"),
     }
     entries: list[tuple[str, str, str]] = []
     for name, (content, role) in inputs.items():
@@ -218,7 +222,7 @@ def create_valid_source_stage(root: Path) -> tuple[Path, Path]:
     (package / "mockups").mkdir()
     (package / "test-cases").mkdir()
     (package / "AGENT-NOTES.md").write_text(
-        "# Контекст\n\nrequirements.docx\nrequirements.xhtml\nrequirements.pdf\n",
+        "# Контекст\n\nrequirements.docx\nrequirements.xhtml\n",
         encoding="utf-8",
     )
     initialize_registry(package, CONTROLLER_THREAD, "local")
@@ -227,8 +231,11 @@ def create_valid_source_stage(root: Path) -> tuple[Path, Path]:
     handoff.mkdir(parents=True)
     selection_lines = ["# Выбор источников", ""]
     workflow_lines = [
+        "source_contract_version: 2",
         "stage: source-locator",
         "status: completed",
+        "visual_crosscheck: not_required",
+        'visual_crosscheck_reason: "Тестовый пакет не содержит визуально значимой разметки."',
         'source_selection: "fts/Project/FT/work/stage-handoffs/00-FT/source-selection.md"',
         "primary_sources:",
     ]
@@ -241,6 +248,16 @@ def create_valid_source_stage(root: Path) -> tuple[Path, Path]:
                 f'    sha256: "{digest}"',
             ]
         )
+        if role == "machine_readable_primary":
+            semantic_relative, _, semantic_digest = entries[0]
+            workflow_lines.extend(
+                [
+                    "    origin: generated",
+                    f'    derived_from: "{semantic_relative}"',
+                    f'    derived_from_sha256: "{semantic_digest}"',
+                    '    generator: "scripts/normalize_ft_source.py"',
+                ]
+            )
     workflow_lines.extend(["support_sources:", "visual_sources:"])
     (handoff / "source-selection.md").write_text("\n".join(selection_lines) + "\n", encoding="utf-8")
     (handoff / "workflow-state.yaml").write_text("\n".join(workflow_lines) + "\n", encoding="utf-8")
@@ -252,6 +269,151 @@ class RuntimeContractTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary_directory:
             package, handoff = create_valid_source_stage(Path(temporary_directory))
             self.assertEqual([], validate_source(package, handoff))
+
+    def test_source_contract_v2_requires_visual_input_only_when_declared(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            package, handoff = create_valid_source_stage(root)
+            workflow = handoff / "workflow-state.yaml"
+            workflow.write_text(
+                workflow.read_text(encoding="utf-8").replace(
+                    "visual_crosscheck: not_required", "visual_crosscheck: required"
+                ),
+                encoding="utf-8",
+            )
+            errors = validate_source(package, handoff)
+            self.assertTrue(any("no visual source is registered" in error for error in errors))
+
+            visual = package / "source" / "requirements.pdf"
+            visual.write_bytes(b"pdf")
+            relative = visual.relative_to(root).as_posix()
+            digest = hashlib.sha256(visual.read_bytes()).hexdigest()
+            (package / "AGENT-NOTES.md").write_text(
+                (package / "AGENT-NOTES.md").read_text(encoding="utf-8") + "requirements.pdf\n",
+                encoding="utf-8",
+            )
+            (handoff / "source-selection.md").write_text(
+                (handoff / "source-selection.md").read_text(encoding="utf-8")
+                + f"- `{relative}` `{digest}` `visual_structural_crosscheck_only`\n",
+                encoding="utf-8",
+            )
+            workflow.write_text(
+                workflow.read_text(encoding="utf-8").replace(
+                    "visual_sources:\n",
+                    "visual_sources:\n"
+                    f'  - path: "{relative}"\n'
+                    "    role: visual_structural_crosscheck_only\n"
+                    f'    sha256: "{digest}"\n',
+                ),
+                encoding="utf-8",
+            )
+            self.assertEqual([], validate_source(package, handoff))
+
+    def test_source_contract_v2_accepts_native_xhtml_as_single_canonical_file(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            package, handoff = create_valid_source_stage(root)
+            (package / "source" / "requirements.docx").unlink()
+            xhtml = package / "source" / "requirements.xhtml"
+            relative = xhtml.relative_to(root).as_posix()
+            digest = hashlib.sha256(xhtml.read_bytes()).hexdigest()
+            selection_relative = (handoff / "source-selection.md").relative_to(root).as_posix()
+            (package / "AGENT-NOTES.md").write_text("# Контекст\n\nrequirements.xhtml\n", encoding="utf-8")
+            (handoff / "source-selection.md").write_text(
+                f"# Выбор источников\n\n- `{relative}` `{digest}` `semantic_primary+machine_readable_primary`\n",
+                encoding="utf-8",
+            )
+            (handoff / "workflow-state.yaml").write_text(
+                "source_contract_version: 2\n"
+                "stage: source-locator\n"
+                "status: completed\n"
+                "visual_crosscheck: not_required\n"
+                'visual_crosscheck_reason: "Нативный XHTML не содержит визуально значимой разметки."\n'
+                f'source_selection: "{selection_relative}"\n'
+                "primary_sources:\n"
+                f'  - path: "{relative}"\n'
+                "    role: semantic_primary+machine_readable_primary\n"
+                f'    sha256: "{digest}"\n'
+                "    origin: canonical\n"
+                "support_sources:\n"
+                "visual_sources:\n",
+                encoding="utf-8",
+            )
+            self.assertEqual([], validate_source(package, handoff))
+
+    def test_legacy_three_file_source_selection_remains_valid(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            package, handoff = create_valid_source_stage(root)
+            visual = package / "source" / "requirements.pdf"
+            visual.write_bytes(b"pdf")
+            sources = [
+                (package / "source" / "requirements.docx", "semantic_primary"),
+                (package / "source" / "requirements.xhtml", "machine_readable_primary"),
+                (visual, "visual_structural_crosscheck_only"),
+            ]
+            selection_lines = ["# Выбор источников", ""]
+            workflow_lines = [
+                "stage: source-locator",
+                "status: completed",
+                f'source_selection: "{(handoff / "source-selection.md").relative_to(root).as_posix()}"',
+                "primary_sources:",
+            ]
+            notes = ["# Контекст", ""]
+            for source, role in sources:
+                relative = source.relative_to(root).as_posix()
+                digest = hashlib.sha256(source.read_bytes()).hexdigest()
+                notes.append(source.name)
+                selection_lines.append(f"- `{relative}` `{digest}` `{role}`")
+                workflow_lines.extend(
+                    [
+                        f'  - path: "{relative}"',
+                        f"    role: {role}",
+                        f'    sha256: "{digest}"',
+                    ]
+                )
+            workflow_lines.extend(["support_sources:", "visual_sources:"])
+            (package / "AGENT-NOTES.md").write_text("\n".join(notes) + "\n", encoding="utf-8")
+            (handoff / "source-selection.md").write_text("\n".join(selection_lines) + "\n", encoding="utf-8")
+            (handoff / "workflow-state.yaml").write_text("\n".join(workflow_lines) + "\n", encoding="utf-8")
+            self.assertEqual([], validate_source(package, handoff))
+
+    def test_source_contract_v2_rejects_generated_extraction_from_wrong_hash(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            package, handoff = create_valid_source_stage(Path(temporary_directory))
+            workflow = handoff / "workflow-state.yaml"
+            content = workflow.read_text(encoding="utf-8")
+            content = re.sub(r"derived_from_sha256: \"[0-9a-f]{64}\"", f'derived_from_sha256: "{"0" * 64}"', content)
+            workflow.write_text(content, encoding="utf-8")
+            errors = validate_source(package, handoff)
+            self.assertTrue(any("derives from a different semantic hash" in error for error in errors))
+
+    def test_docx_normalizer_preserves_headings_paragraphs_and_table_rows(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            source = root / "requirements.docx"
+            destination = root / "requirements.normalized.xhtml"
+            document_xml = """<?xml version="1.0" encoding="UTF-8"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>
+  <w:p><w:pPr><w:pStyle w:val="Heading1"/></w:pPr><w:r><w:t>Раздел 9</w:t></w:r></w:p>
+  <w:p><w:r><w:t>Таблица 7</w:t></w:r></w:p>
+  <w:tbl>
+    <w:tr><w:tc><w:p><w:r><w:t>Название</w:t></w:r></w:p></w:tc></w:tr>
+    <w:tr><w:tc><w:p><w:r><w:t>Сохранить</w:t></w:r></w:p></w:tc></w:tr>
+  </w:tbl>
+</w:body></w:document>"""
+            with zipfile.ZipFile(source, "w") as archive:
+                archive.writestr("word/document.xml", document_xml)
+
+            normalize_docx(source, destination)
+
+            tree = ET.parse(destination)
+            visible_text = " ".join("".join(tree.getroot().itertext()).split())
+            self.assertIn("Раздел 9", visible_text)
+            self.assertIn("Таблица 7", visible_text)
+            self.assertIn("Сохранить", visible_text)
+            self.assertIn(hashlib.sha256(source.read_bytes()).hexdigest(), destination.read_text(encoding="utf-8"))
+            self.assertIn("сохранить", xhtml_table_rows(destination)[7])
 
     def test_source_stage_rejects_stale_hash_and_downstream_artifacts(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:

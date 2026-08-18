@@ -503,19 +503,19 @@ def validate(package_root: Path, scope_dir: Path) -> list[str]:
     if row_references:
         xhtml_path = machine_readable_primary(package_root)
         if xhtml_path is None or not xhtml_path.is_file():
-            errors.append("source-row-inventory uses table rows but locator has no existing machine-readable primary XHTML")
+            errors.append("source-row-inventory uses table rows but locator has no existing normalized machine-readable primary")
         else:
             try:
                 table_rows = xhtml_table_rows(xhtml_path)
             except (ET.ParseError, OSError) as exc:
-                errors.append(f"machine-readable primary XHTML cannot be parsed for table-row validation: {exc}")
+                errors.append(f"normalized machine-readable primary cannot be parsed for table-row validation: {exc}")
             else:
                 for inventory_id, table_number, row_name in row_references:
                     if table_number not in table_rows:
-                        errors.append(f"{inventory_id}: source table {table_number} does not exist in primary XHTML")
+                        errors.append(f"{inventory_id}: source table {table_number} does not exist in normalized primary")
                     elif normalized_source_text(row_name) not in table_rows[table_number]:
                         errors.append(
-                            f"{inventory_id}: source row {row_name!r} does not exist in table {table_number} of primary XHTML"
+                            f"{inventory_id}: source row {row_name!r} does not exist in table {table_number} of normalized primary"
                         )
     if not re.search(r"^##\s+Примен[её]нные исключения\s*$", inventory_content, re.MULTILINE):
         errors.append("source-row-inventory must contain an explicit 'Применённые исключения' section")

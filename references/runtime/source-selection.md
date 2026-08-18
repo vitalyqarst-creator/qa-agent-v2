@@ -9,11 +9,37 @@ Source locator создаёт только:
 
 Созданный при инициализации пакета пустой `work/scope-clarification-requests.md` также допустим, но source locator не добавляет в него вопросы.
 
-`workflow-state.yaml` содержит `stage: source-locator`, `status: completed`, путь к `source-selection.md`, списки `primary_sources`, `support_sources`, `visual_sources` и при наличии `figma_sources`. Для каждого локального файла обязательны repo-relative `path`, роль и SHA-256.
+`workflow-state.yaml` содержит `source_contract_version: 2`, `stage: source-locator`, `status: completed`, путь к `source-selection.md`, списки `primary_sources`, `support_sources`, `visual_sources` и при наличии `figma_sources`. Для каждого локального файла обязательны repo-relative `path`, роль и SHA-256.
 
-В `primary_sources` должны находиться ровно по одному существующему файлу ролей `semantic_primary`, `machine_readable_primary` и `visual_structural_crosscheck_only`. Все фактически находящиеся в `source/`, `support/` и `mockups/` файлы регистрируются; скрытое игнорирование входа запрещено.
+В `primary_sources` должны присутствовать ровно одна роль `semantic_primary` и одна роль `machine_readable_primary`. Это не обязательно два пользовательских файла: нативный XHTML может иметь объединённую роль `semantic_primary+machine_readable_primary`, а для канонического DOCX source locator создаёт производный XHTML через `scripts/normalize_ft_source.py`. Для машинной записи обязательно поле `origin: canonical|generated|supplied`; при `generated` также указываются `derived_from`, `derived_from_sha256` и `generator`.
 
-PDF проверяется визуально и структурно, но не становится источником бизнес-правил. Рендеры и другие временные файлы создаются только в системном временном каталоге. Source locator удаляет созданный им временный каталог до завершения; новые файлы в repo-local `tmp/` после регистрации source-locator считаются ошибкой этапа.
+`visual_crosscheck` принимает `required` или `not_required`. При `required` в `visual_sources` регистрируется хотя бы один PDF/рендер с ролью `visual_structural_crosscheck_only`. При `not_required` визуальный файл не создаётся, а `visual_crosscheck_reason` конкретно объясняет, почему расположение, рисунки и сложная разметка не влияют на смысл scope-ов. Все фактически находящиеся в `source/`, `support/` и `mockups/` файлы регистрируются; скрытое игнорирование входа запрещено.
+
+PDF/рендер при наличии проверяется визуально и структурно, но не становится источником бизнес-правил. Рендеры и другие временные файлы создаются только в системном временном каталоге. Source locator удаляет созданный им временный каталог до завершения; новые файлы в repo-local `tmp/` после регистрации source-locator считаются ошибкой этапа.
+
+Минимальный вариант для DOCX без визуально значимой разметки:
+
+```yaml
+source_contract_version: 2
+stage: source-locator
+status: completed
+source_selection: "fts/Project/FT/work/stage-handoffs/00-FT/source-selection.md"
+visual_crosscheck: not_required
+visual_crosscheck_reason: "ФТ содержит только линейный текст и простые таблицы без визуального оракула."
+primary_sources:
+  - path: "fts/Project/FT/source/requirements.docx"
+    role: semantic_primary
+    sha256: "<sha256>"
+  - path: "fts/Project/FT/source/requirements.normalized.xhtml"
+    role: machine_readable_primary
+    origin: generated
+    derived_from: "fts/Project/FT/source/requirements.docx"
+    derived_from_sha256: "<sha256 DOCX>"
+    generator: "scripts/normalize_ft_source.py"
+    sha256: "<sha256 XHTML>"
+support_sources:
+visual_sources:
+```
 
 До возврата результата обязательно выполнить:
 

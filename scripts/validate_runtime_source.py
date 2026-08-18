@@ -6,6 +6,7 @@ import json
 import re
 from datetime import datetime, timezone
 from pathlib import Path
+from xml.etree import ElementTree as ET
 
 try:
     from scripts.runtime_session_registry import load_registry, validate_topology
@@ -15,11 +16,14 @@ except ModuleNotFoundError:  # Direct invocation: python scripts/validate_runtim
 
 DIGEST_RE = re.compile(r"^[0-9a-f]{64}$", re.IGNORECASE)
 URL_RE = re.compile(r"https://www\.figma\.com/\S+")
-PRIMARY_ROLES = {
+LEGACY_PRIMARY_ROLES = {
     "semantic_primary",
     "machine_readable_primary",
     "visual_structural_crosscheck_only",
 }
+SEMANTIC_ROLE = "semantic_primary"
+MACHINE_ROLE = "machine_readable_primary"
+VISUAL_ROLE = "visual_structural_crosscheck_only"
 LOCAL_SECTIONS = ("primary_sources", "support_sources", "visual_sources")
 REQUIRED_HANDOFF_FILES = ("source-selection.md", "workflow-state.yaml")
 
@@ -87,6 +91,10 @@ def sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def role_tokens(value: str) -> set[str]:
+    return {token.strip().casefold() for token in re.split(r"[+,]", value) if token.strip()}
+
+
 def validate(package_root: Path, handoff_dir: Path, allow_downstream: bool = False) -> list[str]:
     package_root = package_root.resolve()
     handoff_dir = handoff_dir.resolve()
@@ -124,6 +132,7 @@ def validate(package_root: Path, handoff_dir: Path, allow_downstream: bool = Fal
 
     registered_paths: set[str] = set()
     primary_roles: list[str] = []
+    registered_entries: list[tuple[str, dict[str, str], Path]] = []
     for section in LOCAL_SECTIONS:
         for index, entry in enumerate(parse_list(workflow, section), start=1):
             label = f"{section}[{index}]"
@@ -147,6 +156,8 @@ def validate(package_root: Path, handoff_dir: Path, allow_downstream: bool = Fal
                 errors.append(f"{label}: role is required")
             elif section == "primary_sources":
                 primary_roles.append(role)
+            if role and resolved.is_file():
+                registered_entries.append((section, entry, resolved))
             if not digest or not DIGEST_RE.fullmatch(digest):
                 errors.append(f"{label}: sha256 must be a 64-character digest")
             elif resolved.is_file() and sha256(resolved) != digest.casefold():
@@ -156,8 +167,68 @@ def validate(package_root: Path, handoff_dir: Path, allow_downstream: bool = Fal
             if digest and digest not in selection:
                 errors.append(f"{label}: digest is absent from source-selection.md")
 
-    if set(primary_roles) != PRIMARY_ROLES or len(primary_roles) != len(PRIMARY_ROLES):
-        errors.append("primary_sources must contain exactly one semantic DOCX, machine-readable XHTML and visual PDF role")
+    contract_version = top.get("source_contract_version", "1")
+    if contract_version == "1":
+        if set(primary_roles) != LEGACY_PRIMARY_ROLES or len(primary_roles) != len(LEGACY_PRIMARY_ROLES):
+            errors.append("legacy primary_sources must contain semantic, machine-readable and visual roles")
+    elif contract_version == "2":
+        primary_entries = [entry for section, entry, _ in registered_entries if section == "primary_sources"]
+        semantic_entries = [entry for entry in primary_entries if SEMANTIC_ROLE in role_tokens(entry.get("role", ""))]
+        machine_entries = [entry for entry in primary_entries if MACHINE_ROLE in role_tokens(entry.get("role", ""))]
+        visual_entries = [
+            entry
+            for _, entry, _ in registered_entries
+            if VISUAL_ROLE in role_tokens(entry.get("role", ""))
+        ]
+        if len(semantic_entries) != 1:
+            errors.append("source contract v2 requires exactly one canonical semantic_primary")
+        if len(machine_entries) != 1:
+            errors.append("source contract v2 requires exactly one machine_readable_primary")
+
+        visual_decision = top.get("visual_crosscheck")
+        if visual_decision not in {"required", "not_required"}:
+            errors.append("source contract v2 requires visual_crosscheck: required or not_required")
+        elif visual_decision == "required" and not visual_entries:
+            errors.append("visual_crosscheck is required but no visual source is registered")
+        elif visual_decision == "not_required":
+            if visual_entries:
+                errors.append("visual sources are registered while visual_crosscheck is not_required")
+            if not top.get("visual_crosscheck_reason"):
+                errors.append("visual_crosscheck_reason is required when visual cross-check is not required")
+
+        if len(machine_entries) == 1:
+            machine = machine_entries[0]
+            machine_path, machine_error = resolve_registered_path(repo_root, package_root, machine.get("path", ""))
+            if machine_error is None and machine_path is not None and machine_path.is_file():
+                try:
+                    ET.parse(machine_path)
+                except (ET.ParseError, OSError) as exc:
+                    errors.append(f"machine_readable_primary must be well-formed XML/XHTML: {exc}")
+            origin = machine.get("origin")
+            if origin not in {"canonical", "generated", "supplied"}:
+                errors.append("machine_readable_primary origin must be canonical, generated or supplied")
+            elif origin == "canonical":
+                if len(semantic_entries) != 1 or machine.get("path") != semantic_entries[0].get("path"):
+                    errors.append("canonical machine-readable source must be the semantic primary path")
+            elif origin == "generated":
+                derived_from = machine.get("derived_from")
+                derived_digest = machine.get("derived_from_sha256")
+                generator = machine.get("generator")
+                if len(semantic_entries) == 1 and derived_from != semantic_entries[0].get("path"):
+                    errors.append("generated machine-readable source must derive from semantic_primary")
+                if not derived_digest or not DIGEST_RE.fullmatch(derived_digest):
+                    errors.append("generated machine-readable source requires derived_from_sha256")
+                elif len(semantic_entries) == 1:
+                    semantic_path, semantic_error = resolve_registered_path(
+                        repo_root, package_root, semantic_entries[0].get("path", "")
+                    )
+                    if semantic_error is None and semantic_path is not None and semantic_path.is_file():
+                        if sha256(semantic_path) != derived_digest.casefold():
+                            errors.append("generated machine-readable source derives from a different semantic hash")
+                if not generator:
+                    errors.append("generated machine-readable source requires a generator identifier")
+    else:
+        errors.append("source_contract_version must be 1 or 2")
 
     actual_inputs: set[str] = set()
     for directory_name in ("source", "support", "mockups"):
