@@ -327,6 +327,59 @@ class RuntimeContractTests(unittest.TestCase):
             )
             self.assertEqual([], validate_source(package, handoff))
 
+    def test_source_stage_enforces_input_directory_sections(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            package, handoff = create_valid_source_stage(root)
+            support = package / "support" / "cities.md"
+            mockup = package / "mockups" / "form.png"
+            support.write_text("Москва\n", encoding="utf-8")
+            mockup.write_bytes(b"png")
+            support_relative = support.relative_to(root).as_posix()
+            mockup_relative = mockup.relative_to(root).as_posix()
+            support_digest = hashlib.sha256(support.read_bytes()).hexdigest()
+            mockup_digest = hashlib.sha256(mockup.read_bytes()).hexdigest()
+
+            selection = handoff / "source-selection.md"
+            selection.write_text(
+                selection.read_text(encoding="utf-8")
+                + f"- `{support_relative}` `{support_digest}` `dictionary`\n"
+                + f"- `{mockup_relative}` `{mockup_digest}` `ui_mockup_reference`\n",
+                encoding="utf-8",
+            )
+            workflow = handoff / "workflow-state.yaml"
+            original = workflow.read_text(encoding="utf-8")
+            wrong = original.replace(
+                "support_sources:\nvisual_sources:\n",
+                "support_sources:\n"
+                f'  - path: "{mockup_relative}"\n'
+                "    role: ui_mockup_reference\n"
+                f'    sha256: "{mockup_digest}"\n'
+                "visual_sources:\n"
+                f'  - path: "{support_relative}"\n'
+                "    role: dictionary\n"
+                f'    sha256: "{support_digest}"\n',
+            )
+            workflow.write_text(wrong, encoding="utf-8")
+
+            errors = validate_source(package, handoff)
+            self.assertTrue(any("support/ must be registered in support_sources" in error for error in errors))
+            self.assertTrue(any("mockups/ must be registered in visual_sources" in error for error in errors))
+
+            correct = original.replace(
+                "support_sources:\nvisual_sources:\n",
+                "support_sources:\n"
+                f'  - path: "{support_relative}"\n'
+                "    role: dictionary\n"
+                f'    sha256: "{support_digest}"\n'
+                "visual_sources:\n"
+                f'  - path: "{mockup_relative}"\n'
+                "    role: ui_mockup_reference\n"
+                f'    sha256: "{mockup_digest}"\n',
+            )
+            workflow.write_text(correct, encoding="utf-8")
+            self.assertEqual([], validate_source(package, handoff))
+
     def test_source_contract_v2_accepts_native_xhtml_as_single_canonical_file(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
             root = Path(temporary_directory)

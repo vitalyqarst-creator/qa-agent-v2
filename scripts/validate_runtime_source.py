@@ -150,6 +150,18 @@ def validate(package_root: Path, handoff_dir: Path, allow_downstream: bool = Fal
                 errors.append(f"{label}: {path_error}")
                 continue
             assert resolved is not None
+            relative_to_package = resolved.relative_to(package_root)
+            input_directory = relative_to_package.parts[0] if relative_to_package.parts else ""
+            allowed_sections = {
+                "source": {"primary_sources", "visual_sources"},
+                "support": {"support_sources"},
+                "mockups": {"visual_sources"},
+            }.get(input_directory)
+            if allowed_sections is not None and section not in allowed_sections:
+                expected = " or ".join(sorted(allowed_sections))
+                errors.append(
+                    f"{label}: files under {input_directory}/ must be registered in {expected}"
+                )
             if not resolved.is_file():
                 errors.append(f"{label}: registered file does not exist: {path_value}")
             if not role:
