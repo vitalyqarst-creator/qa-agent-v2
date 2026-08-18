@@ -718,6 +718,20 @@ class RuntimeContractTests(unittest.TestCase):
     def test_valid_runtime_test_case_passes(self) -> None:
         self.assertEqual([], validate_tc(VALID_TC))
 
+    def test_expected_result_allows_or_inside_quoted_ui_label(self) -> None:
+        labelled = VALID_TC.replace(
+            "Карточка партнёра сохранена.",
+            "В форме указаны `Наименование банка или БИК` = `ПАО СБЕРБАНК`.",
+        )
+        self.assertEqual([], validate_tc(labelled))
+
+    def test_expected_result_rejects_alternative_outcomes(self) -> None:
+        alternative = VALID_TC.replace(
+            "Карточка партнёра сохранена.",
+            "Карточка партнёра сохранена или отображается ошибка.",
+        )
+        self.assertTrue(any("expected result must be deterministic" in error for error in validate_tc(alternative)))
+
     def test_internal_gap_and_fixture_request_are_rejected(self) -> None:
         invalid = VALID_TC.replace(
             "- `Наименование партнёра` = `ПАО СБЕРБАНК`.",

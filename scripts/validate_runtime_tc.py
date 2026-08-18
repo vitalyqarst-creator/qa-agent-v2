@@ -134,6 +134,11 @@ def composite_numbered_actions(value: str) -> list[str]:
     ]
 
 
+def has_nondeterministic_outcome(value: str) -> bool:
+    without_labels = QUOTED_FRAGMENT_RE.sub("", value)
+    return re.search(r"\bили\b", without_labels, re.IGNORECASE) is not None
+
+
 def sections(block: str) -> dict[str, str]:
     return {match.group(1): match.group(2).strip() for match in SECTION_RE.finditer(block)}
 
@@ -306,7 +311,7 @@ def validate(content: str) -> list[str]:
         step_actions = {normalize_action(line) for line in steps.splitlines() if NUMBERED_LINE_RE.match(line)}
         if precondition_actions & step_actions:
             errors.append(f"{tc_id}: setup action is duplicated in steps")
-        if " или " in expected.lower():
+        if has_nondeterministic_outcome(expected):
             errors.append(f"{tc_id}: expected result must be deterministic")
         status_match = STATUS_RE.search(block)
         status = status_match.group(1).strip().strip("`") if status_match else "ready"
