@@ -315,6 +315,7 @@ def validate_projection(content: str, matrix_content: str) -> list[str]:
     hover_controls = hover_revealed_controls(matrix.rows, check_index, result_index)
     required_anchors: set[str] = set()
     all_matrix_anchors: set[str] = set()
+    matrix_requirement_codes: set[str] = set()
     executable_rows: dict[str, set[str]] = {}
     row_profiles: dict[str, str] = {}
     all_matrix_ids: set[str] = set()
@@ -323,6 +324,7 @@ def validate_projection(content: str, matrix_content: str) -> list[str]:
         all_matrix_ids.add(matrix_id)
         anchors = extract_anchors(row[source_index])
         all_matrix_anchors.update(anchors)
+        matrix_requirement_codes.update(anchor for anchor in anchors if anchor.startswith("CODE:"))
         if row[decision_index] == "TC":
             required_anchors.update(anchors)
             executable_rows[matrix_id] = anchors
@@ -349,6 +351,17 @@ def validate_projection(content: str, matrix_content: str) -> list[str]:
         }
         referenced_matrix_ids.update(linked_ids)
         traceability_anchors = extract_anchors(traceability)
+        runtime_text = "\n".join(sections(block).values())
+        leaked_codes = sorted(
+            matrix_requirement_codes.intersection(
+                anchor for anchor in extract_anchors(runtime_text) if anchor.startswith("CODE:")
+            )
+        )
+        if leaked_codes:
+            errors.append(
+                f"{tc_id}: requirement codes are allowed only in traceability: "
+                + ", ".join(anchor_label(anchor) for anchor in leaked_codes)
+            )
         linked_profiles = {row_profiles.get(matrix_id, "") for matrix_id in linked_ids}
         if any("ролевой-доступ" in profiles for profiles in linked_profiles):
             preconditions = sections(block).get("Предусловия", "")

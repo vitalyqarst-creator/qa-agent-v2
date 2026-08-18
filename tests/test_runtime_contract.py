@@ -121,6 +121,17 @@ VALID_CONSISTENCY = """
 | История изменений и аудит | Не применимо: источник не содержит требований к аудиту. | — |
 """
 
+VALID_BOUNDARY_CONTROL = """
+
+## Контроль границ источника
+
+| Фрагмент | Структурный якорь | Решение | Связанные обязанности или область |
+| --- | --- | --- | --- |
+| Выбранный раздел | Раздел 9.3.2 — до раздела 9.3.3 | Включён | SR-001; SR-002; GAP-001 |
+| Вводный текст родительского раздела | Раздел 9.3 — до раздела 9.3.1 | Не применимо: нормативный вводный текст отсутствует. | — |
+| Завершающий текст родительского раздела | После раздела 9.3.3 — до раздела 9.4 | Не применимо: нормативный завершающий текст отсутствует. | — |
+"""
+
 EMPTY_CLARIFICATION_REGISTER = """# Реестр вопросов к БА
 
 Вопросы пока не сформированы.
@@ -889,6 +900,51 @@ class RuntimeContractTests(unittest.TestCase):
         invalid = VALID_MATRIX.replace("базовый, жизненный-цикл-создания", "")
         self.assertTrue(any("no test-design profile" in error for error in validate_matrix(invalid)))
 
+    def test_traceability_supports_project_specific_codes_and_uncoded_anchors(self) -> None:
+        anchors = extract_anchors(
+            "REQ-7-REQ-9; BR_12; GSR 22; AS.5; Раздел 9.3.2, абзац «Карточка сохраняется»"
+        )
+        self.assertTrue(
+            {
+                "CODE:REQ-7",
+                "CODE:REQ-8",
+                "CODE:REQ-9",
+                "CODE:BR_12",
+                "CODE:GSR 22",
+                "CODE:AS.5",
+                "SECTION:9.3.2",
+                "TEXT:карточка сохраняется",
+            }.issubset(anchors)
+        )
+
+    def test_tc_projection_keeps_any_project_requirement_code_in_traceability_only(self) -> None:
+        matrix = VALID_MATRIX.replace("AS.38", "REQ-7")
+        test_case = VALID_TC.replace("AS.38", "REQ-7")
+        self.assertEqual([], validate_tc_projection(test_case, matrix))
+
+        leaked = test_case.replace(
+            "1. Открыть карточку добавления партнёра.",
+            "1. Согласно REQ-7 открыть карточку добавления партнёра.",
+        )
+        self.assertTrue(
+            any("requirement codes are allowed only in traceability" in error for error in validate_tc_projection(leaked, matrix))
+        )
+
+    def test_uniqueness_requirement_requires_matching_matrix_profile(self) -> None:
+        inventory = VALID_INVENTORY.replace(
+            "Карточка сохраняется",
+            "Дубликаты по наименованию не допускаются",
+        )
+        errors = validate_matrix_projection(VALID_MATRIX, inventory, VALID_GAPS)
+        self.assertTrue(any("уникальность-и-дубли" in error for error in errors))
+
+        profiled = VALID_MATRIX.replace(
+            "базовый, жизненный-цикл-создания",
+            "базовый, уникальность-и-дубли",
+        )
+        self.assertEqual([], validate_matrix(profiled))
+        self.assertEqual([], validate_matrix_projection(profiled, inventory, VALID_GAPS))
+
     def test_matrix_requires_explicit_coverage_item(self) -> None:
         invalid = VALID_MATRIX.replace("Сохранение валидной карточки", "")
         self.assertTrue(any("empty Элемент покрытия" in error for error in validate_matrix(invalid)))
@@ -1161,6 +1217,7 @@ class RuntimeContractTests(unittest.TestCase):
                 "| UI-уровень | Визуальный источник | Результат сверки |\n"
                 "| --- | --- | --- |\n"
                 "| Форма добавления | `fts/Project/FT/mockups/form.png` | Подтверждены подписи и путь открытия. |\n"
+                + VALID_BOUNDARY_CONTROL
                 + VALID_CONSISTENCY,
                 encoding="utf-8",
             )
@@ -1178,6 +1235,32 @@ class RuntimeContractTests(unittest.TestCase):
             )
             self.assertEqual([], validate_scope(package, scope))
 
+            inventory_path = scope / "source-row-inventory.md"
+            gaps_path = scope / "coverage-gaps.md"
+            inventory_path.write_text(
+                VALID_INVENTORY.replace(
+                    "AS.38; Таблица 7, строка «Сохранить»",
+                    "Таблица 7, строка «Сохранить»",
+                ).replace(
+                    "AS.39",
+                    "Раздел 9.3.2; абзац «Реакция на ограничение должна быть определена»",
+                ),
+                encoding="utf-8",
+            )
+            gaps_path.write_text(
+                VALID_GAPS.replace(
+                    "AS.39",
+                    "Раздел 9.3.2; абзац «Реакция на ограничение должна быть определена»",
+                ),
+                encoding="utf-8",
+            )
+            self.assertEqual([], validate_scope(package, scope))
+            inventory_path.write_text(
+                VALID_INVENTORY.replace("строка «Сохранить»", "строка «Сохранить», примечание"),
+                encoding="utf-8",
+            )
+            gaps_path.write_text(VALID_GAPS, encoding="utf-8")
+
             pending_question = (
                 "# Реестр вопросов к БА\n\n"
                 "## CLR-scope-001 — реакция на ограничение\n\n"
@@ -1190,6 +1273,16 @@ class RuntimeContractTests(unittest.TestCase):
             )
             register = package / "work" / "scope-clarification-requests.md"
             register.write_text(pending_question, encoding="utf-8")
+            self.assertEqual([], validate_scope(package, scope))
+
+            uncoded_question = pending_question.replace(
+                "при нарушении ограничения AS.39?",
+                "при нарушении ограничения?",
+            ).replace(
+                "**Основание в ФТ:** AS.39.",
+                "**Основание в ФТ:** Раздел 9.3.2; абзац «При нарушении ограничения карточка не сохраняется».",
+            )
+            register.write_text(uncoded_question, encoding="utf-8")
             self.assertEqual([], validate_scope(package, scope))
 
             answered_question = pending_question.replace(
@@ -1227,6 +1320,31 @@ class RuntimeContractTests(unittest.TestCase):
                 VALID_INVENTORY.replace("строка «Сохранить»", "строка «Сохранить», примечание"),
                 encoding="utf-8",
             )
+
+            inventory_path.write_text(
+                inventory_path.read_text(encoding="utf-8").replace(
+                    "| SR-001 | Карточка партнёра |",
+                    "| SR-001 | Карточка партнёра или реквизита |",
+                ),
+                encoding="utf-8",
+            )
+            errors = validate_scope(package, scope)
+            self.assertTrue(any("split mixed surfaces" in error for error in errors))
+            inventory_path.write_text(
+                VALID_INVENTORY.replace("строка «Сохранить»", "строка «Сохранить», примечание"),
+                encoding="utf-8",
+            )
+
+            brief_path = scope / "scope-brief.md"
+            brief_path.write_text(
+                brief_path.read_text(encoding="utf-8").replace(
+                    "| Выбранный раздел | Раздел 9.3.2 — до раздела 9.3.3 | Включён |",
+                    "| Выбранный раздел | Раздел 9.3.2 — до раздела 9.3.3 | Не применимо: требований нет. |",
+                ),
+                encoding="utf-8",
+            )
+            errors = validate_scope(package, scope)
+            self.assertTrue(any("selected section must use decision" in error for error in errors))
 
             brief_path = scope / "scope-brief.md"
             valid_brief = brief_path.read_text(encoding="utf-8")

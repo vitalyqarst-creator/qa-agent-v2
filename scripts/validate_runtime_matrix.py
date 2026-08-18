@@ -35,6 +35,7 @@ ALLOWED_PROFILES = {
     "таблица-решений",
     "комбинаторный",
     "справочник",
+    "уникальность-и-дубли",
     "ролевой-доступ",
     "переход-состояния",
     "жизненный-цикл-создания",
@@ -68,6 +69,11 @@ MISSING_ENVIRONMENT_GAP_RE = re.compile(
 )
 ONLY_ROLE_VISIBILITY_RE = re.compile(
     r"(?:видим\w*\s+и\s+доступ\w*|доступ\w*\s+и\s+видим\w*)\s+только",
+    re.IGNORECASE,
+)
+UNIQUENESS_REQUIREMENT_RE = re.compile(
+    r"\bуникальн\w*|\bдубл\w*|\bповторн\w*\s+(?:запис\w*|сущност\w*|объект\w*)|"
+    r"\bне\s+допуска\w*\s+(?:одинаков\w*|повторн\w*)",
     re.IGNORECASE,
 )
 NEGATIVE_ACTOR_RE = re.compile(
@@ -275,6 +281,7 @@ def validate_projection(content: str, inventory_content: str, gaps_content: str)
     inventory_anchors: set[str] = set()
     inventory_ids: set[str] = set()
     inventory_statements: dict[str, str] = {}
+    inventory_sources: dict[str, str] = {}
     inventory_id_index = inventory.index("ID")
     inventory_source_index = inventory.index("Источник")
     inventory_statement_index = inventory.index("Утверждение для покрытия")
@@ -284,6 +291,7 @@ def validate_projection(content: str, inventory_content: str, gaps_content: str)
             errors.append("source-row-inventory contains an empty ID")
             continue
         inventory_ids.add(inventory_id)
+        inventory_sources[inventory_id] = row[inventory_source_index]
         inventory_statements[inventory_id] = row[inventory_statement_index]
         inventory_anchors.update(extract_anchors(row[inventory_source_index]))
 
@@ -291,6 +299,7 @@ def validate_projection(content: str, inventory_content: str, gaps_content: str)
     matrix_check_index = matrix.index("Проверка")
     matrix_expected_index = matrix.index("Ожидаемый результат")
     matrix_decision_index = matrix.index("Решение")
+    matrix_profile_index = matrix.index("Профили тест-дизайна")
     matrix_id_index = matrix.index("ID")
     matrix_anchors: set[str] = set()
     matrix_rows_by_id: dict[str, tuple[str, ...]] = {}
@@ -299,6 +308,21 @@ def validate_projection(content: str, inventory_content: str, gaps_content: str)
         matrix_anchors.update(extract_anchors(matrix_source))
         matrix_rows_by_id[row[matrix_id_index]] = row
         linked_inventory_ids = SOURCE_ROW_TOKEN_RE.findall(matrix_source)
+        source_requires_uniqueness = any(
+            UNIQUENESS_REQUIREMENT_RE.search(
+                f"{inventory_sources.get(inventory_id, '')} {inventory_statements.get(inventory_id, '')}"
+            )
+            for inventory_id in linked_inventory_ids
+        )
+        if (
+            source_requires_uniqueness
+            and row[matrix_decision_index] == "TC"
+            and "уникальность-и-дубли" not in row[matrix_profile_index]
+        ):
+            errors.append(
+                f"{row[matrix_id_index]}: source-backed uniqueness or duplicate rule requires "
+                "the 'уникальность-и-дубли' profile"
+            )
         source_requires_absence = any(
             ONLY_ROLE_VISIBILITY_RE.search(inventory_statements.get(inventory_id, ""))
             for inventory_id in linked_inventory_ids

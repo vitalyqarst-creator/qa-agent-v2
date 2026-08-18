@@ -32,13 +32,24 @@ PROCESS_PREFIXES = {
     "ТАБЛИЦА",
 }
 RANGE_RE = re.compile(
-    r"\b([A-ZА-ЯЁ][A-ZА-ЯЁ0-9_-]{0,15})\.(\d+)\s*[-–—]\s*(?:([A-ZА-ЯЁ][A-ZА-ЯЁ0-9_-]{0,15})\.)?(\d+)\b"
+    r"\b([A-ZА-ЯЁ][A-ZА-ЯЁ0-9]{0,15})([._-])(\d+)\s*[-–—]\s*"
+    r"(?:([A-ZА-ЯЁ][A-ZА-ЯЁ0-9]{0,15})([._-]))?(\d+)\b"
 )
-DOT_CODE_RE = re.compile(r"\b([A-ZА-ЯЁ][A-ZА-ЯЁ0-9_-]{0,15})\.(\d+(?:\.\d+)*)\b")
+SEPARATED_CODE_RE = re.compile(
+    r"\b([A-ZА-ЯЁ][A-ZА-ЯЁ0-9]{0,15})([._-])(\d+(?:[._-]\d+)*)\b"
+)
 SPACE_CODE_RE = re.compile(r"\b([A-ZА-ЯЁ]{2,10})\s+(\d+(?:\.\d+)*)\b")
 TABLE_RE = re.compile(
     r"\bтаблиц(?:а|ы|е|у|ей)\s*(\d+)"
     r"(?:\s*[,;/]\s*строк(?:а|и|е|у)\s*[`\"«]?([^`\"»;|\n]+)[`\"»]?)?",
+    re.IGNORECASE,
+)
+SECTION_RE = re.compile(
+    r"\b(?:раздел|подраздел|пункт)\s+([0-9]+(?:\.[0-9]+)*)\b",
+    re.IGNORECASE,
+)
+QUOTED_STRUCTURAL_TEXT_RE = re.compile(
+    r"\b(?:абзац|пункт|элемент\s+списка|строка)\s+(?:«([^»\n]{3,})»|`([^`\n]{3,})`)",
     re.IGNORECASE,
 )
 
@@ -83,15 +94,23 @@ def normalize_label(value: str) -> str:
 
 def extract_anchors(value: str) -> set[str]:
     anchors: set[str] = set()
-    for prefix, start_raw, repeated_prefix, end_raw in RANGE_RE.findall(value.upper()):
+    for prefix, separator, start_raw, repeated_prefix, repeated_separator, end_raw in RANGE_RE.findall(
+        value.upper()
+    ):
         end_prefix = repeated_prefix or prefix
+        end_separator = repeated_separator or separator
         start = int(start_raw)
         end = int(end_raw)
-        if prefix == end_prefix and prefix not in PROCESS_PREFIXES and 0 <= end - start <= 500:
-            anchors.update(f"CODE:{prefix}.{number}" for number in range(start, end + 1))
-    for prefix, number in DOT_CODE_RE.findall(value.upper()):
+        if (
+            prefix == end_prefix
+            and separator == end_separator
+            and prefix not in PROCESS_PREFIXES
+            and 0 <= end - start <= 500
+        ):
+            anchors.update(f"CODE:{prefix}{separator}{number}" for number in range(start, end + 1))
+    for prefix, separator, number in SEPARATED_CODE_RE.findall(value.upper()):
         if prefix not in PROCESS_PREFIXES:
-            anchors.add(f"CODE:{prefix}.{number}")
+            anchors.add(f"CODE:{prefix}{separator}{number}")
     for prefix, number in SPACE_CODE_RE.findall(value.upper()):
         if prefix not in PROCESS_PREFIXES:
             anchors.add(f"CODE:{prefix} {number}")
@@ -100,6 +119,9 @@ def extract_anchors(value: str) -> set[str]:
             anchors.add(f"TABLE:{table_number}:{normalize_label(row_label)}")
         else:
             anchors.add(f"TABLE:{table_number}")
+    anchors.update(f"SECTION:{number}" for number in SECTION_RE.findall(value))
+    for left_quote, backtick_quote in QUOTED_STRUCTURAL_TEXT_RE.findall(value):
+        anchors.add(f"TEXT:{normalize_label(left_quote or backtick_quote)}")
     return anchors
 
 
@@ -111,4 +133,8 @@ def anchor_label(anchor: str) -> str:
         if len(parts) == 3:
             return f"Таблица {parts[1]}, строка «{parts[2]}»"
         return f"Таблица {parts[1]}"
+    if anchor.startswith("SECTION:"):
+        return f"Раздел {anchor.removeprefix('SECTION:')}"
+    if anchor.startswith("TEXT:"):
+        return f"фрагмент «{anchor.removeprefix('TEXT:')}»"
     return anchor

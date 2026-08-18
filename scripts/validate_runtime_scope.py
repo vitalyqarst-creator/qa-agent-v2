@@ -59,6 +59,11 @@ CONSISTENCY_ASPECTS = (
     "Поля, справочники и внешние источники",
     "История изменений и аудит",
 )
+BOUNDARY_FRAGMENTS = (
+    "Выбранный раздел",
+    "Вводный текст родительского раздела",
+    "Завершающий текст родительского раздела",
+)
 RESIDUAL_EXPLANATION = "**Почему существующий ответ не закрывает вопрос:**"
 WORKING_ASSUMPTION_STATUS_RE = re.compile(
     r"^response_status:\s*(?:answered|resolved|approved)\s*$", re.IGNORECASE | re.MULTILINE
@@ -113,6 +118,7 @@ INDEPENDENT_PROPERTY_PATTERNS = {
     "представление": re.compile(r"\bинформационн\w*\s+(?:блок\w*|виджет\w*)", re.IGNORECASE),
     "ссылка или переход": re.compile(r"\bссылк\w*|\bпереход\w*", re.IGNORECASE),
 }
+MULTI_SURFACE_RE = re.compile(r"\s(?:и|или)\s|(?<=\w)\s*/\s*(?=\w)", re.IGNORECASE)
 QUESTION_EXTRA_BEHAVIOR_RE = re.compile(
     r"\bпомимо\b|\b(?:како(?:е|й|ва)|что)\s+ещ[её]\b|\bдополнительн\w*\s+(?:поведени\w*|результат\w*)",
     re.IGNORECASE,
@@ -331,10 +337,26 @@ def question_field(block: str, label: str) -> str:
     return match.group(1).strip() if match else ""
 
 
-def duplicates_fully_answered_question(current_question: str, support: str, code: str) -> bool:
+def precise_source_anchors(value: str) -> set[str]:
+    anchors = extract_anchors(value)
+    codes = {anchor for anchor in anchors if anchor.startswith("CODE:")}
+    table_rows = {anchor for anchor in anchors if anchor.startswith("TABLE:") and anchor.count(":") == 2}
+    sections = {anchor for anchor in anchors if anchor.startswith("SECTION:")}
+    quoted_text = {anchor for anchor in anchors if anchor.startswith("TEXT:")}
+    if codes or table_rows or (sections and quoted_text):
+        return codes | table_rows | sections | quoted_text
+    return set()
+
+
+def single_observation_surface(value: str) -> bool:
+    without_labels = re.sub(r"`[^`\n]*`|«[^»\n]*»|\"[^\"\n]*\"", "", value)
+    return not MULTI_SURFACE_RE.search(without_labels)
+
+
+def duplicates_fully_answered_question(current_question: str, support: str, anchors: set[str]) -> bool:
     current_tokens = meaningful_tokens(current_question)
     for card in re.split(r"(?=^###\s+CLR-)", support, flags=re.MULTILINE):
-        if not re.search(rf"\b{re.escape(code)}\b", card, re.IGNORECASE):
+        if not anchors.intersection(precise_source_anchors(card)):
             continue
         if not re.search(r"response_status:\s*(?:answered|resolved|approved)\b", card, re.IGNORECASE):
             continue
@@ -365,14 +387,12 @@ def operational_working_assumption(card: str) -> bool:
     )
 
 
-def operational_assumption_codes(card: str) -> set[str]:
+def operational_assumption_anchors(card: str) -> set[str]:
     if not operational_working_assumption(card):
         return set()
     requirement_match = re.search(r"^requirement_codes:\s*(.+?)\s*$", card, re.IGNORECASE | re.MULTILINE)
     if requirement_match and requirement_match.group(1).strip() not in {"-", "none"}:
-        return {
-            anchor for anchor in extract_anchors(requirement_match.group(1)) if anchor.startswith("CODE:")
-        }
+        return precise_source_anchors(requirement_match.group(1))
     reference_match = re.search(r"^related_ft_reference:\s*(.+?)\s*$", card, re.IGNORECASE | re.MULTILINE)
     if reference_match is None:
         return set()
@@ -381,11 +401,7 @@ def operational_assumption_codes(card: str) -> set[str]:
         for part in reference_match.group(1).split(";")
         if "cross-ref" not in part.casefold() and "cross ref" not in part.casefold()
     ]
-    return {
-        anchor
-        for anchor in extract_anchors(";".join(primary_parts))
-        if anchor.startswith("CODE:")
-    }
+    return precise_source_anchors(";".join(primary_parts))
 
 
 def validate_test_data_plan(content: str) -> list[str]:
@@ -477,6 +493,11 @@ def validate(package_root: Path, scope_dir: Path) -> list[str]:
             source_value = row[inventory_source_index]
             statement_value = row[inventory_statement_index]
             source_codes = {anchor for anchor in extract_anchors(source_value) if anchor.startswith("CODE:")}
+            if not precise_source_anchors(source_value):
+                errors.append(
+                    f"{inventory_id}: source needs an exact requirement code or an uncoded structural anchor "
+                    "(exact table row, or section plus quoted paragraph/list text)"
+                )
             row_matches = table_row_references(source_value)
             for table_number, row_name in row_matches:
                 row_references.append((inventory_id, int(table_number), row_name))
@@ -541,6 +562,11 @@ def validate(package_root: Path, scope_dir: Path) -> list[str]:
             contract_ids.append(source_id)
             if not SOURCE_ROW_ID_RE.fullmatch(source_id):
                 errors.append(f"verifiability contract has invalid SR reference {source_id!r}")
+            observation_surface = row[contract_indexes[0]].strip()
+            if observation_surface and not single_observation_surface(observation_surface):
+                errors.append(
+                    f"{source_id}: verifiability contract must name one object or UI level; split mixed surfaces"
+                )
             for index in contract_indexes:
                 value = row[index].strip()
                 if not value or value in {"-", "—"}:
@@ -569,6 +595,67 @@ def validate(package_root: Path, scope_dir: Path) -> list[str]:
         workflow_content,
     ):
         errors.append("workflow-state must reference work/scope-clarification-requests.md as clarification_register")
+    boundary_refs: set[str] = set()
+    boundary_control = find_markdown_table(
+        scope_brief_content,
+        ("Фрагмент", "Структурный якорь", "Решение", "Связанные обязанности или область"),
+    )
+    if boundary_control is None or not boundary_control.rows:
+        errors.append("scope-brief must contain the source boundary control table")
+    else:
+        fragment_index = boundary_control.index("Фрагмент")
+        anchor_index = boundary_control.index("Структурный якорь")
+        decision_index = boundary_control.index("Решение")
+        related_index = boundary_control.index("Связанные обязанности или область")
+        fragments = [row[fragment_index].strip() for row in boundary_control.rows]
+        for required_fragment in BOUNDARY_FRAGMENTS:
+            count = sum(fragment.casefold() == required_fragment.casefold() for fragment in fragments)
+            if count != 1:
+                errors.append(
+                    f"scope-brief source boundary control must contain fragment {required_fragment!r} exactly once"
+                )
+        for row in boundary_control.rows:
+            fragment = row[fragment_index].strip() or "<без фрагмента>"
+            anchor = row[anchor_index].strip()
+            decision = row[decision_index].strip()
+            related = row[related_index].strip()
+            if fragment.casefold() == "выбранный раздел" and decision.casefold() != "включён":
+                errors.append("scope-brief selected section must use decision 'Включён'")
+            if not anchor or anchor in {"-", "—"}:
+                errors.append(f"scope-brief source boundary fragment {fragment!r} has no structural anchor")
+            if decision.casefold() == "включён":
+                linked = set(SOURCE_ROW_TOKEN_RE.findall(related)) | set(
+                    re.findall(r"(?<![A-Za-z0-9_.-])GAP-\d{2,}(?![A-Za-z0-9_.-])", related)
+                )
+                boundary_refs.update(linked)
+                if not linked:
+                    errors.append(
+                        f"scope-brief source boundary fragment {fragment!r} is included but has no SR-* or GAP-* links"
+                    )
+            elif decision.casefold().startswith("ранее покрыт:"):
+                previous_scope = decision.split(":", 1)[1].strip().strip("` ")
+                previous_matches = [
+                    candidate
+                    for candidate in (package_root / "work" / "stage-handoffs").glob("*")
+                    if candidate.is_dir()
+                    and candidate.resolve() != scope_dir.resolve()
+                    and canonical_scope(candidate.name) == canonical_scope(previous_scope)
+                    and (candidate / "source-row-inventory.md").is_file()
+                ]
+                if not previous_scope or not previous_matches:
+                    errors.append(
+                        f"scope-brief source boundary fragment {fragment!r} references no completed earlier scope"
+                    )
+            elif decision.casefold().startswith("не применимо:"):
+                reason = decision.split(":", 1)[1].strip()
+                if len(reason) < 5:
+                    errors.append(
+                        f"scope-brief source boundary fragment {fragment!r} needs a concrete non-applicability reason"
+                    )
+            else:
+                errors.append(
+                    f"scope-brief source boundary fragment {fragment!r} has unsupported decision {decision!r}"
+                )
     visual_check = find_markdown_table(
         scope_brief_content,
         ("UI-уровень", "Визуальный источник", "Результат сверки"),
@@ -653,11 +740,11 @@ def validate(package_root: Path, scope_dir: Path) -> list[str]:
 
     support_files = approved_support_paths(package_root)
     support_contents = [(path, path.read_text(encoding="utf-8")) for path in support_files]
-    assumption_codes = {
-        code
+    assumption_anchors = {
+        anchor
         for _path, support in support_contents
         for card in support_cards(support)
-        for code in operational_assumption_codes(card)
+        for anchor in operational_assumption_anchors(card)
     }
 
     gaps_content = (scope_dir / "coverage-gaps.md").read_text(encoding="utf-8")
@@ -694,14 +781,12 @@ def validate(package_root: Path, scope_dir: Path) -> list[str]:
                     errors.append(
                         f"{gap_id}: missing environment data is execution readiness, not a coverage gap"
                     )
-                source_codes = {
-                    anchor for anchor in extract_anchors(row[gap_source_index]) if anchor.startswith("CODE:")
-                }
-                covered_assumptions = sorted(source_codes & assumption_codes)
+                source_anchors = precise_source_anchors(row[gap_source_index])
+                covered_assumptions = sorted(source_anchors & assumption_anchors)
                 if covered_assumptions:
                     errors.append(
                         f"{gap_id}: non-blocking working assumption provides current behavior for "
-                        + ", ".join(code.removeprefix("CODE:") for code in covered_assumptions)
+                        + ", ".join(covered_assumptions)
                         + "; record future update instead of a coverage gap"
                     )
 
@@ -716,6 +801,13 @@ def validate(package_root: Path, scope_dir: Path) -> list[str]:
     )
     if unknown_consistency_refs:
         errors.append("scope-brief consistency analysis references unknown IDs: " + ", ".join(unknown_consistency_refs))
+    unknown_boundary_refs = sorted(
+        reference
+        for reference in boundary_refs
+        if reference not in active_inventory_ids and reference not in known_gap_ids
+    )
+    if unknown_boundary_refs:
+        errors.append("scope-brief source boundary control references unknown IDs: " + ", ".join(unknown_boundary_refs))
 
     prompt = (scope_dir / "prompt.scope-to-writer.md").read_text(encoding="utf-8")
     combined_scope_text = "\n".join(
@@ -777,26 +869,31 @@ def validate(package_root: Path, scope_dir: Path) -> list[str]:
             errors.append(
                 f"{question_id}: environment or test-data provisioning belongs in test-data-plan, not BA questions"
             )
-        codes = sorted(anchor.removeprefix("CODE:") for anchor in extract_anchors(block) if anchor.startswith("CODE:"))
-        if not codes:
-            errors.append(f"{question_id}: question has no requirement code")
+        question_anchors = precise_source_anchors(requirement_basis)
+        if not question_anchors:
+            errors.append(
+                f"{question_id}: question needs an exact requirement code or an uncoded structural anchor "
+                "(exact table row, or section plus quoted paragraph/list text)"
+            )
             continue
-        provisional_codes = {f"CODE:{code}" for code in codes} & assumption_codes
-        if provisional_codes and status not in {"ответ-получен", "отменён"}:
+        provisional_anchors = question_anchors & assumption_anchors
+        if provisional_anchors and status not in {"ответ-получен", "отменён"}:
             errors.append(
                 f"{question_id}: non-blocking working assumption already provides current behavior for "
-                + ", ".join(sorted(code.removeprefix("CODE:") for code in provisional_codes))
+                + ", ".join(sorted(provisional_anchors))
                 + "; preserve a future-update note instead of a BA question"
             )
         matching_support: list[Path] = []
         for path, support in support_contents:
-            for code in codes:
-                if re.search(rf"\b{re.escape(code)}\b", support, re.IGNORECASE):
-                    matching_support.append(path)
-                if status not in {"ответ-получен", "отменён"} and duplicates_fully_answered_question(
-                    current_question, support, code
-                ):
-                    errors.append(f"{question_id}: duplicates a fully answered approved clarification for {code}")
+            if question_anchors.intersection(precise_source_anchors(support)):
+                matching_support.append(path)
+            if status not in {"ответ-получен", "отменён"} and duplicates_fully_answered_question(
+                current_question, support, question_anchors
+            ):
+                errors.append(
+                    f"{question_id}: duplicates a fully answered approved clarification for "
+                    + ", ".join(sorted(question_anchors))
+                )
         if matching_support and status not in {"ответ-получен", "отменён"} and RESIDUAL_EXPLANATION not in block:
             names = sorted({path.name for path in matching_support})
             errors.append(f"{question_id}: approved answer source mentions its requirement; residual explanation is required: {names}")
