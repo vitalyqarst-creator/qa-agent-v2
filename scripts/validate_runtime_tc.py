@@ -65,7 +65,7 @@ POSTCONDITION_LOGIN_RE = re.compile(r"^\d+\.\s+Войти\s+пользовате
 POSTCONDITION_NAVIGATION_RE = re.compile(r"^\d+\.\s+(?:Открыть|Перейти)\b", re.IGNORECASE | re.MULTILINE)
 POSTCONDITION_FIND_RE = re.compile(r"^\d+\.\s+Найти\b", re.IGNORECASE | re.MULTILINE)
 OPAQUE_DELEGATE_STEP_RE = re.compile(r"^\d+\.\s+Выполнить\b", re.IGNORECASE | re.MULTILINE)
-LOOKUP_LINE_RE = re.compile(r"^\d+\.\s+Найти\b", re.IGNORECASE)
+LOOKUP_ANYWHERE_LINE_RE = re.compile(r"^\d+\..*\bНайти\b", re.IGNORECASE)
 UI_LOOKUP_RE = re.compile(r"\b(?:кнопк\w*|пол[ея]\b|раздел\w*|вкладк\w*|ссылк\w*|действи\w*)\b", re.IGNORECASE)
 OBJECT_OBSERVATION_RE = re.compile(r"\b(?:виджет\w*|блок\w*|карточк\w*|партн[её]р\w*|реквизит\w*|объект\w*)\b", re.IGNORECASE)
 VISIBILITY_RESULT_RE = re.compile(r"\b(?:отображ\w*|видим\w*|отсутств\w*|открыт\w*)\b", re.IGNORECASE)
@@ -77,6 +77,34 @@ QUOTED_CONTROL_RE = re.compile(
     r"(?:кнопк\w*|действи\w*)\s+(?:«([^»]+)»|`([^`]+)`)",
     re.IGNORECASE,
 )
+BACKTICK_LITERAL_RE = re.compile(r"`([^`\n]+)`")
+QUOTED_LABEL_RE = re.compile(r"«([^»]+)»")
+
+
+def normalized_label(value: str) -> str:
+    folded = value.casefold().replace("ё", "е")
+    folded = re.sub(r"[^a-zа-я0-9]+", " ", folded)
+    return re.sub(r"\s+", " ", folded).strip()
+
+
+def visible_selector_values(data: str) -> list[str]:
+    selector_keys = {
+        "партнер",
+        "наименование партнера",
+        "организация",
+        "объект",
+        "запись",
+        "реквизит",
+        "бик",
+        "расчетный счет",
+        "расч счет",
+        "р с",
+    }
+    return [
+        value.strip()
+        for key, value in DATA_PAIR_RE.findall(data)
+        if normalized_label(key) in selector_keys and len(value.strip()) >= 3
+    ]
 
 
 def sections(block: str) -> dict[str, str]:
@@ -127,17 +155,22 @@ def missing_hover_prerequisites(block: str, controls: set[str]) -> list[str]:
 
 def unqualified_object_lookups(block: str) -> list[str]:
     tc_sections = sections(block)
-    values = [value.strip().casefold() for _key, value in DATA_PAIR_RE.findall(tc_sections.get("Тестовые данные", ""))]
-    values = [value for value in values if len(value) >= 3]
+    values = visible_selector_values(tc_sections.get("Тестовые данные", ""))
     if not values:
         return []
     errors: list[str] = []
     for section_name in ("Предусловия", "Шаги", "Постусловия"):
-        for line in tc_sections.get(section_name, "").splitlines():
-            if not LOOKUP_LINE_RE.match(line) or UI_LOOKUP_RE.search(line):
-                continue
-            if not any(value in line.casefold() for value in values):
-                errors.append(f"{section_name}: {line.strip()}")
+        lookup_lines = [
+            line.strip()
+            for line in tc_sections.get(section_name, "").splitlines()
+            if LOOKUP_ANYWHERE_LINE_RE.match(line) and not UI_LOOKUP_RE.search(line)
+        ]
+        if not lookup_lines:
+            continue
+        lookup_text = "\n".join(lookup_lines).casefold()
+        missing = [value for value in values if value.casefold() not in lookup_text]
+        if missing:
+            errors.append(f"{section_name}: missing visible selector literals {missing}")
     return errors
 
 
@@ -213,6 +246,21 @@ def validate(content: str) -> list[str]:
             errors.append(f"{tc_id}: process placeholder in test data")
         expected = tc_sections["Итоговый ожидаемый результат"]
         data_values = [value.strip().casefold() for _key, value in data_pairs if len(value.strip()) >= 3]
+        declared_values = {value.strip() for _key, value in data_pairs}
+        undeclared_identifiers = sorted(
+            {
+                literal
+                for literal in BACKTICK_LITERAL_RE.findall(expected)
+                if len(literal) >= 6
+                and any(character.isdigit() for character in literal)
+                and re.fullmatch(r"[A-Za-zА-Яа-я0-9_.:/+\-]+", literal)
+                and literal not in declared_values
+            }
+        )
+        if undeclared_identifiers:
+            errors.append(
+                f"{tc_id}: expected-result identifiers must be declared in test data: {undeclared_identifiers}"
+            )
         if (
             data_values
             and OBJECT_OBSERVATION_RE.search(expected)
@@ -312,12 +360,16 @@ def validate_projection(content: str, matrix_content: str) -> list[str]:
     decision_index = matrix.index("Решение")
     matrix_id_index = matrix.index("ID")
     result_index = matrix.index("Ожидаемый результат")
+    data_index = matrix.index("Конкретные тестовые данные")
+    coverage_index = matrix.index("Элемент покрытия")
     hover_controls = hover_revealed_controls(matrix.rows, check_index, result_index)
     required_anchors: set[str] = set()
     all_matrix_anchors: set[str] = set()
     matrix_requirement_codes: set[str] = set()
     executable_rows: dict[str, set[str]] = {}
     row_profiles: dict[str, str] = {}
+    row_data_pairs: dict[str, list[tuple[str, str]]] = {}
+    row_prefill_labels: dict[str, list[str]] = {}
     all_matrix_ids: set[str] = set()
     for row in matrix.rows:
         matrix_id = row[matrix_id_index].strip()
@@ -329,6 +381,9 @@ def validate_projection(content: str, matrix_content: str) -> list[str]:
             required_anchors.update(anchors)
             executable_rows[matrix_id] = anchors
             row_profiles[matrix_id] = row[profile_index].casefold()
+            row_data_pairs[matrix_id] = DATA_PAIR_RE.findall(row[data_index])
+            if "предзаполн" in " ".join((row[check_index], row[coverage_index], row[result_index])).casefold():
+                row_prefill_labels[matrix_id] = QUOTED_LABEL_RE.findall(row[result_index])
 
     tc_matches = list(TC_HEADING_RE.finditer(content))
     tc_traceability_values: list[str] = []
@@ -363,6 +418,9 @@ def validate_projection(content: str, matrix_content: str) -> list[str]:
                 + ", ".join(anchor_label(anchor) for anchor in leaked_codes)
             )
         linked_profiles = {row_profiles.get(matrix_id, "") for matrix_id in linked_ids}
+        tc_sections = sections(block)
+        tc_data = tc_sections.get("Тестовые данные", "")
+        tc_expected = tc_sections.get("Итоговый ожидаемый результат", "")
         if any("ролевой-доступ" in profiles for profiles in linked_profiles):
             preconditions = sections(block).get("Предусловия", "")
             if not LOGIN_PRECONDITION_RE.search(preconditions):
@@ -375,6 +433,22 @@ def validate_projection(content: str, matrix_content: str) -> list[str]:
                 continue
             for missing in sorted(executable_rows[matrix_id] - traceability_anchors):
                 errors.append(f"test case linked to {matrix_id} omits {anchor_label(missing)}")
+            for _field, value in row_data_pairs.get(matrix_id, []):
+                if value.strip() not in tc_data:
+                    errors.append(
+                        f"{tc_id}: exact matrix test-data literal from {matrix_id} is absent: {value.strip()}"
+                    )
+            tc_pairs = {normalized_label(field): value.strip() for field, value in DATA_PAIR_RE.findall(tc_data)}
+            for label in row_prefill_labels.get(matrix_id, []):
+                normalized = normalized_label(label)
+                value = tc_pairs.get(normalized)
+                if value is None:
+                    errors.append(f"{tc_id}: prefill field from {matrix_id} is absent from test data: {label}")
+                    continue
+                if label.casefold() not in tc_expected.casefold() or value not in tc_expected:
+                    errors.append(
+                        f"{tc_id}: prefill oracle must state the field-value pair from {matrix_id}: {label} = {value}"
+                    )
     for matrix_id in sorted(executable_rows.keys() - referenced_matrix_ids):
         errors.append(f"test cases do not project executable matrix row {matrix_id}")
     for missing in sorted(required_anchors - tc_anchors):

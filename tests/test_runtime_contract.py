@@ -1063,6 +1063,36 @@ class RuntimeContractTests(unittest.TestCase):
         )
         self.assertEqual([], validate_tc(exact))
 
+    def test_lookup_path_requires_every_declared_visible_selector_literal(self) -> None:
+        nested = VALID_TC.replace(
+            "- `Наименование партнёра` = `ПАО СБЕРБАНК`.",
+            "- `Партнёр` = `ПАО СБЕРБАНК`.\n- `БИК` = `044525225`.\n- `Расчетный счет` = `40702810100000000001`.",
+        ).replace(
+            "1. В поле `Наименование партнёра` ввести `ПАО СБЕРБАНК`.",
+            "1. Найти партнёра `ПАО СБЕРБАНК`, открыть его и найти реквизит по БИК `044525225`.",
+        )
+        errors = validate_tc(nested)
+        self.assertTrue(any("missing visible selector literals" in error for error in errors))
+
+        exact = nested.replace(
+            "по БИК `044525225`.",
+            "по БИК `044525225` и расчетному счету `40702810100000000001`.",
+        )
+        self.assertEqual([], validate_tc(exact))
+
+    def test_expected_identifier_must_be_declared_in_test_data(self) -> None:
+        undeclared = VALID_TC.replace(
+            "Карточка партнёра сохранена.",
+            "Карточка партнёра с ID `12345678` сохранена.",
+        )
+        self.assertTrue(any("must be declared in test data" in error for error in validate_tc(undeclared)))
+
+        declared = undeclared.replace(
+            "- `Наименование партнёра` = `ПАО СБЕРБАНК`.",
+            "- `Наименование партнёра` = `ПАО СБЕРБАНК`.\n- `ID` = `12345678`.",
+        )
+        self.assertEqual([], validate_tc(declared))
+
     def test_visibility_result_identifies_the_observed_object(self) -> None:
         generic = VALID_TC.replace(
             "Карточка партнёра сохранена.",
@@ -1338,6 +1368,41 @@ class RuntimeContractTests(unittest.TestCase):
         errors = validate_tc_projection(VALID_TC, expanded)
         self.assertTrue(any("M-002" in error for error in errors))
         self.assertTrue(any("AS.39" in error for error in errors))
+
+    def test_tc_projection_preserves_exact_matrix_test_data_literal(self) -> None:
+        matrix = VALID_MATRIX.replace("`ПАО СБЕРБАНК`", '`ПАО "СБЕРБАНК"`', 1)
+        errors = validate_tc_projection(VALID_TC, matrix)
+        self.assertTrue(any("exact matrix test-data literal" in error for error in errors))
+
+        exact = VALID_TC.replace("ПАО СБЕРБАНК", 'ПАО "СБЕРБАНК"')
+        self.assertEqual([], validate_tc_projection(exact, matrix))
+
+    def test_prefill_projection_requires_explicit_field_value_oracle(self) -> None:
+        matrix = VALID_MATRIX.replace(
+            "Сохранить карточку | базовый, жизненный-цикл-создания | Сохранение валидной карточки",
+            "Открыть предзаполненную форму | базовый, жизненный-цикл-создания | Предзаполнение формы",
+        ).replace(
+            "Карточка сохранена | TC | ready |",
+            "Поля «Наименование» и «ИНН» предзаполнены | TC | ready |",
+        ).replace(
+            "`Наименование` = `ПАО СБЕРБАНК`",
+            "`Наименование` = `ПАО СБЕРБАНК`; `ИНН` = `7707083893`",
+        )
+        test_case = VALID_TC.replace(
+            "- `Наименование партнёра` = `ПАО СБЕРБАНК`.",
+            "- `Наименование` = `ПАО СБЕРБАНК`.\n- `ИНН` = `7707083893`.",
+        ).replace(
+            "Карточка партнёра сохранена.",
+            "Поле «Наименование» содержит `ПАО СБЕРБАНК`.",
+        )
+        errors = validate_tc_projection(test_case, matrix)
+        self.assertTrue(any("prefill oracle must state" in error and "ИНН" in error for error in errors))
+
+        exact = test_case.replace(
+            "Поле «Наименование» содержит `ПАО СБЕРБАНК`.",
+            "Поле «Наименование» содержит `ПАО СБЕРБАНК`; поле «ИНН» содержит `7707083893`.",
+        )
+        self.assertEqual([], validate_tc_projection(exact, matrix))
 
     def test_tc_projection_requires_matrix_row_and_its_primary_source_in_same_tc(self) -> None:
         missing_matrix_id = VALID_TC.replace("`M-001`; ", "")
