@@ -25,7 +25,7 @@ STAGE_REQUIREMENTS = {
     "matrix-reviewer": ("scope-analyzer", "writer", "matrix-reviewer"),
     "tc-reviewer": ("scope-analyzer", "writer", "matrix-reviewer", "tc-reviewer"),
 }
-REGISTRY_SCHEMA_VERSION = 3
+REGISTRY_SCHEMA_VERSION = 4
 ROLE_SKILL_PATHS = {
     "source-locator": "skills/ft-source-locator/SKILL.md",
     "scope-analyzer": "skills/ft-scope-analyzer/SKILL.md",
@@ -109,18 +109,34 @@ def canonical_scope(value: str) -> str:
     return SCOPE_PREFIX_RE.sub("", value.strip())
 
 
-def session_record(thread_id: str, host_id: str, code_commit: str) -> dict[str, str]:
+def session_record(
+    thread_id: str,
+    host_id: str,
+    code_commit: str,
+    model: str | None = None,
+    thinking: str | None = None,
+) -> dict[str, Any]:
     if not THREAD_ID_RE.fullmatch(thread_id):
         raise ValueError("session thread id must be a UUID returned by Codex create_thread")
     if not host_id.strip():
         raise ValueError("session host id must be returned by Codex create_thread")
-    return {
+    if bool(model) != bool(thinking):
+        raise ValueError("explicit session profile requires both model and thinking")
+    record: dict[str, Any] = {
         "session_type": "codex-thread",
         "session_id": thread_id,
         "host_id": host_id.strip(),
         "runtime_commit": code_commit,
         "recorded_at": utc_now(),
+        "dispatch_profile": {"source": "default"},
     }
+    if model and thinking:
+        record["dispatch_profile"] = {
+            "source": "explicit",
+            "model": model.strip(),
+            "thinking": thinking.strip(),
+        }
+    return record
 
 
 def load_registry(package_root: Path) -> tuple[dict[str, Any] | None, list[str]]:
@@ -246,13 +262,15 @@ def record_role(
     thread_id: str,
     host_id: str,
     scope: str | None = None,
+    model: str | None = None,
+    thinking: str | None = None,
 ) -> Path:
     payload, errors = load_registry(package_root)
     if errors:
         raise ValueError(errors[0])
     assert payload is not None
     current_commit = runtime_code_commit(package_root)
-    record = session_record(thread_id, host_id, current_commit)
+    record = session_record(thread_id, host_id, current_commit, model, thinking)
 
     if role == PACKAGE_ROLE:
         if scope is not None:
@@ -284,6 +302,8 @@ def record_role(
                 )
         elif not same_session:
             raise ValueError(f"{role} is already assigned to another session; reuse the original session")
+        elif current.get("dispatch_profile") != record.get("dispatch_profile"):
+            raise ValueError(f"{role} session is already registered with another dispatch profile")
         else:
             return registry_path(package_root)
 
@@ -320,6 +340,18 @@ def validate_record(label: str, record: Any) -> list[str]:
     host_id = record.get("host_id")
     if not isinstance(host_id, str) or not host_id.strip():
         errors.append(f"{label} host_id is required")
+    profile = record.get("dispatch_profile")
+    if not isinstance(profile, dict):
+        errors.append(f"{label} dispatch_profile is required")
+    else:
+        source = profile.get("source")
+        if source not in {"default", "explicit"}:
+            errors.append(f"{label} dispatch_profile source must be default or explicit")
+        if source == "explicit":
+            if not isinstance(profile.get("model"), str) or not profile["model"].strip():
+                errors.append(f"{label} explicit dispatch_profile requires model")
+            if not isinstance(profile.get("thinking"), str) or not profile["thinking"].strip():
+                errors.append(f"{label} explicit dispatch_profile requires thinking")
     return errors
 
 
@@ -403,6 +435,8 @@ def main() -> int:
     record_parser.add_argument("--scope")
     record_parser.add_argument("--thread-id", required=True)
     record_parser.add_argument("--host-id", required=True)
+    record_parser.add_argument("--model")
+    record_parser.add_argument("--thinking")
 
     verify_parser = subparsers.add_parser("verify")
     verify_parser.add_argument("--package-root", type=Path, required=True)
@@ -426,7 +460,15 @@ def main() -> int:
             print(json.dumps({"created": True, "path": str(path)}, ensure_ascii=False))
             return 0
         if args.command == "record":
-            path = record_role(args.package_root, args.role, args.thread_id, args.host_id, args.scope)
+            path = record_role(
+                args.package_root,
+                args.role,
+                args.thread_id,
+                args.host_id,
+                args.scope,
+                args.model,
+                args.thinking,
+            )
             print(json.dumps({"recorded": True, "path": str(path)}, ensure_ascii=False))
             return 0
         if args.command == "acknowledge-runtime":

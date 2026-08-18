@@ -426,6 +426,7 @@ class RuntimeContractTests(unittest.TestCase):
   <w:tbl>
     <w:tr><w:tc><w:p><w:r><w:t>Название</w:t></w:r></w:p></w:tc></w:tr>
     <w:tr><w:tc><w:p><w:r><w:t>Сохранить</w:t></w:r></w:p></w:tc></w:tr>
+    <w:tr><w:tc><w:p><w:r><w:t>Отменить</w:t></w:r></w:p><w:p><w:r><w:t>или кнопка</w:t></w:r></w:p></w:tc></w:tr>
   </w:tbl>
 </w:body></w:document>"""
             with zipfile.ZipFile(source, "w") as archive:
@@ -440,6 +441,7 @@ class RuntimeContractTests(unittest.TestCase):
             self.assertIn("Сохранить", visible_text)
             self.assertIn(hashlib.sha256(source.read_bytes()).hexdigest(), destination.read_text(encoding="utf-8"))
             self.assertIn("сохранить", xhtml_table_rows(destination)[7])
+            self.assertIn("отменить или кнопка", xhtml_table_rows(destination)[7])
 
     def test_docx_normalizer_materializes_word_numbering_labels(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
@@ -539,6 +541,35 @@ class RuntimeContractTests(unittest.TestCase):
                     WRITER_THREAD,
                 ),
             )
+
+    def test_session_registry_persists_explicit_dispatch_profile(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            initialize_registry(root, CONTROLLER_THREAD, "local")
+            record_role(
+                root,
+                "source-locator",
+                LOCATOR_THREAD,
+                "local",
+                model="gpt-5.6-sol",
+                thinking="high",
+            )
+            payload = json.loads((root / "work" / "runtime-session-registry.json").read_text(encoding="utf-8"))
+            self.assertEqual(
+                {"source": "explicit", "model": "gpt-5.6-sol", "thinking": "high"},
+                payload["source_locator"]["dispatch_profile"],
+            )
+            with self.assertRaisesRegex(ValueError, "another dispatch profile"):
+                record_role(root, "source-locator", LOCATOR_THREAD, "local")
+            with self.assertRaisesRegex(ValueError, "requires both model and thinking"):
+                record_role(
+                    root,
+                    "scope-analyzer",
+                    ANALYZER_THREAD,
+                    "local",
+                    "scope",
+                    model="gpt-5.6-sol",
+                )
 
     def test_session_topology_rejects_role_reuse(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
@@ -1252,6 +1283,40 @@ class RuntimeContractTests(unittest.TestCase):
             )
             self.assertEqual([], validate_scope(package, scope))
 
+            xhtml_path = package / "source" / "requirements.xhtml"
+            original_xhtml = xhtml_path.read_text(encoding="utf-8")
+            xhtml_path.write_text(
+                original_xhtml.replace(
+                    "<tr><td>Название</td><td>Примечание</td></tr>",
+                    "<tr><td>Название</td><td>О</td></tr>",
+                ),
+                encoding="utf-8",
+            )
+            errors = validate_scope(package, scope)
+            self.assertTrue(any("opaque table headers" in error for error in errors))
+            brief_path = scope / "scope-brief.md"
+            brief_without_semantics = brief_path.read_text(encoding="utf-8")
+            brief_path.write_text(
+                brief_without_semantics
+                + "\n## Семантика заголовков таблиц\n\n"
+                + "| Таблица | Заголовок | Значение | Основание или пробел |\n"
+                + "| --- | --- | --- | --- |\n"
+                + "| Таблица 7 | О | Не определено | GAP-001 |\n",
+                encoding="utf-8",
+            )
+            self.assertEqual([], validate_scope(package, scope))
+            brief_path.write_text(
+                brief_path.read_text(encoding="utf-8").replace(
+                    "| Таблица 7 | О | Не определено | GAP-001 |",
+                    "| Таблица 7 | О | Обязательность | Таблица 7 |",
+                ),
+                encoding="utf-8",
+            )
+            errors = validate_scope(package, scope)
+            self.assertTrue(any("exact source legend" in error for error in errors))
+            brief_path.write_text(brief_without_semantics, encoding="utf-8")
+            xhtml_path.write_text(original_xhtml, encoding="utf-8")
+
             inventory_path = scope / "source-row-inventory.md"
             original_inventory = inventory_path.read_text(encoding="utf-8")
             inventory_path.write_text(
@@ -1278,7 +1343,23 @@ class RuntimeContractTests(unittest.TestCase):
             self.assertTrue(any("requiredness alone" in error for error in errors))
             inventory_path.write_text(original_inventory, encoding="utf-8")
 
+            reactive_inventory = original_inventory.replace(
+                "Карточка сохраняется",
+                "При создании дубля система отображает подсказку",
+            ).replace(
+                "Нажатие кнопки сохранения после заполнения | Карточка сохранена",
+                "Указывает существующее наименование | Отображается подсказка о дубле",
+            )
+            inventory_path.write_text(reactive_inventory, encoding="utf-8")
+            errors = validate_scope(package, scope)
+            self.assertTrue(any("source-backed trigger/action" in error for error in errors))
+            inventory_path.write_text(original_inventory, encoding="utf-8")
+
             gaps_path = scope / "coverage-gaps.md"
+            gaps_path.write_text(VALID_GAPS.replace("AS.39", "AS.40"), encoding="utf-8")
+            errors = validate_scope(package, scope)
+            self.assertTrue(any("exactly reuse the linked SR-002 source anchor" in error for error in errors))
+            gaps_path.write_text(VALID_GAPS, encoding="utf-8")
             inventory_path.write_text(
                 VALID_INVENTORY.replace(
                     "AS.38; Таблица 7, строка «Сохранить»",
@@ -1333,7 +1414,8 @@ class RuntimeContractTests(unittest.TestCase):
                 "**Основание в ФТ:** Раздел 9.3.2; абзац «При нарушении ограничения карточка не сохраняется».",
             )
             register.write_text(uncoded_question, encoding="utf-8")
-            self.assertEqual([], validate_scope(package, scope))
+            errors = validate_scope(package, scope)
+            self.assertTrue(any("exactly reuse the linked coverage-gap source anchor" in error for error in errors))
 
             answered_question = pending_question.replace(
                 "`ожидает-ответа`", "`ответ-получен`"
@@ -1398,6 +1480,10 @@ class RuntimeContractTests(unittest.TestCase):
 
             brief_path = scope / "scope-brief.md"
             valid_brief = brief_path.read_text(encoding="utf-8")
+            brief_path.write_text(valid_brief + "\nТабица 7.\n", encoding="utf-8")
+            errors = validate_scope(package, scope)
+            self.assertTrue(any("high-confidence user-facing text error" in error for error in errors))
+            brief_path.write_text(valid_brief, encoding="utf-8")
             brief_path.write_text(
                 valid_brief.replace(
                     "| История изменений и аудит | Не применимо: источник не содержит требований к аудиту. | — |\n",

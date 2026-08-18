@@ -195,6 +195,30 @@ VISUAL_INCOMPLETE_RE = re.compile(
     re.IGNORECASE,
 )
 TABLE_COVERAGE_NUMBER_RE = re.compile(r"^(?:Таблица\s+)?(\d+)$", re.IGNORECASE)
+OPAQUE_TABLE_HEADER_RE = re.compile(r"^[A-Za-zА-Яа-яЁё]{1,2}$")
+UNAMBIGUOUS_SHORT_HEADERS = {"id"}
+REACTIVE_RESULT_RE = re.compile(
+    r"\b(?:подсказк|сообщен|ошиб|уведомл|предупрежд|диалог)\w*\b",
+    re.IGNORECASE,
+)
+SOURCE_TRIGGER_RE = re.compile(
+    r"\bпри\s+(?:ввод|выбор|нажат|сохран|попытк|поиск|открыт|закрыт|загруз|снятии\s+фокус)\w*|"
+    r"\bпосле\s+(?:ввод|выбор|нажат|сохран|открыт|закрыт|загруз)\w*",
+    re.IGNORECASE,
+)
+EXPLICIT_ACTION_TRIGGER_RE = re.compile(
+    r"\b(?:нажима|выбира|сохраня|открыва|закрыва|заверша|снимает\s+фокус|переводит\s+фокус)\w*",
+    re.IGNORECASE,
+)
+HIGH_CONFIDENCE_TEXT_ERRORS = (
+    (re.compile(r"\bТабица\b", re.IGNORECASE), "опечатка 'Табица'"),
+    (re.compile(r"\bотсутствуюют\b", re.IGNORECASE), "опечатка 'отсутствуюют'"),
+    (re.compile(r"\bданны\b", re.IGNORECASE), "незавершённое слово 'данны'"),
+    (
+        re.compile(r"\bодин\s+вариант\s*:[^\n|]{0,160}\bлибо\b", re.IGNORECASE),
+        "противоречивая фраза 'один вариант ... либо'",
+    ),
+)
 ALLOWED_VISUAL_STATUSES = (
     "использован",
     "не относится к области:",
@@ -249,6 +273,27 @@ def normalized_source_text(value: str) -> str:
     return " ".join(value.replace("\u00a0", " ").split()).casefold()
 
 
+def canonical_source_reference(value: str) -> str:
+    return normalized_source_text(value.strip().strip("` ").rstrip(".;"))
+
+
+def xhtml_cell_text(cell: ET.Element) -> str:
+    block_tags = {"address", "div", "h1", "h2", "h3", "h4", "h5", "h6", "li", "p", "table"}
+    direct_blocks = [
+        child for child in list(cell) if child.tag.rsplit("}", 1)[-1].casefold() in block_tags
+    ]
+    if direct_blocks:
+        parts: list[str] = []
+        if cell.text and cell.text.strip():
+            parts.append(cell.text)
+        for child in direct_blocks:
+            parts.append("".join(child.itertext()))
+            if child.tail and child.tail.strip():
+                parts.append(child.tail)
+        return " ".join(" ".join(parts).replace("\u00a0", " ").split())
+    return " ".join("".join(cell.itertext()).replace("\u00a0", " ").split())
+
+
 def table_row_references(value: str) -> list[tuple[str, str]]:
     return [
         (match.group(1), match.group(2) or match.group(3))
@@ -277,9 +322,37 @@ def xhtml_table_rows(path: Path) -> dict[int, set[str]]:
                 if child.tag.rsplit("}", 1)[-1].casefold() in {"td", "th"}
             ]
             if cells:
-                first_cells.append(" ".join("".join(cells[0].itertext()).replace("\u00a0", " ").split()))
+                first_cells.append(xhtml_cell_text(cells[0]))
         # The first row is the column header, not a requirement row.
         result[current_table_number] = {normalized_source_text(value) for value in first_cells[1:] if value}
+        current_table_number = None
+    return result
+
+
+def xhtml_table_headers(path: Path) -> dict[int, tuple[str, ...]]:
+    tree = ET.parse(path)
+    current_table_number: int | None = None
+    result: dict[int, tuple[str, ...]] = {}
+    for element in tree.iter():
+        tag = element.tag.rsplit("}", 1)[-1].casefold()
+        text = " ".join("".join(element.itertext()).replace("\u00a0", " ").split())
+        if tag in {"h1", "h2", "h3", "h4", "h5", "h6", "p"}:
+            label_match = TABLE_LABEL_RE.match(text)
+            if label_match:
+                current_table_number = int(label_match.group(1))
+        if tag != "table" or current_table_number is None:
+            continue
+        first_row = next(
+            (child for child in element.iter() if child.tag.rsplit("}", 1)[-1].casefold() == "tr"),
+            None,
+        )
+        if first_row is not None:
+            headers = tuple(
+                xhtml_cell_text(child)
+                for child in list(first_row)
+                if child.tag.rsplit("}", 1)[-1].casefold() in {"td", "th"}
+            )
+            result[current_table_number] = headers
         current_table_number = None
     return result
 
@@ -543,8 +616,10 @@ def validate(package_root: Path, scope_dir: Path) -> list[str]:
     inventory = find_markdown_table(inventory_content, ("ID", "Источник", "Утверждение для покрытия"))
     row_references: list[tuple[str, int, str]] = []
     normalized_table_rows: dict[int, set[str]] = {}
+    normalized_table_headers: dict[int, tuple[str, ...]] = {}
     active_inventory_ids: set[str] = set()
     inventory_statements: dict[str, str] = {}
+    inventory_sources: dict[str, str] = {}
     if inventory is None or not inventory.rows:
         errors.append("source-row-inventory has no required source rows table")
     else:
@@ -563,6 +638,7 @@ def validate(package_root: Path, scope_dir: Path) -> list[str]:
             source_value = row[inventory_source_index]
             statement_value = row[inventory_statement_index]
             inventory_statements[inventory_id] = statement_value
+            inventory_sources[inventory_id] = source_value
             source_codes = {anchor for anchor in extract_anchors(source_value) if anchor.startswith("CODE:")}
             if not precise_source_anchors(source_value):
                 errors.append(
@@ -607,6 +683,7 @@ def validate(package_root: Path, scope_dir: Path) -> list[str]:
             try:
                 table_rows = xhtml_table_rows(xhtml_path)
                 normalized_table_rows = table_rows
+                normalized_table_headers = xhtml_table_headers(xhtml_path)
             except (ET.ParseError, OSError) as exc:
                 errors.append(f"normalized machine-readable primary cannot be parsed for table-row validation: {exc}")
             else:
@@ -658,6 +735,7 @@ def validate(package_root: Path, scope_dir: Path) -> list[str]:
                             f"{source_id}: unknown verifiability element must link an explicit GAP-*"
                         )
             statement = inventory_statements.get(source_id, "")
+            action = row[contract_indexes[2]].strip()
             observed_result = row[contract_indexes[3]].strip()
             if (
                 re.search(r"\bобязатель\w*", statement, re.IGNORECASE)
@@ -666,6 +744,18 @@ def validate(package_root: Path, scope_dir: Path) -> list[str]:
             ):
                 errors.append(
                     f"{source_id}: requiredness alone supports 'object is not saved', not an exact disabled UI mechanism"
+                )
+            linked_contract_gaps = set(
+                re.findall(r"(?<![A-Za-z0-9_.-])GAP-\d{2,}(?![A-Za-z0-9_.-])", " | ".join(row))
+            )
+            if (
+                REACTIVE_RESULT_RE.search(observed_result)
+                and not linked_contract_gaps
+                and not SOURCE_TRIGGER_RE.search(statement)
+                and not EXPLICIT_ACTION_TRIGGER_RE.search(action)
+            ):
+                errors.append(
+                    f"{source_id}: message, hint or notification needs a source-backed trigger/action or an explicit GAP-*"
                 )
         duplicates = sorted({source_id for source_id in contract_ids if contract_ids.count(source_id) > 1})
         if duplicates:
@@ -811,6 +901,7 @@ def validate(package_root: Path, scope_dir: Path) -> list[str]:
 
     referenced_table_numbers = {table_number for _inventory_id, table_number, _row_name in row_references}
     table_coverage_refs: set[str] = set()
+    header_semantics_gap_ids: set[str] = set()
     table_coverage = find_markdown_table(
         scope_brief_content,
         ("Таблица", "Строка", "Решение", "Связанные обязанности/пробелы"),
@@ -869,6 +960,82 @@ def validate(package_root: Path, scope_dir: Path) -> list[str]:
                     errors.append(f"table-row coverage misses table {table_number} rows: {missing_rows}")
                 if extra_rows:
                     errors.append(f"table-row coverage has extra table {table_number} rows: {extra_rows}")
+
+    opaque_headers = {
+        (table_number, header)
+        for table_number in referenced_table_numbers
+        for header in normalized_table_headers.get(table_number, ())
+        if OPAQUE_TABLE_HEADER_RE.fullmatch(header.strip())
+        and header.strip().casefold() not in UNAMBIGUOUS_SHORT_HEADERS
+    }
+    semantics = find_markdown_table(
+        scope_brief_content,
+        ("Таблица", "Заголовок", "Значение", "Основание или пробел"),
+    )
+    if opaque_headers:
+        if semantics is None or not semantics.rows:
+            labels = ", ".join(f"Таблица {number}: {header}" for number, header in sorted(opaque_headers))
+            errors.append(
+                "scope-brief must resolve or explicitly gap opaque table headers: " + labels
+            )
+        else:
+            semantics_table_index = semantics.index("Таблица")
+            semantics_header_index = semantics.index("Заголовок")
+            semantics_value_index = semantics.index("Значение")
+            semantics_basis_index = semantics.index("Основание или пробел")
+            declared_semantics: list[tuple[int, str]] = []
+            approved_support = approved_support_paths(package_root)
+            root = runtime_root(package_root)
+            support_labels: set[str] = set()
+            for path in approved_support:
+                support_labels.add(path.name.casefold())
+                support_labels.add(path.as_posix().casefold())
+                try:
+                    support_labels.add(path.relative_to(root).as_posix().casefold())
+                except ValueError:
+                    pass
+            for row_number, row in enumerate(semantics.rows, start=1):
+                table_match = TABLE_COVERAGE_NUMBER_RE.fullmatch(row[semantics_table_index].strip())
+                if table_match is None:
+                    errors.append(
+                        f"table-header semantics row {row_number}: invalid table label {row[semantics_table_index]!r}"
+                    )
+                    continue
+                key = (int(table_match.group(1)), row[semantics_header_index].strip())
+                declared_semantics.append(key)
+                value = row[semantics_value_index].strip()
+                basis = row[semantics_basis_index].strip()
+                gaps = set(re.findall(r"(?<![A-Za-z0-9_.-])GAP-\d{2,}(?![A-Za-z0-9_.-])", basis))
+                header_semantics_gap_ids.update(gaps)
+                if re.search(r"\bне\s+определ", value, re.IGNORECASE):
+                    if not gaps:
+                        errors.append(
+                            f"table-header semantics row {row_number}: unresolved meaning must link GAP-*"
+                        )
+                else:
+                    anchors = precise_source_anchors(basis)
+                    exact_semantic_anchor = any(
+                        anchor.startswith(("CODE:", "TEXT:"))
+                        or (anchor.startswith("TABLE:") and anchor.count(":") >= 2)
+                        for anchor in anchors
+                    )
+                    registered_support = any(label in basis.casefold() for label in support_labels)
+                    if not value or value in {"-", "—"}:
+                        errors.append(f"table-header semantics row {row_number}: meaning is empty")
+                    elif not exact_semantic_anchor and not registered_support:
+                        errors.append(
+                            f"table-header semantics row {row_number}: interpreted meaning needs an exact source legend or approved support path"
+                        )
+            for key in sorted(opaque_headers):
+                if declared_semantics.count(key) != 1:
+                    errors.append(
+                        f"opaque table header must appear exactly once in semantics control: Таблица {key[0]}, {key[1]!r}"
+                    )
+            extras = sorted(set(declared_semantics) - opaque_headers)
+            if extras:
+                errors.append("table-header semantics contains non-opaque or unreferenced headers: " + repr(extras))
+    elif semantics is not None and semantics.rows:
+        errors.append("scope-brief has table-header semantics rows but referenced tables have no opaque headers")
     visual_check = find_markdown_table(
         scope_brief_content,
         ("UI-уровень", "Визуальный источник", "Результат сверки"),
@@ -1032,6 +1199,7 @@ def validate(package_root: Path, scope_dir: Path) -> list[str]:
         ("ID", "Связанная обязанность", "Источник", "Класс", "Недостаток источника", "Что требуется для закрытия"),
     )
     gap_ids: list[str] = []
+    gap_sources: dict[str, str] = {}
     if "GAP-" in gaps_content:
         if gaps is None or not gaps.rows:
             errors.append("coverage-gaps contains GAP IDs but has no typed source-level gap table")
@@ -1045,6 +1213,7 @@ def validate(package_root: Path, scope_dir: Path) -> list[str]:
             for row in gaps.rows:
                 gap_id = row[gap_id_index].strip()
                 gap_ids.append(gap_id)
+                gap_sources[gap_id] = row[gap_source_index].strip()
                 if not GAP_ID_RE.fullmatch(gap_id):
                     errors.append(f"coverage-gaps has invalid ID {gap_id!r}")
                 linked_sources = SOURCE_ROW_TOKEN_RE.findall(row[linked_source_index])
@@ -1052,6 +1221,12 @@ def validate(package_root: Path, scope_dir: Path) -> list[str]:
                     errors.append(f"{gap_id}: coverage gap must link exactly one atomic SR obligation")
                 elif linked_sources[0] not in active_inventory_ids:
                     errors.append(f"{gap_id}: linked source obligation {linked_sources[0]} is absent from active inventory")
+                elif canonical_source_reference(row[gap_source_index]) != canonical_source_reference(
+                    inventory_sources.get(linked_sources[0], "")
+                ):
+                    errors.append(
+                        f"{gap_id}: source reference must exactly reuse the linked {linked_sources[0]} source anchor"
+                    )
                 gap_class = row[gap_class_index].strip()
                 if gap_class not in ALLOWED_GAP_CLASSES:
                     errors.append(f"{gap_id}: unsupported coverage-gap class {gap_class!r}")
@@ -1070,6 +1245,11 @@ def validate(package_root: Path, scope_dir: Path) -> list[str]:
                     )
 
     known_gap_ids = set(gap_ids)
+    unknown_header_semantics_gaps = sorted(header_semantics_gap_ids - known_gap_ids)
+    if unknown_header_semantics_gaps:
+        errors.append(
+            "table-header semantics references unknown gaps: " + ", ".join(unknown_header_semantics_gaps)
+        )
     unknown_contract_gaps = sorted(contract_gap_ids - known_gap_ids)
     if unknown_contract_gaps:
         errors.append("verifiability contract references unknown gaps: " + ", ".join(unknown_contract_gaps))
@@ -1150,6 +1330,12 @@ def validate(package_root: Path, scope_dir: Path) -> list[str]:
             errors.append(
                 f"{question_id}: clarification card must track exactly one independently resolvable GAP-*"
             )
+        elif next(iter(linked_gaps)) in gap_sources and canonical_source_reference(
+            requirement_basis
+        ) != canonical_source_reference(gap_sources[next(iter(linked_gaps))]):
+            errors.append(
+                f"{question_id}: FT basis must exactly reuse the linked coverage-gap source anchor"
+            )
         if not answer:
             errors.append(f"{question_id}: clarification card has no editable 'Ответ БА' field")
         placeholder = bool(QUESTION_ANSWER_PLACEHOLDER_RE.fullmatch(answer.strip()))
@@ -1204,12 +1390,21 @@ def validate(package_root: Path, scope_dir: Path) -> list[str]:
         for word, replacement in FORBIDDEN_PROCESS_WORDS.items():
             if re.search(rf"\b{re.escape(word)}s?\b", visible, re.IGNORECASE):
                 errors.append(f"{name}: use Russian wording instead of {word!r} ({replacement})")
+        for pattern, description in HIGH_CONFIDENCE_TEXT_ERRORS:
+            if pattern.search(visible):
+                errors.append(f"{name}: high-confidence user-facing text error: {description}")
     visible_questions = strip_allowed_technical_fragments(questions_content)
     for word, replacement in FORBIDDEN_PROCESS_WORDS.items():
         if re.search(rf"\b{re.escape(word)}s?\b", visible_questions, re.IGNORECASE):
             errors.append(
                 "work/scope-clarification-requests.md: use Russian wording instead of "
                 f"{word!r} ({replacement})"
+            )
+    for pattern, description in HIGH_CONFIDENCE_TEXT_ERRORS:
+        if pattern.search(visible_questions):
+            errors.append(
+                "work/scope-clarification-requests.md: high-confidence user-facing text error: "
+                + description
             )
     return errors
 

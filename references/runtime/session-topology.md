@@ -23,7 +23,7 @@ Scope analyzer-ы одного FT-пакета не работают однов�
 
 ## Controller-owned registry
 
-До запуска semantic role controller создаёт `work/runtime-session-registry.json` и регистрирует фактический `threadId`/`hostId`, полученные от Codex Desktop. Допустим только `codex-thread`; subagent, fork и выдуманный ID запрещены. Операции Codex Desktop и их порядок уже перечислены ниже и в `AGENTS.md`: controller не выполняет web search документации перед стандартным dispatch. Если встроенная операция недоступна, route останавливается.
+До запуска semantic role controller создаёт `work/runtime-session-registry.json` и регистрирует фактический `threadId`/`hostId`, полученные от Codex Desktop. Допустим только `codex-thread`; subagent, fork и выдуманный ID запрещены. Операции Codex Desktop, поддерживаемые параметры `create_thread` и их порядок заданы активным tool contract и ниже: controller не выполняет web search документации перед стандартным dispatch. Если встроенная операция или указанный профиль недоступны, route останавливается, а не ищет обход в интернете.
 
 При инициализации registry фиксируется SHA-256 пользовательского `AGENT-NOTES.md`. Его изменение внутри route блокирует следующий self-check: generated XHTML, runtime-классификация и поздний support принадлежат source handoff, а не переписывают package-specific вход.
 
@@ -41,7 +41,7 @@ Scope analyzer-ы одного FT-пакета не работают однов�
 
 Если пользователь в задаче текущего этапа явно задал модель и уровень рассуждений создаваемой semantic-сессии, controller передаёт точные поддерживаемые значения в `create_thread` как `model` и `thinking`. Это параметры запуска сессии, а не текст operational prompt. Controller не заменяет указанную модель близкой, не понижает уровень рассуждений и не переносит выбор автоматически на другие роли или следующие этапы.
 
-Если пользователь не задал профиль явно, controller опускает `model` и `thinking`: используется настроенный default Codex. Нельзя молча закреплять глобальную модель по примеру одного FT или прошлого прогона. В итоговом stage summary controller кратко фиксирует, был ли использован явный профиль или default; это служебная информация и не попадает в FT-артефакты.
+Если пользователь не задал профиль явно, controller опускает `model` и `thinking`: используется настроенный default Codex. Нельзя молча закреплять глобальную модель по примеру одного FT или прошлого прогона. Фактический выбор фиксируется в `runtime-session-registry.json`: при явном профиле команда `record` получает оба флага `--model` и `--thinking`; при default оба флага опущены. В итоговом stage summary controller берёт этот факт из registry, а не из памяти; это служебная информация и не попадает в FT-артефакты.
 
 В начале каждого следующего turn controller проверяет, что открытая сессия работает по текущему commit agent-layer:
 
@@ -63,6 +63,8 @@ python scripts/runtime_session_registry.py record --package-root <FT-package> --
 python scripts/runtime_session_registry.py record --package-root <FT-package> --role scope-analyzer --scope <scope> --thread-id <threadId> --host-id <hostId>
 python scripts/runtime_session_registry.py record --package-root <FT-package> --role writer --scope <scope> --thread-id <threadId> --host-id <hostId>
 ```
+
+При явном профиле к соответствующей команде `record` добавь `--model <model> --thinking <level>`. Для reviewer те же значения передаются в `runtime_review_dispatch.py create` через `--reviewer-model` и `--reviewer-thinking`.
 
 Для reviewer запись выполняется автоматически командой `runtime_review_dispatch.py create` по имени review-каталога `<scope>`.
 

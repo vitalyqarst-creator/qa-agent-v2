@@ -173,6 +173,8 @@ def create_dispatch(
     reviewer_host_id: str,
     dispatched_at: str | None = None,
     previous_review: Path | None = None,
+    reviewer_model: str | None = None,
+    reviewer_thinking: str | None = None,
 ) -> Path:
     if kind not in {"matrix", "tc"}:
         raise ValueError("review kind must be matrix or tc")
@@ -210,6 +212,8 @@ def create_dispatch(
         reviewer_thread_id,
         reviewer_host_id,
         scope,
+        reviewer_model,
+        reviewer_thinking,
     )
     output = review_dir / f"{kind}-review-dispatch-{artifact_digest[:12]}-{reviewer_thread_id[:8]}.json"
     stable_fields = {
@@ -268,6 +272,8 @@ def main() -> int:
     create_parser.add_argument("--reviewer-thread-id", required=True)
     create_parser.add_argument("--reviewer-host-id", required=True)
     create_parser.add_argument("--previous-review", type=Path)
+    create_parser.add_argument("--reviewer-model")
+    create_parser.add_argument("--reviewer-thinking")
 
     verify_parser = subparsers.add_parser("verify")
     verify_parser.add_argument("--package-root", type=Path, required=True)
@@ -289,6 +295,8 @@ def main() -> int:
                 args.reviewer_thread_id,
                 args.reviewer_host_id,
                 previous_review=args.previous_review,
+                reviewer_model=args.reviewer_model,
+                reviewer_thinking=args.reviewer_thinking,
             )
         except ValueError as exc:
             print(json.dumps({"created": False, "error": str(exc)}, ensure_ascii=False))
