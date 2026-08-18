@@ -75,10 +75,10 @@ VALID_TC = """## TC-9.3.2-001
 
 VALID_MATRIX = """# Матрица
 
-| ID | Источник требования | Проверка | Профили тест-дизайна | Предусловие/исходное состояние | Конкретные тестовые данные | Ожидаемый результат | Решение | Готовность |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| M-001 | SR-001; AS.38; Таблица 7, строка «Сохранить» | Сохранить карточку | базовый, жизненный-цикл-создания | Открыта форма добавления | `Наименование` = `ПАО СБЕРБАНК` | Карточка сохранена | TC | ready |
-| GAP-001 | SR-002; AS.39 | Проверить неизвестную реакцию | допустимые-классы | Открыта форма | Не определены | Требуется уточнение результата | coverage-gap | blocked-observability |
+| ID | Источник требования | Проверка | Профили тест-дизайна | Элемент покрытия | Предусловие/исходное состояние | Конкретные тестовые данные | Ожидаемый результат | Решение | Готовность |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| M-001 | SR-001; AS.38; Таблица 7, строка «Сохранить» | Сохранить карточку | базовый, жизненный-цикл-создания | Сохранение валидной карточки | Открыта форма добавления | `Наименование` = `ПАО СБЕРБАНК` | Карточка сохранена | TC | ready |
+| GAP-001 | SR-002; AS.39 | Проверить неизвестную реакцию | допустимые-классы | GAP-001 | Открыта форма | Не определены | Требуется уточнение результата | coverage-gap | blocked-observability |
 """
 
 VALID_INVENTORY = """# Инвентарь
@@ -689,6 +689,59 @@ class RuntimeContractTests(unittest.TestCase):
         invalid = VALID_MATRIX.replace("базовый, жизненный-цикл-создания", "")
         self.assertTrue(any("no test-design profile" in error for error in validate_matrix(invalid)))
 
+    def test_matrix_requires_explicit_coverage_item(self) -> None:
+        invalid = VALID_MATRIX.replace("Сохранение валидной карточки", "")
+        self.assertTrue(any("empty Элемент покрытия" in error for error in validate_matrix(invalid)))
+
+    def test_formal_profiles_require_coverage_model_and_exact_projection(self) -> None:
+        formal = VALID_MATRIX.replace(
+            "базовый, жизненный-цикл-создания | Сохранение валидной карточки",
+            "допустимые-классы, границы | EP-01; BVA-01",
+        )
+        self.assertTrue(any("coverage model" in error for error in validate_matrix(formal)))
+
+        formal += """
+
+## Модель покрытия
+
+| Элемент покрытия | Техника | Параметр или условия | Класс, точка, переход или комбинация | Представитель | Ожидаемый результат | Основание |
+| --- | --- | --- | --- | --- | --- | --- |
+| EP-01 | классы-эквивалентности | Наименование | Допустимое значение | `ПАО СБЕРБАНК` | Значение принимается | AS.38 |
+| BVA-01 | граничные-значения | Длина наименования | На границе | `20 символов` | Значение принимается | AS.38 |
+"""
+        self.assertEqual([], validate_matrix(formal))
+
+        missing_projection = formal.replace("EP-01; BVA-01", "EP-01")
+        self.assertTrue(
+            any("BVA-01 is not projected" in error for error in validate_matrix(missing_projection))
+        )
+
+        wrong_technique = formal.replace(
+            "| BVA-01 | граничные-значения |",
+            "| BVA-01 | таблица-решений |",
+        )
+        self.assertTrue(any("technique must be" in error for error in validate_matrix(wrong_technique)))
+
+        duplicate_projection = formal.replace("EP-01; BVA-01", "EP-01; BVA-01; EP-01")
+        self.assertTrue(
+            any("already projected" in error for error in validate_matrix(duplicate_projection))
+        )
+
+    def test_decision_state_and_combinatorial_profiles_require_matching_items(self) -> None:
+        replacements = {
+            "таблица-решений": "DT-R1",
+            "переход-состояния": "ST-T1",
+            "комбинаторный": "CT-C1",
+        }
+        for profile, item in replacements.items():
+            with self.subTest(profile=profile):
+                invalid = VALID_MATRIX.replace(
+                    "базовый, жизненный-цикл-создания | Сохранение валидной карточки",
+                    f"{profile} | Сохранение валидной карточки",
+                )
+                errors = validate_matrix(invalid)
+                self.assertTrue(any(f"requires a {item[:-1]}" in error for error in errors))
+
     def test_matrix_separates_coverage_from_execution_readiness(self) -> None:
         needs_data = VALID_MATRIX.replace("| TC | ready |", "| TC | needs-test-data |", 1)
         self.assertEqual([], validate_matrix(needs_data))
@@ -817,8 +870,8 @@ class RuntimeContractTests(unittest.TestCase):
     def test_tc_projection_requires_every_executable_matrix_source(self) -> None:
         self.assertEqual([], validate_tc_projection(VALID_TC, VALID_MATRIX))
         expanded = VALID_MATRIX.replace(
-            "| GAP-001 | SR-002; AS.39 | Проверить неизвестную реакцию | допустимые-классы | Открыта форма | Не определены | Требуется уточнение результата | coverage-gap | blocked-observability |",
-            "| M-002 | SR-002; AS.39 | Проверить второе правило | базовый | Открыта форма | Не требуются. | Второе правило выполнено | TC | ready |",
+            "| GAP-001 | SR-002; AS.39 | Проверить неизвестную реакцию | допустимые-классы | GAP-001 | Открыта форма | Не определены | Требуется уточнение результата | coverage-gap | blocked-observability |",
+            "| M-002 | SR-002; AS.39 | Проверить второе правило | базовый | Второе source-backed правило | Открыта форма | Не требуются. | Второе правило выполнено | TC | ready |",
         )
         errors = validate_tc_projection(VALID_TC, expanded)
         self.assertTrue(any("M-002" in error for error in errors))

@@ -18,6 +18,7 @@ REQUIRED_HEADERS = (
     "Источник требования",
     "Проверка",
     "Профили тест-дизайна",
+    "Элемент покрытия",
     "Предусловие/исходное состояние",
     "Конкретные тестовые данные",
     "Ожидаемый результат",
@@ -31,6 +32,8 @@ ALLOWED_PROFILES = {
     "автозаполнение",
     "допустимые-классы",
     "границы",
+    "таблица-решений",
+    "комбинаторный",
     "справочник",
     "ролевой-доступ",
     "переход-состояния",
@@ -75,6 +78,34 @@ ABSENCE_ORACLE_RE = re.compile(
     r"(?:не\s+отображ\w*|не\s+видим\w*|отсутств\w*)",
     re.IGNORECASE,
 )
+FORMAL_COVERAGE_ITEM_RE = re.compile(
+    r"(?<![A-Za-z0-9_.-])(?:EP-[A-Za-z0-9_.-]+|BVA-[A-Za-z0-9_.-]+|"
+    r"DT-R[A-Za-z0-9_.-]+|ST-T[A-Za-z0-9_.-]+|CT-C[A-Za-z0-9_.-]+)"
+    r"(?![A-Za-z0-9_.-])"
+)
+PROFILE_COVERAGE_PREFIXES = {
+    "допустимые-классы": "EP-",
+    "границы": "BVA-",
+    "таблица-решений": "DT-R",
+    "переход-состояния": "ST-T",
+    "комбинаторный": "CT-C",
+}
+COVERAGE_MODEL_HEADERS = (
+    "Элемент покрытия",
+    "Техника",
+    "Параметр или условия",
+    "Класс, точка, переход или комбинация",
+    "Представитель",
+    "Ожидаемый результат",
+    "Основание",
+)
+COVERAGE_TECHNIQUES = {
+    "EP-": "классы-эквивалентности",
+    "BVA-": "граничные-значения",
+    "DT-R": "таблица-решений",
+    "ST-T": "переходы-состояний",
+    "CT-C": "комбинаторное-покрытие",
+}
 
 
 def cells(line: str) -> list[str]:
@@ -100,6 +131,51 @@ def find_matrix(lines: list[str]) -> tuple[list[str], list[list[str]]] | None:
     return None
 
 
+def coverage_prefix(item: str) -> str | None:
+    for prefix in COVERAGE_TECHNIQUES:
+        if item.startswith(prefix):
+            return prefix
+    return None
+
+
+def validate_coverage_model(content: str, used_items: dict[str, str]) -> list[str]:
+    errors: list[str] = []
+    model = find_markdown_table(content, COVERAGE_MODEL_HEADERS)
+    if model is None:
+        return ["formal test-design profiles require a non-empty coverage model table"] if used_items else []
+    if not model.rows:
+        return ["coverage model table has no data rows"]
+
+    item_index = model.index("Элемент покрытия")
+    technique_index = model.index("Техника")
+    model_items: set[str] = set()
+    for row_number, row in enumerate(model.rows, start=1):
+        item = row[item_index].strip()
+        if not FORMAL_COVERAGE_ITEM_RE.fullmatch(item):
+            errors.append(f"coverage model row {row_number}: invalid formal coverage item {item!r}")
+            continue
+        if item in model_items:
+            errors.append(f"coverage model row {row_number}: duplicate coverage item {item}")
+        model_items.add(item)
+        prefix = coverage_prefix(item)
+        expected_technique = COVERAGE_TECHNIQUES[prefix] if prefix else None
+        if row[technique_index].strip() != expected_technique:
+            errors.append(
+                f"{item}: technique must be {expected_technique!r}, got {row[technique_index].strip()!r}"
+            )
+        for name in COVERAGE_MODEL_HEADERS[2:]:
+            value = row[model.index(name)].strip()
+            if not value or EMPTY_RE.fullmatch(value):
+                errors.append(f"{item}: coverage model field {name} is empty")
+
+    for item, row_id in sorted(used_items.items()):
+        if item not in model_items:
+            errors.append(f"{row_id}: formal coverage item {item} is absent from coverage model")
+    for item in sorted(model_items - set(used_items)):
+        errors.append(f"coverage model item {item} is not projected into the matrix")
+    return errors
+
+
 def validate(content: str) -> list[str]:
     errors: list[str] = []
     matrix = find_matrix(content.splitlines())
@@ -115,6 +191,7 @@ def validate(content: str) -> list[str]:
 
     index_by_name = {name: header.index(name) for name in REQUIRED_HEADERS if name in header}
     seen_ids: set[str] = set()
+    used_formal_items: dict[str, str] = {}
     for row_number, row in enumerate(rows, start=1):
         row_id = row[index_by_name["ID"]]
         if not row_id or EMPTY_RE.fullmatch(row_id):
@@ -124,7 +201,13 @@ def validate(content: str) -> list[str]:
         else:
             seen_ids.add(row_id)
 
-        for field in ("Источник требования", "Проверка", "Предусловие/исходное состояние", "Ожидаемый результат"):
+        for field in (
+            "Источник требования",
+            "Проверка",
+            "Элемент покрытия",
+            "Предусловие/исходное состояние",
+            "Ожидаемый результат",
+        ):
             value = row[index_by_name[field]]
             if not value or EMPTY_RE.fullmatch(value):
                 errors.append(f"{row_id or f'row {row_number}'}: empty {field}")
@@ -151,6 +234,22 @@ def validate(content: str) -> list[str]:
             errors.append(f"{row_id}: TC decision must use an M-* ID")
         if decision == "coverage-gap" and not row_id.startswith("GAP-"):
             errors.append(f"{row_id}: coverage-gap decision must use a GAP-* ID")
+        coverage_raw = row[index_by_name["Элемент покрытия"]]
+        formal_items = FORMAL_COVERAGE_ITEM_RE.findall(coverage_raw)
+        if decision == "coverage-gap" and row_id and row_id not in coverage_raw:
+            errors.append(f"{row_id}: coverage-gap row must name its GAP ID as the coverage item")
+        if decision == "TC":
+            for profile, prefix in PROFILE_COVERAGE_PREFIXES.items():
+                if profile in profiles and not any(item.startswith(prefix) for item in formal_items):
+                    errors.append(f"{row_id}: profile {profile!r} requires a {prefix}* coverage item")
+            for item in formal_items:
+                previous_row = used_formal_items.get(item)
+                if previous_row is not None:
+                    errors.append(
+                        f"{row_id}: formal coverage item {item} is already projected by {previous_row}"
+                    )
+                else:
+                    used_formal_items[item] = row_id
         data = row[index_by_name["Конкретные тестовые данные"]]
         if decision == "TC" and (not data or EMPTY_RE.fullmatch(data)):
             errors.append(f"{row_id}: TC decision requires concrete data or 'Не требуются.'")
@@ -160,6 +259,7 @@ def validate(content: str) -> list[str]:
             errors.append(
                 f"{row_id}: missing environment binding requires needs-test-data, not absent test data"
             )
+    errors.extend(validate_coverage_model(content, used_formal_items))
     return errors
 
 
