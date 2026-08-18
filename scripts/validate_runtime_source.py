@@ -191,6 +191,7 @@ def validate(package_root: Path, handoff_dir: Path, allow_downstream: bool = Fal
     if not allow_downstream:
         allowed_work_files = {
             (package_root / "work" / "runtime-session-registry.json").resolve(),
+            (package_root / "work" / "scope-clarification-requests.md").resolve(),
             selection_path,
             workflow_path,
         }

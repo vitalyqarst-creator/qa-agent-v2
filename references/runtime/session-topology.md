@@ -17,6 +17,8 @@ Controller — одна верхнеуровневая Codex-сессия на �
 
 Один analyzer или writer нельзя использовать для двух scope: перенос контекста между разделами ухудшает независимость и увеличивает риск скрытого смешения требований.
 
+Scope analyzer-ы одного FT-пакета не работают одновременно: они последовательно обновляют общий `work/scope-clarification-requests.md`. Controller запускает следующий analyzer только после завершения предыдущего и успешного scope-validator-а.
+
 ## Controller-owned registry
 
 До запуска semantic role controller создаёт `work/runtime-session-registry.json` и регистрирует фактический `threadId`/`hostId`, полученные от Codex Desktop. Допустим только `codex-thread`; subagent, fork и выдуманный ID запрещены. Операции Codex Desktop и их порядок уже перечислены ниже и в `AGENTS.md`: controller не выполняет web search документации перед стандартным dispatch. Если встроенная операция недоступна, route останавливается.

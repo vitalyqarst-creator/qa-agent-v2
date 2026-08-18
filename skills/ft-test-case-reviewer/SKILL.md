@@ -5,7 +5,7 @@ description: Независимо проверяет matrix или canonical т�
 
 # FT Test Case Reviewer
 
-До review прочитай `AGENTS.md`, `references/runtime/session-topology.md`, `references/runtime/test-data-fixtures.md`, `references/runtime/test-design-profiles.md`, `references/runtime/test-design-matrix.md`, `references/runtime/test-case-runtime.md` и `references/runtime/review-record.md`.
+До review прочитай `AGENTS.md`, `references/runtime/session-topology.md`, `references/runtime/scope-analysis.md`, `references/runtime/test-data-fixtures.md`, `references/runtime/test-design-profiles.md`, `references/runtime/test-design-matrix.md`, `references/runtime/test-case-runtime.md` и `references/runtime/review-record.md`.
 
 Review выполняется только в отдельной верхнеуровневой Codex-сессии. Итог сохрани в `work/reviews/<scope>/<matrix|tc>-review.md`: ссылка/идентификатор сессии, verdict и конечный список findings. Рядом создай `<matrix|tc>-review.json`, связанный с SHA-256 проверенного artifact, и проверь его `scripts/validate_runtime_review.py`. Не создавай attestation, immutable snapshot, dispatch receipt или технический transcript.
 
@@ -15,9 +15,11 @@ Review выполняется только в отдельной верхнеу�
 
 До содержательного review заново запусти matrix-validator с `--source-inventory` и `--coverage-gaps`; неполная проекция блокирует review.
 
-Сверь matrix заново с DOCX/XHTML/PDF, `scope-brief.md`, questions, `test-data-plan.md` и доступным `fixture-catalog.json`. Отдельно оцени решение по покрытию и готовность исполнения.
+Сверь matrix заново с DOCX/XHTML/PDF, `source-row-inventory.md`, включая `Контракт проверяемости`, `scope-brief.md`, включая `Проверку согласованности`, карточками текущего scope в `work/scope-clarification-requests.md`, `test-data-plan.md` и доступным `fixture-catalog.json`. Отдельно оцени решение по покрытию и готовность исполнения.
 
 До оценки строк matrix проверь входной inventory: один `SR-*` должен соответствовать одной обязанности, все утверждения из таблиц должны содержать ссылку на таблицу и точный текст существующей строки первого столбца XHTML, а отменённые утверждённым ответом требования должны находиться в разделе применённых исключений и отсутствовать среди активных `SR-*`. Независимые свойства разных ячеек одной строки — обязательность, редактируемость, представление, ссылка/переход и состав данных — должны быть разнесены по отдельным `SR-*`; одна строка таблицы может повторяться. Соседний абзац и элемент примечания не должны быть выданы за строку таблицы. Если строка таблицы и связанный код требования называют разные объекты, действия или результаты, требуй отдельный пробел по противоречию; молчаливая нормализация под контекст запрещена. Убедись, что visual cross-check охватывает каждый включённый UI-уровень и каждый локальный путь дословно совпадает с зарегистрированным source locator-ом существующим файлом.
+
+Проверь не только наличие, но и смысл `Контракта проверяемости`: каждая активная `SR-*` должна иметь один конкретный объект/UI-уровень, применимое условие, событие и наблюдаемый результат. Не принимай формальные перефразы исходной обязанности. В `Проверке согласованности` оцени все семь аспектов; `Не применимо` допустимо только с конкретной причиной, а применимый вывод должен быть связан с `SR-*` или `GAP-*`.
 
 Каждый `GAP-*` должен ссылаться ровно на одну атомарную `SR-*`, иметь допустимый source-level класс и переносить эту же связь в отдельную строку matrix с решением `coverage-gap` и готовностью `blocked-observability`. Общий вопрос БА может закрывать несколько GAP, но разные объекты, UI-уровни и обязанности не объединяются в один пробел покрытия. Отсутствие стендовой записи, учётной записи, URL, credentials или доступа к среде не является GAP.
 

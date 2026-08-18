@@ -88,9 +88,36 @@ VALID_INVENTORY = """# Инвентарь
 | SR-001 | AS.38; Таблица 7, строка «Сохранить» | Карточка сохраняется |
 | SR-002 | AS.39 | Реакция на ограничение должна быть определена |
 
+## Контракт проверяемости
+
+| SR | Объект или UI-уровень | Актор и условие | Действие или событие | Наблюдаемый результат |
+| --- | --- | --- | --- | --- |
+| SR-001 | Карточка партнёра | Пользователь с доступом к добавлению | Нажатие кнопки сохранения после заполнения | Карточка сохранена |
+| SR-002 | Карточка партнёра | Пользователь с доступом к добавлению | Нарушение ограничения AS.39 | Наблюдаемый результат не определён источником; GAP-001 |
+
 ## Применённые исключения
 
 Исключения отсутствуют.
+"""
+
+VALID_CONSISTENCY = """
+
+## Проверка согласованности
+
+| Аспект | Вывод анализа | Связанные обязанности/пробелы |
+| --- | --- | --- |
+| Идентичность объекта | Проверяется одна создаваемая карточка партнёра. | SR-001 |
+| Представления объекта | Не применимо: раздел не задаёт несколько представлений объекта. | — |
+| Создание, редактирование и повторное открытие | Источник задаёт сохранение создаваемой карточки. | SR-001 |
+| Роли и видимость | Не применимо: источник не задаёт различий между ролями. | — |
+| Статусы и переходы | Не применимо: источник не задаёт статусных переходов. | — |
+| Поля, справочники и внешние источники | Реакция на ограничение не определена. | SR-002; GAP-001 |
+| История изменений и аудит | Не применимо: источник не содержит требований к аудиту. | — |
+"""
+
+EMPTY_CLARIFICATION_REGISTER = """# Реестр вопросов к БА
+
+Вопросы пока не сформированы.
 """
 
 VALID_GAPS = """# Пробелы покрытия
@@ -153,6 +180,10 @@ def create_scope_locator(package: Path) -> None:
     (mockups / "form.png").write_bytes(b"png")
     locator = package / "work" / "stage-handoffs" / "00-ft"
     locator.mkdir(parents=True, exist_ok=True)
+    (package / "work" / "scope-clarification-requests.md").write_text(
+        EMPTY_CLARIFICATION_REGISTER,
+        encoding="utf-8",
+    )
     (locator / "workflow-state.yaml").write_text(
         "primary_sources:\n"
         "  - path: fts/Project/FT/source/requirements.xhtml\n"
@@ -828,7 +859,7 @@ class RuntimeContractTests(unittest.TestCase):
             scope.mkdir()
             (scope / "source-row-inventory.md").write_text(VALID_INVENTORY, encoding="utf-8")
             (scope / "coverage-gaps.md").write_text(VALID_GAPS, encoding="utf-8")
-            (scope / "scope-clarification-requests.md").write_text(
+            (package / "work" / "scope-clarification-requests.md").write_text(
                 "# Вопросы\n\n## CLR-001 — подтверждение\n\n"
                 "**Вопрос:** Как выполняется подтверждение вторым сотрудником?\n\n"
                 "**Основание в ФТ:** AS.7.\n\n"
@@ -842,7 +873,11 @@ class RuntimeContractTests(unittest.TestCase):
                 "Не создавай matrix-строки для GAP-001.\n",
                 encoding="utf-8",
             )
-            (scope / "workflow-state.yaml").write_text("stage: ft-scope-analyzer\n", encoding="utf-8")
+            (scope / "workflow-state.yaml").write_text(
+                "stage: ft-scope-analyzer\n"
+                'clarification_register: "work/scope-clarification-requests.md"\n',
+                encoding="utf-8",
+            )
             errors = validate_scope(package, scope)
             self.assertTrue(any("approved answer" in error for error in errors))
             self.assertTrue(any("fully answered" in error for error in errors))
@@ -864,7 +899,7 @@ class RuntimeContractTests(unittest.TestCase):
                 encoding="utf-8",
             )
             (scope / "coverage-gaps.md").write_text(VALID_GAPS, encoding="utf-8")
-            (scope / "scope-clarification-requests.md").write_text(
+            (package / "work" / "scope-clarification-requests.md").write_text(
                 "# Вопросы к БА\n\nОткрытые вопросы отсутствуют.\n", encoding="utf-8"
             )
             (scope / "scope-brief.md").write_text(
@@ -872,7 +907,8 @@ class RuntimeContractTests(unittest.TestCase):
                 "## Визуальная сверка\n\n"
                 "| UI-уровень | Визуальный источник | Результат сверки |\n"
                 "| --- | --- | --- |\n"
-                "| Форма добавления | `fts/Project/FT/mockups/form.png` | Подтверждены подписи и путь открытия. |\n",
+                "| Форма добавления | `fts/Project/FT/mockups/form.png` | Подтверждены подписи и путь открытия. |\n"
+                + VALID_CONSISTENCY,
                 encoding="utf-8",
             )
             (scope / "test-data-plan.md").write_text(
@@ -882,8 +918,75 @@ class RuntimeContractTests(unittest.TestCase):
                 "Создай матрицу по всем строкам инвентаря. Для `GAP-001` создай строку матрицы с решением `coverage-gap`.\n",
                 encoding="utf-8",
             )
-            (scope / "workflow-state.yaml").write_text("stage: ft-scope-analyzer\n", encoding="utf-8")
+            (scope / "workflow-state.yaml").write_text(
+                "stage: ft-scope-analyzer\n"
+                'clarification_register: "work/scope-clarification-requests.md"\n',
+                encoding="utf-8",
+            )
             self.assertEqual([], validate_scope(package, scope))
+
+            pending_question = (
+                "# Реестр вопросов к БА\n\n"
+                "## CLR-scope-001 — реакция на ограничение\n\n"
+                "**Область проверки:** `scope`\n\n"
+                "**Статус:** `ожидает-ответа`\n\n"
+                "**Вопрос:** Какой наблюдаемый результат возникает при нарушении ограничения AS.39?\n\n"
+                "**Основание в ФТ:** AS.39.\n\n"
+                "**Влияние на покрытие:** Нельзя определить ожидаемый результат отрицательной проверки.\n\n"
+                "**Ответ БА:** _Введите ответ здесь._\n"
+            )
+            register = package / "work" / "scope-clarification-requests.md"
+            register.write_text(pending_question, encoding="utf-8")
+            self.assertEqual([], validate_scope(package, scope))
+
+            answered_question = pending_question.replace(
+                "`ожидает-ответа`", "`ответ-получен`"
+            ).replace("_Введите ответ здесь._", "Сохранение блокируется, поле подсвечивается красным.")
+            register.write_text(answered_question, encoding="utf-8")
+            self.assertEqual([], validate_scope(package, scope))
+
+            register.write_text(
+                answered_question.replace(
+                    "Сохранение блокируется, поле подсвечивается красным.",
+                    "_Введите ответ здесь._",
+                ),
+                encoding="utf-8",
+            )
+            errors = validate_scope(package, scope)
+            self.assertTrue(any("requires a recorded answer" in error for error in errors))
+
+            register.write_text(answered_question + "\n" + answered_question.split("\n", 2)[2], encoding="utf-8")
+            errors = validate_scope(package, scope)
+            self.assertTrue(any("duplicate IDs" in error for error in errors))
+            register.write_text(EMPTY_CLARIFICATION_REGISTER, encoding="utf-8")
+
+            inventory_path = scope / "source-row-inventory.md"
+            inventory_path.write_text(
+                inventory_path.read_text(encoding="utf-8").replace(
+                    "| SR-002 | Карточка партнёра | Пользователь с доступом к добавлению | Нарушение ограничения AS.39 | Наблюдаемый результат не определён источником; GAP-001 |\n",
+                    "",
+                ),
+                encoding="utf-8",
+            )
+            errors = validate_scope(package, scope)
+            self.assertTrue(any("misses active obligations" in error and "SR-002" in error for error in errors))
+            inventory_path.write_text(
+                VALID_INVENTORY.replace("строка «Сохранить»", "строка «Сохранить», примечание"),
+                encoding="utf-8",
+            )
+
+            brief_path = scope / "scope-brief.md"
+            valid_brief = brief_path.read_text(encoding="utf-8")
+            brief_path.write_text(
+                valid_brief.replace(
+                    "| История изменений и аудит | Не применимо: источник не содержит требований к аудиту. | — |\n",
+                    "",
+                ),
+                encoding="utf-8",
+            )
+            errors = validate_scope(package, scope)
+            self.assertTrue(any("История изменений и аудит" in error and "exactly once" in error for error in errors))
+            brief_path.write_text(valid_brief, encoding="utf-8")
 
             (scope / "coverage-gaps.md").write_text(
                 VALID_GAPS.replace(
@@ -896,16 +999,20 @@ class RuntimeContractTests(unittest.TestCase):
             self.assertTrue(any("execution readiness, not a coverage gap" in error for error in errors))
             (scope / "coverage-gaps.md").write_text(VALID_GAPS, encoding="utf-8")
 
-            (scope / "scope-clarification-requests.md").write_text(
-                "# Вопросы к БА\n\n## CLR-001 — стендовые записи\n\n"
+            (package / "work" / "scope-clarification-requests.md").write_text(
+                "# Реестр вопросов к БА\n\n## CLR-scope-001 — стендовые записи\n\n"
+                "**Область проверки:** `scope`\n\n"
+                "**Статус:** `ожидает-ответа`\n\n"
                 "**Вопрос:** Предоставьте готового партнёра и учётную запись тестовой среды для AS.39.\n\n"
-                "**Основание в ФТ:** AS.39.\n",
+                "**Основание в ФТ:** AS.39.\n\n"
+                "**Влияние на покрытие:** Нельзя выполнить проверку.\n\n"
+                "**Ответ БА:** _Введите ответ здесь._\n",
                 encoding="utf-8",
             )
             errors = validate_scope(package, scope)
             self.assertTrue(any("test-data provisioning" in error for error in errors))
 
-            (scope / "scope-clarification-requests.md").write_text(
+            (package / "work" / "scope-clarification-requests.md").write_text(
                 "# Вопросы к БА\n\n## Q-001 — неверный идентификатор\n\n"
                 "**Вопрос:** Какое поведение задано AS.39?\n",
                 encoding="utf-8",
@@ -965,12 +1072,14 @@ class RuntimeContractTests(unittest.TestCase):
             scope.mkdir()
             (scope / "source-row-inventory.md").write_text(VALID_INVENTORY, encoding="utf-8")
             (scope / "coverage-gaps.md").write_text(VALID_GAPS, encoding="utf-8")
-            (scope / "scope-clarification-requests.md").write_text(
-                "# Вопросы к БА\n\n## CLR-001 — роль\n\n"
+            (package / "work" / "scope-clarification-requests.md").write_text(
+                "# Реестр вопросов к БА\n\n## CLR-scope-001 — роль\n\n"
+                "**Область проверки:** `scope`\n\n"
+                "**Статус:** `ожидает-ответа`\n\n"
                 "**Вопрос:** Какая роль выполняет действие?\n\n"
                 "**Основание в ФТ:** AS.39.\n\n"
                 "**Влияние на покрытие:** Нельзя определить доступ.\n\n"
-                "**Текущее состояние:** Ответ не получен.\n\n"
+                "**Ответ БА:** _Введите ответ здесь._\n\n"
                 "**Почему существующий ответ не закрывает вопрос:** Нет финальной ролевой модели.\n",
                 encoding="utf-8",
             )
@@ -1081,12 +1190,14 @@ class RuntimeContractTests(unittest.TestCase):
             )
             (scope / "source-row-inventory.md").write_text(inventory, encoding="utf-8")
             (scope / "coverage-gaps.md").write_text(VALID_GAPS, encoding="utf-8")
-            (scope / "scope-clarification-requests.md").write_text(
-                "# Вопросы к БА\n\n## CLR-001 Уточнение результата\n\n"
+            (package / "work" / "scope-clarification-requests.md").write_text(
+                "# Реестр вопросов к БА\n\n## CLR-scope-001 Уточнение результата\n\n"
+                "**Область проверки:** `scope`\n\n"
+                "**Статус:** `ожидает-ответа`\n\n"
                 "**Вопрос:** Какой результат возникает помимо сохранения карточки?\n\n"
                 "**Основание в ФТ:** AS.38.\n\n"
                 "**Влияние на покрытие:** Нельзя завершить проверку.\n\n"
-                "**Текущее состояние:** Ответ не получен.\n",
+                "**Ответ БА:** _Введите ответ здесь._\n",
                 encoding="utf-8",
             )
             (scope / "scope-brief.md").write_text(
@@ -1550,6 +1661,7 @@ class RuntimeContractTests(unittest.TestCase):
             package = Path(temporary_directory) / "Partners-v1"
             create_package(package)
             self.assertEqual(set(PACKAGE_DIRS) | {"AGENT-NOTES.md"}, {item.name for item in package.iterdir()})
+            self.assertTrue((package / "work" / "scope-clarification-requests.md").is_file())
             self.assertFalse((package / "evals").exists())
             self.assertFalse((package / "references").exists())
             self.assertFalse((package / "scripts").exists())

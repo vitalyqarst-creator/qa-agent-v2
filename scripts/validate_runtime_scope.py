@@ -18,7 +18,6 @@ REQUIRED_FILES = (
     "source-row-inventory.md",
     "scope-brief.md",
     "coverage-gaps.md",
-    "scope-clarification-requests.md",
     "test-data-plan.md",
     "prompt.scope-to-writer.md",
     "workflow-state.yaml",
@@ -40,6 +39,26 @@ FORBIDDEN_PROCESS_WORDS = {
 }
 QUESTION_HEADING_RE = re.compile(r"^##\s+(CLR-[A-Za-z0-9.-]+)\b", re.MULTILINE)
 ANY_QUESTION_HEADING_RE = re.compile(r"^##\s+([^\n]+)$", re.MULTILINE)
+ALLOWED_QUESTION_STATUSES = {
+    "ожидает-ответа",
+    "частичный-ответ",
+    "ответ-получен",
+    "отменён",
+}
+QUESTION_ANSWER_PLACEHOLDER_RE = re.compile(r"^_?Введите\s+ответ\s+здесь\.?_?$", re.IGNORECASE)
+UNCERTAIN_VERIFIABILITY_RE = re.compile(
+    r"не\s+(?:указан\w*|задан\w*|определ[её]н\w*)|требуется\s+уточн|неизвест\w*",
+    re.IGNORECASE,
+)
+CONSISTENCY_ASPECTS = (
+    "Идентичность объекта",
+    "Представления объекта",
+    "Создание, редактирование и повторное открытие",
+    "Роли и видимость",
+    "Статусы и переходы",
+    "Поля, справочники и внешние источники",
+    "История изменений и аудит",
+)
 RESIDUAL_EXPLANATION = "**Почему существующий ответ не закрывает вопрос:**"
 WORKING_ASSUMPTION_STATUS_RE = re.compile(
     r"^response_status:\s*(?:answered|resolved|approved)\s*$", re.IGNORECASE | re.MULTILINE
@@ -303,6 +322,15 @@ def question_text(block: str) -> str:
     return match.group(1).strip() if match else block
 
 
+def question_field(block: str, label: str) -> str:
+    match = re.search(
+        rf"^\*\*{re.escape(label)}:\*\*\s*(.*?)(?=\n\s*\n\*\*|\n##\s|\Z)",
+        block,
+        re.MULTILINE | re.DOTALL,
+    )
+    return match.group(1).strip() if match else ""
+
+
 def duplicates_fully_answered_question(current_question: str, support: str, code: str) -> bool:
     current_tokens = meaningful_tokens(current_question)
     for card in re.split(r"(?=^###\s+CLR-)", support, flags=re.MULTILINE):
@@ -421,6 +449,12 @@ def validate(package_root: Path, scope_dir: Path) -> list[str]:
     if missing_files:
         return errors
 
+    clarification_register = package_root / "work" / "scope-clarification-requests.md"
+    if not clarification_register.is_file():
+        errors.append("missing package clarification register: work/scope-clarification-requests.md")
+    if (scope_dir / "scope-clarification-requests.md").exists():
+        errors.append("scope-local clarification file is forbidden; use work/scope-clarification-requests.md")
+
     inventory_content = (scope_dir / "source-row-inventory.md").read_text(encoding="utf-8")
     inventory = find_markdown_table(inventory_content, ("ID", "Источник", "Утверждение для покрытия"))
     row_references: list[tuple[str, int, str]] = []
@@ -486,7 +520,55 @@ def validate(package_root: Path, scope_dir: Path) -> list[str]:
     if not re.search(r"^##\s+Примен[её]нные исключения\s*$", inventory_content, re.MULTILINE):
         errors.append("source-row-inventory must contain an explicit 'Применённые исключения' section")
 
+    verifiability = find_markdown_table(
+        inventory_content,
+        ("SR", "Объект или UI-уровень", "Актор и условие", "Действие или событие", "Наблюдаемый результат"),
+    )
+    contract_gap_ids: set[str] = set()
+    if verifiability is None or not verifiability.rows:
+        errors.append("source-row-inventory must contain a non-empty 'Контракт проверяемости' table")
+    else:
+        sr_index = verifiability.index("SR")
+        contract_indexes = (
+            verifiability.index("Объект или UI-уровень"),
+            verifiability.index("Актор и условие"),
+            verifiability.index("Действие или событие"),
+            verifiability.index("Наблюдаемый результат"),
+        )
+        contract_ids: list[str] = []
+        for row in verifiability.rows:
+            source_id = row[sr_index].strip()
+            contract_ids.append(source_id)
+            if not SOURCE_ROW_ID_RE.fullmatch(source_id):
+                errors.append(f"verifiability contract has invalid SR reference {source_id!r}")
+            for index in contract_indexes:
+                value = row[index].strip()
+                if not value or value in {"-", "—"}:
+                    errors.append(f"{source_id}: verifiability contract contains an empty semantic field")
+                if UNCERTAIN_VERIFIABILITY_RE.search(value):
+                    linked_gaps = set(re.findall(r"(?<![A-Za-z0-9_.-])GAP-\d{2,}(?![A-Za-z0-9_.-])", value))
+                    contract_gap_ids.update(linked_gaps)
+                    if not linked_gaps:
+                        errors.append(
+                            f"{source_id}: unknown verifiability element must link an explicit GAP-*"
+                        )
+        duplicates = sorted({source_id for source_id in contract_ids if contract_ids.count(source_id) > 1})
+        if duplicates:
+            errors.append("verifiability contract duplicates source obligations: " + ", ".join(duplicates))
+        missing_contract = sorted(active_inventory_ids - set(contract_ids))
+        extra_contract = sorted(set(contract_ids) - active_inventory_ids)
+        if missing_contract:
+            errors.append("verifiability contract misses active obligations: " + ", ".join(missing_contract))
+        if extra_contract:
+            errors.append("verifiability contract references non-active obligations: " + ", ".join(extra_contract))
+
     scope_brief_content = (scope_dir / "scope-brief.md").read_text(encoding="utf-8")
+    workflow_content = (scope_dir / "workflow-state.yaml").read_text(encoding="utf-8")
+    if not re.search(
+        r"(?m)^clarification_register:\s*[\"']?work/scope-clarification-requests\.md[\"']?\s*$",
+        workflow_content,
+    ):
+        errors.append("workflow-state must reference work/scope-clarification-requests.md as clarification_register")
     visual_check = find_markdown_table(
         scope_brief_content,
         ("UI-уровень", "Визуальный источник", "Результат сверки"),
@@ -521,7 +603,6 @@ def validate(package_root: Path, scope_dir: Path) -> list[str]:
                     )
                 )
 
-        workflow_content = (scope_dir / "workflow-state.yaml").read_text(encoding="utf-8")
         for value in yaml_list_values(workflow_content, "local_mockups"):
             errors.extend(
                 validate_visual_reference(
@@ -531,6 +612,44 @@ def validate(package_root: Path, scope_dir: Path) -> list[str]:
                     "workflow-state local_mockups",
                 )
             )
+
+    consistency = find_markdown_table(
+        scope_brief_content,
+        ("Аспект", "Вывод анализа", "Связанные обязанности/пробелы"),
+    )
+    consistency_refs: set[str] = set()
+    if consistency is None or not consistency.rows:
+        errors.append("scope-brief must contain the complete consistency analysis table")
+    else:
+        aspect_index = consistency.index("Аспект")
+        conclusion_index = consistency.index("Вывод анализа")
+        refs_index = consistency.index("Связанные обязанности/пробелы")
+        aspects = [row[aspect_index].strip() for row in consistency.rows]
+        for required_aspect in CONSISTENCY_ASPECTS:
+            count = sum(aspect.casefold() == required_aspect.casefold() for aspect in aspects)
+            if count != 1:
+                errors.append(
+                    f"scope-brief consistency analysis must contain aspect {required_aspect!r} exactly once"
+                )
+        for row in consistency.rows:
+            aspect = row[aspect_index].strip() or "<без аспекта>"
+            conclusion = row[conclusion_index].strip()
+            references = row[refs_index].strip()
+            if not conclusion:
+                errors.append(f"scope-brief consistency aspect {aspect!r} has no conclusion")
+                continue
+            if conclusion.casefold().startswith("не применимо"):
+                if not re.match(r"(?i)^не применимо:\s*.{5,}$", conclusion):
+                    errors.append(
+                        f"scope-brief consistency aspect {aspect!r} needs a concrete reason after 'Не применимо:'"
+                    )
+                continue
+            linked = set(SOURCE_ROW_TOKEN_RE.findall(references)) | set(
+                re.findall(r"(?<![A-Za-z0-9_.-])GAP-\d{2,}(?![A-Za-z0-9_.-])", references)
+            )
+            consistency_refs.update(linked)
+            if not linked:
+                errors.append(f"scope-brief consistency aspect {aspect!r} must link SR-* or GAP-*")
 
     support_files = approved_support_paths(package_root)
     support_contents = [(path, path.read_text(encoding="utf-8")) for path in support_files]
@@ -586,6 +705,18 @@ def validate(package_root: Path, scope_dir: Path) -> list[str]:
                         + "; record future update instead of a coverage gap"
                     )
 
+    known_gap_ids = set(gap_ids)
+    unknown_contract_gaps = sorted(contract_gap_ids - known_gap_ids)
+    if unknown_contract_gaps:
+        errors.append("verifiability contract references unknown gaps: " + ", ".join(unknown_contract_gaps))
+    unknown_consistency_refs = sorted(
+        reference
+        for reference in consistency_refs
+        if reference not in active_inventory_ids and reference not in known_gap_ids
+    )
+    if unknown_consistency_refs:
+        errors.append("scope-brief consistency analysis references unknown IDs: " + ", ".join(unknown_consistency_refs))
+
     prompt = (scope_dir / "prompt.scope-to-writer.md").read_text(encoding="utf-8")
     combined_scope_text = "\n".join(
         (scope_dir / name).read_text(encoding="utf-8") for name in REQUIRED_FILES if name.endswith(".md")
@@ -602,12 +733,42 @@ def validate(package_root: Path, scope_dir: Path) -> list[str]:
     test_data_plan_content = (scope_dir / "test-data-plan.md").read_text(encoding="utf-8")
     errors.extend(validate_test_data_plan(test_data_plan_content))
 
-    questions_content = (scope_dir / "scope-clarification-requests.md").read_text(encoding="utf-8")
+    questions_content = clarification_register.read_text(encoding="utf-8") if clarification_register.is_file() else ""
     for heading in ANY_QUESTION_HEADING_RE.findall(questions_content):
-        if not heading.startswith("CLR-"):
+        if heading != "Реестр вопросов к БА" and not heading.startswith("CLR-"):
             errors.append(f"clarification question heading must use CLR-* ID, got {heading!r}")
-    for question_id, block in question_blocks(questions_content):
-        current_question = question_text(block)
+    question_cards = question_blocks(questions_content)
+    question_ids = [question_id for question_id, _block in question_cards]
+    duplicate_question_ids = sorted({question_id for question_id in question_ids if question_ids.count(question_id) > 1})
+    if duplicate_question_ids:
+        errors.append("clarification register contains duplicate IDs: " + ", ".join(duplicate_question_ids))
+    for question_id, block in question_cards:
+        question_scope = question_field(block, "Область проверки").strip("` ")
+        status = question_field(block, "Статус").strip("` ").casefold()
+        explicit_question = question_field(block, "Вопрос")
+        requirement_basis = question_field(block, "Основание в ФТ")
+        coverage_impact = question_field(block, "Влияние на покрытие")
+        answer = question_field(block, "Ответ БА")
+        if not question_scope:
+            errors.append(f"{question_id}: clarification card has no scope")
+        if status not in ALLOWED_QUESTION_STATUSES:
+            errors.append(f"{question_id}: unsupported clarification status {status!r}")
+        if not explicit_question:
+            errors.append(f"{question_id}: clarification card has no explicit question")
+        if not requirement_basis:
+            errors.append(f"{question_id}: clarification card has no FT basis")
+        if not coverage_impact:
+            errors.append(f"{question_id}: clarification card has no coverage impact")
+        if not answer:
+            errors.append(f"{question_id}: clarification card has no editable 'Ответ БА' field")
+        placeholder = bool(QUESTION_ANSWER_PLACEHOLDER_RE.fullmatch(answer.strip()))
+        if status == "ожидает-ответа" and not placeholder:
+            errors.append(f"{question_id}: pending clarification must keep the explicit editable answer placeholder")
+        if status in {"ответ-получен", "отменён", "частичный-ответ"} and (not answer or placeholder):
+            errors.append(f"{question_id}: status {status!r} requires a recorded answer or reason")
+        if status == "частичный-ответ" and not question_field(block, "Осталось уточнить"):
+            errors.append(f"{question_id}: partial answer requires 'Осталось уточнить'")
+        current_question = explicit_question or question_text(block)
         if QUESTION_EXTRA_BEHAVIOR_RE.search(current_question):
             errors.append(
                 f"{question_id}: question asks for behavior beyond the source-backed result instead of only missing facts"
@@ -621,7 +782,7 @@ def validate(package_root: Path, scope_dir: Path) -> list[str]:
             errors.append(f"{question_id}: question has no requirement code")
             continue
         provisional_codes = {f"CODE:{code}" for code in codes} & assumption_codes
-        if provisional_codes:
+        if provisional_codes and status not in {"ответ-получен", "отменён"}:
             errors.append(
                 f"{question_id}: non-blocking working assumption already provides current behavior for "
                 + ", ".join(sorted(code.removeprefix("CODE:") for code in provisional_codes))
@@ -632,9 +793,11 @@ def validate(package_root: Path, scope_dir: Path) -> list[str]:
             for code in codes:
                 if re.search(rf"\b{re.escape(code)}\b", support, re.IGNORECASE):
                     matching_support.append(path)
-                if duplicates_fully_answered_question(current_question, support, code):
+                if status not in {"ответ-получен", "отменён"} and duplicates_fully_answered_question(
+                    current_question, support, code
+                ):
                     errors.append(f"{question_id}: duplicates a fully answered approved clarification for {code}")
-        if matching_support and RESIDUAL_EXPLANATION not in block:
+        if matching_support and status not in {"ответ-получен", "отменён"} and RESIDUAL_EXPLANATION not in block:
             names = sorted({path.name for path in matching_support})
             errors.append(f"{question_id}: approved answer source mentions its requirement; residual explanation is required: {names}")
 
@@ -645,6 +808,13 @@ def validate(package_root: Path, scope_dir: Path) -> list[str]:
         for word, replacement in FORBIDDEN_PROCESS_WORDS.items():
             if re.search(rf"\b{re.escape(word)}s?\b", visible, re.IGNORECASE):
                 errors.append(f"{name}: use Russian wording instead of {word!r} ({replacement})")
+    visible_questions = strip_allowed_technical_fragments(questions_content)
+    for word, replacement in FORBIDDEN_PROCESS_WORDS.items():
+        if re.search(rf"\b{re.escape(word)}s?\b", visible_questions, re.IGNORECASE):
+            errors.append(
+                "work/scope-clarification-requests.md: use Russian wording instead of "
+                f"{word!r} ({replacement})"
+            )
     return errors
 
 

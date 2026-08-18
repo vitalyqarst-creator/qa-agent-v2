@@ -22,6 +22,7 @@ REQUIRED_PATHS = (
     "skills/ft-test-case-reviewer/SKILL.md",
     "references/runtime/test-data-fixtures.md",
     "references/runtime/source-selection.md",
+    "references/runtime/scope-analysis.md",
     "references/runtime/test-design-profiles.md",
     "references/runtime/test-design-matrix.md",
     "references/runtime/test-case-runtime.md",
@@ -50,24 +51,36 @@ REQUIRED_REFERENCE_CONSUMERS = {
         "references/runtime/session-topology.md",
         "references/runtime/source-selection.md",
     ),
-    "skills/ft-scope-analyzer/SKILL.md": ("references/runtime/session-topology.md",),
+    "skills/ft-scope-analyzer/SKILL.md": (
+        "references/runtime/session-topology.md",
+        "references/runtime/scope-analysis.md",
+    ),
     "skills/ft-test-case-writer/SKILL.md": (
         "references/runtime/test-design-profiles.md",
         "references/runtime/review-record.md",
+        "references/runtime/scope-analysis.md",
         "references/runtime/session-topology.md",
     ),
     "skills/ft-test-case-reviewer/SKILL.md": (
         "references/runtime/test-data-fixtures.md",
         "references/runtime/test-design-profiles.md",
         "references/runtime/review-record.md",
+        "references/runtime/scope-analysis.md",
         "references/runtime/session-topology.md",
     ),
 }
 
 REQUIRED_POLICY_MARKERS = {
     "AGENTS.md": (
+        "Senior QA-инженер",
         "needs-test-data",
         "не является `coverage-gap`",
+        "work/scope-clarification-requests.md",
+    ),
+    "skills/ft-scope-analyzer/SKILL.md": (
+        "Контракт проверяемости",
+        "Проверку согласованности",
+        "**Ответ БА:** _Введите ответ здесь._",
     ),
     "skills/ft-test-case-writer/SKILL.md": (
         "доступны writer-у только для чтения",

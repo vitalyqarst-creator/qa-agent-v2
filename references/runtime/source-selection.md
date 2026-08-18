@@ -7,6 +7,8 @@ Source locator создаёт только:
 - `work/stage-handoffs/00-<ft>/workflow-state.yaml`;
 - controller-owned `work/runtime-session-registry.json` уже существует до начала этапа.
 
+Созданный при инициализации пакета пустой `work/scope-clarification-requests.md` также допустим, но source locator не добавляет в него вопросы.
+
 `workflow-state.yaml` содержит `stage: source-locator`, `status: completed`, путь к `source-selection.md`, списки `primary_sources`, `support_sources`, `visual_sources` и при наличии `figma_sources`. Для каждого локального файла обязательны repo-relative `path`, роль и SHA-256.
 
 В `primary_sources` должны находиться ровно по одному существующему файлу ролей `semantic_primary`, `machine_readable_primary` и `visual_structural_crosscheck_only`. Все фактически находящиеся в `source/`, `support/` и `mockups/` файлы регистрируются; скрытое игнорирование входа запрещено.

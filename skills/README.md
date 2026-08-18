@@ -15,6 +15,7 @@
 
 - `references/runtime/test-data-fixtures.md` — спецификация данных, готовность среды и сохранение внешних ответов;
 - `references/runtime/source-selection.md` — формат и machine gate первого этапа;
+- `references/runtime/scope-analysis.md` — углублённый анализ области и единый реестр вопросов к БА;
 - `references/runtime/test-design-profiles.md` — универсальные правила покрытия, атомарности и параметризации;
 - `references/runtime/test-design-matrix.md` — компактный формат matrix;
 - `references/runtime/test-case-runtime.md` — production-формат TC;

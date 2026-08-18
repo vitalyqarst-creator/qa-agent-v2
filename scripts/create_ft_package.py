@@ -23,6 +23,10 @@ NOTES = """# Контекст FT-пакета
 
 Указать здесь доступные источники тестовых данных: локальные fixtures, provider интеграции, публичный справочник или синтетический генератор. Не добавлять credentials.
 """
+CLARIFICATION_REGISTER = """# Реестр вопросов к БА
+
+Вопросы пока не сформированы.
+"""
 
 
 def create_package(destination: Path) -> None:
@@ -37,6 +41,9 @@ def create_package(destination: Path) -> None:
     notes = destination / "AGENT-NOTES.md"
     if not notes.exists():
         notes.write_text(NOTES, encoding="utf-8", newline="\n")
+    clarification_register = destination / "work" / "scope-clarification-requests.md"
+    if not clarification_register.exists():
+        clarification_register.write_text(CLARIFICATION_REGISTER, encoding="utf-8", newline="\n")
 
 
 def main() -> int:
