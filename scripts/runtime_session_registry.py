@@ -89,6 +89,13 @@ def runtime_acknowledgement(package_root: Path) -> dict[str, str]:
     }
 
 
+def package_input_baseline(package_root: Path) -> dict[str, str]:
+    notes = package_root.resolve() / "AGENT-NOTES.md"
+    if not notes.is_file():
+        return {}
+    return {"agent_notes_sha256": hashlib.sha256(notes.read_bytes()).hexdigest()}
+
+
 def find_package_root(path: Path) -> Path | None:
     resolved = path.resolve()
     start = resolved if resolved.is_dir() else resolved.parent
@@ -151,6 +158,7 @@ def initialize_registry(package_root: Path, controller_thread_id: str, controlle
     payload: dict[str, Any] = {
         "schema_version": REGISTRY_SCHEMA_VERSION,
         "runtime": runtime_acknowledgement(package_root),
+        "package_inputs": package_input_baseline(package_root),
         "controller": controller,
         "source_locator": None,
         "scopes": {},
@@ -189,6 +197,14 @@ def validate_runtime_acknowledgement(package_root: Path, payload: dict[str, Any]
             f"runtime code commit changed from {recorded_commit!r} to {current_commit!r}; "
             "controller must reread the runtime contract and run acknowledge-runtime"
         )
+    package_inputs = payload.get("package_inputs")
+    if isinstance(package_inputs, dict) and package_inputs.get("agent_notes_sha256"):
+        current_inputs = package_input_baseline(package_root)
+        if current_inputs.get("agent_notes_sha256") != package_inputs.get("agent_notes_sha256"):
+            errors.append(
+                "AGENT-NOTES.md changed after route initialization; it is an immutable package input, "
+                "so start a new route instead of mutating it during source registration"
+            )
     return errors
 
 

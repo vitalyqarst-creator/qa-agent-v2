@@ -25,6 +25,8 @@ Scope analyzer-ы одного FT-пакета не работают однов�
 
 До запуска semantic role controller создаёт `work/runtime-session-registry.json` и регистрирует фактический `threadId`/`hostId`, полученные от Codex Desktop. Допустим только `codex-thread`; subagent, fork и выдуманный ID запрещены. Операции Codex Desktop и их порядок уже перечислены ниже и в `AGENTS.md`: controller не выполняет web search документации перед стандартным dispatch. Если встроенная операция недоступна, route останавливается.
 
+При инициализации registry фиксируется SHA-256 пользовательского `AGENT-NOTES.md`. Его изменение внутри route блокирует следующий self-check: generated XHTML, runtime-классификация и поздний support принадлежат source handoff, а не переписывают package-specific вход.
+
 Обычный dispatch source locator, analyzer и writer всегда двухфазный:
 
 1. Controller вызывает `list_projects` и выбирает текущий сохранённый проект.
@@ -34,6 +36,12 @@ Scope analyzer-ы одного FT-пакета не работают однов�
 5. Controller ожидает `turnCompleted` через `wait_threads`, затем независимо запускает artifact validator и только после `valid=true` объявляет этап завершённым. `waitingOnApproval`, `needsAttention`, незавершённый turn или один лишь текст semantic role не являются завершением этапа. Если требуется действие пользователя, controller сообщает `blocked-user-action`, но не выдаёт устаревший успешный stage summary; при продолжении сначала повторно проверяет состояние semantic thread и validator.
 
 Начальный semantic prompt непосредственно в `create_thread` запрещён: сессия может начать self-check раньше, чем controller успеет записать её ID в registry.
+
+### Модель и уровень рассуждений
+
+Если пользователь в задаче текущего этапа явно задал модель и уровень рассуждений создаваемой semantic-сессии, controller передаёт точные поддерживаемые значения в `create_thread` как `model` и `thinking`. Это параметры запуска сессии, а не текст operational prompt. Controller не заменяет указанную модель близкой, не понижает уровень рассуждений и не переносит выбор автоматически на другие роли или следующие этапы.
+
+Если пользователь не задал профиль явно, controller опускает `model` и `thinking`: используется настроенный default Codex. Нельзя молча закреплять глобальную модель по примеру одного FT или прошлого прогона. В итоговом stage summary controller кратко фиксирует, был ли использован явный профиль или default; это служебная информация и не попадает в FT-артефакты.
 
 В начале каждого следующего turn controller проверяет, что открытая сессия работает по текущему commit agent-layer:
 

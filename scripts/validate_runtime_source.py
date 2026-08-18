@@ -243,17 +243,6 @@ def validate(package_root: Path, handoff_dir: Path, allow_downstream: bool = Fal
     for path_value in sorted(registered_paths - actual_inputs):
         errors.append(f"registered local path is outside source/support/mockups: {path_value}")
 
-    for path_value in sorted(actual_inputs):
-        package_relative = (repo_root / path_value).relative_to(package_root).as_posix()
-        directory_reference = f"{Path(package_relative).parts[0]}/"
-        directory_classification_allowed = directory_reference == "mockups/" and directory_reference in notes
-        if (
-            package_relative not in notes
-            and Path(package_relative).name not in notes
-            and not directory_classification_allowed
-        ):
-            errors.append(f"AGENT-NOTES.md does not classify input {package_relative}")
-
     figma_urls = {url.rstrip(".,") for url in URL_RE.findall(notes)}
     for url in figma_urls:
         if url not in workflow or url not in selection:

@@ -81,6 +81,7 @@ REQUIRED_POLICY_MARKERS = {
         "не является `coverage-gap`",
         "work/scope-clarification-requests.md",
         "нейтральным bootstrap prompt",
+        "параметры `model` и `thinking`",
         "skills/ft-source-locator/SKILL.md",
         "Команда role self-check возвращает путь и SHA-256 обязательного skill",
     ),
@@ -89,6 +90,7 @@ REQUIRED_POLICY_MARKERS = {
         "scripts/cleanup_runtime_temp.py",
         "scripts/render_runtime_pdf.py",
         "не читай реализацию validator-а",
+        "`AGENT-NOTES.md` является входом пользователя",
     ),
     "skills/ft-scope-analyzer/SKILL.md": (
         "Контракт проверяемости",
@@ -96,6 +98,7 @@ REQUIRED_POLICY_MARKERS = {
         "Контроль полноты строк таблиц",
         "реестр обработки каждого зарегистрированного",
         "**Ответ БА:** _Введите ответ здесь._",
+        "Тип `Дата` не разрешает выводить платформенные min/max",
     ),
     "skills/ft-test-case-writer/SKILL.md": (
         "доступны writer-у только для чтения",
@@ -130,10 +133,12 @@ REQUIRED_POLICY_MARKERS = {
         "обоих обязательных файлов `source-selection.md` и `workflow-state.yaml`",
         "полностью читает role-skill",
         "skills/ft-test-case-reviewer/SKILL.md",
+        "Модель и уровень рассуждений",
     ),
     "references/runtime/source-selection.md": (
         "scripts/render_runtime_pdf.py",
         "не требует ручного вызова Poppler",
+        "`AGENT-NOTES.md` — пользовательский вход",
     ),
 }
 

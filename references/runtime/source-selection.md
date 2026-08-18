@@ -2,10 +2,12 @@
 
 Source locator создаёт только:
 
-- `AGENT-NOTES.md` с классификацией фактически доступных support-файлов;
+- производное машинное представление канонического источника, если оно отсутствовало;
 - `work/stage-handoffs/00-<ft>/source-selection.md`;
 - `work/stage-handoffs/00-<ft>/workflow-state.yaml`;
 - controller-owned `work/runtime-session-registry.json` уже существует до начала этапа.
+
+`AGENT-NOTES.md` — пользовательский вход и package-specific контракт. Source locator читает его, но не изменяет. Фактическая runtime-классификация, происхождение сгенерированного XHTML и поздние support-файлы записываются в source handoff.
 
 Созданный при инициализации пакета пустой `work/scope-clarification-requests.md` также допустим, но source locator не добавляет в него вопросы.
 
@@ -63,7 +65,7 @@ python scripts/validate_runtime_source.py <FT-package> <source-handoff-dir> --re
 
 ## Поздний support после вопросов БА
 
-Новый support-файл, предоставленный после scope analysis, регистрирует та же source-locator-сессия в существующих `AGENT-NOTES.md`, `source-selection.md` и `workflow-state.yaml`. Primary и visual selection не пересматриваются, semantic stages не выполняются. Поскольку downstream-артефакты к этому моменту ожидаемы, используется ограниченная проверка:
+Новый support-файл, предоставленный после scope analysis, регистрирует та же source-locator-сессия в существующих `source-selection.md` и `workflow-state.yaml`; `AGENT-NOTES.md` остаётся неизменным. Primary и visual selection не пересматриваются, semantic stages не выполняются. Поскольку downstream-артефакты к этому моменту ожидаемы, используется ограниченная проверка:
 
 ```text
 python scripts/validate_runtime_source.py <FT-package> <source-handoff-dir> --support-update

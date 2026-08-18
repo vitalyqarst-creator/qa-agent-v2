@@ -177,6 +177,23 @@ BOUNDARY_PLAN_RE = re.compile(
     re.IGNORECASE | re.DOTALL,
 )
 BOUNDARY_CLARIFICATION_RE = re.compile(r"требуется\s+уточнение\s*:\s*GAP-\d{2,}", re.IGNORECASE)
+BOUNDARY_SOURCE_RE = re.compile(r"основание\s+границы\s*:\s*(.+?)\s*$", re.IGNORECASE | re.DOTALL)
+VALID_BOUNDARY_VALUE_RE = re.compile(r"валидная\s+граница\s*:\s*(.+?)(?:;|$)", re.IGNORECASE | re.DOTALL)
+DATE_LITERAL_RE = re.compile(r"(?<!\d)(?:0?[1-9]|[12]\d|3[01])[./-](?:0?[1-9]|1[0-2])[./-]\d{4}(?!\d)")
+CONTEXT_ONLY_DEFINITION_RE = re.compile(r"\b(?:обозначает|бизнес-смысл|определение\s+термина)\b", re.IGNORECASE)
+OBSERVABLE_BEHAVIOR_RE = re.compile(
+    r"\b(?:отображ|показы|доступ|недоступ|сохраня|заполня|созда|измен|блокир|принима|отклон|разреш|запрещ)",
+    re.IGNORECASE,
+)
+REQUIRED_UI_MECHANISM_RE = re.compile(
+    r"(?:кнопк\w*[^|\n]{0,80}(?:недоступ|заблок)|сохранени\w*[^|\n]{0,80}(?:недоступ|заблок))",
+    re.IGNORECASE,
+)
+VISUAL_INCOMPLETE_RE = re.compile(
+    r"(?:макет|локальн\w*\s+материал\w*)[^|\n]{0,220}"
+    r"(?:не\s+показыва|не\s+содерж|не\s+подтвержда|не\s+позволя)",
+    re.IGNORECASE,
+)
 TABLE_COVERAGE_NUMBER_RE = re.compile(r"^(?:Таблица\s+)?(\d+)$", re.IGNORECASE)
 ALLOWED_VISUAL_STATUSES = (
     "использован",
@@ -425,7 +442,7 @@ def operational_assumption_anchors(card: str) -> set[str]:
     return precise_source_anchors(";".join(primary_parts))
 
 
-def validate_test_data_plan(content: str) -> list[str]:
+def validate_test_data_plan(content: str, source_evidence: str = "") -> list[str]:
     if re.search(r"(?m)^Данные не требуются\.\s*$", content) and "|" not in content:
         return []
     table = find_markdown_table(content, TEST_DATA_PLAN_HEADERS)
@@ -459,13 +476,28 @@ def validate_test_data_plan(content: str) -> list[str]:
         if not boundaries:
             errors.append(f"test-data-plan {group}: 'Границы и классы' must not be empty")
         quantitative = bool(QUANTITATIVE_DATA_RE.search(" | ".join((group, data, preparation))))
-        if quantitative and not (
-            BOUNDARY_PLAN_RE.search(boundaries) or BOUNDARY_CLARIFICATION_RE.search(boundaries)
-        ):
+        boundary_plan = BOUNDARY_PLAN_RE.search(boundaries)
+        if quantitative and not (boundary_plan or BOUNDARY_CLARIFICATION_RE.search(boundaries)):
             errors.append(
                 f"test-data-plan {group}: quantitative requirement needs 'Шаг представления: ...; "
-                "валидная граница: ...; ближайшее недопустимое: ...' or 'Требуется уточнение: GAP-*'"
+                "валидная граница: ...; ближайшее недопустимое: ...; Основание границы: ...' "
+                "or 'Требуется уточнение: GAP-*'"
             )
+        if quantitative and boundary_plan:
+            source_match = BOUNDARY_SOURCE_RE.search(boundaries)
+            source_basis = source_match.group(1).strip() if source_match else ""
+            if not source_basis or not precise_source_anchors(source_basis):
+                errors.append(
+                    f"test-data-plan {group}: exact boundary needs 'Основание границы:' with a precise source anchor"
+                )
+            if source_evidence:
+                valid_boundary = VALID_BOUNDARY_VALUE_RE.search(boundaries)
+                if valid_boundary:
+                    for literal in DATE_LITERAL_RE.findall(valid_boundary.group(1)):
+                        if literal not in source_evidence:
+                            errors.append(
+                                f"test-data-plan {group}: date boundary {literal!r} is absent from primary/approved sources"
+                            )
         external = any(part.startswith("внешний сервис:") for part in source_parts)
         saved = any(part.startswith(("сохранённый ответ", "сохраненный ответ")) for part in source_parts)
         if external and not saved:
@@ -512,6 +544,7 @@ def validate(package_root: Path, scope_dir: Path) -> list[str]:
     row_references: list[tuple[str, int, str]] = []
     normalized_table_rows: dict[int, set[str]] = {}
     active_inventory_ids: set[str] = set()
+    inventory_statements: dict[str, str] = {}
     if inventory is None or not inventory.rows:
         errors.append("source-row-inventory has no required source rows table")
     else:
@@ -529,6 +562,7 @@ def validate(package_root: Path, scope_dir: Path) -> list[str]:
             active_inventory_ids.add(inventory_id)
             source_value = row[inventory_source_index]
             statement_value = row[inventory_statement_index]
+            inventory_statements[inventory_id] = statement_value
             source_codes = {anchor for anchor in extract_anchors(source_value) if anchor.startswith("CODE:")}
             if not precise_source_anchors(source_value):
                 errors.append(
@@ -558,8 +592,15 @@ def validate(package_root: Path, scope_dir: Path) -> list[str]:
                 )
             if RESOLVED_EXCLUSION_RE.search(statement_value):
                 errors.append(f"{inventory_id}: resolved or cancelled behavior belongs in applied exclusions, not active inventory")
+            if CONTEXT_ONLY_DEFINITION_RE.search(statement_value) and not OBSERVABLE_BEHAVIOR_RE.search(statement_value):
+                errors.append(
+                    f"{inventory_id}: definition or business context without observable system behavior is not an active obligation"
+                )
+    xhtml_path = machine_readable_primary(package_root)
+    machine_source_text = ""
+    if xhtml_path is not None and xhtml_path.is_file():
+        machine_source_text = xhtml_path.read_text(encoding="utf-8")
     if row_references:
-        xhtml_path = machine_readable_primary(package_root)
         if xhtml_path is None or not xhtml_path.is_file():
             errors.append("source-row-inventory uses table rows but locator has no existing normalized machine-readable primary")
         else:
@@ -616,6 +657,16 @@ def validate(package_root: Path, scope_dir: Path) -> list[str]:
                         errors.append(
                             f"{source_id}: unknown verifiability element must link an explicit GAP-*"
                         )
+            statement = inventory_statements.get(source_id, "")
+            observed_result = row[contract_indexes[3]].strip()
+            if (
+                re.search(r"\bобязатель\w*", statement, re.IGNORECASE)
+                and REQUIRED_UI_MECHANISM_RE.search(observed_result)
+                and not REQUIRED_UI_MECHANISM_RE.search(statement)
+            ):
+                errors.append(
+                    f"{source_id}: requiredness alone supports 'object is not saved', not an exact disabled UI mechanism"
+                )
         duplicates = sorted({source_id for source_id in contract_ids if contract_ids.count(source_id) > 1})
         if duplicates:
             errors.append("verifiability contract duplicates source obligations: " + ", ".join(duplicates))
@@ -822,10 +873,12 @@ def validate(package_root: Path, scope_dir: Path) -> list[str]:
         scope_brief_content,
         ("UI-уровень", "Визуальный источник", "Результат сверки"),
     )
+    incomplete_local_visual = False
     if visual_check is None or not visual_check.rows:
         errors.append("scope-brief must contain a visual cross-check row for every included UI level")
     else:
         visual_index = visual_check.index("Визуальный источник")
+        visual_result_index = visual_check.index("Результат сверки")
         registered_visuals = {
             resolve_declared_path(package_root, entry["path"]).as_posix().casefold()
             for entry in locator_sections(package_root).get("visual_sources", [])
@@ -833,6 +886,8 @@ def validate(package_root: Path, scope_dir: Path) -> list[str]:
         }
         for row_number, row in enumerate(visual_check.rows, start=1):
             visual_source = row[visual_index]
+            if VISUAL_INCOMPLETE_RE.search(row[visual_result_index]):
+                incomplete_local_visual = True
             declared_paths = LOCAL_VISUAL_RE.findall(visual_source)
             visible_without_urls = re.sub(r"https?://\S+", "", visual_source)
             if not declared_paths and (
@@ -886,6 +941,7 @@ def validate(package_root: Path, scope_dir: Path) -> list[str]:
                 for kind, value in visual_inputs
                 if kind == "path"
             }
+            registered_figma = {value for kind, value in visual_inputs if kind == "url"}
             for row_number, row in enumerate(disposition.rows, start=1):
                 declared = row[input_index].strip().strip("` ")
                 declared_inputs.append(declared)
@@ -895,6 +951,15 @@ def validate(package_root: Path, scope_dir: Path) -> list[str]:
                     errors.append(f"visual input disposition row {row_number}: unsupported status {row[status_index]!r}")
                 if not result or result in {"-", "—"}:
                     errors.append(f"visual input disposition row {row_number}: result or reason is missing")
+                if (
+                    declared in registered_figma
+                    and status == "не открывался: локальных материалов достаточно"
+                    and incomplete_local_visual
+                ):
+                    errors.append(
+                        f"visual input disposition row {row_number}: Figma cannot be skipped as locally sufficient "
+                        "when the included UI cross-check records missing visual elements"
+                    )
                 if any(declared == value for kind, value in visual_inputs if kind == "path"):
                     errors.extend(
                         validate_visual_reference(
@@ -1051,7 +1116,8 @@ def validate(package_root: Path, scope_dir: Path) -> list[str]:
                 errors.append(f"writer prompt does not carry {gap_id}")
 
     test_data_plan_content = (scope_dir / "test-data-plan.md").read_text(encoding="utf-8")
-    errors.extend(validate_test_data_plan(test_data_plan_content))
+    source_evidence = "\n".join([machine_source_text, *(support for _path, support in support_contents)])
+    errors.extend(validate_test_data_plan(test_data_plan_content, source_evidence))
 
     questions_content = clarification_register.read_text(encoding="utf-8") if clarification_register.is_file() else ""
     for heading in ANY_QUESTION_HEADING_RE.findall(questions_content):
@@ -1079,6 +1145,11 @@ def validate(package_root: Path, scope_dir: Path) -> list[str]:
             errors.append(f"{question_id}: clarification card has no FT basis")
         if not coverage_impact:
             errors.append(f"{question_id}: clarification card has no coverage impact")
+        linked_gaps = set(re.findall(r"\bGAP-\d{2,}\b", coverage_impact))
+        if len(linked_gaps) != 1:
+            errors.append(
+                f"{question_id}: clarification card must track exactly one independently resolvable GAP-*"
+            )
         if not answer:
             errors.append(f"{question_id}: clarification card has no editable 'Ответ БА' field")
         placeholder = bool(QUESTION_ANSWER_PLACEHOLDER_RE.fullmatch(answer.strip()))

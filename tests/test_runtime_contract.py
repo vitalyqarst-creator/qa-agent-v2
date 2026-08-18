@@ -322,10 +322,6 @@ class RuntimeContractTests(unittest.TestCase):
             visual.write_bytes(b"pdf")
             relative = visual.relative_to(root).as_posix()
             digest = hashlib.sha256(visual.read_bytes()).hexdigest()
-            (package / "AGENT-NOTES.md").write_text(
-                (package / "AGENT-NOTES.md").read_text(encoding="utf-8") + "requirements.pdf\n",
-                encoding="utf-8",
-            )
             (handoff / "source-selection.md").write_text(
                 (handoff / "source-selection.md").read_text(encoding="utf-8")
                 + f"- `{relative}` `{digest}` `visual_structural_crosscheck_only`\n",
@@ -352,7 +348,6 @@ class RuntimeContractTests(unittest.TestCase):
             relative = xhtml.relative_to(root).as_posix()
             digest = hashlib.sha256(xhtml.read_bytes()).hexdigest()
             selection_relative = (handoff / "source-selection.md").relative_to(root).as_posix()
-            (package / "AGENT-NOTES.md").write_text("# Контекст\n\nrequirements.xhtml\n", encoding="utf-8")
             (handoff / "source-selection.md").write_text(
                 f"# Выбор источников\n\n- `{relative}` `{digest}` `semantic_primary+machine_readable_primary`\n",
                 encoding="utf-8",
@@ -393,11 +388,9 @@ class RuntimeContractTests(unittest.TestCase):
                 f'source_selection: "{(handoff / "source-selection.md").relative_to(root).as_posix()}"',
                 "primary_sources:",
             ]
-            notes = ["# Контекст", ""]
             for source, role in sources:
                 relative = source.relative_to(root).as_posix()
                 digest = hashlib.sha256(source.read_bytes()).hexdigest()
-                notes.append(source.name)
                 selection_lines.append(f"- `{relative}` `{digest}` `{role}`")
                 workflow_lines.extend(
                     [
@@ -407,7 +400,6 @@ class RuntimeContractTests(unittest.TestCase):
                     ]
                 )
             workflow_lines.extend(["support_sources:", "visual_sources:"])
-            (package / "AGENT-NOTES.md").write_text("\n".join(notes) + "\n", encoding="utf-8")
             (handoff / "source-selection.md").write_text("\n".join(selection_lines) + "\n", encoding="utf-8")
             (handoff / "workflow-state.yaml").write_text("\n".join(workflow_lines) + "\n", encoding="utf-8")
             self.assertEqual([], validate_source(package, handoff))
@@ -1195,7 +1187,7 @@ class RuntimeContractTests(unittest.TestCase):
                 "# Вопросы\n\n## CLR-001 — подтверждение\n\n"
                 "**Вопрос:** Как выполняется подтверждение вторым сотрудником?\n\n"
                 "**Основание в ФТ:** AS.7.\n\n"
-                "**Влияние на покрытие:** Проверка невозможна.\n\n"
+                "**Влияние на покрытие:** Нельзя выполнить GAP-001.\n\n"
                 "**Текущее состояние:** Ответ не получен.\n",
                 encoding="utf-8",
             )
@@ -1261,6 +1253,31 @@ class RuntimeContractTests(unittest.TestCase):
             self.assertEqual([], validate_scope(package, scope))
 
             inventory_path = scope / "source-row-inventory.md"
+            original_inventory = inventory_path.read_text(encoding="utf-8")
+            inventory_path.write_text(
+                original_inventory.replace(
+                    "| Карточка сохраняется |",
+                    "| Термин обозначает бизнес-смысл карточки |",
+                ),
+                encoding="utf-8",
+            )
+            errors = validate_scope(package, scope)
+            self.assertTrue(any("business context" in error for error in errors))
+
+            inventory_path.write_text(
+                original_inventory.replace(
+                    "| Карточка сохраняется |",
+                    "| Поле обязательно |",
+                ).replace(
+                    "| SR-001 | Карточка партнёра | Пользователь с доступом к добавлению | Нажатие кнопки сохранения после заполнения | Карточка сохранена |",
+                    "| SR-001 | Карточка партнёра | Пользователь с доступом к добавлению | Оставить поле пустым | Сохранение недоступно |",
+                ),
+                encoding="utf-8",
+            )
+            errors = validate_scope(package, scope)
+            self.assertTrue(any("requiredness alone" in error for error in errors))
+            inventory_path.write_text(original_inventory, encoding="utf-8")
+
             gaps_path = scope / "coverage-gaps.md"
             inventory_path.write_text(
                 VALID_INVENTORY.replace(
@@ -1293,12 +1310,20 @@ class RuntimeContractTests(unittest.TestCase):
                 "**Статус:** `ожидает-ответа`\n\n"
                 "**Вопрос:** Какой наблюдаемый результат возникает при нарушении ограничения AS.39?\n\n"
                 "**Основание в ФТ:** AS.39.\n\n"
-                "**Влияние на покрытие:** Нельзя определить ожидаемый результат отрицательной проверки.\n\n"
+                "**Влияние на покрытие:** Нельзя определить ожидаемый результат GAP-001.\n\n"
                 "**Ответ БА:** _Введите ответ здесь._\n"
             )
             register = package / "work" / "scope-clarification-requests.md"
             register.write_text(pending_question, encoding="utf-8")
             self.assertEqual([], validate_scope(package, scope))
+
+            register.write_text(
+                pending_question.replace("GAP-001.", "GAP-001 и GAP-002."),
+                encoding="utf-8",
+            )
+            errors = validate_scope(package, scope)
+            self.assertTrue(any("exactly one independently resolvable GAP" in error for error in errors))
+            register.write_text(pending_question, encoding="utf-8")
 
             uncoded_question = pending_question.replace(
                 "при нарушении ограничения AS.39?",
@@ -1401,7 +1426,7 @@ class RuntimeContractTests(unittest.TestCase):
                 "**Статус:** `ожидает-ответа`\n\n"
                 "**Вопрос:** Предоставьте готового партнёра и учётную запись тестовой среды для AS.39.\n\n"
                 "**Основание в ФТ:** AS.39.\n\n"
-                "**Влияние на покрытие:** Нельзя выполнить проверку.\n\n"
+                "**Влияние на покрытие:** Нельзя выполнить GAP-001.\n\n"
                 "**Ответ БА:** _Введите ответ здесь._\n",
                 encoding="utf-8",
             )
@@ -1446,9 +1471,20 @@ class RuntimeContractTests(unittest.TestCase):
 
         valid = plan.replace(
             "Допустимо 40 МБ; недопустимо 41 МБ.",
-            "Шаг представления: 1 КБ; валидная граница: 40 МБ; ближайшее недопустимое: 40 МБ + 1 КБ.",
+            "Шаг представления: 1 КБ; валидная граница: 40 МБ; ближайшее недопустимое: 40 МБ + 1 КБ; Основание границы: AS.35.",
         )
         self.assertEqual([], validate_test_data_plan(valid))
+
+    def test_test_data_plan_rejects_unsourced_date_limits(self) -> None:
+        plan = """# План тестовых данных
+
+| Группа проверок | Источник значений | Данные или контракт получения | Воспроизводимая подготовка | Границы и классы | Готовность |
+| --- | --- | --- | --- | --- | --- |
+| Диапазон даты | первичный источник | Значения даты | Ввести дату. | Шаг представления: 1 день; валидная граница: 01.01.1900; ближайшее недопустимое: 31.12.1899; Основание границы: Таблица 6, строка «Дата». | needs-test-data |
+"""
+        errors = validate_test_data_plan(plan, "<td>Дата</td><td>Дата</td>")
+        self.assertTrue(any("date boundary" in error and "absent" in error for error in errors))
+        self.assertEqual([], validate_test_data_plan(plan, "Источник устанавливает границу 01.01.1900."))
 
     def test_scope_validator_blocks_bulk_parent_ownership_row_loss_visual_omission_and_repo_temp(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
@@ -1575,6 +1611,18 @@ class RuntimeContractTests(unittest.TestCase):
 
             self.assertEqual([], validate_scope(package, scope))
 
+            brief_path = scope / "scope-brief.md"
+            complete_brief = brief_path.read_text(encoding="utf-8")
+            brief_path.write_text(
+                complete_brief.replace(
+                    "| Форма | `fts/Project/FT/mockups/form.png` | Подтверждена форма. |",
+                    "| Форма | `fts/Project/FT/mockups/form.png` | Локальный макет не показывает релевантное поле. |",
+                ),
+                encoding="utf-8",
+            )
+            errors = validate_scope(package, scope)
+            self.assertTrue(any("Figma cannot be skipped" in error for error in errors))
+
     def test_scope_validator_rejects_gap_and_question_covered_by_nonblocking_working_assumption(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
             root = Path(temporary_directory)
@@ -1615,7 +1663,7 @@ class RuntimeContractTests(unittest.TestCase):
                 "**Статус:** `ожидает-ответа`\n\n"
                 "**Вопрос:** Какая роль выполняет действие?\n\n"
                 "**Основание в ФТ:** AS.39.\n\n"
-                "**Влияние на покрытие:** Нельзя определить доступ.\n\n"
+                "**Влияние на покрытие:** Нельзя определить GAP-001.\n\n"
                 "**Ответ БА:** _Введите ответ здесь._\n\n"
                 "**Почему существующий ответ не закрывает вопрос:** Нет финальной ролевой модели.\n",
                 encoding="utf-8",
@@ -1733,7 +1781,7 @@ class RuntimeContractTests(unittest.TestCase):
                 "**Статус:** `ожидает-ответа`\n\n"
                 "**Вопрос:** Какой результат возникает помимо сохранения карточки?\n\n"
                 "**Основание в ФТ:** AS.38.\n\n"
-                "**Влияние на покрытие:** Нельзя завершить проверку.\n\n"
+                "**Влияние на покрытие:** Нельзя завершить GAP-001.\n\n"
                 "**Ответ БА:** _Введите ответ здесь._\n",
                 encoding="utf-8",
             )
@@ -2549,6 +2597,15 @@ class RuntimeContractTests(unittest.TestCase):
             contract = required_skill_contract(root, role)
             self.assertEqual(expected_path, contract["path"])
             self.assertRegex(contract["sha256"], r"^[0-9a-f]{64}$")
+
+    def test_session_registry_detects_agent_notes_mutation(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            package = Path(temporary_directory)
+            (package / "AGENT-NOTES.md").write_text("# Вход пользователя\n", encoding="utf-8")
+            initialize_registry(package, CONTROLLER_THREAD, "local")
+            (package / "AGENT-NOTES.md").write_text("# Изменено во время route\n", encoding="utf-8")
+            errors = validate_controller(package, CONTROLLER_THREAD)
+            self.assertTrue(any("immutable package input" in error for error in errors))
 
     def test_runtime_tree_has_no_evals_or_legacy_skills(self) -> None:
         root = Path(__file__).resolve().parents[1]
