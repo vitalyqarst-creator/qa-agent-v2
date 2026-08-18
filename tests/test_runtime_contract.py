@@ -2839,6 +2839,18 @@ class RuntimeContractTests(unittest.TestCase):
             snapshot = fixture_root / "FX-DADATA-PARTNER-001" / "response.json"
             self.assertNotIn("not-written", snapshot.read_text(encoding="utf-8"))
 
+            with patch("scripts.capture_dadata_fixture.urlopen", side_effect=[Response(), Response()]):
+                bank_entry = capture_fixture(
+                    kind="bank",
+                    query="СБЕРБАНК",
+                    fixture_id="FX-DADATA-BANK-001",
+                    purpose="Подсказка банка",
+                    fixture_root=fixture_root,
+                    token="not-written",
+                )
+            self.assertEqual("bank", bank_entry["request"]["suggestion_kind"])
+            self.assertEqual([], validate_catalog(fixture_root / "fixture-catalog.json"))
+
     def test_package_creator_does_not_copy_runtime_artifacts(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
             package = Path(temporary_directory) / "Partners-v1"

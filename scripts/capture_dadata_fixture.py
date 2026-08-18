@@ -15,6 +15,7 @@ TOKEN_ENV = "DADATA_API_KEY"
 FIXTURE_ID = re.compile(r"^FX-[A-Z0-9_-]+$")
 ENDPOINTS = {
     "party": "https://suggestions.dadata.ru/suggestions/api/4_1/rs/suggest/party",
+    "bank": "https://suggestions.dadata.ru/suggestions/api/4_1/rs/suggest/bank",
     "address": "https://suggestions.dadata.ru/suggestions/api/4_1/rs/suggest/address",
 }
 
