@@ -45,10 +45,14 @@ PROCESS_PLACEHOLDER_RE = re.compile(
     r"\b(?:edit\s+TC|несохран[её]нн\w*\s+значени\w*|данн\w*\s+предыдущ\w*\s+TC|значени\w*\s+из\s+fixture)\b",
     re.IGNORECASE,
 )
+UNBOUND_RUNTIME_REFERENCE_RE = re.compile(
+    r"зафиксирован\w*\s+в\s+(?:протокол|отч[её]т)\w*\s+(?:текущ\w*\s+)?прогон\w*",
+    re.IGNORECASE,
+)
 STATUS_RE = re.compile(r"\*\*Статус исполнения:\*\*\s*([^\n]+)")
 CONFIRMATION_RE = re.compile(r"\*\*Требуется подтверждение:\*\*\s*([^\n]+)")
 PRECONDITION_ITEM_RE = re.compile(
-    r"^\d+\.\s+(?:(?:Открыть|Перейти|Найти|Нажать|Выбрать|Ввести|Заполнить|Создать|Добавить|Подготовить|Очистить|Загрузить|Войти|Выполнить|Подтвердить)\b|(?:Пользователь|Партн[её]р|Реквизит|Объект|Запись|У\s+партн[её]ра)\b)",
+    r"^\d+\.\s+(?:(?:Открыть|Перейти|Найти|Нажать|Выбрать|Ввести|Заполнить|Создать|Добавить|Подготовить|Очистить|Загрузить|Войти|Выполнить|Подтвердить|Зафиксировать)\b|(?:Пользователь|Партн[её]р|Реквизит|Объект|Запись|У\s+партн[её]ра)\b)",
     re.IGNORECASE,
 )
 AMBIGUOUS_STATE_SETUP_RE = re.compile(
@@ -87,6 +91,10 @@ ACTION_VERB_RE = re.compile(
     re.IGNORECASE,
 )
 QUOTED_FRAGMENT_RE = re.compile(r"`[^`\n]*`|«[^»\n]*»|\"[^\"\n]*\"")
+RUNTIME_BINDING_RE = re.compile(
+    r"^\d+\.\s+Зафиксировать\b[^\n]*?\bкак\s+`([A-Za-zА-Яа-яЁё][A-Za-zА-Яа-яЁё0-9_-]{2,63})`\s*\.?$",
+    re.IGNORECASE | re.MULTILINE,
+)
 
 
 def normalized_label(value: str) -> str:
@@ -242,6 +250,10 @@ def validate(content: str) -> list[str]:
             value = tc_sections[section_name]
             if FORBIDDEN_RUNTIME_RE.search(value):
                 errors.append(f"{tc_id}: internal marker in {section_name}")
+            if UNBOUND_RUNTIME_REFERENCE_RE.search(value):
+                errors.append(
+                    f"{tc_id}: runtime-generated value must use an explicit capture binding, not an external run report"
+                )
         preconditions = tc_sections["Предусловия"]
         if preconditions != "Не требуются." and not all(
             PRECONDITION_ITEM_RE.match(line) for line in preconditions.splitlines() if line.strip()
@@ -279,8 +291,9 @@ def validate(content: str) -> list[str]:
         if PROCESS_PLACEHOLDER_RE.search(data):
             errors.append(f"{tc_id}: process placeholder in test data")
         expected = tc_sections["Итоговый ожидаемый результат"]
+        runtime_bindings = set(RUNTIME_BINDING_RE.findall(f"{preconditions}\n{steps}"))
         data_values = [value.strip().casefold() for _key, value in data_pairs if len(value.strip()) >= 3]
-        declared_values = {value.strip() for _key, value in data_pairs}
+        declared_values = {value.strip() for _key, value in data_pairs}.union(runtime_bindings)
         undeclared_identifiers = sorted(
             {
                 literal
@@ -295,6 +308,11 @@ def validate(content: str) -> list[str]:
             errors.append(
                 f"{tc_id}: expected-result identifiers must be declared in test data: {undeclared_identifiers}"
             )
+        unused_bindings = sorted(
+            binding for binding in runtime_bindings if f"`{binding}`" not in expected
+        )
+        if unused_bindings:
+            errors.append(f"{tc_id}: captured runtime bindings must be reused in the expected result: {unused_bindings}")
         if (
             data_values
             and OBJECT_OBSERVATION_RE.search(expected)

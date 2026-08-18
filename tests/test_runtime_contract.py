@@ -732,6 +732,30 @@ class RuntimeContractTests(unittest.TestCase):
         )
         self.assertTrue(any("expected result must be deterministic" in error for error in validate_tc(alternative)))
 
+    def test_system_generated_identifier_can_use_runtime_binding(self) -> None:
+        bound = VALID_TC.replace(
+            "1. Открыть карточку добавления партнёра.",
+            "1. Партнёр `ПАО СБЕРБАНК` создан.\n2. Зафиксировать отображаемый системный ID партнёра `ПАО СБЕРБАНК` как `PARTNER-ID-01`.",
+        ).replace(
+            "Карточка партнёра сохранена.",
+            "Карточка партнёра `ПАО СБЕРБАНК` отображает системный ID `PARTNER-ID-01`.",
+        )
+        self.assertEqual([], validate_tc(bound))
+
+    def test_runtime_binding_must_be_reused_in_expected_result(self) -> None:
+        unused = VALID_TC.replace(
+            "1. Открыть карточку добавления партнёра.",
+            "1. Партнёр `ПАО СБЕРБАНК` создан.\n2. Зафиксировать отображаемый системный ID партнёра `ПАО СБЕРБАНК` как `PARTNER-ID-01`.",
+        )
+        self.assertTrue(any("captured runtime bindings must be reused" in error for error in validate_tc(unused)))
+
+    def test_external_run_report_does_not_define_runtime_value(self) -> None:
+        external = VALID_TC.replace(
+            "1. Открыть карточку добавления партнёра.",
+            "1. Партнёр имеет системный ID, зафиксированный в протоколе текущего прогона.",
+        )
+        self.assertTrue(any("must use an explicit capture binding" in error for error in validate_tc(external)))
+
     def test_internal_gap_and_fixture_request_are_rejected(self) -> None:
         invalid = VALID_TC.replace(
             "- `Наименование партнёра` = `ПАО СБЕРБАНК`.",
@@ -821,6 +845,11 @@ class RuntimeContractTests(unittest.TestCase):
         self.assertIn("не fail-fast проверкой", reviewer)
         self.assertIn("проверь каждый TC", reviewer)
         self.assertIn("число проверенных TC", reviewer)
+        fixtures = (root / "references" / "runtime" / "test-data-fixtures.md").read_text(encoding="utf-8")
+        self.assertIn("Значения, создаваемые системой", fixtures)
+        self.assertIn("runtime binding", fixtures)
+        self.assertIn("не требуй заранее известный литерал", reviewer.casefold())
+        self.assertIn("системно создаваемый output выдан за заранее известный вход", reviewer)
 
     def test_matrix_roles_require_reachable_observation_points(self) -> None:
         root = Path(__file__).resolve().parents[1]
