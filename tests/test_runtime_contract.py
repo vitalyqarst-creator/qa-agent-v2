@@ -415,6 +415,43 @@ class RuntimeContractTests(unittest.TestCase):
             self.assertIn(hashlib.sha256(source.read_bytes()).hexdigest(), destination.read_text(encoding="utf-8"))
             self.assertIn("сохранить", xhtml_table_rows(destination)[7])
 
+    def test_docx_normalizer_materializes_word_numbering_labels(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            source = root / "requirements.docx"
+            destination = root / "requirements.normalized.xhtml"
+            document_xml = """<?xml version="1.0" encoding="UTF-8"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>
+  <w:p><w:pPr><w:pStyle w:val="CaptionTable"/></w:pPr><w:r><w:t>Требования к карточке</w:t></w:r></w:p>
+  <w:tbl>
+    <w:tr><w:tc><w:p><w:r><w:t>Название</w:t></w:r></w:p></w:tc></w:tr>
+    <w:tr><w:tc><w:p><w:pPr><w:numPr><w:ilvl w:val="0"/><w:numId w:val="8"/></w:numPr></w:pPr><w:r><w:t>Сохранить</w:t></w:r></w:p></w:tc></w:tr>
+  </w:tbl>
+</w:body></w:document>"""
+            styles_xml = """<?xml version="1.0" encoding="UTF-8"?>
+<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:style w:type="paragraph" w:styleId="CaptionTable"><w:name w:val="heading 5"/><w:pPr><w:numPr><w:numId w:val="12"/></w:numPr></w:pPr></w:style>
+</w:styles>"""
+            numbering_xml = """<?xml version="1.0" encoding="UTF-8"?>
+<w:numbering xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:abstractNum w:abstractNumId="16"><w:lvl w:ilvl="0"><w:start w:val="1"/><w:numFmt w:val="decimal"/><w:lvlText w:val="AS.%1"/></w:lvl></w:abstractNum>
+  <w:abstractNum w:abstractNumId="18"><w:lvl w:ilvl="0"><w:start w:val="7"/><w:numFmt w:val="decimal"/><w:pStyle w:val="CaptionTable"/><w:lvlText w:val="Таблица %1 "/></w:lvl></w:abstractNum>
+  <w:num w:numId="8"><w:abstractNumId w:val="16"/></w:num>
+  <w:num w:numId="12"><w:abstractNumId w:val="18"/></w:num>
+</w:numbering>"""
+            with zipfile.ZipFile(source, "w") as archive:
+                archive.writestr("word/document.xml", document_xml)
+                archive.writestr("word/styles.xml", styles_xml)
+                archive.writestr("word/numbering.xml", numbering_xml)
+
+            normalize_docx(source, destination)
+
+            tree = ET.parse(destination)
+            visible_text = " ".join("".join(tree.getroot().itertext()).split())
+            self.assertIn("Таблица 7 Требования к карточке", visible_text)
+            self.assertIn("AS.1 Сохранить", visible_text)
+            self.assertIn("as.1 сохранить", xhtml_table_rows(destination)[7])
+
     def test_source_stage_rejects_stale_hash_and_downstream_artifacts(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
             root = Path(temporary_directory)

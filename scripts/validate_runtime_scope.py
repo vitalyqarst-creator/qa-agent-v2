@@ -219,7 +219,7 @@ def xhtml_table_rows(path: Path) -> dict[int, set[str]]:
     for element in tree.iter():
         tag = element.tag.rsplit("}", 1)[-1].casefold()
         text = " ".join("".join(element.itertext()).replace("\u00a0", " ").split())
-        if tag in {"h1", "p"}:
+        if tag in {"h1", "h2", "h3", "h4", "h5", "h6", "p"}:
             label_match = TABLE_LABEL_RE.match(text)
             if label_match:
                 current_table_number = int(label_match.group(1))
