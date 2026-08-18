@@ -53,6 +53,7 @@ ALLOWED_GAP_CLASSES = {
     "нет-бизнес-результата",
     "нет-точки-наблюдения",
 }
+RESOLVED_GAP_RE = re.compile(r"^\s*Закрыт(?:о|а|ы)?(?:\s+[^:|]{1,60})?\s*:", re.IGNORECASE)
 EMPTY_RE = re.compile(r"^(?:-|—|n/?a|не определен[оы]?|требу(?:ется|ются))\.?$", re.IGNORECASE)
 SOURCE_ROW_TOKEN_RE = re.compile(r"(?<![A-Za-z0-9_.-])SR-\d{2,}(?![A-Za-z0-9_.-])")
 CONCRETE_DATA_RE = re.compile(r"`[^`\n]+`\s*=\s*`[^`\n]+`")
@@ -357,6 +358,11 @@ def validate_projection(content: str, inventory_content: str, gaps_content: str)
             gap_details = " | ".join(
                 gap_row[gaps.index(name)] for name in ("Недостаток источника", "Что требуется для закрытия")
             )
+            resolved = bool(RESOLVED_GAP_RE.search(gap_row[gaps.index("Что требуется для закрытия")]))
+            if resolved:
+                if gap_id in matrix_rows_by_id:
+                    errors.append(f"matrix must not project resolved coverage gap {gap_id}")
+                continue
             if MISSING_ENVIRONMENT_GAP_RE.search(gap_details):
                 errors.append(
                     f"{gap_id}: missing environment data is execution readiness, not a coverage gap"

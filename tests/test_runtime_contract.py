@@ -1243,6 +1243,18 @@ class RuntimeContractTests(unittest.TestCase):
                 for error in validate_matrix_projection(VALID_MATRIX, VALID_INVENTORY, environment_gap)
             )
         )
+        resolved_gaps = VALID_GAPS.replace("Ответ БА", "Закрыт: ответ БА применён.")
+        resolved_matrix = VALID_MATRIX.replace(
+            "| GAP-001 | SR-002; AS.39 | Проверить неизвестную реакцию | допустимые-классы | GAP-001 | Открыта форма | Не определены | Требуется уточнение результата | coverage-gap | blocked-observability |",
+            "| M-002 | SR-002; AS.39 | Проверить уточнённую реакцию | базовый | Уточнённый результат | Открыта форма | `Значение` = `проверка` | Сохранение блокируется | TC | ready |",
+        )
+        self.assertEqual([], validate_matrix_projection(resolved_matrix, VALID_INVENTORY, resolved_gaps))
+        self.assertTrue(
+            any(
+                "must not project resolved coverage gap GAP-001" in error
+                for error in validate_matrix_projection(VALID_MATRIX, VALID_INVENTORY, resolved_gaps)
+            )
+        )
 
     def test_tc_projection_requires_every_executable_matrix_source(self) -> None:
         self.assertEqual([], validate_tc_projection(VALID_TC, VALID_MATRIX))
