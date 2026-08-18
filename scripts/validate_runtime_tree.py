@@ -30,6 +30,7 @@ REQUIRED_PATHS = (
     "references/runtime/session-topology.md",
     "scripts/create_ft_package.py",
     "scripts/cleanup_runtime_temp.py",
+    "scripts/render_runtime_pdf.py",
     "scripts/capture_dadata_fixture.py",
     "scripts/validate_fixture_catalog.py",
     "scripts/validate_runtime_source.py",
@@ -79,10 +80,13 @@ REQUIRED_POLICY_MARKERS = {
         "не является `coverage-gap`",
         "work/scope-clarification-requests.md",
         "нейтральным bootstrap prompt",
+        "skills/ft-source-locator/SKILL.md",
+        "Команда role self-check возвращает путь и SHA-256 обязательного skill",
     ),
     "skills/ft-source-locator/SKILL.md": (
         "не загружай целиком объёмные справочники",
         "scripts/cleanup_runtime_temp.py",
+        "scripts/render_runtime_pdf.py",
         "не читай реализацию validator-а",
     ),
     "skills/ft-scope-analyzer/SKILL.md": (
@@ -109,6 +113,12 @@ REQUIRED_POLICY_MARKERS = {
         "Начальный semantic prompt непосредственно в `create_thread` запрещён",
         "`waitingOnApproval`",
         "обоих обязательных файлов `source-selection.md` и `workflow-state.yaml`",
+        "полностью читает role-skill",
+        "skills/ft-test-case-reviewer/SKILL.md",
+    ),
+    "references/runtime/source-selection.md": (
+        "scripts/render_runtime_pdf.py",
+        "не требует ручного вызова Poppler",
     ),
 }
 

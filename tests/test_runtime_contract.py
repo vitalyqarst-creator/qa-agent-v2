@@ -14,12 +14,14 @@ from scripts.capture_dadata_fixture import capture_fixture
 from scripts.cleanup_runtime_temp import cleanup
 from scripts.create_ft_package import PACKAGE_DIRS, create_package
 from scripts.normalize_ft_source import normalize_docx
+from scripts.render_runtime_pdf import parse_pages, render_pdf
 from scripts.runtime_review_dispatch import create_dispatch, sha256, validate_dispatch
 from scripts.runtime_review_delta import artifact_index, enrich_review_record, write_revision_manifest
 from scripts.runtime_session_registry import (
     acknowledge_runtime,
     initialize_registry,
     record_role,
+    required_skill_contract,
     validate_controller,
     validate_topology,
 )
@@ -2339,6 +2341,51 @@ class RuntimeContractTests(unittest.TestCase):
         removed, errors = cleanup([Path(__file__).resolve().parents[1]])
         self.assertEqual([], removed)
         self.assertTrue(any("outside system temp" in error for error in errors))
+
+    def test_runtime_pdf_renderer_handles_cyrillic_path_and_contact_sheet(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            source_dir = Path(temporary_directory) / "Исходные материалы"
+            source_dir.mkdir()
+            pdf_path = source_dir / "Требования Партнёры.pdf"
+            import fitz
+
+            document = fitz.open()
+            document.new_page(width=300, height=400)
+            document.new_page(width=400, height=300)
+            document.save(pdf_path)
+            document.close()
+
+            result = render_pdf(pdf_path, "1-2", dpi=72, contact_columns=2)
+            output_dir = Path(result["output_dir"])
+            try:
+                self.assertEqual([1, 2], result["selected_pages"])
+                self.assertEqual(2, len(result["rendered_pages"]))
+                self.assertEqual(1, len(result["contact_sheets"]))
+                self.assertTrue(all(Path(path).is_file() for path in result["rendered_pages"]))
+                self.assertTrue(Path(result["contact_sheets"][0]).is_file())
+                self.assertTrue(output_dir.name.startswith("ft-runtime-pdf-visual-"))
+            finally:
+                cleanup([output_dir])
+
+    def test_runtime_pdf_page_selection_is_one_based_and_bounded(self) -> None:
+        self.assertEqual([0, 2, 3], parse_pages("1,3-4", 4))
+        with self.assertRaises(ValueError):
+            parse_pages("0", 4)
+        with self.assertRaises(ValueError):
+            parse_pages("4-3", 4)
+
+    def test_semantic_roles_have_exact_skill_contracts(self) -> None:
+        root = Path(__file__).resolve().parents[1]
+        for role, expected_path in {
+            "source-locator": "skills/ft-source-locator/SKILL.md",
+            "scope-analyzer": "skills/ft-scope-analyzer/SKILL.md",
+            "writer": "skills/ft-test-case-writer/SKILL.md",
+            "matrix-reviewer": "skills/ft-test-case-reviewer/SKILL.md",
+            "tc-reviewer": "skills/ft-test-case-reviewer/SKILL.md",
+        }.items():
+            contract = required_skill_contract(root, role)
+            self.assertEqual(expected_path, contract["path"])
+            self.assertRegex(contract["sha256"], r"^[0-9a-f]{64}$")
 
     def test_runtime_tree_has_no_evals_or_legacy_skills(self) -> None:
         root = Path(__file__).resolve().parents[1]

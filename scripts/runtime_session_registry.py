@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import re
 import subprocess
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -24,6 +26,13 @@ STAGE_REQUIREMENTS = {
     "tc-reviewer": ("scope-analyzer", "writer", "matrix-reviewer", "tc-reviewer"),
 }
 REGISTRY_SCHEMA_VERSION = 3
+ROLE_SKILL_PATHS = {
+    "source-locator": "skills/ft-source-locator/SKILL.md",
+    "scope-analyzer": "skills/ft-scope-analyzer/SKILL.md",
+    "writer": "skills/ft-test-case-writer/SKILL.md",
+    "matrix-reviewer": "skills/ft-test-case-reviewer/SKILL.md",
+    "tc-reviewer": "skills/ft-test-case-reviewer/SKILL.md",
+}
 
 
 def utc_now() -> str:
@@ -55,6 +64,22 @@ def runtime_code_commit(package_root: Path) -> str:
     )
     commit = completed.stdout.strip().casefold()
     return commit if completed.returncode == 0 and re.fullmatch(r"[0-9a-f]{40}", commit) else "unversioned"
+
+
+def required_skill_contract(package_root: Path, role: str) -> dict[str, str]:
+    relative_path = ROLE_SKILL_PATHS.get(role)
+    if relative_path is None:
+        raise ValueError(f"unsupported semantic role: {role}")
+    root = runtime_root(package_root)
+    if root is None:
+        raise ValueError("runtime root with AGENTS.md and scripts was not found")
+    path = root / relative_path
+    if not path.is_file():
+        raise ValueError(f"required role skill does not exist: {relative_path}")
+    return {
+        "path": relative_path,
+        "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+    }
 
 
 def runtime_acknowledgement(package_root: Path) -> dict[str, str]:
@@ -347,6 +372,7 @@ def validate_topology(
 
 
 def main() -> int:
+    sys.stdout.reconfigure(encoding="utf-8")
     parser = argparse.ArgumentParser(description="Register and verify the practical runtime session topology.")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
@@ -405,7 +431,10 @@ def main() -> int:
     except ValueError as exc:
         print(json.dumps({"valid": False, "errors": [str(exc)]}, ensure_ascii=False))
         return 1
-    print(json.dumps({"valid": not errors, "errors": errors}, ensure_ascii=False))
+    result: dict[str, Any] = {"valid": not errors, "errors": errors}
+    if not errors and args.expected_role:
+        result["required_skill"] = required_skill_contract(args.package_root, args.expected_role)
+    print(json.dumps(result, ensure_ascii=False))
     return 0 if not errors else 1
 
 

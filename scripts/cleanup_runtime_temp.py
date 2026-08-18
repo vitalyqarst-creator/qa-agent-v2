@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import shutil
+import sys
 import tempfile
 from pathlib import Path
 
@@ -35,6 +36,7 @@ def cleanup(paths: list[Path]) -> tuple[list[str], list[str]]:
 
 
 def main() -> int:
+    sys.stdout.reconfigure(encoding="utf-8")
     parser = argparse.ArgumentParser(
         description="Safely remove isolated FT runtime artifacts from the system temporary directory."
     )

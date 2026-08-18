@@ -4,6 +4,7 @@ import argparse
 import hashlib
 import json
 import re
+import sys
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -11,10 +12,15 @@ from typing import Any
 
 try:
     from scripts.runtime_review_delta import validate_revision_manifest, write_revision_manifest
-    from scripts.runtime_session_registry import canonical_scope, record_role, validate_topology
+    from scripts.runtime_session_registry import (
+        canonical_scope,
+        record_role,
+        required_skill_contract,
+        validate_topology,
+    )
 except ModuleNotFoundError:  # Direct invocation: python scripts/runtime_review_dispatch.py
     from runtime_review_delta import validate_revision_manifest, write_revision_manifest
-    from runtime_session_registry import canonical_scope, record_role, validate_topology
+    from runtime_session_registry import canonical_scope, record_role, required_skill_contract, validate_topology
 
 
 THREAD_ID_RE = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", re.IGNORECASE)
@@ -249,6 +255,7 @@ def create_dispatch(
 
 
 def main() -> int:
+    sys.stdout.reconfigure(encoding="utf-8")
     parser = argparse.ArgumentParser(description="Create or verify a controller-owned runtime review dispatch receipt.")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
@@ -297,7 +304,10 @@ def main() -> int:
         args.kind,
         args.reviewer_thread_id,
     )
-    print(json.dumps({"valid": not errors, "errors": errors}, ensure_ascii=False))
+    result: dict[str, Any] = {"valid": not errors, "errors": errors}
+    if not errors:
+        result["required_skill"] = required_skill_contract(args.package_root, f"{args.kind}-reviewer")
+    print(json.dumps(result, ensure_ascii=False))
     return 0 if not errors else 1
 
 

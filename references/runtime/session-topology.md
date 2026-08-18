@@ -66,6 +66,15 @@ python scripts/runtime_session_registry.py verify --package-root <FT-package> --
 
 Source locator использует `--through source-locator` без `--scope`. Ошибка registry останавливает этап до чтения semantic inputs.
 
+Сразу после успешного self-check semantic-сессия полностью читает role-skill, путь и SHA-256 которого возвращены командой. Controller обязан дословно включить в operational prompt требование прочитать этот файл до любых semantic inputs. Соответствие ролей фиксировано:
+
+- `source-locator` → `skills/ft-source-locator/SKILL.md`;
+- `scope-analyzer` → `skills/ft-scope-analyzer/SKILL.md`;
+- `writer` → `skills/ft-test-case-writer/SKILL.md`;
+- `matrix-reviewer` и `tc-reviewer` → `skills/ft-test-case-reviewer/SKILL.md`.
+
+Название роли в prompt или ссылка на `skills/README.md` не заменяют чтение точного `SKILL.md`. Если self-check не вернул skill contract, файл отсутствует или его SHA-256 не совпал, этап останавливается до чтения FT-пакета.
+
 Operational prompt — только транспортный конверт этапа, а не место для тест-дизайна. Controller указывает роль, scope, self-check, пути входных/выходных артефактов из canonical references или `workflow-state.yaml` и требование запустить штатный validator. Он не пересказывает findings, не трактует требования, не вводит дополнительные решения по `TC`/`coverage-gap`/готовности, не запрещает допустимые статусы и не придумывает путь результата. Для revision достаточно дать путь к review-record: semantic role сама читает конечные findings и применяет свой skill. Если controller считает нужным добавить содержательное ограничение, он должен остановиться и вернуть вопрос соответствующей semantic role, а не встраивать своё решение в prompt.
 
 ## Переходы
