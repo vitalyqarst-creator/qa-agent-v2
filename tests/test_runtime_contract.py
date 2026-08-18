@@ -3,6 +3,8 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+import subprocess
+import sys
 import tempfile
 import unittest
 import zipfile
@@ -287,6 +289,17 @@ def create_valid_source_stage(root: Path) -> tuple[Path, Path]:
 
 
 class RuntimeContractTests(unittest.TestCase):
+    def test_review_validator_supports_direct_invocation(self) -> None:
+        root = Path(__file__).resolve().parents[1]
+        result = subprocess.run(
+            [sys.executable, "scripts/validate_runtime_review.py", "--help"],
+            cwd=root,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(0, result.returncode, result.stderr)
+
     def test_valid_source_stage_passes_projection_and_cleanliness_gate(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
             package, handoff = create_valid_source_stage(Path(temporary_directory))

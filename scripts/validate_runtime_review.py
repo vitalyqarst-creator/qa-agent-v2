@@ -7,10 +7,16 @@ import re
 from pathlib import Path
 from typing import Any
 
-from scripts.runtime_cleanliness import validate_no_repository_temp
-from scripts.runtime_review_dispatch import load_json as load_dispatch_json
-from scripts.runtime_review_dispatch import validate_dispatch
-from scripts.runtime_review_delta import review_snapshot
+try:
+    from scripts.runtime_cleanliness import validate_no_repository_temp
+    from scripts.runtime_review_dispatch import load_json as load_dispatch_json
+    from scripts.runtime_review_dispatch import validate_dispatch
+    from scripts.runtime_review_delta import review_snapshot
+except ModuleNotFoundError:  # Direct invocation: python scripts/validate_runtime_review.py
+    from runtime_cleanliness import validate_no_repository_temp
+    from runtime_review_dispatch import load_json as load_dispatch_json
+    from runtime_review_dispatch import validate_dispatch
+    from runtime_review_delta import review_snapshot
 
 
 THREAD_ID_RE = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", re.IGNORECASE)
