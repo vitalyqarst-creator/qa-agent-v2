@@ -31,6 +31,7 @@ REQUIRED_PATHS = (
     "scripts/create_ft_package.py",
     "scripts/cleanup_runtime_temp.py",
     "scripts/render_runtime_pdf.py",
+    "scripts/runtime_cleanliness.py",
     "scripts/capture_dadata_fixture.py",
     "scripts/validate_fixture_catalog.py",
     "scripts/validate_runtime_source.py",
@@ -92,6 +93,8 @@ REQUIRED_POLICY_MARKERS = {
     "skills/ft-scope-analyzer/SKILL.md": (
         "Контракт проверяемости",
         "Проверку согласованности",
+        "Контроль полноты строк таблиц",
+        "реестр обработки каждого зарегистрированного",
         "**Ответ БА:** _Введите ответ здесь._",
     ),
     "skills/ft-test-case-writer/SKILL.md": (
@@ -102,6 +105,18 @@ REQUIRED_POLICY_MARKERS = {
     "skills/ft-test-case-reviewer/SKILL.md": (
         "Отсутствие стендовой записи",
         "готовность исполнения",
+        "механическое включение всего родительского фрагмента",
+        "шаг представления",
+    ),
+    "references/runtime/scope-analysis.md": (
+        "## Контроль полноты строк таблиц",
+        "## Реестр обработки визуальных входов",
+        "| Родительская обязанность |",
+    ),
+    "references/runtime/test-data-fixtures.md": (
+        "| Границы и классы |",
+        "Шаг представления:",
+        "не доказывает бизнес-валидность",
     ),
     "references/runtime/test-design-matrix.md": (
         "| Готовность |",

@@ -133,6 +133,26 @@ VALID_BOUNDARY_CONTROL = """
 | Выбранный раздел | Раздел 9.3.2 — до раздела 9.3.3 | Включён | SR-001; SR-002; GAP-001 |
 | Вводный текст родительского раздела | Раздел 9.3 — до раздела 9.3.1 | Не применимо: нормативный вводный текст отсутствует. | — |
 | Завершающий текст родительского раздела | После раздела 9.3.3 — до раздела 9.4 | Не применимо: нормативный завершающий текст отсутствует. | — |
+
+Нормативные родительские обязанности отсутствуют.
+"""
+
+VALID_TABLE_COVERAGE = """
+
+## Контроль полноты строк таблиц
+
+| Таблица | Строка | Решение | Связанные обязанности/пробелы |
+| --- | --- | --- | --- |
+| Таблица 7 | Сохранить | Включена | SR-001 |
+"""
+
+VALID_VISUAL_DISPOSITION = """
+
+## Реестр обработки визуальных входов
+
+| Визуальный вход | Статус обработки | Основание или результат |
+| --- | --- | --- |
+| `fts/Project/FT/mockups/form.png` | использован | Подтверждены подписи формы. |
 """
 
 EMPTY_CLARIFICATION_REGISTER = """# Реестр вопросов к БА
@@ -149,9 +169,9 @@ VALID_GAPS = """# Пробелы покрытия
 
 VALID_DATA_PLAN = """# План тестовых данных
 
-| Группа проверок | Источник значений | Данные или контракт получения | Воспроизводимая подготовка | Готовность |
-| --- | --- | --- | --- | --- |
-| Сохранение карточки | первичный источник; стендовая подготовка | `Наименование` = `Проверка 001` | Создать запись с указанным наименованием. | needs-test-data |
+| Группа проверок | Источник значений | Данные или контракт получения | Воспроизводимая подготовка | Границы и классы | Готовность |
+| --- | --- | --- | --- | --- | --- |
+| Сохранение карточки | первичный источник; стендовая подготовка | `Наименование` = `Проверка 001` | Создать запись с указанным наименованием. | Не применимо: количественное ограничение отсутствует. | needs-test-data |
 """
 
 CONTROLLER_THREAD = "00000000-0000-4000-8000-000000000001"
@@ -1221,6 +1241,8 @@ class RuntimeContractTests(unittest.TestCase):
                 "| --- | --- | --- |\n"
                 "| Форма добавления | `fts/Project/FT/mockups/form.png` | Подтверждены подписи и путь открытия. |\n"
                 + VALID_BOUNDARY_CONTROL
+                + VALID_TABLE_COVERAGE
+                + VALID_VISUAL_DISPOSITION
                 + VALID_CONSISTENCY,
                 encoding="utf-8",
             )
@@ -1397,20 +1419,161 @@ class RuntimeContractTests(unittest.TestCase):
     def test_test_data_plan_requires_provenance_and_provider_acquisition_contract(self) -> None:
         invalid = """# План тестовых данных
 
-| Группа проверок | Источник значений | Данные или контракт получения | Воспроизводимая подготовка | Готовность |
-| --- | --- | --- | --- | --- |
-| Подсказка организации | внешний сервис: Provider | `Наименование` = `ООО Тест` | Выбрать подсказку. | needs-test-data |
+| Группа проверок | Источник значений | Данные или контракт получения | Воспроизводимая подготовка | Границы и классы | Готовность |
+| --- | --- | --- | --- | --- | --- |
+| Подсказка организации | внешний сервис: Provider | `Наименование` = `ООО Тест` | Выбрать подсказку. | Не применимо: количественное ограничение отсутствует. | needs-test-data |
 """
         errors = validate_test_data_plan(invalid)
         self.assertTrue(any("must use 'Контракт получения:'" in error for error in errors))
         self.assertTrue(any("requires readiness 'требуется получение данных'" in error for error in errors))
 
         valid = invalid.replace(
-            "`Наименование` = `ООО Тест` | Выбрать подсказку. | needs-test-data",
-            "Контракт получения: запрос `Тест`; сохранить выбранное наименование и связанные реквизиты одной записи | Выбрать сохранённую подсказку. | требуется получение данных",
+            "`Наименование` = `ООО Тест` | Выбрать подсказку. | Не применимо: количественное ограничение отсутствует. | needs-test-data",
+            "Контракт получения: запрос `Тест`; сохранить выбранное наименование и связанные реквизиты одной записи | Выбрать сохранённую подсказку. | Не применимо: количественное ограничение отсутствует. | требуется получение данных",
         )
         self.assertEqual([], validate_test_data_plan(valid))
         self.assertTrue(validate_test_data_plan("# План\n\nЗначения будут подготовлены.\n"))
+
+    def test_test_data_plan_requires_explicit_quantitative_boundary_contract(self) -> None:
+        plan = """# План тестовых данных
+
+| Группа проверок | Источник значений | Данные или контракт получения | Воспроизводимая подготовка | Границы и классы | Готовность |
+| --- | --- | --- | --- | --- | --- |
+| Размер файла не более 40 МБ | стендовая подготовка | Файлы размером 40 МБ и 41 МБ | Создать файлы до проверки. | Допустимо 40 МБ; недопустимо 41 МБ. | needs-test-data |
+"""
+        errors = validate_test_data_plan(plan)
+        self.assertTrue(any("Шаг представления" in error for error in errors))
+
+        valid = plan.replace(
+            "Допустимо 40 МБ; недопустимо 41 МБ.",
+            "Шаг представления: 1 КБ; валидная граница: 40 МБ; ближайшее недопустимое: 40 МБ + 1 КБ.",
+        )
+        self.assertEqual([], validate_test_data_plan(valid))
+
+    def test_scope_validator_blocks_bulk_parent_ownership_row_loss_visual_omission_and_repo_temp(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            (root / "AGENTS.md").write_text("# Runtime\n", encoding="utf-8")
+            (root / "scripts").mkdir()
+            package = root / "fts" / "Project" / "FT"
+            create_scope_locator(package)
+            xhtml = package / "source" / "requirements.xhtml"
+            xhtml.write_text(
+                xhtml.read_text(encoding="utf-8").replace(
+                    "</table>",
+                    "<tr><td>ИНН</td><td>Отдельное поле</td></tr></table>",
+                ),
+                encoding="utf-8",
+            )
+            locator = package / "work" / "stage-handoffs" / "00-ft" / "workflow-state.yaml"
+            locator.write_text(
+                locator.read_text(encoding="utf-8")
+                + "figma_sources:\n"
+                + "  - url: https://www.figma.com/design/example?node-id=1-2\n",
+                encoding="utf-8",
+            )
+            scope = package / "work" / "stage-handoffs" / "01-scope"
+            scope.mkdir()
+            (scope / "source-row-inventory.md").write_text(
+                VALID_INVENTORY.replace("строка «Сохранить»", "строка «Сохранить», примечание"),
+                encoding="utf-8",
+            )
+            (scope / "coverage-gaps.md").write_text(VALID_GAPS, encoding="utf-8")
+            (scope / "scope-brief.md").write_text(
+                "# Границы\n\n"
+                "## Визуальная сверка\n\n"
+                "| UI-уровень | Визуальный источник | Результат сверки |\n"
+                "| --- | --- | --- |\n"
+                "| Форма | `fts/Project/FT/mockups/form.png` | Подтверждена форма. |\n"
+                + VALID_BOUNDARY_CONTROL.replace(
+                    "| Вводный текст родительского раздела | Раздел 9.3 — до раздела 9.3.1 | Не применимо: нормативный вводный текст отсутствует. | — |",
+                    "| Вводный текст родительского раздела | Раздел 9.3 — до раздела 9.3.1 | Включён | SR-001 |",
+                )
+                + VALID_TABLE_COVERAGE
+                + VALID_VISUAL_DISPOSITION
+                + VALID_CONSISTENCY,
+                encoding="utf-8",
+            )
+            (scope / "test-data-plan.md").write_text(VALID_DATA_PLAN, encoding="utf-8")
+            (scope / "prompt.scope-to-writer.md").write_text(
+                "Для `GAP-001` создай строку матрицы с решением `coverage-gap`.\n",
+                encoding="utf-8",
+            )
+            (scope / "workflow-state.yaml").write_text(
+                "stage: ft-scope-analyzer\n"
+                'clarification_register: "work/scope-clarification-requests.md"\n',
+                encoding="utf-8",
+            )
+            repository_temp = root / "tmp" / "pdfs" / "page-01.png"
+            repository_temp.parent.mkdir(parents=True)
+            repository_temp.write_bytes(b"png")
+
+            errors = validate_scope(package, scope)
+            self.assertTrue(any("instead of including the whole fragment" in error for error in errors))
+            self.assertTrue(any("misses table 7 rows" in error and "инн" in error for error in errors))
+            self.assertTrue(any("figma.com" in error and "exactly once" in error for error in errors))
+            self.assertTrue(any("repository-local temporary file" in error for error in errors))
+
+    def test_scope_validator_accepts_explicit_parent_distribution_and_figma_disposition(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            (root / "AGENTS.md").write_text("# Runtime\n", encoding="utf-8")
+            (root / "scripts").mkdir()
+            package = root / "fts" / "Project" / "FT"
+            create_scope_locator(package)
+            figma_url = "https://www.figma.com/design/example?node-id=1-2"
+            locator = package / "work" / "stage-handoffs" / "00-ft" / "workflow-state.yaml"
+            locator.write_text(
+                locator.read_text(encoding="utf-8")
+                + "figma_sources:\n"
+                + f"  - url: {figma_url}\n",
+                encoding="utf-8",
+            )
+            scope = package / "work" / "stage-handoffs" / "01-scope"
+            scope.mkdir()
+            (scope / "source-row-inventory.md").write_text(
+                VALID_INVENTORY.replace("строка «Сохранить»", "строка «Сохранить», примечание"),
+                encoding="utf-8",
+            )
+            (scope / "coverage-gaps.md").write_text(VALID_GAPS, encoding="utf-8")
+            boundary = VALID_BOUNDARY_CONTROL.replace(
+                "| Вводный текст родительского раздела | Раздел 9.3 — до раздела 9.3.1 | Не применимо: нормативный вводный текст отсутствует. | — |",
+                "| Вводный текст родительского раздела | Раздел 9.3 — до раздела 9.3.1 | Распределён | См. таблицу владения. |",
+            ).replace("\nНормативные родительские обязанности отсутствуют.\n", "\n")
+            ownership = """
+
+## Распределение родительских обязанностей
+
+| Источник | Родительская обязанность | Целевая область | Связанные обязанности или решение |
+| --- | --- | --- | --- |
+| AS.38 | Сохранение карточки доступно в текущем подразделе. | `scope` | SR-001 |
+"""
+            disposition = VALID_VISUAL_DISPOSITION + f"| {figma_url} | не открывался: локальных материалов достаточно | Локальный макет полностью показывает форму. |\n"
+            (scope / "scope-brief.md").write_text(
+                "# Границы\n\n"
+                "## Визуальная сверка\n\n"
+                "| UI-уровень | Визуальный источник | Результат сверки |\n"
+                "| --- | --- | --- |\n"
+                "| Форма | `fts/Project/FT/mockups/form.png` | Подтверждена форма. |\n"
+                + boundary
+                + ownership
+                + VALID_TABLE_COVERAGE
+                + disposition
+                + VALID_CONSISTENCY,
+                encoding="utf-8",
+            )
+            (scope / "test-data-plan.md").write_text(VALID_DATA_PLAN, encoding="utf-8")
+            (scope / "prompt.scope-to-writer.md").write_text(
+                "Для `GAP-001` создай строку матрицы с решением `coverage-gap`.\n",
+                encoding="utf-8",
+            )
+            (scope / "workflow-state.yaml").write_text(
+                "stage: ft-scope-analyzer\n"
+                'clarification_register: "work/scope-clarification-requests.md"\n',
+                encoding="utf-8",
+            )
+
+            self.assertEqual([], validate_scope(package, scope))
 
     def test_scope_validator_rejects_gap_and_question_covered_by_nonblocking_working_assumption(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:

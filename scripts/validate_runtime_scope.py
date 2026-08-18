@@ -7,9 +7,11 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 
 try:
+    from scripts.runtime_cleanliness import validate_no_repository_temp
     from scripts.runtime_traceability import extract_anchors, find_markdown_table
     from scripts.runtime_session_registry import canonical_scope, validate_topology
 except ModuleNotFoundError:  # Direct invocation: python scripts/validate_runtime_scope.py
+    from runtime_cleanliness import validate_no_repository_temp
     from runtime_traceability import extract_anchors, find_markdown_table
     from runtime_session_registry import canonical_scope, validate_topology
 
@@ -147,6 +149,7 @@ TEST_DATA_PLAN_HEADERS = (
     "Источник значений",
     "Данные или контракт получения",
     "Воспроизводимая подготовка",
+    "Границы и классы",
     "Готовность",
 )
 ALLOWED_DATA_SOURCE_PREFIXES = (
@@ -163,6 +166,24 @@ ALLOWED_DATA_SOURCE_PREFIXES = (
     "не требуются",
 )
 ALLOWED_DATA_READINESS = {"ready", "готово", "needs-test-data", "требуется получение данных"}
+QUANTITATIVE_DATA_RE = re.compile(
+    r"\b(?:размер|длин|количеств|диапазон|предел|максим|миним)\w*\b|"
+    r"\bне\s+(?:более|менее)\b|"
+    r"\b\d+(?:[.,]\d+)?\s*(?:байт|кб|мб|гб|символ\w*|знак\w*|цифр\w*|дн\w*|лет\w*|сек\w*|мин\w*|%)\b",
+    re.IGNORECASE,
+)
+BOUNDARY_PLAN_RE = re.compile(
+    r"шаг\s+представления\s*:.+?валидная\s+граница\s*:.+?ближайшее\s+недопустимое\s*:",
+    re.IGNORECASE | re.DOTALL,
+)
+BOUNDARY_CLARIFICATION_RE = re.compile(r"требуется\s+уточнение\s*:\s*GAP-\d{2,}", re.IGNORECASE)
+TABLE_COVERAGE_NUMBER_RE = re.compile(r"^(?:Таблица\s+)?(\d+)$", re.IGNORECASE)
+ALLOWED_VISUAL_STATUSES = (
+    "использован",
+    "не относится к области:",
+    "не открывался: локальных материалов достаточно",
+    "недоступен:",
+)
 
 
 def runtime_root(package_root: Path) -> Path:
@@ -185,9 +206,9 @@ def locator_sections(package_root: Path) -> dict[str, list[dict[str, str]]]:
             current_section = section_match.group(1)
             current_entry = None
             continue
-        path_match = re.match(r"\s*-\s+path:\s*(.+?)\s*$", line)
-        if current_section and path_match:
-            current_entry = {"path": path_match.group(1).strip().strip('"\'')}
+        item_match = re.match(r"\s*-\s+(path|url):\s*(.+?)\s*$", line)
+        if current_section and item_match:
+            current_entry = {item_match.group(1): item_match.group(2).strip().strip('"\'')}
             sections.setdefault(current_section, []).append(current_entry)
             continue
         attribute_match = re.match(r"\s+([A-Za-z_][A-Za-z0-9_-]*):\s*(.+?)\s*$", line)
@@ -417,11 +438,15 @@ def validate_test_data_plan(content: str) -> list[str]:
     group_index = table.index("Группа проверок")
     source_index = table.index("Источник значений")
     data_index = table.index("Данные или контракт получения")
+    preparation_index = table.index("Воспроизводимая подготовка")
+    boundaries_index = table.index("Границы и классы")
     readiness_index = table.index("Готовность")
     for row in table.rows:
         group = row[group_index].strip() or "<без группы>"
         source = row[source_index].strip()
         data = row[data_index].strip()
+        preparation = row[preparation_index].strip()
+        boundaries = row[boundaries_index].strip()
         readiness = row[readiness_index].strip().casefold()
         source_parts = [part.strip().strip("`").casefold() for part in source.split(";") if part.strip()]
         if not source_parts or any(
@@ -431,6 +456,16 @@ def validate_test_data_plan(content: str) -> list[str]:
             errors.append(f"test-data-plan {group}: unsupported or missing value source {source!r}")
         if readiness not in ALLOWED_DATA_READINESS:
             errors.append(f"test-data-plan {group}: unsupported readiness {row[readiness_index]!r}")
+        if not boundaries:
+            errors.append(f"test-data-plan {group}: 'Границы и классы' must not be empty")
+        quantitative = bool(QUANTITATIVE_DATA_RE.search(" | ".join((group, data, preparation))))
+        if quantitative and not (
+            BOUNDARY_PLAN_RE.search(boundaries) or BOUNDARY_CLARIFICATION_RE.search(boundaries)
+        ):
+            errors.append(
+                f"test-data-plan {group}: quantitative requirement needs 'Шаг представления: ...; "
+                "валидная граница: ...; ближайшее недопустимое: ...' or 'Требуется уточнение: GAP-*'"
+            )
         external = any(part.startswith("внешний сервис:") for part in source_parts)
         saved = any(part.startswith(("сохранённый ответ", "сохраненный ответ")) for part in source_parts)
         if external and not saved:
@@ -456,6 +491,7 @@ def strip_allowed_technical_fragments(content: str) -> str:
 
 def validate(package_root: Path, scope_dir: Path) -> list[str]:
     errors: list[str] = []
+    errors.extend(validate_no_repository_temp(package_root))
     errors.extend(validate_topology(package_root, "scope-analyzer", canonical_scope(scope_dir.name)))
     missing_files: list[str] = []
     for name in REQUIRED_FILES:
@@ -474,6 +510,7 @@ def validate(package_root: Path, scope_dir: Path) -> list[str]:
     inventory_content = (scope_dir / "source-row-inventory.md").read_text(encoding="utf-8")
     inventory = find_markdown_table(inventory_content, ("ID", "Источник", "Утверждение для покрытия"))
     row_references: list[tuple[str, int, str]] = []
+    normalized_table_rows: dict[int, set[str]] = {}
     active_inventory_ids: set[str] = set()
     if inventory is None or not inventory.rows:
         errors.append("source-row-inventory has no required source rows table")
@@ -528,6 +565,7 @@ def validate(package_root: Path, scope_dir: Path) -> list[str]:
         else:
             try:
                 table_rows = xhtml_table_rows(xhtml_path)
+                normalized_table_rows = table_rows
             except (ET.ParseError, OSError) as exc:
                 errors.append(f"normalized machine-readable primary cannot be parsed for table-row validation: {exc}")
             else:
@@ -596,6 +634,8 @@ def validate(package_root: Path, scope_dir: Path) -> list[str]:
     ):
         errors.append("workflow-state must reference work/scope-clarification-requests.md as clarification_register")
     boundary_refs: set[str] = set()
+    distributed_parent = False
+    parent_decisions: list[str] = []
     boundary_control = find_markdown_table(
         scope_brief_content,
         ("Фрагмент", "Структурный якорь", "Решение", "Связанные обязанности или область"),
@@ -621,9 +661,16 @@ def validate(package_root: Path, scope_dir: Path) -> list[str]:
             related = row[related_index].strip()
             if fragment.casefold() == "выбранный раздел" and decision.casefold() != "включён":
                 errors.append("scope-brief selected section must use decision 'Включён'")
+            elif fragment.casefold() != "выбранный раздел":
+                parent_decisions.append(decision.casefold())
             if not anchor or anchor in {"-", "—"}:
                 errors.append(f"scope-brief source boundary fragment {fragment!r} has no structural anchor")
             if decision.casefold() == "включён":
+                if fragment.casefold() != "выбранный раздел":
+                    errors.append(
+                        f"scope-brief parent fragment {fragment!r} must distribute obligations by target scope "
+                        "instead of including the whole fragment"
+                    )
                 linked = set(SOURCE_ROW_TOKEN_RE.findall(related)) | set(
                     re.findall(r"(?<![A-Za-z0-9_.-])GAP-\d{2,}(?![A-Za-z0-9_.-])", related)
                 )
@@ -632,6 +679,10 @@ def validate(package_root: Path, scope_dir: Path) -> list[str]:
                     errors.append(
                         f"scope-brief source boundary fragment {fragment!r} is included but has no SR-* or GAP-* links"
                     )
+            elif decision.casefold() == "распределён":
+                if fragment.casefold() == "выбранный раздел":
+                    errors.append("scope-brief selected section cannot use decision 'Распределён'")
+                distributed_parent = True
             elif decision.casefold().startswith("ранее покрыт:"):
                 previous_scope = decision.split(":", 1)[1].strip().strip("` ")
                 previous_matches = [
@@ -656,6 +707,117 @@ def validate(package_root: Path, scope_dir: Path) -> list[str]:
                 errors.append(
                     f"scope-brief source boundary fragment {fragment!r} has unsupported decision {decision!r}"
                 )
+
+    ownership = find_markdown_table(
+        scope_brief_content,
+        ("Источник", "Родительская обязанность", "Целевая область", "Связанные обязанности или решение"),
+    )
+    ownership_refs: set[str] = set()
+    if distributed_parent:
+        if ownership is None or not ownership.rows:
+            errors.append("scope-brief distributed parent text requires the parent requirement ownership table")
+        else:
+            source_index = ownership.index("Источник")
+            duty_index = ownership.index("Родительская обязанность")
+            target_index = ownership.index("Целевая область")
+            resolution_index = ownership.index("Связанные обязанности или решение")
+            current_scope = canonical_scope(scope_dir.name)
+            for row_number, row in enumerate(ownership.rows, start=1):
+                source = row[source_index].strip()
+                duty = row[duty_index].strip()
+                target = row[target_index].strip().strip("` ")
+                resolution = row[resolution_index].strip()
+                if not precise_source_anchors(source):
+                    errors.append(f"parent ownership row {row_number}: source lacks an exact requirement anchor")
+                if not duty or duty in {"-", "—"}:
+                    errors.append(f"parent ownership row {row_number}: atomic parent obligation is missing")
+                if not target or re.search(r"\b(?:будущ|друг\w*\s+scope|не\s+определ)\w*", target, re.IGNORECASE):
+                    errors.append(f"parent ownership row {row_number}: target scope must be explicit")
+                linked = set(SOURCE_ROW_TOKEN_RE.findall(resolution)) | set(
+                    re.findall(r"(?<![A-Za-z0-9_.-])GAP-\d{2,}(?![A-Za-z0-9_.-])", resolution)
+                )
+                if canonical_scope(target) == current_scope:
+                    ownership_refs.update(linked)
+                    if not linked:
+                        errors.append(
+                            f"parent ownership row {row_number}: current-scope obligation must link SR-* or GAP-*"
+                        )
+                elif linked:
+                    errors.append(
+                        f"parent ownership row {row_number}: another scope must not link current inventory IDs"
+                    )
+    elif ownership is not None and ownership.rows:
+        errors.append("scope-brief has parent ownership rows but boundary control does not use 'Распределён'")
+    elif (
+        parent_decisions
+        and all(decision.startswith("не применимо:") for decision in parent_decisions)
+        and "Нормативные родительские обязанности отсутствуют." not in scope_brief_content
+    ):
+        errors.append(
+            "scope-brief must state 'Нормативные родительские обязанности отсутствуют.' "
+            "when parent fragments are not applicable"
+        )
+
+    referenced_table_numbers = {table_number for _inventory_id, table_number, _row_name in row_references}
+    table_coverage_refs: set[str] = set()
+    table_coverage = find_markdown_table(
+        scope_brief_content,
+        ("Таблица", "Строка", "Решение", "Связанные обязанности/пробелы"),
+    )
+    if referenced_table_numbers:
+        if table_coverage is None or not table_coverage.rows:
+            errors.append("scope-brief must contain complete table-row coverage for every referenced source table")
+        else:
+            table_index = table_coverage.index("Таблица")
+            row_index = table_coverage.index("Строка")
+            decision_index = table_coverage.index("Решение")
+            refs_index = table_coverage.index("Связанные обязанности/пробелы")
+            declared: dict[int, list[str]] = {}
+            for row_number, row in enumerate(table_coverage.rows, start=1):
+                table_match = TABLE_COVERAGE_NUMBER_RE.fullmatch(row[table_index].strip())
+                if table_match is None:
+                    errors.append(f"table-row coverage row {row_number}: invalid table label {row[table_index]!r}")
+                    continue
+                table_number = int(table_match.group(1))
+                source_row = row[row_index].strip().strip("«»\"")
+                normalized_row = normalized_source_text(source_row)
+                declared.setdefault(table_number, []).append(normalized_row)
+                if table_number not in normalized_table_rows:
+                    errors.append(f"table-row coverage row {row_number}: table {table_number} is absent from XHTML")
+                elif normalized_row not in normalized_table_rows[table_number]:
+                    errors.append(
+                        f"table-row coverage row {row_number}: row {source_row!r} is absent from table {table_number}"
+                    )
+                decision = row[decision_index].strip()
+                linked = set(SOURCE_ROW_TOKEN_RE.findall(row[refs_index])) | set(
+                    re.findall(r"(?<![A-Za-z0-9_.-])GAP-\d{2,}(?![A-Za-z0-9_.-])", row[refs_index])
+                )
+                if decision.casefold() == "включена":
+                    table_coverage_refs.update(linked)
+                    if not linked:
+                        errors.append(f"table-row coverage row {row_number}: included row must link SR-* or GAP-*")
+                elif decision.casefold().startswith("передана:"):
+                    if len(decision.split(":", 1)[1].strip()) < 2:
+                        errors.append(f"table-row coverage row {row_number}: transferred row needs a target scope")
+                elif decision.casefold().startswith("не применимо:"):
+                    if len(decision.split(":", 1)[1].strip()) < 5:
+                        errors.append(f"table-row coverage row {row_number}: non-applicability needs a reason")
+                elif decision.casefold().startswith("исключена утверждённым ответом:"):
+                    if len(decision.split(":", 1)[1].strip()) < 3:
+                        errors.append(f"table-row coverage row {row_number}: excluded row needs an answer source")
+                else:
+                    errors.append(f"table-row coverage row {row_number}: unsupported decision {decision!r}")
+            for table_number in sorted(referenced_table_numbers):
+                declared_rows = declared.get(table_number, [])
+                duplicates = sorted({value for value in declared_rows if declared_rows.count(value) > 1})
+                if duplicates:
+                    errors.append(f"table-row coverage duplicates rows in table {table_number}: {duplicates}")
+                missing_rows = sorted(normalized_table_rows.get(table_number, set()) - set(declared_rows))
+                extra_rows = sorted(set(declared_rows) - normalized_table_rows.get(table_number, set()))
+                if missing_rows:
+                    errors.append(f"table-row coverage misses table {table_number} rows: {missing_rows}")
+                if extra_rows:
+                    errors.append(f"table-row coverage has extra table {table_number} rows: {extra_rows}")
     visual_check = find_markdown_table(
         scope_brief_content,
         ("UI-уровень", "Визуальный источник", "Результат сверки"),
@@ -699,6 +861,58 @@ def validate(package_root: Path, scope_dir: Path) -> list[str]:
                     "workflow-state local_mockups",
                 )
             )
+
+    visual_inputs: list[tuple[str, str]] = []
+    for entry in locator_sections(package_root).get("visual_sources", []):
+        if entry.get("path"):
+            visual_inputs.append(("path", entry["path"]))
+    for entry in locator_sections(package_root).get("figma_sources", []):
+        if entry.get("url"):
+            visual_inputs.append(("url", entry["url"]))
+    disposition = find_markdown_table(
+        scope_brief_content,
+        ("Визуальный вход", "Статус обработки", "Основание или результат"),
+    )
+    if visual_inputs:
+        if disposition is None or not disposition.rows:
+            errors.append("scope-brief must record a disposition for every registered visual/Figma input")
+        else:
+            input_index = disposition.index("Визуальный вход")
+            status_index = disposition.index("Статус обработки")
+            result_index = disposition.index("Основание или результат")
+            declared_inputs: list[str] = []
+            registered_local = {
+                resolve_declared_path(package_root, value).as_posix().casefold()
+                for kind, value in visual_inputs
+                if kind == "path"
+            }
+            for row_number, row in enumerate(disposition.rows, start=1):
+                declared = row[input_index].strip().strip("` ")
+                declared_inputs.append(declared)
+                status = row[status_index].strip().casefold()
+                result = row[result_index].strip()
+                if not any(status == allowed or status.startswith(allowed) for allowed in ALLOWED_VISUAL_STATUSES):
+                    errors.append(f"visual input disposition row {row_number}: unsupported status {row[status_index]!r}")
+                if not result or result in {"-", "—"}:
+                    errors.append(f"visual input disposition row {row_number}: result or reason is missing")
+                if any(declared == value for kind, value in visual_inputs if kind == "path"):
+                    errors.extend(
+                        validate_visual_reference(
+                            package_root,
+                            declared,
+                            registered_local,
+                            f"visual input disposition row {row_number}",
+                        )
+                    )
+            for _kind, value in visual_inputs:
+                count = sum(declared == value for declared in declared_inputs)
+                if count != 1:
+                    errors.append(f"registered visual input must appear exactly once in disposition: {value}")
+            extras = sorted(set(declared_inputs) - {value for _kind, value in visual_inputs})
+            if extras:
+                errors.append("visual input disposition contains unregistered inputs: " + ", ".join(extras))
+    elif "Визуальные входы отсутствуют." not in scope_brief_content:
+        errors.append("scope-brief must state 'Визуальные входы отсутствуют.' when locator registered none")
 
     consistency = find_markdown_table(
         scope_brief_content,
@@ -808,6 +1022,20 @@ def validate(package_root: Path, scope_dir: Path) -> list[str]:
     )
     if unknown_boundary_refs:
         errors.append("scope-brief source boundary control references unknown IDs: " + ", ".join(unknown_boundary_refs))
+    unknown_ownership_refs = sorted(
+        reference
+        for reference in ownership_refs
+        if reference not in active_inventory_ids and reference not in known_gap_ids
+    )
+    if unknown_ownership_refs:
+        errors.append("parent requirement ownership references unknown IDs: " + ", ".join(unknown_ownership_refs))
+    unknown_table_refs = sorted(
+        reference
+        for reference in table_coverage_refs
+        if reference not in active_inventory_ids and reference not in known_gap_ids
+    )
+    if unknown_table_refs:
+        errors.append("table-row coverage references unknown IDs: " + ", ".join(unknown_table_refs))
 
     prompt = (scope_dir / "prompt.scope-to-writer.md").read_text(encoding="utf-8")
     combined_scope_text = "\n".join(

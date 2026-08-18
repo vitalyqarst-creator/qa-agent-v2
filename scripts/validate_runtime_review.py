@@ -7,6 +7,7 @@ import re
 from pathlib import Path
 from typing import Any
 
+from scripts.runtime_cleanliness import validate_no_repository_temp
 from scripts.runtime_review_dispatch import load_json as load_dispatch_json
 from scripts.runtime_review_dispatch import validate_dispatch
 from scripts.runtime_review_delta import review_snapshot
@@ -254,6 +255,8 @@ def validate(artifact: Path, record_path: Path, kind: str, require_accepted: boo
                                     errors.append("delta reviewed_items must equal revision manifest changed_items")
                         elif review_mode == "delta":
                             errors.append("delta review requires a revision manifest")
+    if package_root is not None:
+        errors.extend(validate_no_repository_temp(package_root))
     return errors
 
 

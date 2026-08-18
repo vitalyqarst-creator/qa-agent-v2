@@ -6,9 +6,11 @@ import re
 from pathlib import Path
 
 try:
+    from scripts.runtime_cleanliness import validate_no_repository_temp
     from scripts.runtime_traceability import anchor_label, extract_anchors, find_markdown_table
     from scripts.runtime_session_registry import canonical_scope, find_package_root, validate_topology
 except ModuleNotFoundError:  # Direct invocation: python scripts/validate_runtime_matrix.py
+    from runtime_cleanliness import validate_no_repository_temp
     from runtime_traceability import anchor_label, extract_anchors, find_markdown_table
     from runtime_session_registry import canonical_scope, find_package_root, validate_topology
 
@@ -381,7 +383,7 @@ def validate_projection(content: str, inventory_content: str, gaps_content: str)
 
 
 def validate_layout(matrix_path: Path, package_root: Path) -> list[str]:
-    errors: list[str] = []
+    errors: list[str] = validate_no_repository_temp(package_root)
     scope = matrix_path.parent.name
     expected = package_root / "work" / "practical" / scope / "test-design-matrix.md"
     if matrix_path.resolve() != expected.resolve():
