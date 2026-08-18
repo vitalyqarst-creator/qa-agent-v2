@@ -1582,6 +1582,96 @@ class RuntimeContractTests(unittest.TestCase):
                 any("must equal revision manifest changed_items" in error for error in validate_review(artifact, review_path, "tc"))
             )
 
+    def test_schema_v2_matrix_revision_completes_delta_rereview(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            source = root / "source"
+            source.mkdir()
+            (source / "requirements.xhtml").write_text("<p>Требование</p>", encoding="utf-8")
+            artifact = root / "test-design-matrix.md"
+            artifact.write_text(VALID_MATRIX, encoding="utf-8")
+            create_session_topology(root, "reviews")
+            reviewer_thread = "22345678-1234-1234-1234-123456789abc"
+            prompt = root / "matrix-review-prompt.md"
+            prompt.write_text("Проведи независимое review matrix.\n", encoding="utf-8")
+            review_dir = root / "reviews"
+            first_dispatch = create_dispatch(
+                root,
+                artifact,
+                prompt,
+                review_dir,
+                "matrix",
+                reviewer_thread,
+                "local",
+                "2026-08-17T00:00:00Z",
+            )
+            first_record = {
+                "schema_version": 1,
+                "review_kind": "matrix",
+                "artifact_path": "test-design-matrix.md",
+                "artifact_sha256": hashlib.sha256(artifact.read_bytes()).hexdigest(),
+                "dispatch_path": first_dispatch.relative_to(root).as_posix(),
+                "dispatch_sha256": sha256(first_dispatch),
+                "reviewer_session_type": "codex-thread",
+                "reviewer_session_id": reviewer_thread,
+                "reviewed_at": "2026-08-17T00:01:00Z",
+                "verdict": "matrix-changes-required",
+                "findings": [
+                    {
+                        "id": "M-R-001",
+                        "severity": "material",
+                        "affected_items": ["M-001"],
+                        "description": "Ожидаемый результат строки M-001 недостаточно точен.",
+                        "required_correction": "Уточнить ожидаемый результат M-001.",
+                    }
+                ],
+                "reviewed_items": ["M-001", "GAP-001"],
+                "review_scope_complete": True,
+            }
+            review_path = review_dir / "matrix-review.json"
+            review_path.write_text(json.dumps(first_record, ensure_ascii=False), encoding="utf-8")
+            review_path.with_suffix(".md").write_text("# Ревью матрицы\n", encoding="utf-8")
+            enrich_review_record(root, artifact, review_path, "matrix", "reviews")
+            self.assertEqual([], validate_review(artifact, review_path, "matrix"))
+
+            artifact.write_text(
+                VALID_MATRIX.replace("Карточка сохранена", "Карточка сохранена и доступна для повторного открытия"),
+                encoding="utf-8",
+            )
+            second_dispatch = create_dispatch(
+                root,
+                artifact,
+                prompt,
+                review_dir,
+                "matrix",
+                reviewer_thread,
+                "local",
+                "2026-08-17T00:02:00Z",
+                previous_review=review_path,
+            )
+            dispatch_payload = json.loads(second_dispatch.read_text(encoding="utf-8"))
+            self.assertEqual("delta", dispatch_payload["review_mode"])
+
+            second_record = {
+                "schema_version": 1,
+                "review_kind": "matrix",
+                "artifact_path": "test-design-matrix.md",
+                "artifact_sha256": hashlib.sha256(artifact.read_bytes()).hexdigest(),
+                "dispatch_path": second_dispatch.relative_to(root).as_posix(),
+                "dispatch_sha256": sha256(second_dispatch),
+                "reviewer_session_type": "codex-thread",
+                "reviewer_session_id": reviewer_thread,
+                "reviewed_at": "2026-08-17T00:03:00Z",
+                "verdict": "matrix-accepted",
+                "findings": [],
+                "reviewed_items": ["M-001"],
+                "review_scope_complete": True,
+            }
+            review_path.write_text(json.dumps(second_record, ensure_ascii=False), encoding="utf-8")
+            review_path.with_suffix(".md").write_text("# Повторное review matrix\n", encoding="utf-8")
+            enrich_review_record(root, artifact, review_path, "matrix", "reviews")
+            self.assertEqual([], validate_review(artifact, review_path, "matrix", require_accepted=True))
+
     def test_matrix_item_index_localizes_row_change_without_structure_change(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
             artifact = Path(temporary_directory) / "test-design-matrix.md"
