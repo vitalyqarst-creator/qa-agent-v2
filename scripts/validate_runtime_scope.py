@@ -1418,9 +1418,10 @@ def validate(package_root: Path, scope_dir: Path) -> list[str]:
             errors.append(f"{question_id}: clarification card has no coverage impact")
         linked_gaps = set(re.findall(r"\bGAP-\d{2,}\b", coverage_impact))
         if not linked_gaps:
-            errors.append(
-                f"{question_id}: clarification card must track at least one independently resolvable GAP-*"
-            )
+            if status != "отменён":
+                errors.append(
+                    f"{question_id}: clarification card must track at least one independently resolvable GAP-*"
+                )
         elif len(linked_gaps) == 1:
             linked_gap = next(iter(linked_gaps))
             if linked_gap not in gap_sources:

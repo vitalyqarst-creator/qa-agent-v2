@@ -1513,6 +1513,20 @@ class RuntimeContractTests(unittest.TestCase):
             register.write_text(pending_question, encoding="utf-8")
             self.assertEqual([], validate_scope(package, scope))
 
+            cancelled_without_gap = (
+                "# Реестр вопросов к БА\n\n"
+                "## CLR-scope-002 — отменённое поведение\n\n"
+                "**Область проверки:** `scope`\n\n"
+                "**Статус:** `отменён`\n\n"
+                "**Вопрос:** Как выполняется подтверждение вторым сотрудником?\n\n"
+                "**Основание в ФТ:** AS.7.\n\n"
+                "**Влияние на покрытие:** AS.7 исключён из покрытия.\n\n"
+                "**Ответ БА:** Подтверждение вторым сотрудником отменено.\n"
+            )
+            register.write_text(cancelled_without_gap, encoding="utf-8")
+            self.assertEqual([], validate_scope(package, scope))
+            register.write_text(pending_question, encoding="utf-8")
+
             register.write_text(
                 pending_question.replace("GAP-001.", "GAP-001 и GAP-002."),
                 encoding="utf-8",
