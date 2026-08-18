@@ -38,6 +38,7 @@ REQUIRED_PATHS = (
     "scripts/runtime_traceability.py",
     "scripts/validate_runtime_review.py",
     "scripts/runtime_review_dispatch.py",
+    "scripts/runtime_review_delta.py",
     "scripts/runtime_session_registry.py",
 )
 

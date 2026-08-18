@@ -282,7 +282,7 @@ def validate_layout(test_cases_path: Path, matrix_path: Path, package_root: Path
             review = None
         if (
             isinstance(review, dict)
-            and review.get("schema_version") == 1
+            and review.get("schema_version") in {1, 2}
             and review.get("review_kind") == "tc"
             and review.get("verdict") == "tc-changes-required"
             and review.get("artifact_sha256") == hashlib.sha256(test_cases_path.read_bytes()).hexdigest()

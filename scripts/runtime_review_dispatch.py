@@ -10,8 +10,10 @@ from pathlib import Path
 from typing import Any
 
 try:
+    from scripts.runtime_review_delta import validate_revision_manifest, write_revision_manifest
     from scripts.runtime_session_registry import canonical_scope, record_role, validate_topology
 except ModuleNotFoundError:  # Direct invocation: python scripts/runtime_review_dispatch.py
+    from runtime_review_delta import validate_revision_manifest, write_revision_manifest
     from runtime_session_registry import canonical_scope, record_role, validate_topology
 
 
@@ -58,8 +60,9 @@ def validate_dispatch(
         return load_errors
     assert payload is not None
 
-    if payload.get("schema_version") != 1:
-        errors.append("dispatch schema_version must be 1")
+    schema_version = payload.get("schema_version")
+    if schema_version not in {1, 2}:
+        errors.append("dispatch schema_version must be 1 or 2")
     if payload.get("status") != "dispatched":
         errors.append("dispatch status must be dispatched")
     if payload.get("review_kind") != kind:
@@ -121,6 +124,36 @@ def validate_dispatch(
                 thread_id if isinstance(thread_id, str) else None,
             )
         )
+    if schema_version == 2:
+        review_mode = payload.get("review_mode")
+        if review_mode not in {"full", "delta"}:
+            errors.append("dispatch review_mode must be full or delta")
+        manifest_relative = payload.get("revision_manifest_path")
+        manifest_digest = payload.get("revision_manifest_sha256")
+        if review_mode == "delta" and not isinstance(manifest_relative, str):
+            errors.append("delta dispatch requires revision_manifest_path")
+        if isinstance(manifest_relative, str):
+            if Path(manifest_relative).is_absolute() or ".." in Path(manifest_relative).parts:
+                errors.append("revision_manifest_path must be package-relative")
+            else:
+                manifest_path = (package_root / manifest_relative).resolve()
+                if not manifest_path.is_file():
+                    errors.append("revision manifest does not exist")
+                elif not isinstance(manifest_digest, str) or not DIGEST_RE.fullmatch(manifest_digest):
+                    errors.append("revision_manifest_sha256 must be a 64-character SHA-256")
+                elif sha256(manifest_path) != manifest_digest.lower():
+                    errors.append("revision manifest SHA-256 mismatch")
+                else:
+                    scope = canonical_scope(dispatch_path.parent.name)
+                    errors.extend(
+                        validate_revision_manifest(package_root, artifact, manifest_path, kind, scope)
+                    )
+                    try:
+                        manifest_payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+                    except (OSError, json.JSONDecodeError):
+                        manifest_payload = None
+                    if isinstance(manifest_payload, dict) and manifest_payload.get("review_mode") != review_mode:
+                        errors.append("dispatch review_mode differs from revision manifest")
     return errors
 
 
@@ -133,6 +166,7 @@ def create_dispatch(
     reviewer_thread_id: str,
     reviewer_host_id: str,
     dispatched_at: str | None = None,
+    previous_review: Path | None = None,
 ) -> Path:
     if kind not in {"matrix", "tc"}:
         raise ValueError("review kind must be matrix or tc")
@@ -148,6 +182,22 @@ def create_dispatch(
     review_dir.mkdir(parents=True, exist_ok=True)
 
     scope = canonical_scope(review_dir.name)
+    artifact_digest = sha256(artifact)
+    manifest_path: Path | None = None
+    review_mode = "full"
+    if previous_review is not None:
+        if not previous_review.is_file():
+            raise ValueError(f"previous review does not exist: {previous_review}")
+        manifest_path = write_revision_manifest(
+            package_root,
+            artifact,
+            previous_review,
+            review_dir,
+            kind,
+            scope,
+        )
+        manifest_payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+        review_mode = manifest_payload["review_mode"]
     record_role(
         package_root,
         f"{kind}-reviewer",
@@ -155,11 +205,9 @@ def create_dispatch(
         reviewer_host_id,
         scope,
     )
-
-    artifact_digest = sha256(artifact)
     output = review_dir / f"{kind}-review-dispatch-{artifact_digest[:12]}-{reviewer_thread_id[:8]}.json"
     stable_fields = {
-        "schema_version": 1,
+        "schema_version": 2,
         "status": "dispatched",
         "controller_owned": True,
         "bootstrap_protocol": "create-thread-then-controller-follow-up",
@@ -171,7 +219,11 @@ def create_dispatch(
         "reviewer_session_type": "codex-thread",
         "reviewer_session_id": reviewer_thread_id,
         "reviewer_host_id": reviewer_host_id,
+        "review_mode": review_mode,
     }
+    if manifest_path is not None:
+        stable_fields["revision_manifest_path"] = relative_to_package(manifest_path, package_root)
+        stable_fields["revision_manifest_sha256"] = sha256(manifest_path)
     if output.exists():
         existing, errors = load_json(output)
         if errors:
@@ -208,6 +260,7 @@ def main() -> int:
     create_parser.add_argument("--kind", choices=("matrix", "tc"), required=True)
     create_parser.add_argument("--reviewer-thread-id", required=True)
     create_parser.add_argument("--reviewer-host-id", required=True)
+    create_parser.add_argument("--previous-review", type=Path)
 
     verify_parser = subparsers.add_parser("verify")
     verify_parser.add_argument("--package-root", type=Path, required=True)
@@ -228,6 +281,7 @@ def main() -> int:
                 args.kind,
                 args.reviewer_thread_id,
                 args.reviewer_host_id,
+                previous_review=args.previous_review,
             )
         except ValueError as exc:
             print(json.dumps({"created": False, "error": str(exc)}, ensure_ascii=False))

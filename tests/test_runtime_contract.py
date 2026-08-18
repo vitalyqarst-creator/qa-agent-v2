@@ -10,6 +10,7 @@ from unittest.mock import patch
 from scripts.capture_dadata_fixture import capture_fixture
 from scripts.create_ft_package import PACKAGE_DIRS, create_package
 from scripts.runtime_review_dispatch import create_dispatch, sha256, validate_dispatch
+from scripts.runtime_review_delta import artifact_index, enrich_review_record, write_revision_manifest
 from scripts.runtime_session_registry import (
     acknowledge_runtime,
     initialize_registry,
@@ -1472,6 +1473,199 @@ class RuntimeContractTests(unittest.TestCase):
             review_path.write_text(json.dumps(record, ensure_ascii=False), encoding="utf-8")
             self.assertEqual([], validate_review(artifact, review_path, "tc"))
             self.assertEqual("matrix", tc_repair_stage(record["findings"]))
+
+    def test_schema_v2_delta_rereview_checks_only_declared_changed_tc(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            source = root / "source"
+            source.mkdir()
+            (source / "requirements.xhtml").write_text("<p>Требование</p>", encoding="utf-8")
+            artifact = root / "test-cases.md"
+            artifact.write_text(
+                "# Набор\n\n## TC-001\n\nПервый результат.\n\n## TC-002\n\nВторой результат.\n",
+                encoding="utf-8",
+            )
+            create_session_topology(root, "reviews")
+            record_role(root, "matrix-reviewer", MATRIX_REVIEWER_THREAD, "local", "reviews")
+            reviewer_thread = "22345678-1234-1234-1234-123456789abc"
+            prompt = root / "tc-review-prompt.md"
+            prompt.write_text("Проведи независимое review тест-кейсов.\n", encoding="utf-8")
+            review_dir = root / "reviews"
+            dispatch_path = create_dispatch(
+                root,
+                artifact,
+                prompt,
+                review_dir,
+                "tc",
+                reviewer_thread,
+                "local",
+                "2026-08-17T00:00:00Z",
+            )
+            first_record = {
+                "schema_version": 1,
+                "review_kind": "tc",
+                "artifact_path": "test-cases.md",
+                "artifact_sha256": hashlib.sha256(artifact.read_bytes()).hexdigest(),
+                "dispatch_path": dispatch_path.relative_to(root).as_posix(),
+                "dispatch_sha256": sha256(dispatch_path),
+                "reviewer_session_type": "codex-thread",
+                "reviewer_session_id": reviewer_thread,
+                "reviewed_at": "2026-08-17T00:01:00Z",
+                "verdict": "tc-changes-required",
+                "findings": [
+                    {
+                        "id": "TC-R-001",
+                        "severity": "material",
+                        "affected_items": ["TC-001"],
+                        "origin_stage": "tc",
+                        "description": "Исправить первый TC.",
+                        "required_correction": "Уточнить результат.",
+                    }
+                ],
+                "total_tc_count": 2,
+                "reviewed_tc_count": 2,
+                "reviewed_items": ["TC-001", "TC-002"],
+                "review_scope_complete": True,
+            }
+            review_path = review_dir / "tc-review.json"
+            review_path.write_text(json.dumps(first_record, ensure_ascii=False), encoding="utf-8")
+            review_path.with_suffix(".md").write_text("# Review\n\nПроверено TC: 2/2\n", encoding="utf-8")
+            enrich_review_record(root, artifact, review_path, "tc", "reviews")
+            self.assertEqual([], validate_review(artifact, review_path, "tc"))
+
+            artifact.write_text(
+                "# Набор\n\n## TC-001\n\nПервый уточнённый результат.\n\n## TC-002\n\nВторой результат.\n",
+                encoding="utf-8",
+            )
+            second_dispatch = create_dispatch(
+                root,
+                artifact,
+                prompt,
+                review_dir,
+                "tc",
+                reviewer_thread,
+                "local",
+                "2026-08-17T00:02:00Z",
+                previous_review=review_path,
+            )
+            dispatch_payload = json.loads(second_dispatch.read_text(encoding="utf-8"))
+            self.assertEqual("delta", dispatch_payload["review_mode"])
+
+            second_record = {
+                "schema_version": 1,
+                "review_kind": "tc",
+                "artifact_path": "test-cases.md",
+                "artifact_sha256": hashlib.sha256(artifact.read_bytes()).hexdigest(),
+                "dispatch_path": second_dispatch.relative_to(root).as_posix(),
+                "dispatch_sha256": sha256(second_dispatch),
+                "reviewer_session_type": "codex-thread",
+                "reviewer_session_id": reviewer_thread,
+                "reviewed_at": "2026-08-17T00:03:00Z",
+                "verdict": "tc-accepted",
+                "findings": [],
+                "total_tc_count": 2,
+                "reviewed_tc_count": 1,
+                "reviewed_items": ["TC-001"],
+                "review_scope_complete": True,
+            }
+            review_path.write_text(json.dumps(second_record, ensure_ascii=False), encoding="utf-8")
+            review_path.with_suffix(".md").write_text(
+                "# Review\n\nПроверено изменённых TC: 1/2\n", encoding="utf-8"
+            )
+            enrich_review_record(root, artifact, review_path, "tc", "reviews")
+            self.assertEqual([], validate_review(artifact, review_path, "tc", require_accepted=True))
+
+            wrong_delta = json.loads(review_path.read_text(encoding="utf-8"))
+            wrong_delta["reviewed_items"] = ["TC-002"]
+            review_path.write_text(json.dumps(wrong_delta, ensure_ascii=False), encoding="utf-8")
+            self.assertTrue(
+                any("must equal revision manifest changed_items" in error for error in validate_review(artifact, review_path, "tc"))
+            )
+
+    def test_matrix_item_index_localizes_row_change_without_structure_change(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            artifact = Path(temporary_directory) / "test-design-matrix.md"
+            artifact.write_text(VALID_MATRIX, encoding="utf-8")
+            before = artifact_index(artifact, "matrix")
+            artifact.write_text(
+                VALID_MATRIX.replace("Карточка сохранена", "Карточка успешно сохранена"),
+                encoding="utf-8",
+            )
+            after = artifact_index(artifact, "matrix")
+            changed = {
+                item for item in set(before["items"]) | set(after["items"])
+                if before["items"].get(item) != after["items"].get(item)
+            }
+            self.assertEqual({"M-001"}, changed)
+            self.assertEqual(before["structure_sha256"], after["structure_sha256"])
+
+    def test_revision_manifest_falls_back_to_full_for_undeclared_or_source_changes(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            source = root / "source"
+            source.mkdir()
+            source_file = source / "requirements.xhtml"
+            source_file.write_text("<p>Требование</p>", encoding="utf-8")
+            artifact = root / "test-cases.md"
+            original = "# Набор\n\n## TC-001\n\nПервый.\n\n## TC-002\n\nВторой.\n"
+            artifact.write_text(original, encoding="utf-8")
+            review_dir = root / "reviews"
+            create_session_topology(root, "reviews")
+            record_role(root, "matrix-reviewer", MATRIX_REVIEWER_THREAD, "local", "reviews")
+            reviewer_thread = "22345678-1234-1234-1234-123456789abc"
+            prompt = root / "tc-review-prompt.md"
+            prompt.write_text("Проведи независимое review тест-кейсов.\n", encoding="utf-8")
+            dispatch_path = create_dispatch(
+                root,
+                artifact,
+                prompt,
+                review_dir,
+                "tc",
+                reviewer_thread,
+                "local",
+                "2026-08-17T00:00:00Z",
+            )
+            previous = {
+                "schema_version": 1,
+                "review_kind": "tc",
+                "artifact_path": "test-cases.md",
+                "artifact_sha256": hashlib.sha256(artifact.read_bytes()).hexdigest(),
+                "dispatch_path": dispatch_path.relative_to(root).as_posix(),
+                "dispatch_sha256": sha256(dispatch_path),
+                "reviewer_session_type": "codex-thread",
+                "reviewer_session_id": reviewer_thread,
+                "reviewed_at": "2026-08-17T00:01:00Z",
+                "verdict": "tc-changes-required",
+                "findings": [
+                    {
+                        "id": "TC-R-001",
+                        "affected_items": ["TC-001"],
+                        "origin_stage": "tc",
+                    }
+                ],
+                "total_tc_count": 2,
+                "reviewed_tc_count": 2,
+                "reviewed_items": ["TC-001", "TC-002"],
+                "review_scope_complete": True,
+            }
+            review_path = review_dir / "tc-review.json"
+            review_path.write_text(json.dumps(previous), encoding="utf-8")
+            review_path.with_suffix(".md").write_text("# Review\n\nПроверено TC: 2/2\n", encoding="utf-8")
+            enrich_review_record(root, artifact, review_path, "tc", "reviews")
+
+            artifact.write_text(original.replace("Первый.", "Первый исправлен.").replace("Второй.", "Второй изменён."), encoding="utf-8")
+            manifest_path = write_revision_manifest(root, artifact, review_path, review_dir, "tc", "reviews")
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            self.assertEqual("full", manifest["review_mode"])
+            self.assertIn("undeclared-items-changed", manifest["fallback_reasons"])
+
+            artifact.write_text(original.replace("Первый.", "Первый исправлен."), encoding="utf-8")
+            source_file.write_text("<p>Изменённое требование</p>", encoding="utf-8")
+            manifest_path.unlink()
+            manifest_path = write_revision_manifest(root, artifact, review_path, review_dir, "tc", "reviews")
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            self.assertEqual("full", manifest["review_mode"])
+            self.assertIn("semantic-inputs-changed", manifest["fallback_reasons"])
 
     def test_tc_layout_rejects_noop_repair_with_tc_or_both_findings(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:

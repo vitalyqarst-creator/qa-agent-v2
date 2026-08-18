@@ -22,4 +22,4 @@
 - `references/runtime/review-record.md` — независимость и SHA-256-актуальность review.
 - `references/runtime/session-topology.md` — controller-owned распределение ролей по Codex-сессиям.
 
-Обязательные проверки переходов: `scripts/runtime_session_registry.py`, `scripts/validate_runtime_source.py`, `scripts/validate_runtime_scope.py`, `scripts/validate_runtime_matrix.py` с inventory/gaps и `scripts/validate_runtime_tc.py` с matrix.
+Обязательные проверки переходов: `scripts/runtime_session_registry.py`, `scripts/validate_runtime_source.py`, `scripts/validate_runtime_scope.py`, `scripts/validate_runtime_matrix.py` с inventory/gaps и `scripts/validate_runtime_tc.py` с matrix. Review/re-review используют `scripts/runtime_review_dispatch.py`, `scripts/runtime_review_delta.py` и `scripts/validate_runtime_review.py`.

@@ -9,6 +9,7 @@ from typing import Any
 
 from scripts.runtime_review_dispatch import load_json as load_dispatch_json
 from scripts.runtime_review_dispatch import validate_dispatch
+from scripts.runtime_review_delta import review_snapshot
 
 
 THREAD_ID_RE = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", re.IGNORECASE)
@@ -60,8 +61,9 @@ def validate(artifact: Path, record_path: Path, kind: str, require_accepted: boo
     if not summary_path.is_file():
         errors.append(f"human review summary does not exist: {summary_path.name}")
 
-    if record.get("schema_version") != 1:
-        errors.append("schema_version must be 1")
+    schema_version = record.get("schema_version")
+    if schema_version not in {1, 2}:
+        errors.append("schema_version must be 1 or 2")
     if record.get("review_kind") != kind:
         errors.append(f"review_kind must be {kind}")
     declared_path = record.get("artifact_path")
@@ -109,6 +111,15 @@ def validate(artifact: Path, record_path: Path, kind: str, require_accepted: boo
         errors.append("accepted verdict requires an empty findings list")
     elif isinstance(verdict, str) and verdict.endswith("-changes-required") and not findings:
         errors.append("changes-required verdict requires findings")
+    if schema_version == 2 and isinstance(verdict, str) and verdict.endswith("-changes-required") and isinstance(findings, list):
+        for index, finding in enumerate(findings, start=1):
+            if not isinstance(finding, dict):
+                continue
+            affected = finding.get("affected_items")
+            if not isinstance(affected, list) or not affected or not all(
+                isinstance(item, str) and item.strip() for item in affected
+            ):
+                errors.append(f"finding {index} must contain non-empty affected_items")
     if kind == "tc" and verdict == "tc-changes-required" and isinstance(findings, list):
         for index, finding in enumerate(findings, start=1):
             if not isinstance(finding, dict):
@@ -128,14 +139,27 @@ def validate(artifact: Path, record_path: Path, kind: str, require_accepted: boo
             errors.append("canonical TC artifact contains no TC headings")
         if record.get("total_tc_count") != tc_count:
             errors.append(f"total_tc_count must equal canonical TC count: {tc_count}")
-        if record.get("reviewed_tc_count") != tc_count:
-            errors.append(f"reviewed_tc_count must prove full-set review: {tc_count}")
+        review_mode = record.get("review_mode", "full")
+        expected_reviewed_count = tc_count
+        if schema_version == 2 and review_mode == "delta":
+            reviewed_items = record.get("reviewed_items")
+            expected_reviewed_count = len(reviewed_items) if isinstance(reviewed_items, list) else -1
+        if record.get("reviewed_tc_count") != expected_reviewed_count:
+            if schema_version == 2 and review_mode == "delta":
+                errors.append("reviewed_tc_count must equal the delta reviewed_items count")
+            else:
+                errors.append(f"reviewed_tc_count must prove full-set review: {tc_count}")
         if record.get("review_scope_complete") is not True:
             errors.append("review_scope_complete must be true for TC review")
         if summary_path.is_file():
             summary = summary_path.read_text(encoding="utf-8")
-            if f"Проверено TC: {tc_count}/{tc_count}" not in summary:
-                errors.append(f"human review summary must contain: Проверено TC: {tc_count}/{tc_count}")
+            expected_summary = (
+                f"Проверено изменённых TC: {expected_reviewed_count}/{tc_count}"
+                if schema_version == 2 and review_mode == "delta"
+                else f"Проверено TC: {tc_count}/{tc_count}"
+            )
+            if expected_summary not in summary:
+                errors.append(f"human review summary must contain: {expected_summary}")
 
     dispatch_relative = record.get("dispatch_path")
     dispatch_digest = record.get("dispatch_sha256")
@@ -181,6 +205,55 @@ def validate(artifact: Path, record_path: Path, kind: str, require_accepted: boo
                         dispatched_at = dispatch.get("dispatched_at")
                         if isinstance(dispatched_at, str) and isinstance(reviewed_at, str) and reviewed_at < dispatched_at:
                             errors.append("reviewed_at precedes controller dispatch")
+                    if schema_version == 2:
+                        review_mode = record.get("review_mode")
+                        if review_mode not in {"full", "delta"}:
+                            errors.append("schema v2 review_mode must be full or delta")
+                        else:
+                            dispatched_mode = dispatch.get("review_mode")
+                            if dispatched_mode == "full" and review_mode != "full":
+                                errors.append("a full dispatch cannot be downgraded to delta review")
+                            elif dispatched_mode == "delta" and review_mode not in {"delta", "full"}:
+                                errors.append("review_mode differs from controller dispatch")
+                        scope = dispatch_path.parent.name
+                        try:
+                            current_snapshot = review_snapshot(package_root, artifact, kind, scope)
+                        except (OSError, ValueError, UnicodeError) as exc:
+                            errors.append(f"cannot build current review snapshot: {exc}")
+                            current_snapshot = None
+                        if current_snapshot is not None:
+                            for field in ("artifact_index", "semantic_input_hashes"):
+                                if record.get(field) != current_snapshot[field]:
+                                    errors.append(f"schema v2 {field} is stale or incomplete")
+                        reviewed_items = record.get("reviewed_items")
+                        if not isinstance(reviewed_items, list) or not all(
+                            isinstance(item, str) and item.strip() for item in reviewed_items
+                        ):
+                            errors.append("schema v2 reviewed_items must be a list of item IDs")
+                        elif current_snapshot is not None:
+                            current_items = set(current_snapshot["artifact_index"]["items"])
+                            if review_mode == "full" and set(reviewed_items) != current_items:
+                                errors.append("full review must list every current artifact item in reviewed_items")
+                            if len(reviewed_items) != len(set(reviewed_items)):
+                                errors.append("reviewed_items contains duplicates")
+                        if record.get("review_scope_complete") is not True:
+                            errors.append("schema v2 review_scope_complete must be true")
+                        manifest_relative = dispatch.get("revision_manifest_path")
+                        if isinstance(manifest_relative, str):
+                            if record.get("revision_manifest_path") != manifest_relative:
+                                errors.append("review revision_manifest_path differs from dispatch")
+                            if record.get("revision_manifest_sha256") != dispatch.get("revision_manifest_sha256"):
+                                errors.append("review revision_manifest_sha256 differs from dispatch")
+                            manifest_path = package_root / manifest_relative
+                            try:
+                                manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+                            except (OSError, json.JSONDecodeError):
+                                manifest = None
+                            if review_mode == "delta" and isinstance(manifest, dict) and isinstance(reviewed_items, list):
+                                if set(reviewed_items) != set(manifest.get("changed_items", [])):
+                                    errors.append("delta reviewed_items must equal revision manifest changed_items")
+                        elif review_mode == "delta":
+                            errors.append("delta review requires a revision manifest")
     return errors
 
 

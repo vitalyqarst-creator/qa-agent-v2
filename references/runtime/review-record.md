@@ -6,7 +6,7 @@ Matrix и canonical TC проверяются в разных верхнеуро
 
 1. Controller создаёт operational prompt в `work/reviews/<scope>/<matrix|tc>-review-prompt.md`.
 2. Через встроенный Codex Desktop API controller вызывает `list_projects`, затем `create_thread` в local environment текущего проекта. Начальный bootstrap prompt запрещает читать artifacts и выполнять review до operational follow-up.
-3. Полученный от `create_thread` `threadId` controller регистрирует командой `scripts/runtime_review_dispatch.py create`. Команда одновременно закрепляет reviewer за scope в `runtime-session-registry.json`. Receipt имеет имя `<kind>-review-dispatch-<artifact-hash-prefix>-<reviewer-thread-prefix>.json`; поэтому повторный review неизменных байтов в новой сессии не перезаписывает историческое evidence.
+3. Полученный от `create_thread` `threadId` controller регистрирует командой `scripts/runtime_review_dispatch.py create`. Команда одновременно закрепляет reviewer за scope в `runtime-session-registry.json`. Для первого review `--previous-review` не передаётся и режим всегда `full`. После ограниченной revision controller передаёт прежний `changes-required` record через `--previous-review`; команда сама создаёт revision manifest и выбирает `delta` либо безопасный `full` fallback. Receipt имеет имя `<kind>-review-dispatch-<artifact-hash-prefix>-<reviewer-thread-prefix>.json`.
 4. Только после успешной регистрации controller отправляет в созданную сессию operational prompt через `send_message_to_thread`, включая путь receipt.
 5. Reviewer первым действием запускает `scripts/runtime_review_dispatch.py verify`. При ошибке он останавливается без verdict.
 6. Controller ожидает завершения через `wait_threads`, сверяет фактические thread/host ID, проверяет неизменность SHA-256 receipt относительно значения, возвращённого командой `create`, и валидирует итоговый review-record.
@@ -27,6 +27,14 @@ Bootstrap prompt:
 python scripts/runtime_review_dispatch.py create --package-root <FT-package> --artifact <matrix-or-TC> --review-prompt <prompt.md> --review-dir <work/reviews/scope> --kind <matrix|tc> --reviewer-thread-id <threadId> --reviewer-host-id <hostId>
 ```
 
+После revision к команде добавляется:
+
+```text
+--previous-review <work/reviews/scope/matrix-or-tc-review.json>
+```
+
+До перезаписи прежнего record dispatch встраивает его в controller-owned manifest. `delta` разрешён только когда source/support/mockup, scope handoff, ответы БА, fixtures и принятая matrix для TC не изменились; структура/порядок artifact прежние; изменены только элементы, перечисленные в `affected_items` findings. Иначе manifest автоматически выбирает `full`. No-op revision отклоняется.
+
 Reviewer проверяет receipt:
 
 ```text
@@ -41,7 +49,7 @@ python scripts/runtime_review_dispatch.py verify --package-root <FT-package> --a
 
 ```json
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "review_kind": "matrix",
   "artifact_path": "work/practical/<scope>/test-design-matrix.md",
   "artifact_sha256": "<64 hex>",
@@ -50,6 +58,15 @@ python scripts/runtime_review_dispatch.py verify --package-root <FT-package> --a
   "reviewer_session_type": "codex-thread",
   "reviewer_session_id": "<top-level thread id>",
   "reviewed_at": "YYYY-MM-DDTHH:MM:SSZ",
+  "review_mode": "full",
+  "artifact_index": {
+    "items": {"M-001": "<64 hex>"},
+    "order": ["M-001"],
+    "structure_sha256": "<64 hex>"
+  },
+  "semantic_input_hashes": {"source/requirements.docx": "<64 hex>"},
+  "reviewed_items": ["M-001"],
+  "review_scope_complete": true,
   "verdict": "matrix-accepted",
   "findings": []
 }
@@ -58,6 +75,9 @@ python scripts/runtime_review_dispatch.py verify --package-root <FT-package> --a
 - `review_kind`: `matrix` или `tc`.
 - Допустимые verdict: `matrix-accepted`, `matrix-changes-required`, `tc-accepted`, `tc-changes-required`.
 - Accepted verdict требует пустой `findings`; changes-required требует непустой конечный список findings.
+- Schema v2 обязательна для новых review. Schema v1 принимается только как историческое evidence и не может служить основанием для delta re-review.
+- Перед validator reviewer запускает `runtime_review_delta.py enrich-review`: helper рассчитывает hashes элементов и semantic inputs из текущих файлов и переносит controller-owned режим/manifest из dispatch. Эти поля нельзя заполнять оценочно.
+- `full` означает полный независимый semantic review всего ограниченного artifact. `delta` означает полный запуск дешёвых validator-ов и semantic re-review только `changed_items`, прежних findings и их source/dependency slices. Reviewer вправе повысить `delta` до `full`, но не понизить controller-owned `full`.
 - Любое изменение проверенного artifact меняет SHA-256 и делает review устаревшим. После правки нужен новый review-record из отдельной сессии.
 - Обновление agent-layer само по себе не отменяет уже принятый review неизменного artifact. Проверка исторического review-record сверяет его собственные immutable receipt, thread ID и hashes, но не требует, чтобы та reviewer-сессия оставалась текущей ролью registry. Свежая сессия обязательна только при фактическом новом review.
 - `dispatch_path` указывает на controller-owned receipt текущего artifact; thread ID и hashes в receipt и review-record должны совпадать.
@@ -79,12 +99,14 @@ python scripts/runtime_review_dispatch.py verify --package-root <FT-package> --a
 {
   "id": "TC-R-001",
   "severity": "material",
-  "affected_tc": ["TC-001"],
+  "affected_items": ["TC-001"],
   "origin_stage": "matrix",
   "description": "Принятая matrix не содержит обязательную ветку покрытия.",
   "required_correction": "Добавить ветку в matrix и заново спроецировать TC."
 }
 ```
+
+`affected_items` обязателен для каждого schema v2 finding обоих видов review. Для matrix перечисляй `M-*`, `GAP-*` и затронутые элементы модели `EP-*`/`BVA-*`/`DT-R*`/`ST-T*`/`CT-C*`; для TC — `TC-*`. Используй `GLOBAL` только для действительно глобального дефекта: он принудительно включает полный re-review.
 
 - `matrix` — дефект присутствует в принятой matrix, но проверенный TC уже корректен относительно источника и после исправления matrix не требует изменения. Сначала исправляется matrix.
 - `tc` — matrix достаточна, а дефект возник только при её проекции в canonical TC. Исправляются TC.
@@ -94,7 +116,7 @@ Reviewer классифицирует происхождение, а не тол
 
 После принятия исправленной matrix controller передаёт writer-у путь исходного `tc-changes-required` review-record. Writer применяет все findings с `origin_stage: tc|both` и заново проецирует matrix-изменения. Если при наличии `tc|both` findings SHA-256 canonical TC остался равен проверенному review artifact, `validate_runtime_tc.py` отклоняет no-op repair.
 
-Оба счётчика должны совпадать с фактическим числом заголовков `## TC-...` в canonical-файле. В человекочитаемом отчёте обязательна строка `Проверено TC: 34/34` с фактическими значениями. Это исполнимое доказательство полного, не fail-fast review; заявление без совпадающих счётчиков валидатор не принимает.
+Для полного TC review оба счётчика совпадают с фактическим числом заголовков `## TC-...`, а отчёт содержит `Проверено TC: 34/34`. Для delta re-review `total_tc_count` сохраняет общий размер, `reviewed_tc_count` равен числу `changed_items`, а отчёт содержит `Проверено изменённых TC: 2/34`. Во всех режимах `reviewed_items` и `review_scope_complete: true` обязательны.
 
 Проверка:
 
