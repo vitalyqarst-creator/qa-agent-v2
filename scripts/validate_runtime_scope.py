@@ -277,6 +277,9 @@ def public_contract(scope: str | None = None) -> dict[str, object]:
                 "example": f"CLR-{section_id}-001",
             },
         },
+        "clarification_fields": {
+            "partial_support_answer_residual_heading": RESIDUAL_EXPLANATION,
+        },
         "required_tables": {
             "source_inventory": ["ID", "Источник", "Утверждение для покрытия"],
             "verifiability": [
@@ -1530,7 +1533,10 @@ def validate(package_root: Path, scope_dir: Path) -> list[str]:
                 )
         if matching_support and status not in {"ответ-получен", "отменён"} and RESIDUAL_EXPLANATION not in block:
             names = sorted({path.name for path in matching_support})
-            errors.append(f"{question_id}: approved answer source mentions its requirement; residual explanation is required: {names}")
+            errors.append(
+                f"{question_id}: approved answer source mentions its requirement; add exact field "
+                f"{RESIDUAL_EXPLANATION} {names}"
+            )
 
     for name in REQUIRED_FILES:
         if not name.endswith(".md"):

@@ -882,6 +882,10 @@ class RuntimeContractTests(unittest.TestCase):
         self.assertEqual(r"SR-\d{2,}", contract["id_formats"]["source_row"]["pattern"])
         self.assertIn("source-row-inventory.md", contract["required_files"])
         self.assertIn("visual_crosscheck", contract["conditional_controls"])
+        self.assertEqual(
+            "**Почему существующий ответ не закрывает вопрос:**",
+            contract["clarification_fields"]["partial_support_answer_residual_heading"],
+        )
 
     def test_session_topology_uses_cost_aware_role_defaults(self) -> None:
         root = Path(__file__).resolve().parents[1]
