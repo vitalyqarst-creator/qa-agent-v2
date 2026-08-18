@@ -57,6 +57,10 @@ RESOLVED_GAP_RE = re.compile(r"^\s*Закрыт(?:о|а|ы)?(?:\s+[^:|]{1,60})?\
 EMPTY_RE = re.compile(r"^(?:-|—|n/?a|не определен[оы]?|требу(?:ется|ются))\.?$", re.IGNORECASE)
 SOURCE_ROW_TOKEN_RE = re.compile(r"(?<![A-Za-z0-9_.-])SR-\d{2,}(?![A-Za-z0-9_.-])")
 CONCRETE_DATA_RE = re.compile(r"`[^`\n]+`\s*=\s*`[^`\n]+`")
+HOVER_REVEALED_CONTROL_RE = re.compile(
+    r"\bпри\s+наведени\w*[^|\n.]{0,180}?\bкнопк\w*\s+[«\"`]([^»\"`]+)[»\"`]",
+    re.IGNORECASE,
+)
 MISSING_ENVIRONMENT_DATA_RE = re.compile(
     r"(?:fixture|фикстур)\w*\s+(?:отсутств\w*|нет)|"
     r"(?:нет|отсутств\w*)\s+(?:готов\w*\s+)?(?:партн[её]р\w*|реквизит\w*|сущност\w*|запис\w*|рол\w*|уч[её]тн\w*)|"
@@ -298,6 +302,12 @@ def validate_projection(content: str, inventory_content: str, gaps_content: str)
         inventory_statements[inventory_id] = row[inventory_statement_index]
         inventory_anchors.update(extract_anchors(row[inventory_source_index]))
 
+    hover_revealed_controls = {
+        match.casefold().strip()
+        for statement in inventory_statements.values()
+        for match in HOVER_REVEALED_CONTROL_RE.findall(statement)
+    }
+
     matrix_source_index = matrix.index("Источник требования")
     matrix_check_index = matrix.index("Проверка")
     matrix_expected_index = matrix.index("Ожидаемый результат")
@@ -311,6 +321,18 @@ def validate_projection(content: str, inventory_content: str, gaps_content: str)
         matrix_anchors.update(extract_anchors(matrix_source))
         matrix_rows_by_id[row[matrix_id_index]] = row
         linked_inventory_ids = SOURCE_ROW_TOKEN_RE.findall(matrix_source)
+        check = row[matrix_check_index]
+        for control in sorted(hover_revealed_controls) if row[matrix_decision_index] == "TC" else ():
+            click = re.search(
+                rf"\bнажа\w*[^|\n.]{{0,100}}[«\"`]{re.escape(control)}[»\"`]",
+                check,
+                re.IGNORECASE,
+            )
+            if click and not re.search(r"\bнаве\w*[^|\n.]{0,180}\bнажа\w*", check, re.IGNORECASE):
+                errors.append(
+                    f"{row[matrix_id_index]}: hover-revealed control {control!r} requires an explicit "
+                    "hover immediately before the click in the matrix check"
+                )
         source_requires_uniqueness = any(
             UNIQUENESS_REQUIREMENT_RE.search(
                 f"{inventory_sources.get(inventory_id, '')} {inventory_statements.get(inventory_id, '')}"

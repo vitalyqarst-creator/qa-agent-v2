@@ -36,6 +36,7 @@ from scripts.validate_runtime_matrix import (
 )
 from scripts.validate_runtime_review import tc_repair_stage, validate as validate_review
 from scripts.validate_runtime_scope import (
+    generic_unavailability_without_observation,
     public_contract,
     table_row_references,
     validate as validate_scope,
@@ -989,6 +990,38 @@ class RuntimeContractTests(unittest.TestCase):
             "Кнопка видима и доступна «Редактировать»",
         )
         self.assertTrue(any("hover-revealed control" in error for error in validate_tc_projection(without_hover, postfix_matrix)))
+
+    def test_matrix_requires_hover_before_clicking_a_hover_revealed_control(self) -> None:
+        inventory = VALID_INVENTORY.replace(
+            "Карточка сохраняется",
+            "При наведении на карточку доступна кнопка «Редактировать»",
+        )
+        matrix = VALID_MATRIX.replace(
+            "Сохранить карточку",
+            "Нажать «Редактировать»",
+        )
+        errors = validate_matrix_projection(matrix, inventory, VALID_GAPS)
+        self.assertTrue(any("hover-revealed control" in error for error in errors))
+
+        fixed = matrix.replace(
+            "Нажать «Редактировать»",
+            "Навести курсор на карточку и нажать «Редактировать»",
+        )
+        self.assertEqual([], validate_matrix_projection(fixed, inventory, VALID_GAPS))
+
+    def test_generic_unavailability_requires_a_concrete_observation_surface(self) -> None:
+        self.assertTrue(
+            generic_unavailability_without_observation(
+                "Сущность в кредитном процессе",
+                "Сущность недоступна.",
+            )
+        )
+        self.assertFalse(
+            generic_unavailability_without_observation(
+                "Список выбора партнёра",
+                "Партнёр не отображается в списке.",
+            )
+        )
 
     def test_object_lookup_requires_concrete_test_data_literal(self) -> None:
         generic = VALID_TC.replace(

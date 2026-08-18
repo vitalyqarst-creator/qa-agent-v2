@@ -203,11 +203,36 @@ REACTIVE_RESULT_RE = re.compile(
     r"\b(?:подсказк|сообщен|ошиб|уведомл|предупрежд|диалог)\w*\b",
     re.IGNORECASE,
 )
+GENERIC_UNAVAILABILITY_RE = re.compile(r"\bнедоступ\w*\b", re.IGNORECASE)
+CONCRETE_OBSERVATION_RE = re.compile(
+    r"\b(?:не\s+отображ\w*|отсутств\w*|заблокир\w*|disabled|readonly|"
+    r"не\s+выбира\w*|не\s+наход\w*|сообщен\w*|ошиб\w*|уведомл\w*|"
+    r"код\w*\s+(?:ответ|статус)|http\b)\b",
+    re.IGNORECASE,
+)
+CONCRETE_OBSERVATION_SURFACE_RE = re.compile(
+    r"\b(?:кнопк\w*|пол\w*|ссылк\w*|виджет\w*|карточк\w*|спис\w*|таблиц\w*|"
+    r"меню\w*|диалог\w*|сообщен\w*|индикатор\w*|api\b|endpoint\w*|метод\w*|"
+    r"ответ\w*|файл\w*)\b",
+    re.IGNORECASE,
+)
 SOURCE_TRIGGER_RE = re.compile(
     r"\bпри\s+(?:ввод|выбор|нажат|сохран|попытк|поиск|открыт|закрыт|загруз|снятии\s+фокус)\w*|"
     r"\bпосле\s+(?:ввод|выбор|нажат|сохран|открыт|закрыт|загруз)\w*",
     re.IGNORECASE,
 )
+
+
+def generic_unavailability_without_observation(observation_surface: str, observed_result: str) -> bool:
+    """Return true when 'unavailable' merely repeats a business result without an observable surface."""
+
+    if not GENERIC_UNAVAILABILITY_RE.search(observed_result):
+        return False
+    if CONCRETE_OBSERVATION_RE.search(observed_result):
+        return False
+    return not CONCRETE_OBSERVATION_SURFACE_RE.search(observation_surface)
+
+
 EXPLICIT_ACTION_TRIGGER_RE = re.compile(
     r"\b(?:нажима|выбира|сохраня|открыва|закрыва|заверша|снимает\s+фокус|переводит\s+фокус)\w*",
     re.IGNORECASE,
@@ -813,6 +838,14 @@ def validate(package_root: Path, scope_dir: Path) -> list[str]:
             linked_contract_gaps = set(
                 re.findall(r"(?<![A-Za-z0-9_.-])GAP-\d{2,}(?![A-Za-z0-9_.-])", " | ".join(row))
             )
+            if (
+                generic_unavailability_without_observation(observation_surface, observed_result)
+                and not linked_contract_gaps
+            ):
+                errors.append(
+                    f"{source_id}: generic unavailability has no concrete observation surface; link an explicit "
+                    "GAP-* of class 'нет-точки-наблюдения'"
+                )
             if (
                 REACTIVE_RESULT_RE.search(observed_result)
                 and not linked_contract_gaps
