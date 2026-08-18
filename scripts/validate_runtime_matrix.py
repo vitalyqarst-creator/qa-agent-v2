@@ -56,6 +56,7 @@ ALLOWED_GAP_CLASSES = {
 RESOLVED_GAP_RE = re.compile(r"^\s*Закрыт(?:о|а|ы)?(?:\s+[^:|]{1,60})?\s*:", re.IGNORECASE)
 EMPTY_RE = re.compile(r"^(?:-|—|n/?a|не определен[оы]?|требу(?:ется|ются))\.?$", re.IGNORECASE)
 SOURCE_ROW_TOKEN_RE = re.compile(r"(?<![A-Za-z0-9_.-])SR-\d{2,}(?![A-Za-z0-9_.-])")
+MATRIX_ROW_TOKEN_RE = re.compile(r"(?<![A-Za-z0-9_.-])M-\d{2,}(?![A-Za-z0-9_.-])")
 CONCRETE_DATA_RE = re.compile(r"`[^`\n]+`\s*=\s*`[^`\n]+`")
 HOVER_REVEALED_CONTROL_RE = re.compile(
     r"\bпри\s+наведени\w*[^|\n.]{0,180}?\bкнопк\w*\s+[«\"`]([^»\"`]+)[»\"`]",
@@ -84,7 +85,7 @@ UNIQUENESS_REQUIREMENT_RE = re.compile(
     re.IGNORECASE,
 )
 NEGATIVE_ACTOR_RE = re.compile(
-    r"(?:без\s+(?:роли|права)|не\s+име\w*\s+(?:роль|прав))",
+    r"(?:без\s+(?:роли|права)|не\s+име\w*\s+(?:роль|прав)|неадминистратор\w*)",
     re.IGNORECASE,
 )
 ABSENCE_ORACLE_RE = re.compile(
@@ -316,11 +317,14 @@ def validate_projection(content: str, inventory_content: str, gaps_content: str)
     matrix_id_index = matrix.index("ID")
     matrix_anchors: set[str] = set()
     matrix_rows_by_id: dict[str, tuple[str, ...]] = {}
+    matrix_rows_by_source_id: dict[str, list[tuple[str, ...]]] = {}
     for row in matrix.rows:
         matrix_source = row[matrix_source_index]
         matrix_anchors.update(extract_anchors(matrix_source))
         matrix_rows_by_id[row[matrix_id_index]] = row
         linked_inventory_ids = SOURCE_ROW_TOKEN_RE.findall(matrix_source)
+        for linked_inventory_id in linked_inventory_ids:
+            matrix_rows_by_source_id.setdefault(linked_inventory_id, []).append(row)
         check = row[matrix_check_index]
         for control in sorted(hover_revealed_controls) if row[matrix_decision_index] == "TC" else ():
             click = re.search(
@@ -358,6 +362,39 @@ def validate_projection(content: str, inventory_content: str, gaps_content: str)
                     f"{row[matrix_id_index]}: source says the element is visible and available only to the role; "
                     "negative-role expected result must require element absence, not generic unavailability"
                 )
+
+    for inventory_id, statement in inventory_statements.items():
+        if not ONLY_ROLE_VISIBILITY_RE.search(statement):
+            continue
+        projected_rows = matrix_rows_by_source_id.get(inventory_id, [])
+        has_direct_negative = any(
+            NEGATIVE_ACTOR_RE.search(
+                f"{row[matrix_check_index]} {row[matrix.index('Предусловие/исходное состояние')]}"
+            )
+            and ABSENCE_ORACLE_RE.search(row[matrix_expected_index])
+            for row in projected_rows
+        )
+        if has_direct_negative:
+            continue
+        referenced_rows = {
+            reference
+            for row in projected_rows
+            for reference in MATRIX_ROW_TOKEN_RE.findall(" | ".join(row))
+            if reference != row[matrix_id_index]
+        }
+        has_stronger_absence_link = any(
+            (target := matrix_rows_by_id.get(reference)) is not None
+            and NEGATIVE_ACTOR_RE.search(
+                f"{target[matrix_check_index]} {target[matrix.index('Предусловие/исходное состояние')]}"
+            )
+            and ABSENCE_ORACLE_RE.search(target[matrix_expected_index])
+            for reference in referenced_rows
+        )
+        if not has_stronger_absence_link:
+            errors.append(
+                f"{inventory_id}: role-only obligation requires an explicit negative branch or an M-* link "
+                "to stronger source-backed absence coverage"
+            )
     matrix_sources = "\n".join(row[matrix_source_index] for row in matrix.rows)
     for inventory_id in sorted(inventory_ids):
         if not re.search(rf"(?<![A-Za-z0-9_.-]){re.escape(inventory_id)}(?![A-Za-z0-9_.-])", matrix_sources):

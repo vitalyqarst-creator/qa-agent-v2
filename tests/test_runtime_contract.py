@@ -1013,6 +1013,29 @@ class RuntimeContractTests(unittest.TestCase):
         )
         self.assertEqual([], validate_matrix_projection(fixed, inventory, VALID_GAPS))
 
+    def test_role_only_matrix_obligation_requires_negative_branch_or_stronger_link(self) -> None:
+        inventory = VALID_INVENTORY.replace(
+            "Карточка сохраняется",
+            "Кнопка видима и доступна только администратору",
+        ).replace(
+            "| SR-002 | AS.39 | Реакция на ограничение должна быть определена |",
+            "| SR-002 | AS.39 | Реакция на ограничение должна быть определена |\n"
+            "| SR-003 | AS.40 | Скрытая карточка не отображается пользователю без роли администратора |",
+        )
+        matrix = VALID_MATRIX.replace(
+            "Карточка сохранена | TC | ready |",
+            "Кнопка доступна администратору | TC | ready |\n"
+            "| M-002 | SR-003; AS.40 | Неадминистратору открыть список | ролевой-доступ | Скрытая карточка | Карточка скрыта | `Наименование` = `ПАО СБЕРБАНК` | Карточка не отображается | TC | ready |",
+        )
+        errors = validate_matrix_projection(matrix, inventory, VALID_GAPS)
+        self.assertTrue(any("role-only obligation" in error for error in errors))
+
+        linked = matrix.replace(
+            "Кнопка доступна администратору",
+            "Кнопка доступна администратору; отрицательная ветка покрыта M-002",
+        )
+        self.assertEqual([], validate_matrix_projection(linked, inventory, VALID_GAPS))
+
     def test_generic_unavailability_requires_a_concrete_observation_surface(self) -> None:
         self.assertTrue(
             generic_unavailability_without_observation(
