@@ -11,6 +11,7 @@ from unittest.mock import patch
 from xml.etree import ElementTree as ET
 
 from scripts.capture_dadata_fixture import capture_fixture
+from scripts.cleanup_runtime_temp import cleanup
 from scripts.create_ft_package import PACKAGE_DIRS, create_package
 from scripts.normalize_ft_source import normalize_docx
 from scripts.runtime_review_dispatch import create_dispatch, sha256, validate_dispatch
@@ -2319,6 +2320,25 @@ class RuntimeContractTests(unittest.TestCase):
             self.assertFalse((package / "evals").exists())
             self.assertFalse((package / "references").exists())
             self.assertFalse((package / "scripts").exists())
+
+    def test_runtime_temp_cleanup_is_limited_to_isolated_system_temp_directory(self) -> None:
+        holder = tempfile.TemporaryDirectory(prefix="ft-runtime-test-")
+        target = Path(holder.name)
+        (target / "render.png").write_bytes(b"png")
+        removed, errors = cleanup([target])
+        self.assertEqual([], errors)
+        self.assertEqual([str(target.resolve())], removed)
+        self.assertFalse(target.exists())
+        holder.cleanup()
+
+        unsafe = Path(tempfile.gettempdir()) / "unscoped-runtime-temp"
+        removed, errors = cleanup([unsafe])
+        self.assertEqual([], removed)
+        self.assertTrue(any("not an isolated" in error for error in errors))
+
+        removed, errors = cleanup([Path(__file__).resolve().parents[1]])
+        self.assertEqual([], removed)
+        self.assertTrue(any("outside system temp" in error for error in errors))
 
     def test_runtime_tree_has_no_evals_or_legacy_skills(self) -> None:
         root = Path(__file__).resolve().parents[1]

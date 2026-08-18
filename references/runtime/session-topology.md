@@ -15,6 +15,8 @@ Controller — одна верхнеуровневая Codex-сессия на �
 
 Новый practical route по существующему пакету начинается не с source locator, а с определения первого отсутствующего, stale или невалидного артефакта. Controller последовательно проверяет существующие source (`validate_runtime_source.py --resume-existing`), handoff, matrix/review и canonical TC/review и переиспользует все валидные предшествующие результаты. Semantic role вызывается только для первого этапа, который действительно требует изменения; смена runtime commit сама по себе не является причиной пересоздавать артефакты.
 
+`validate_runtime_source.py --resume-existing` запускается только после того, как controller нашёл существующий source handoff и подтвердил наличие обоих обязательных файлов `source-selection.md` и `workflow-state.yaml`; package root и handoff directory передаются как два позиционных аргумента. Если handoff отсутствует, validator не вызывается с неполной командой — первым этапом сразу считается source locator.
+
 Один analyzer или writer нельзя использовать для двух scope: перенос контекста между разделами ухудшает независимость и увеличивает риск скрытого смешения требований.
 
 Scope analyzer-ы одного FT-пакета не работают одновременно: они последовательно обновляют общий `work/scope-clarification-requests.md`. Controller запускает следующий analyzer только после завершения предыдущего и успешного scope-validator-а.
@@ -22,6 +24,16 @@ Scope analyzer-ы одного FT-пакета не работают однов�
 ## Controller-owned registry
 
 До запуска semantic role controller создаёт `work/runtime-session-registry.json` и регистрирует фактический `threadId`/`hostId`, полученные от Codex Desktop. Допустим только `codex-thread`; subagent, fork и выдуманный ID запрещены. Операции Codex Desktop и их порядок уже перечислены ниже и в `AGENTS.md`: controller не выполняет web search документации перед стандартным dispatch. Если встроенная операция недоступна, route останавливается.
+
+Обычный dispatch source locator, analyzer и writer всегда двухфазный:
+
+1. Controller вызывает `list_projects` и выбирает текущий сохранённый проект.
+2. `create_thread` вызывается с project target и `environment: {type: "local"}`. Начальный prompt только просит ждать operational follow-up; он запрещает читать или менять FT-пакет. `worktree` и последующий `handoff_thread` для semantic role не используются: перенос меняет checkout/ID, создаёт гонку реестра и отделяет результаты от текущего пакета.
+3. Controller получает фактические `threadId` и `hostId`, регистрирует их штатной командой `runtime_session_registry.py record` и проверяет успешность записи.
+4. Только после регистрации controller отправляет через `send_message_to_thread` рабочий prompt с ролью, scope и self-check.
+5. Controller ожидает `turnCompleted` через `wait_threads`, затем независимо запускает artifact validator и только после `valid=true` объявляет этап завершённым. `waitingOnApproval`, `needsAttention`, незавершённый turn или один лишь текст semantic role не являются завершением этапа. Если требуется действие пользователя, controller сообщает `blocked-user-action`, но не выдаёт устаревший успешный stage summary; при продолжении сначала повторно проверяет состояние semantic thread и validator.
+
+Начальный semantic prompt непосредственно в `create_thread` запрещён: сессия может начать self-check раньше, чем controller успеет записать её ID в registry.
 
 В начале каждого следующего turn controller проверяет, что открытая сессия работает по текущему commit agent-layer:
 

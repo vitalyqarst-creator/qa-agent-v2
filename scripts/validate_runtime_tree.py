@@ -29,6 +29,7 @@ REQUIRED_PATHS = (
     "references/runtime/review-record.md",
     "references/runtime/session-topology.md",
     "scripts/create_ft_package.py",
+    "scripts/cleanup_runtime_temp.py",
     "scripts/capture_dadata_fixture.py",
     "scripts/validate_fixture_catalog.py",
     "scripts/validate_runtime_source.py",
@@ -77,6 +78,12 @@ REQUIRED_POLICY_MARKERS = {
         "needs-test-data",
         "не является `coverage-gap`",
         "work/scope-clarification-requests.md",
+        "нейтральным bootstrap prompt",
+    ),
+    "skills/ft-source-locator/SKILL.md": (
+        "не загружай целиком объёмные справочники",
+        "scripts/cleanup_runtime_temp.py",
+        "не читай реализацию validator-а",
     ),
     "skills/ft-scope-analyzer/SKILL.md": (
         "Контракт проверяемости",
@@ -96,6 +103,12 @@ REQUIRED_POLICY_MARKERS = {
         "| Готовность |",
         "нет-бизнес-результата",
         "workflow-state.yaml",
+    ),
+    "references/runtime/session-topology.md": (
+        'environment: {type: "local"}',
+        "Начальный semantic prompt непосредственно в `create_thread` запрещён",
+        "`waitingOnApproval`",
+        "обоих обязательных файлов `source-selection.md` и `workflow-state.yaml`",
     ),
 }
 
