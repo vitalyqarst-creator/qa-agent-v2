@@ -79,6 +79,14 @@ QUOTED_CONTROL_RE = re.compile(
 )
 BACKTICK_LITERAL_RE = re.compile(r"`([^`\n]+)`")
 QUOTED_LABEL_RE = re.compile(r"«([^»]+)»")
+ACTION_VERB_RE = re.compile(
+    r"\b(?:Открыть|Перейти|Найти|Нажать|Выбрать|Ввести|Заполнить|Очистить|Загрузить|Скачать|"
+    r"Навести|Установить|Снять|Подтвердить|Отменить|Закрыть|Сохранить|Изменить|Удалить|Добавить|"
+    r"Создать|Вернуть|Архивировать|Разархивировать|Войти|Выйти|Проверить|Убедиться|Зафиксировать|"
+    r"Скопировать|Вставить|Раскрыть|Свернуть|Обновить|Прокрутить)\b",
+    re.IGNORECASE,
+)
+QUOTED_FRAGMENT_RE = re.compile(r"`[^`\n]*`|«[^»\n]*»|\"[^\"\n]*\"")
 
 
 def normalized_label(value: str) -> str:
@@ -104,6 +112,25 @@ def visible_selector_values(data: str) -> list[str]:
         value.strip()
         for key, value in DATA_PAIR_RE.findall(data)
         if normalized_label(key) in selector_keys and len(value.strip()) >= 3
+    ]
+
+
+def action_count(line: str) -> int:
+    without_labels = QUOTED_FRAGMENT_RE.sub("", line)
+    count = 0
+    for match in ACTION_VERB_RE.finditer(without_labels):
+        prefix = without_labels[max(0, match.start() - 24) : match.start()]
+        if re.search(r"(?:кнопк|действи|ссылк)\w*\s+$", prefix, re.IGNORECASE):
+            continue
+        count += 1
+    return count
+
+
+def composite_numbered_actions(value: str) -> list[str]:
+    return [
+        line.strip()
+        for line in value.splitlines()
+        if NUMBERED_LINE_RE.match(line.strip()) and action_count(line) > 1
     ]
 
 
@@ -230,6 +257,8 @@ def validate(content: str) -> list[str]:
             errors.append(
                 f"{tc_id}: a step starting with 'Выполнить' delegates an unspecified flow; list the observable user actions explicitly"
             )
+        for line in composite_numbered_actions(steps):
+            errors.append(f"{tc_id}: one numbered step must contain one user action or one verification ({line})")
         for lookup in unqualified_object_lookups(block):
             errors.append(f"{tc_id}: object lookup must use a concrete literal from test data ({lookup})")
         data = tc_sections["Тестовые данные"]
@@ -298,6 +327,10 @@ def validate(content: str) -> list[str]:
                 errors.append(
                     f"{tc_id}: postcondition actor switch requires renewed navigation and object lookup before cleanup"
                 )
+        for line in composite_numbered_actions(postconditions):
+            errors.append(
+                f"{tc_id}: one numbered postcondition must contain one user action or one verification ({line})"
+            )
     if numbers and numbers != list(range(1, len(numbers) + 1)):
         errors.append("sequential TC numbers are not continuous from TC-001")
     return errors

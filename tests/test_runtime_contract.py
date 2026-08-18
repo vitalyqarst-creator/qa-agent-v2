@@ -968,6 +968,32 @@ class RuntimeContractTests(unittest.TestCase):
         )
         self.assertEqual([], validate_tc(measured))
 
+    def test_one_numbered_step_contains_one_user_action_or_verification(self) -> None:
+        composite = VALID_TC.replace(
+            "1. В поле `Наименование партнёра` ввести `ПАО СБЕРБАНК`.",
+            "1. Открыть экран, найти партнёра и нажать его виджет.",
+        )
+        self.assertTrue(any("one numbered step must contain one user action" in error for error in validate_tc(composite)))
+
+        split = VALID_TC.replace(
+            "1. В поле `Наименование партнёра` ввести `ПАО СБЕРБАНК`.",
+            "1. Открыть экран.\n2. Найти партнёра `ПАО СБЕРБАНК`.\n3. Нажать его виджет.",
+        ).replace("2. Нажать `СОХРАНИТЬ`.", "4. Нажать `СОХРАНИТЬ`.")
+        self.assertEqual([], validate_tc(split))
+
+        quoted_button = VALID_TC.replace(
+            "2. Нажать `СОХРАНИТЬ`.",
+            "2. Нажать кнопку «Добавить».",
+        )
+        self.assertEqual([], validate_tc(quoted_button))
+
+    def test_numbered_postcondition_cannot_combine_multiple_actions(self) -> None:
+        composite = VALID_TC.replace(
+            "- Не требуются.",
+            "1. Открыть список и удалить созданного партнёра.",
+        )
+        self.assertTrue(any("one numbered postcondition" in error for error in validate_tc(composite)))
+
     def test_hover_revealed_control_requires_hover_before_every_click(self) -> None:
         hover_matrix = VALID_MATRIX.replace(
             "Сохранить карточку | базовый, жизненный-цикл-создания",
@@ -1075,9 +1101,11 @@ class RuntimeContractTests(unittest.TestCase):
         self.assertTrue(any("missing visible selector literals" in error for error in errors))
 
         exact = nested.replace(
-            "по БИК `044525225`.",
-            "по БИК `044525225` и расчетному счету `40702810100000000001`.",
-        )
+            "1. Найти партнёра `ПАО СБЕРБАНК`, открыть его и найти реквизит по БИК `044525225`.",
+            "1. Найти партнёра `ПАО СБЕРБАНК`.\n"
+            "2. Нажать найденный виджет.\n"
+            "3. Найти реквизит по БИК `044525225` и расчетному счету `40702810100000000001`.",
+        ).replace("2. Нажать `СОХРАНИТЬ`.", "4. Нажать `СОХРАНИТЬ`.")
         self.assertEqual([], validate_tc(exact))
 
     def test_expected_identifier_must_be_declared_in_test_data(self) -> None:
