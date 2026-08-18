@@ -219,19 +219,73 @@ HIGH_CONFIDENCE_TEXT_ERRORS = (
         "противоречивая фраза 'один вариант ... либо'",
     ),
 )
-ALLOWED_VISUAL_STATUSES = (
-    "использован",
-    "не относится к области:",
-    "не открывался: локальных материалов достаточно",
-    "недоступен:",
-)
-
-
 def runtime_root(package_root: Path) -> Path:
     for candidate in (package_root, *package_root.parents):
         if (candidate / "AGENTS.md").is_file() and (candidate / "scripts").is_dir():
             return candidate
     raise ValueError("runtime root was not found above package root")
+
+
+def public_contract(scope: str | None = None) -> dict[str, object]:
+    """Return the small, stable authoring contract without exposing validator internals."""
+    scope_value = canonical_scope(scope or "scope")
+    scope_digits = "".join(re.findall(r"\d+", scope_value)) or "00"
+    section_match = re.match(r"(\d+(?:\.\d+)*)", scope_value)
+    section_id = section_match.group(1) if section_match else scope_digits
+    return {
+        "contract_version": 1,
+        "scope": scope_value,
+        "required_files": list(REQUIRED_FILES),
+        "id_formats": {
+            "source_row": {
+                "pattern": r"SR-\d{2,}",
+                "example": f"SR-{scope_digits}001",
+            },
+            "coverage_gap": {
+                "pattern": r"GAP-\d{2,}",
+                "example": f"GAP-{scope_digits}001",
+            },
+            "clarification": {
+                "pattern": "CLR-<section>-<sequence>",
+                "example": f"CLR-{section_id}-001",
+            },
+        },
+        "required_tables": {
+            "source_inventory": ["ID", "Источник", "Утверждение для покрытия"],
+            "verifiability": [
+                "SR",
+                "Объект или UI-уровень",
+                "Актор и условие",
+                "Действие или событие",
+                "Наблюдаемый результат",
+            ],
+            "boundaries": [
+                "Фрагмент",
+                "Структурный якорь",
+                "Решение",
+                "Связанные обязанности или область",
+            ],
+            "consistency": ["Аспект", "Вывод анализа", "Связанные обязанности/пробелы"],
+            "coverage_gaps": [
+                "ID",
+                "Связанная обязанность",
+                "Источник",
+                "Класс",
+                "Недостаток источника",
+                "Что требуется для закрытия",
+            ],
+            "test_data": list(TEST_DATA_PLAN_HEADERS),
+        },
+        "conditional_controls": {
+            "table_rows": "только если область использует таблицу ФТ",
+            "opaque_headers": "только для используемых коротких заголовков без явной семантики",
+            "visual_crosscheck": "только для включённых UI-уровней",
+            "figma": "только если релевантного локального визуального материала недостаточно",
+            "second_pass": "только при сигнале сложности из ft-scope-analyzer",
+        },
+        "human_language": "русский",
+        "russian_process_terms": FORBIDDEN_PROCESS_WORDS,
+    }
 
 
 def locator_sections(package_root: Path) -> dict[str, list[dict[str, str]]]:
@@ -1041,21 +1095,39 @@ def validate(package_root: Path, scope_dir: Path) -> list[str]:
         ("UI-уровень", "Визуальный источник", "Результат сверки"),
     )
     incomplete_local_visual = False
+    no_visual_reason = re.search(
+        r"(?im)^Визуальная\s+сверка\s+не\s+требуется:\s*(.{5,})$",
+        scope_brief_content,
+    )
+    registered_sections = locator_sections(package_root)
+    registered_visuals = {
+        resolve_declared_path(package_root, entry["path"]).as_posix().casefold()
+        for entry in registered_sections.get("visual_sources", [])
+        if entry.get("path")
+    }
+    registered_figma = {
+        entry["url"]
+        for entry in registered_sections.get("figma_sources", [])
+        if entry.get("url")
+    }
     if visual_check is None or not visual_check.rows:
-        errors.append("scope-brief must contain a visual cross-check row for every included UI level")
+        if no_visual_reason is None:
+            errors.append(
+                "scope-brief must contain visual cross-check rows for included UI levels "
+                "or 'Визуальная сверка не требуется: <причина>'"
+            )
     else:
         visual_index = visual_check.index("Визуальный источник")
         visual_result_index = visual_check.index("Результат сверки")
-        registered_visuals = {
-            resolve_declared_path(package_root, entry["path"]).as_posix().casefold()
-            for entry in locator_sections(package_root).get("visual_sources", [])
-            if entry.get("path")
-        }
         for row_number, row in enumerate(visual_check.rows, start=1):
             visual_source = row[visual_index]
-            if VISUAL_INCOMPLETE_RE.search(row[visual_result_index]):
+            visual_result = row[visual_result_index].strip()
+            if not visual_result or visual_result in {"-", "—"}:
+                errors.append(f"scope-brief visual cross-check row {row_number}: result is missing")
+            if VISUAL_INCOMPLETE_RE.search(visual_result):
                 incomplete_local_visual = True
             declared_paths = LOCAL_VISUAL_RE.findall(visual_source)
+            declared_urls = re.findall(r"https?://[^\s|]+", visual_source)
             visible_without_urls = re.sub(r"https?://\S+", "", visual_source)
             if not declared_paths and (
                 LOCAL_VISUAL_LABEL_RE.search(visible_without_urls)
@@ -1073,6 +1145,12 @@ def validate(package_root: Path, scope_dir: Path) -> list[str]:
                         f"scope-brief visual cross-check row {row_number}",
                     )
                 )
+            for value in declared_urls:
+                if value not in registered_figma:
+                    errors.append(
+                        f"scope-brief visual cross-check row {row_number}: "
+                        f"Figma URL is not registered by source locator: {value}"
+                    )
 
         for value in yaml_list_values(workflow_content, "local_mockups"):
             errors.extend(
@@ -1084,67 +1162,14 @@ def validate(package_root: Path, scope_dir: Path) -> list[str]:
                 )
             )
 
-    visual_inputs: list[tuple[str, str]] = []
-    for entry in locator_sections(package_root).get("visual_sources", []):
-        if entry.get("path"):
-            visual_inputs.append(("path", entry["path"]))
-    for entry in locator_sections(package_root).get("figma_sources", []):
-        if entry.get("url"):
-            visual_inputs.append(("url", entry["url"]))
-    disposition = find_markdown_table(
-        scope_brief_content,
-        ("Визуальный вход", "Статус обработки", "Основание или результат"),
-    )
-    if visual_inputs:
-        if disposition is None or not disposition.rows:
-            errors.append("scope-brief must record a disposition for every registered visual/Figma input")
-        else:
-            input_index = disposition.index("Визуальный вход")
-            status_index = disposition.index("Статус обработки")
-            result_index = disposition.index("Основание или результат")
-            declared_inputs: list[str] = []
-            registered_local = {
-                resolve_declared_path(package_root, value).as_posix().casefold()
-                for kind, value in visual_inputs
-                if kind == "path"
-            }
-            registered_figma = {value for kind, value in visual_inputs if kind == "url"}
-            for row_number, row in enumerate(disposition.rows, start=1):
-                declared = row[input_index].strip().strip("` ")
-                declared_inputs.append(declared)
-                status = row[status_index].strip().casefold()
-                result = row[result_index].strip()
-                if not any(status == allowed or status.startswith(allowed) for allowed in ALLOWED_VISUAL_STATUSES):
-                    errors.append(f"visual input disposition row {row_number}: unsupported status {row[status_index]!r}")
-                if not result or result in {"-", "—"}:
-                    errors.append(f"visual input disposition row {row_number}: result or reason is missing")
-                if (
-                    declared in registered_figma
-                    and status == "не открывался: локальных материалов достаточно"
-                    and incomplete_local_visual
-                ):
-                    errors.append(
-                        f"visual input disposition row {row_number}: Figma cannot be skipped as locally sufficient "
-                        "when the included UI cross-check records missing visual elements"
-                    )
-                if any(declared == value for kind, value in visual_inputs if kind == "path"):
-                    errors.extend(
-                        validate_visual_reference(
-                            package_root,
-                            declared,
-                            registered_local,
-                            f"visual input disposition row {row_number}",
-                        )
-                    )
-            for _kind, value in visual_inputs:
-                count = sum(declared == value for declared in declared_inputs)
-                if count != 1:
-                    errors.append(f"registered visual input must appear exactly once in disposition: {value}")
-            extras = sorted(set(declared_inputs) - {value for _kind, value in visual_inputs})
-            if extras:
-                errors.append("visual input disposition contains unregistered inputs: " + ", ".join(extras))
-    elif "Визуальные входы отсутствуют." not in scope_brief_content:
-        errors.append("scope-brief must state 'Визуальные входы отсутствуют.' when locator registered none")
+    if incomplete_local_visual and registered_figma:
+        figma_recorded = any(url in scope_brief_content for url in registered_figma)
+        figma_unavailable = re.search(r"(?im)^Figma\s+недоступна:\s*.{5,}$", scope_brief_content)
+        if not figma_recorded and figma_unavailable is None:
+            errors.append(
+                "scope-brief records incomplete local visual evidence; use one registered Figma URL "
+                "or state 'Figma недоступна: <причина>'"
+            )
 
     consistency = find_markdown_table(
         scope_brief_content,
@@ -1152,18 +1177,20 @@ def validate(package_root: Path, scope_dir: Path) -> list[str]:
     )
     consistency_refs: set[str] = set()
     if consistency is None or not consistency.rows:
-        errors.append("scope-brief must contain the complete consistency analysis table")
+        errors.append("scope-brief must contain applicable consistency analysis rows")
     else:
         aspect_index = consistency.index("Аспект")
         conclusion_index = consistency.index("Вывод анализа")
         refs_index = consistency.index("Связанные обязанности/пробелы")
         aspects = [row[aspect_index].strip() for row in consistency.rows]
-        for required_aspect in CONSISTENCY_ASPECTS:
-            count = sum(aspect.casefold() == required_aspect.casefold() for aspect in aspects)
-            if count != 1:
+        normalized_allowed = {aspect.casefold(): aspect for aspect in CONSISTENCY_ASPECTS}
+        for aspect in aspects:
+            if aspect.casefold() not in normalized_allowed:
                 errors.append(
-                    f"scope-brief consistency analysis must contain aspect {required_aspect!r} exactly once"
+                    f"scope-brief consistency analysis has unsupported aspect {aspect!r}"
                 )
+            if sum(value.casefold() == aspect.casefold() for value in aspects) != 1:
+                errors.append(f"scope-brief consistency aspect {aspect!r} must appear exactly once")
         for row in consistency.rows:
             aspect = row[aspect_index].strip() or "<без аспекта>"
             conclusion = row[conclusion_index].strip()
@@ -1172,10 +1199,9 @@ def validate(package_root: Path, scope_dir: Path) -> list[str]:
                 errors.append(f"scope-brief consistency aspect {aspect!r} has no conclusion")
                 continue
             if conclusion.casefold().startswith("не применимо"):
-                if not re.match(r"(?i)^не применимо:\s*.{5,}$", conclusion):
-                    errors.append(
-                        f"scope-brief consistency aspect {aspect!r} needs a concrete reason after 'Не применимо:'"
-                    )
+                errors.append(
+                    f"scope-brief consistency aspect {aspect!r}: omit non-applicable aspects instead of adding a row"
+                )
                 continue
             linked = set(SOURCE_ROW_TOKEN_RE.findall(references)) | set(
                 re.findall(r"(?<![A-Za-z0-9_.-])GAP-\d{2,}(?![A-Za-z0-9_.-])", references)
@@ -1411,9 +1437,20 @@ def validate(package_root: Path, scope_dir: Path) -> list[str]:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Validate a lean runtime scope handoff.")
-    parser.add_argument("package_root", type=Path)
-    parser.add_argument("scope_dir", type=Path)
+    parser.add_argument("package_root", type=Path, nargs="?")
+    parser.add_argument("scope_dir", type=Path, nargs="?")
+    parser.add_argument(
+        "--print-contract",
+        action="store_true",
+        help="Print the stable authoring contract without reading validator implementation.",
+    )
+    parser.add_argument("--scope", help="Scope identifier used to build non-normative ID examples.")
     args = parser.parse_args()
+    if args.print_contract:
+        print(json.dumps(public_contract(args.scope), ensure_ascii=False, indent=2))
+        return 0
+    if args.package_root is None or args.scope_dir is None:
+        parser.error("package_root and scope_dir are required unless --print-contract is used")
     errors = validate(args.package_root.resolve(), args.scope_dir.resolve())
     print(json.dumps({"valid": not errors, "errors": errors}, ensure_ascii=False))
     return 0 if not errors else 1

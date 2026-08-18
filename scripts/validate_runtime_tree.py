@@ -56,7 +56,6 @@ REQUIRED_REFERENCE_CONSUMERS = {
         "references/runtime/source-selection.md",
     ),
     "skills/ft-scope-analyzer/SKILL.md": (
-        "references/runtime/session-topology.md",
         "references/runtime/scope-analysis.md",
     ),
     "skills/ft-test-case-writer/SKILL.md": (
@@ -77,13 +76,11 @@ REQUIRED_REFERENCE_CONSUMERS = {
 REQUIRED_POLICY_MARKERS = {
     "AGENTS.md": (
         "Senior QA-инженер",
-        "needs-test-data",
-        "не является `coverage-gap`",
         "work/scope-clarification-requests.md",
-        "нейтральным bootstrap prompt",
-        "параметры `model` и `thinking`",
-        "skills/ft-source-locator/SKILL.md",
-        "Команда role self-check возвращает путь и SHA-256 обязательного skill",
+        "нейтральным транспортным конвертом",
+        "новый route не означает повторный source locator",
+        "одним содержательным проходом по умолчанию",
+        "отдельной верхнеуровневой Codex-сесси",
     ),
     "skills/ft-source-locator/SKILL.md": (
         "не загружай целиком объёмные справочники",
@@ -93,12 +90,12 @@ REQUIRED_POLICY_MARKERS = {
         "`AGENT-NOTES.md` является входом пользователя",
     ),
     "skills/ft-scope-analyzer/SKILL.md": (
-        "Контракт проверяемости",
+        "source-row-inventory.md",
         "Проверку согласованности",
-        "Контроль полноты строк таблиц",
-        "реестр обработки каждого зарегистрированного",
+        "--print-contract",
+        "нерелевантные визуальные входы не перечисляй",
         "**Ответ БА:** _Введите ответ здесь._",
-        "Тип `Дата` не разрешает выводить платформенные min/max",
+        "Один содержательный проход — default",
     ),
     "skills/ft-test-case-writer/SKILL.md": (
         "доступны writer-у только для чтения",
@@ -112,8 +109,9 @@ REQUIRED_POLICY_MARKERS = {
         "шаг представления",
     ),
     "references/runtime/scope-analysis.md": (
-        "## Контроль полноты строк таблиц",
-        "## Реестр обработки визуальных входов",
+        "### Строки таблицы",
+        "### Визуальная сверка",
+        "Неприменимые аспекты пропускаются",
         "| Родительская обязанность |",
     ),
     "references/runtime/test-data-fixtures.md": (
@@ -170,19 +168,6 @@ def validate(root: Path) -> list[str]:
     matrix_reference = root / "references/runtime/test-design-matrix.md"
     if matrix_reference.is_file() and "dadata" in matrix_reference.read_text(encoding="utf-8").casefold():
         errors.append("generic test-design matrix reference contains provider-specific DaData rule")
-    agents_path = root / "AGENTS.md"
-    if agents_path.is_file():
-        agents_content = agents_path.read_text(encoding="utf-8")
-        for marker in (
-            "create_thread",
-            "send_message_to_thread",
-            "wait_threads",
-            "runtime_review_dispatch.py",
-            "runtime_session_registry.py",
-            "references/runtime/session-topology.md",
-        ):
-            if marker not in agents_content:
-                errors.append(f"AGENTS.md does not enforce controller-owned review dispatch via {marker}")
     return errors
 
 

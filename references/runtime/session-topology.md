@@ -41,7 +41,19 @@ Scope analyzer-ы одного FT-пакета не работают однов�
 
 Если пользователь в задаче текущего этапа явно задал модель и уровень рассуждений создаваемой semantic-сессии, controller передаёт точные поддерживаемые значения в `create_thread` как `model` и `thinking`. Это параметры запуска сессии, а не текст operational prompt. Controller не заменяет указанную модель близкой, не понижает уровень рассуждений и не переносит выбор автоматически на другие роли или следующие этапы.
 
-Если пользователь не задал профиль явно, controller опускает `model` и `thinking`: используется настроенный default Codex. Нельзя молча закреплять глобальную модель по примеру одного FT или прошлого прогона. Фактический выбор фиксируется в `runtime-session-registry.json`: при явном профиле команда `record` получает оба флага `--model` и `--thinking`; при default оба флага опущены. В итоговом stage summary controller берёт этот факт из registry, а не из памяти; это служебная информация и не попадает в FT-артефакты.
+Если пользователь не задал профиль, controller использует cost-aware role default:
+
+| Роль | Модель | Уровень рассуждений |
+| --- | --- | --- |
+| `source-locator` | `gpt-5.6-luna` | `medium` |
+| `scope-analyzer` | `gpt-5.6-terra` | `medium` |
+| `writer` | `gpt-5.6-terra` | `medium` |
+| `matrix-reviewer` | `gpt-5.6-sol` | `medium` |
+| `tc-reviewer` | `gpt-5.6-sol` | `medium` |
+
+Для controller-сессии рекомендуемый профиль при ручном создании — `gpt-5.6-terra` / `low`. `high` не является default ни для одной роли: он оправдан только явным запросом пользователя или повторяющейся доказанной сложностью, которую не покрывает обычный review. Профиль не повышается из-за длины инструкций или ошибки формата.
+
+Фактический выбор фиксируется в `runtime-session-registry.json`; команда `record` получает оба флага `--model` и `--thinking`. В итоговом stage summary controller берёт этот факт из registry, а не из памяти; это служебная информация и не попадает в FT-артефакты.
 
 В начале каждого следующего turn controller проверяет, что открытая сессия работает по текущему commit agent-layer:
 
@@ -64,7 +76,7 @@ python scripts/runtime_session_registry.py record --package-root <FT-package> --
 python scripts/runtime_session_registry.py record --package-root <FT-package> --role writer --scope <scope> --thread-id <threadId> --host-id <hostId>
 ```
 
-При явном профиле к соответствующей команде `record` добавь `--model <model> --thinking <level>`. Для reviewer те же значения передаются в `runtime_review_dispatch.py create` через `--reviewer-model` и `--reviewer-thinking`.
+К соответствующей команде `record` добавь фактически использованные `--model <model> --thinking <level>`. Для reviewer те же значения передаются в `runtime_review_dispatch.py create` через `--reviewer-model` и `--reviewer-thinking`.
 
 Для reviewer запись выполняется автоматически командой `runtime_review_dispatch.py create` по имени review-каталога `<scope>`.
 

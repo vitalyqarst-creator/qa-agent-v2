@@ -34,6 +34,7 @@ from scripts.validate_runtime_matrix import (
 )
 from scripts.validate_runtime_review import tc_repair_stage, validate as validate_review
 from scripts.validate_runtime_scope import (
+    public_contract,
     table_row_references,
     validate as validate_scope,
     validate_test_data_plan,
@@ -116,12 +117,8 @@ VALID_CONSISTENCY = """
 | Аспект | Вывод анализа | Связанные обязанности/пробелы |
 | --- | --- | --- |
 | Идентичность объекта | Проверяется одна создаваемая карточка партнёра. | SR-001 |
-| Представления объекта | Не применимо: раздел не задаёт несколько представлений объекта. | — |
 | Создание, редактирование и повторное открытие | Источник задаёт сохранение создаваемой карточки. | SR-001 |
-| Роли и видимость | Не применимо: источник не задаёт различий между ролями. | — |
-| Статусы и переходы | Не применимо: источник не задаёт статусных переходов. | — |
 | Поля, справочники и внешние источники | Реакция на ограничение не определена. | SR-002; GAP-001 |
-| История изменений и аудит | Не применимо: источник не содержит требований к аудиту. | — |
 """
 
 VALID_BOUNDARY_CONTROL = """
@@ -144,15 +141,6 @@ VALID_TABLE_COVERAGE = """
 | Таблица | Строка | Решение | Связанные обязанности/пробелы |
 | --- | --- | --- | --- |
 | Таблица 7 | Сохранить | Включена | SR-001 |
-"""
-
-VALID_VISUAL_DISPOSITION = """
-
-## Реестр обработки визуальных входов
-
-| Визуальный вход | Статус обработки | Основание или результат |
-| --- | --- | --- |
-| `fts/Project/FT/mockups/form.png` | использован | Подтверждены подписи формы. |
 """
 
 EMPTY_CLARIFICATION_REGISTER = """# Реестр вопросов к БА
@@ -805,6 +793,40 @@ class RuntimeContractTests(unittest.TestCase):
         self.assertIn("origin_stage", reviewer)
         self.assertIn("repair_stage: matrix", writer)
 
+    def test_scope_analyzer_has_lean_progressive_disclosure_contract(self) -> None:
+        root = Path(__file__).resolve().parents[1]
+        agents = (root / "AGENTS.md").read_text(encoding="utf-8")
+        skill = (root / "skills" / "ft-scope-analyzer" / "SKILL.md").read_text(encoding="utf-8")
+        reference = (root / "references" / "runtime" / "scope-analysis.md").read_text(encoding="utf-8")
+
+        self.assertLessEqual(len(agents.split()), 800)
+        self.assertLessEqual(len(skill.split()), 550)
+        self.assertLessEqual(len(reference.split()), 800)
+        self.assertIn("AGENTS.md` уже загружен средой: не перечитывай", skill)
+        self.assertIn("Один содержательный проход — default", skill)
+        self.assertIn("только применимые аспекты", skill)
+        self.assertIn("Сравнивай видимые подписи буквально", skill)
+        self.assertNotIn("прочитай `AGENTS.md`", skill.casefold())
+
+    def test_scope_public_contract_exposes_authoring_schema_and_id_examples(self) -> None:
+        contract = public_contract("9.1-menu-upravleniya-partnerami")
+
+        self.assertEqual("SR-91001", contract["id_formats"]["source_row"]["example"])
+        self.assertEqual(r"SR-\d{2,}", contract["id_formats"]["source_row"]["pattern"])
+        self.assertIn("source-row-inventory.md", contract["required_files"])
+        self.assertIn("visual_crosscheck", contract["conditional_controls"])
+
+    def test_session_topology_uses_cost_aware_role_defaults(self) -> None:
+        root = Path(__file__).resolve().parents[1]
+        topology = (root / "references" / "runtime" / "session-topology.md").read_text(encoding="utf-8")
+
+        self.assertIn("| `source-locator` | `gpt-5.6-luna` | `medium` |", topology)
+        self.assertIn("| `scope-analyzer` | `gpt-5.6-terra` | `medium` |", topology)
+        self.assertIn("| `writer` | `gpt-5.6-terra` | `medium` |", topology)
+        self.assertIn("| `matrix-reviewer` | `gpt-5.6-sol` | `medium` |", topology)
+        self.assertIn("| `tc-reviewer` | `gpt-5.6-sol` | `medium` |", topology)
+        self.assertIn("`high` не является default ни для одной роли", topology)
+
     def test_tc_rejects_hybrid_state_setup_and_accepts_declarative_state(self) -> None:
         ambiguous = VALID_TC.replace(
             "1. Открыть карточку добавления партнёра.",
@@ -1265,7 +1287,6 @@ class RuntimeContractTests(unittest.TestCase):
                 "| Форма добавления | `fts/Project/FT/mockups/form.png` | Подтверждены подписи и путь открытия. |\n"
                 + VALID_BOUNDARY_CONTROL
                 + VALID_TABLE_COVERAGE
-                + VALID_VISUAL_DISPOSITION
                 + VALID_CONSISTENCY,
                 encoding="utf-8",
             )
@@ -1486,13 +1507,14 @@ class RuntimeContractTests(unittest.TestCase):
             brief_path.write_text(valid_brief, encoding="utf-8")
             brief_path.write_text(
                 valid_brief.replace(
+                    "| Поля, справочники и внешние источники | Реакция на ограничение не определена. | SR-002; GAP-001 |\n",
+                    "| Поля, справочники и внешние источники | Реакция на ограничение не определена. | SR-002; GAP-001 |\n"
                     "| История изменений и аудит | Не применимо: источник не содержит требований к аудиту. | — |\n",
-                    "",
                 ),
                 encoding="utf-8",
             )
             errors = validate_scope(package, scope)
-            self.assertTrue(any("История изменений и аудит" in error and "exactly once" in error for error in errors))
+            self.assertTrue(any("История изменений и аудит" in error and "omit non-applicable" in error for error in errors))
             brief_path.write_text(valid_brief, encoding="utf-8")
 
             (scope / "coverage-gaps.md").write_text(
@@ -1612,7 +1634,6 @@ class RuntimeContractTests(unittest.TestCase):
                     "| Вводный текст родительского раздела | Раздел 9.3 — до раздела 9.3.1 | Включён | SR-001 |",
                 )
                 + VALID_TABLE_COVERAGE
-                + VALID_VISUAL_DISPOSITION
                 + VALID_CONSISTENCY,
                 encoding="utf-8",
             )
@@ -1633,10 +1654,9 @@ class RuntimeContractTests(unittest.TestCase):
             errors = validate_scope(package, scope)
             self.assertTrue(any("instead of including the whole fragment" in error for error in errors))
             self.assertTrue(any("misses table 7 rows" in error and "инн" in error for error in errors))
-            self.assertTrue(any("figma.com" in error and "exactly once" in error for error in errors))
             self.assertTrue(any("repository-local temporary file" in error for error in errors))
 
-    def test_scope_validator_accepts_explicit_parent_distribution_and_figma_disposition(self) -> None:
+    def test_scope_validator_uses_figma_only_when_local_visual_is_incomplete(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
             root = Path(temporary_directory)
             (root / "AGENTS.md").write_text("# Runtime\n", encoding="utf-8")
@@ -1670,7 +1690,6 @@ class RuntimeContractTests(unittest.TestCase):
 | --- | --- | --- | --- |
 | AS.38 | Сохранение карточки доступно в текущем подразделе. | `scope` | SR-001 |
 """
-            disposition = VALID_VISUAL_DISPOSITION + f"| {figma_url} | не открывался: локальных материалов достаточно | Локальный макет полностью показывает форму. |\n"
             (scope / "scope-brief.md").write_text(
                 "# Границы\n\n"
                 "## Визуальная сверка\n\n"
@@ -1680,7 +1699,6 @@ class RuntimeContractTests(unittest.TestCase):
                 + boundary
                 + ownership
                 + VALID_TABLE_COVERAGE
-                + disposition
                 + VALID_CONSISTENCY,
                 encoding="utf-8",
             )
@@ -1707,7 +1725,14 @@ class RuntimeContractTests(unittest.TestCase):
                 encoding="utf-8",
             )
             errors = validate_scope(package, scope)
-            self.assertTrue(any("Figma cannot be skipped" in error for error in errors))
+            self.assertTrue(any("incomplete local visual evidence" in error for error in errors))
+
+            brief_path.write_text(
+                brief_path.read_text(encoding="utf-8")
+                + "\nFigma недоступна: у пользователя нет доступа к макету.\n",
+                encoding="utf-8",
+            )
+            self.assertEqual([], validate_scope(package, scope))
 
     def test_scope_validator_rejects_gap_and_question_covered_by_nonblocking_working_assumption(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
