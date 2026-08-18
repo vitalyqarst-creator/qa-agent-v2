@@ -1357,8 +1357,49 @@ class RuntimeContractTests(unittest.TestCase):
             )
             self.assertEqual([], validate_scope(package, scope))
 
+            brief_path = scope / "scope-brief.md"
+            valid_brief = brief_path.read_text(encoding="utf-8")
+            brief_path.write_text(
+                valid_brief.replace(
+                    "Раздел 9.3.2 — до раздела 9.3.3",
+                    "Раздел 9.3.2; AS.38",
+                ),
+                encoding="utf-8",
+            )
+            errors = validate_scope(package, scope)
+            self.assertTrue(any("requirement-code boundary is partial" in error for error in errors))
+            brief_path.write_text(
+                valid_brief.replace(
+                    "SR-001; SR-002; GAP-001",
+                    "SR-001; GAP-001",
+                ),
+                encoding="utf-8",
+            )
+            errors = validate_scope(package, scope)
+            self.assertTrue(any("first and final active source-row IDs" in error for error in errors))
+            brief_path.write_text(valid_brief, encoding="utf-8")
+
             xhtml_path = package / "source" / "requirements.xhtml"
             original_xhtml = xhtml_path.read_text(encoding="utf-8")
+            xhtml_path.write_text(
+                original_xhtml.replace(">Сохранить<", ">Виждет «Партнер»<"),
+                encoding="utf-8",
+            )
+            inventory_path = scope / "source-row-inventory.md"
+            original_inventory = inventory_path.read_text(encoding="utf-8")
+            inventory_path.write_text(
+                original_inventory.replace("Сохранить", "Виждет «Партнер»"),
+                encoding="utf-8",
+            )
+            brief_path.write_text(
+                valid_brief.replace("| Таблица 7 | Сохранить |", "| Таблица 7 | Виждет «Партнер» |"),
+                encoding="utf-8",
+            )
+            self.assertEqual([], validate_scope(package, scope))
+            xhtml_path.write_text(original_xhtml, encoding="utf-8")
+            inventory_path.write_text(original_inventory, encoding="utf-8")
+            brief_path.write_text(valid_brief, encoding="utf-8")
+
             xhtml_path.write_text(
                 original_xhtml.replace(
                     "<tr><td>Название</td><td>Примечание</td></tr>",
@@ -1477,7 +1518,53 @@ class RuntimeContractTests(unittest.TestCase):
                 encoding="utf-8",
             )
             errors = validate_scope(package, scope)
-            self.assertTrue(any("exactly one independently resolvable GAP" in error for error in errors))
+            self.assertTrue(any("unknown coverage gap GAP-002" in error for error in errors))
+            register.write_text(pending_question, encoding="utf-8")
+
+            multi_inventory = inventory_path.read_text(encoding="utf-8").replace(
+                "| SR-002 | AS.39 | Реакция на ограничение должна быть определена |",
+                "| SR-002 | AS.39 | Реакция на ограничение должна быть определена |\n"
+                "| SR-003 | AS.40 | Значение общего термина должно быть определено |",
+            ).replace(
+                "| SR-002 | Карточка партнёра | Пользователь с доступом к добавлению | Нарушение ограничения AS.39 | Наблюдаемый результат не определён источником; GAP-001 |",
+                "| SR-002 | Карточка партнёра | Пользователь с доступом к добавлению | Нарушение ограничения AS.39 | Наблюдаемый результат не определён источником; GAP-001 |\n"
+                "| SR-003 | Карточка партнёра | Пользователь с доступом к добавлению | Проверяет общий термин | Значение не определено источником; GAP-002 |",
+            )
+            inventory_path.write_text(multi_inventory, encoding="utf-8")
+            gaps_path = scope / "coverage-gaps.md"
+            gaps_path.write_text(
+                VALID_GAPS
+                + "| GAP-002 | SR-003 | AS.40 | неоднозначность-требования | Не определён общий термин | Ответ БА |\n",
+                encoding="utf-8",
+            )
+            brief_path.write_text(
+                valid_brief.replace(
+                    "SR-001; SR-002; GAP-001",
+                    "SR-001; SR-002; SR-003; GAP-001; GAP-002",
+                ),
+                encoding="utf-8",
+            )
+            writer_prompt = scope / "prompt.scope-to-writer.md"
+            original_prompt = writer_prompt.read_text(encoding="utf-8")
+            writer_prompt.write_text(original_prompt + " Для GAP-002 создай строку `coverage-gap`.\n", encoding="utf-8")
+            register.write_text(
+                pending_question.replace(
+                    "Какой наблюдаемый результат возникает при нарушении ограничения AS.39?",
+                    "Какое единое правило разрешает неоднозначность AS.39 и AS.40?",
+                ).replace(
+                    "**Основание в ФТ:** AS.39.",
+                    "**Основание в ФТ:** AS.39; AS.40.",
+                ).replace(
+                    "GAP-001.",
+                    "GAP-001 и GAP-002.",
+                ),
+                encoding="utf-8",
+            )
+            self.assertEqual([], validate_scope(package, scope))
+            inventory_path.write_text(original_inventory, encoding="utf-8")
+            gaps_path.write_text(VALID_GAPS, encoding="utf-8")
+            brief_path.write_text(valid_brief, encoding="utf-8")
+            writer_prompt.write_text(original_prompt, encoding="utf-8")
             register.write_text(pending_question, encoding="utf-8")
 
             uncoded_question = pending_question.replace(

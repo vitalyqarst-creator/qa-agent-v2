@@ -327,6 +327,15 @@ def normalized_source_text(value: str) -> str:
     return " ".join(value.replace("\u00a0", " ").split()).casefold()
 
 
+def strip_optional_outer_quotes(value: str) -> str:
+    result = value.strip()
+    quote_pairs = {"«": "»", '"': '"'}
+    closing = quote_pairs.get(result[:1])
+    if closing and result.endswith(closing) and len(result) >= 2:
+        return result[1:-1].strip()
+    return result
+
+
 def canonical_source_reference(value: str) -> str:
     return normalized_source_text(value.strip().strip("` ").rstrip(".;"))
 
@@ -829,6 +838,8 @@ def validate(package_root: Path, scope_dir: Path) -> list[str]:
     ):
         errors.append("workflow-state must reference work/scope-clarification-requests.md as clarification_register")
     boundary_refs: set[str] = set()
+    boundary_code_anchors: set[str] = set()
+    selected_section_refs: set[str] = set()
     distributed_parent = False
     parent_decisions: list[str] = []
     boundary_control = find_markdown_table(
@@ -852,6 +863,9 @@ def validate(package_root: Path, scope_dir: Path) -> list[str]:
         for row in boundary_control.rows:
             fragment = row[fragment_index].strip() or "<без фрагмента>"
             anchor = row[anchor_index].strip()
+            boundary_code_anchors.update(
+                item for item in extract_anchors(anchor) if item.startswith("CODE:")
+            )
             decision = row[decision_index].strip()
             related = row[related_index].strip()
             if fragment.casefold() == "выбранный раздел" and decision.casefold() != "включён":
@@ -870,6 +884,10 @@ def validate(package_root: Path, scope_dir: Path) -> list[str]:
                     re.findall(r"(?<![A-Za-z0-9_.-])GAP-\d{2,}(?![A-Za-z0-9_.-])", related)
                 )
                 boundary_refs.update(linked)
+                if fragment.casefold() == "выбранный раздел":
+                    selected_section_refs.update(
+                        item for item in linked if SOURCE_ROW_ID_RE.fullmatch(item)
+                    )
                 if not linked:
                     errors.append(
                         f"scope-brief source boundary fragment {fragment!r} is included but has no SR-* or GAP-* links"
@@ -901,6 +919,34 @@ def validate(package_root: Path, scope_dir: Path) -> list[str]:
             else:
                 errors.append(
                     f"scope-brief source boundary fragment {fragment!r} has unsupported decision {decision!r}"
+                )
+
+        if active_inventory_ids:
+            ordered_source_rows = sorted(
+                active_inventory_ids,
+                key=lambda value: int(value.removeprefix("SR-")),
+            )
+            required_edges = {ordered_source_rows[0], ordered_source_rows[-1]}
+            missing_edges = sorted(required_edges - selected_section_refs)
+            if missing_edges:
+                errors.append(
+                    "scope-brief selected section must include the first and final active source-row IDs: "
+                    + ", ".join(missing_edges)
+                )
+
+        inventory_code_anchors = {
+            anchor
+            for source in inventory_sources.values()
+            for anchor in extract_anchors(source)
+            if anchor.startswith("CODE:")
+        }
+        declared_inventory_codes = boundary_code_anchors & inventory_code_anchors
+        if declared_inventory_codes:
+            missing_codes = sorted(inventory_code_anchors - boundary_code_anchors)
+            if missing_codes:
+                errors.append(
+                    "scope-brief requirement-code boundary is partial; omitted active codes: "
+                    + ", ".join(missing_codes)
                 )
 
     ownership = find_markdown_table(
@@ -975,7 +1021,7 @@ def validate(package_root: Path, scope_dir: Path) -> list[str]:
                     errors.append(f"table-row coverage row {row_number}: invalid table label {row[table_index]!r}")
                     continue
                 table_number = int(table_match.group(1))
-                source_row = row[row_index].strip().strip("«»\"")
+                source_row = strip_optional_outer_quotes(row[row_index])
                 normalized_row = normalized_source_text(source_row)
                 declared.setdefault(table_number, []).append(normalized_row)
                 if table_number not in normalized_table_rows:
@@ -1352,16 +1398,31 @@ def validate(package_root: Path, scope_dir: Path) -> list[str]:
         if not coverage_impact:
             errors.append(f"{question_id}: clarification card has no coverage impact")
         linked_gaps = set(re.findall(r"\bGAP-\d{2,}\b", coverage_impact))
-        if len(linked_gaps) != 1:
+        if not linked_gaps:
             errors.append(
-                f"{question_id}: clarification card must track exactly one independently resolvable GAP-*"
+                f"{question_id}: clarification card must track at least one independently resolvable GAP-*"
             )
-        elif next(iter(linked_gaps)) in gap_sources and canonical_source_reference(
-            requirement_basis
-        ) != canonical_source_reference(gap_sources[next(iter(linked_gaps))]):
-            errors.append(
-                f"{question_id}: FT basis must exactly reuse the linked coverage-gap source anchor"
-            )
+        elif len(linked_gaps) == 1:
+            linked_gap = next(iter(linked_gaps))
+            if linked_gap not in gap_sources:
+                errors.append(f"{question_id}: clarification card references unknown coverage gap {linked_gap}")
+            elif canonical_source_reference(requirement_basis) != canonical_source_reference(
+                gap_sources[linked_gap]
+            ):
+                errors.append(
+                    f"{question_id}: FT basis must exactly reuse the linked coverage-gap source anchor"
+                )
+        else:
+            question_basis_anchors = precise_source_anchors(requirement_basis)
+            for linked_gap in sorted(linked_gaps):
+                if linked_gap not in gap_sources:
+                    errors.append(f"{question_id}: clarification card references unknown coverage gap {linked_gap}")
+                    continue
+                gap_anchors = precise_source_anchors(gap_sources[linked_gap])
+                if not gap_anchors or not gap_anchors.issubset(question_basis_anchors):
+                    errors.append(
+                        f"{question_id}: multi-gap FT basis must include the exact source anchor of {linked_gap}"
+                    )
         if not answer:
             errors.append(f"{question_id}: clarification card has no editable 'Ответ БА' field")
         placeholder = bool(QUESTION_ANSWER_PLACEHOLDER_RE.fullmatch(answer.strip()))
