@@ -396,6 +396,15 @@ def public_contract(scope: str | None = None) -> dict[str, object]:
                 "требуется",
             ),
         ),
+        "clarification_card": (
+            f"## CLR-{section_id}-001 — Краткая тема\n\n"
+            f"**Область проверки:** `{scope_value}`\n"
+            "**Статус:** `ожидает-ответа`\n"
+            "**Вопрос:** Один однозначный вопрос.\n"
+            "**Основание в ФТ:** Точный source anchor.\n"
+            f"**Влияние на покрытие:** GAP-{scope_digits}001 и неизвестный результат.\n"
+            "**Ответ БА:** _Введите ответ здесь._"
+        ),
         "workflow_state": (
             f'scope: "{scope_value}"\n'
             f'canonical_scope: "{scope_value}"\n'
@@ -460,11 +469,13 @@ def public_contract(scope: str | None = None) -> dict[str, object]:
         "accepted_values": {
             "test_data_source_prefixes": list(ALLOWED_DATA_SOURCE_PREFIXES),
             "test_data_materialization_readiness": sorted(ALLOWED_DATA_READINESS),
+            "boundary_decisions": ["Включён", "Распределён", "Ранее покрыт: <область>", "Не применимо: <причина>"],
         },
         "markdown_templates": templates,
         "correction_policy": {
             "initial_scope_revision_count": 0,
             "after_single_local_correction": 1,
+            "before_final_validation": "close every error returned by the initial validation; do not knowingly carry an unchanged error into the only revision",
             "when_invalid_at_count_1": "stop; correction_allowed=false",
         },
         "conditional_controls": {
@@ -798,7 +809,7 @@ def question_text(block: str) -> str:
 
 def question_field(block: str, label: str) -> str:
     match = re.search(
-        rf"^\*\*{re.escape(label)}:\*\*\s*(.*?)(?=\n\s*\n\*\*|\n##\s|\Z)",
+        rf"^\*\*{re.escape(label)}:\*\*\s*(.*?)(?=\n(?:\s*\n)*\*\*[^*\n]+:\*\*|\n##\s|\Z)",
         block,
         re.MULTILINE | re.DOTALL,
     )

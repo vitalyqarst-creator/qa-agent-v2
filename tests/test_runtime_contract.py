@@ -1050,6 +1050,12 @@ class RuntimeContractTests(unittest.TestCase):
         self.assertIn("Один содержательный проход — default", skill)
         self.assertIn("только применимые аспекты", skill)
         self.assertIn("Сравнивай видимые подписи буквально", skill)
+        self.assertIn("Не перечитывай весь DOCX/PDF", skill)
+        self.assertIn("Альтернативные ключи/способы ввода", skill)
+        self.assertIn("системно заполненного read-only поля", skill)
+        self.assertIn("включая общее ограничение, помечай `Распределён`", reference)
+        self.assertIn("Альтернативные ключи поиска или способы ввода", reference)
+        self.assertIn("не проектируй недостижимое пустое состояние", reference)
         self.assertNotIn("прочитай `AGENTS.md`", skill.casefold())
 
     def test_scope_public_contract_exposes_authoring_schema_and_id_examples(self) -> None:
@@ -1065,6 +1071,8 @@ class RuntimeContractTests(unittest.TestCase):
             contract["clarification_fields"]["partial_support_answer_residual_heading"],
         )
         self.assertIn("| ID | Связанная обязанность |", contract["markdown_templates"]["coverage_gaps"])
+        self.assertIn("**Ответ БА:** _Введите ответ здесь._", contract["markdown_templates"]["clarification_card"])
+        self.assertIn("close every error", contract["correction_policy"]["before_final_validation"])
         self.assertIn("scope_revision_count: 0", contract["markdown_templates"]["workflow_state"])
 
     def test_scope_contract_cli_emits_utf8_on_windows_console(self) -> None:
@@ -1932,6 +1940,11 @@ class RuntimeContractTests(unittest.TestCase):
             register = package / "work" / "scope-clarification-requests.md"
             register.write_text(pending_question, encoding="utf-8")
             self.assertEqual([], validate_scope(package, scope))
+
+            compact_pending_question = pending_question.replace("\n\n**", "\n**")
+            register.write_text(compact_pending_question, encoding="utf-8")
+            self.assertEqual([], validate_scope(package, scope))
+            register.write_text(pending_question, encoding="utf-8")
 
             cancelled_without_gap = (
                 "# Реестр вопросов к БА\n\n"
