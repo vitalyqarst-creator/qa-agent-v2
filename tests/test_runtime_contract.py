@@ -2386,6 +2386,24 @@ class RuntimeContractTests(unittest.TestCase):
             self.assertTrue(any("aggregates independent properties" in error for error in errors))
             self.assertTrue(any("behavior beyond the source-backed result" in error for error in errors))
 
+            (scope / "source-row-inventory.md").write_text(
+                VALID_INVENTORY.replace(
+                    "Карточка сохраняется",
+                    "Нажатие открывает окно редактирования с предзаполненными данными",
+                ),
+                encoding="utf-8",
+            )
+            errors = validate_scope(package, scope)
+            self.assertTrue(
+                any(
+                    "aggregates independent properties" in error
+                    and "открытие интерфейса" in error
+                    and "предзаполнение данных" in error
+                    and "редактируемость" not in error
+                    for error in errors
+                )
+            )
+
     def test_scope_validator_rejects_unregistered_or_missing_visual_paths(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
             root = Path(temporary_directory)

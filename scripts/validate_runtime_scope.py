@@ -117,8 +117,20 @@ LOCAL_VISUAL_RE = re.compile(r"`([^`\n]+\.(?:png|jpe?g|webp|svg))`", re.IGNORECA
 LOCAL_VISUAL_LABEL_RE = re.compile(r"\bРисунок\s+\d+\b", re.IGNORECASE)
 LOCAL_VISUAL_EXTENSION_RE = re.compile(r"\.(?:png|jpe?g|webp|svg)\b", re.IGNORECASE)
 INDEPENDENT_PROPERTY_PATTERNS = {
+    "открытие интерфейса": re.compile(
+        r"\bоткрыва(?:ет|ется|ют|ются)\b[^|\n]{0,120}\b(?:окн|форм|диалог|экран|карточк)\w*",
+        re.IGNORECASE,
+    ),
+    "предзаполнение данных": re.compile(
+        r"\b(?:предзаполн\w*|заполня\w*|заполненн\w*)\b[^|\n]{0,80}\b(?:данн|значен|пол)\w*",
+        re.IGNORECASE,
+    ),
     "обязательность": re.compile(r"\bобязатель\w*", re.IGNORECASE),
-    "редактируемость": re.compile(r"\b(?:не\s*)?редактир\w*|\bтолько\s+для\s+чтения\b", re.IGNORECASE),
+    "редактируемость": re.compile(
+        r"\b(?:не\s+)?редактируем\w*|\b(?:не\s+)?редактиру(?:ется|ются|ют)\b|"
+        r"\b(?:нельзя|можно)\s+редактировать\b|\bтолько\s+для\s+чтения\b",
+        re.IGNORECASE,
+    ),
     "представление": re.compile(r"\bинформационн\w*\s+(?:блок\w*|виджет\w*)", re.IGNORECASE),
     "ссылка или переход": re.compile(r"\bссылк\w*|\bпереход\w*", re.IGNORECASE),
 }
