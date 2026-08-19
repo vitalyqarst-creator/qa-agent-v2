@@ -67,6 +67,14 @@ python scripts/runtime_review_dispatch.py verify --package-root <FT-package> --a
   "semantic_input_hashes": {"source/requirements.docx": "<64 hex>"},
   "reviewed_items": ["M-001"],
   "review_scope_complete": true,
+  "matrix_review_checklist": {
+    "source-coverage": {"status": "checked", "evidence": ["SR-001 -> M-001"]},
+    "formal-techniques": {"status": "not-applicable", "evidence": ["Не применимо: формальные профили отсутствуют."]},
+    "uniqueness-lifecycle": {"status": "not-applicable", "evidence": ["Не применимо: правило уникальности отсутствует."]},
+    "save-data-closure": {"status": "checked", "evidence": ["M-001"]},
+    "reachability-oracles": {"status": "checked", "evidence": ["M-001"]},
+    "duplication-parameterization": {"status": "checked", "evidence": ["Дубли отсутствуют."]}
+  },
   "verdict": "matrix-accepted",
   "findings": []
 }
@@ -78,6 +86,7 @@ python scripts/runtime_review_dispatch.py verify --package-root <FT-package> --a
 - Schema v2 обязательна для новых review. Schema v1 принимается только как историческое evidence и не может служить основанием для delta re-review.
 - Перед validator reviewer запускает `runtime_review_delta.py enrich-review`: helper рассчитывает hashes элементов и semantic inputs из текущих файлов и переносит controller-owned режим/manifest из dispatch. Эти поля нельзя заполнять оценочно.
 - `full` означает полный независимый semantic review всех элементов ограниченного artifact. Source slice для первого review включает целиком выбранный раздел scope и точные зарегистрированные anchors; нерелевантные разделы FT-пакета повторно не читаются. Выход за границы фиксируется в Markdown review и допускается только по явной внешней ссылке либо для проверки противоречия. `delta` означает полный запуск дешёвых validator-ов и semantic re-review только `changed_items`, прежних findings и их source/dependency slices. Reviewer вправе повысить `delta` до `full`, но не понизить controller-owned `full`.
+- Schema v2 `full` matrix review содержит `matrix_review_checklist` с категориями `source-coverage`, `formal-techniques`, `uniqueness-lifecycle`, `save-data-closure`, `reachability-oracles`, `duplication-parameterization`. Статус каждой категории — `checked` либо `not-applicable`; evidence непустое, а неприменимость содержит `Не применимо: <причина>`.
 - Любое изменение проверенного artifact меняет SHA-256 и делает review устаревшим. После правки нужен новый review-record из отдельной сессии.
 - Обновление agent-layer само по себе не отменяет уже принятый review неизменного artifact. Проверка исторического review-record сверяет его собственные immutable receipt, thread ID и hashes, но не требует, чтобы та reviewer-сессия оставалась текущей ролью registry. Свежая сессия обязательна только при фактическом новом review.
 - `dispatch_path` указывает на controller-owned receipt текущего artifact; thread ID и hashes в receipt и review-record должны совпадать.
@@ -107,6 +116,15 @@ python scripts/runtime_review_dispatch.py verify --package-root <FT-package> --a
 ```
 
 `affected_items` обязателен для каждого schema v2 finding обоих видов review. Для matrix перечисляй `M-*`, `GAP-*` и затронутые элементы модели `EP-*`/`BVA-*`/`DT-R*`/`ST-T*`/`CT-C*`; для TC — `TC-*`. Используй `GLOBAL` только для действительно глобального дефекта: он принудительно включает полный re-review.
+
+При matrix re-review каждый finding дополнительно содержит `discovery_status` и непустое `discovery_evidence`:
+
+- `carried-forward` — прежний finding не закрыт; обязателен `previous_finding_id`;
+- `introduced-by-revision` — дефект действительно возник в одном из `changed_items` manifest;
+- `semantic-input-change` — дефект стал применим из-за изменённого semantic input;
+- `prior-review-omission` — дефект неизменённого материала должен был войти в предыдущее полное review, но был пропущен.
+
+Record с хотя бы одним `prior-review-omission` получает `review_quality_status: failed-prior-review-incomplete`; иначе — `complete`. Это не скрывает найденный дефект, но запрещает controller-у выдавать finding drift за нормальную следующую matrix revision.
 
 - `matrix` — дефект присутствует в принятой matrix, но проверенный TC уже корректен относительно источника и после исправления matrix не требует изменения. Сначала исправляется matrix.
 - `tc` — matrix достаточна, а дефект возник только при её проекции в canonical TC. Исправляются TC.

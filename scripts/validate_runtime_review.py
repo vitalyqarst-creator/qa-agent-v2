@@ -30,6 +30,21 @@ VERDICTS = {
     "tc": {"tc-accepted", "tc-changes-required"},
 }
 TC_FINDING_ORIGINS = {"matrix", "tc", "both"}
+MATRIX_REVIEW_CHECKS = {
+    "source-coverage",
+    "formal-techniques",
+    "uniqueness-lifecycle",
+    "save-data-closure",
+    "reachability-oracles",
+    "duplication-parameterization",
+}
+MATRIX_REVIEW_CHECK_STATUSES = {"checked", "not-applicable"}
+MATRIX_DISCOVERY_STATUSES = {
+    "carried-forward",
+    "introduced-by-revision",
+    "semantic-input-change",
+    "prior-review-omission",
+}
 
 
 def tc_repair_stage(findings: list[Any]) -> str | None:
@@ -54,6 +69,88 @@ def load_record(path: Path) -> tuple[dict[str, Any] | None, list[str]]:
     if not isinstance(payload, dict):
         return None, ["review record must be a JSON object"]
     return payload, []
+
+
+def validate_matrix_review_checklist(record: dict[str, Any]) -> list[str]:
+    errors: list[str] = []
+    checklist = record.get("matrix_review_checklist")
+    if not isinstance(checklist, dict):
+        return ["full matrix review requires matrix_review_checklist"]
+    missing = MATRIX_REVIEW_CHECKS - set(checklist)
+    if missing:
+        errors.append(f"matrix_review_checklist is missing categories: {sorted(missing)}")
+    for category in sorted(MATRIX_REVIEW_CHECKS & set(checklist)):
+        entry = checklist.get(category)
+        if not isinstance(entry, dict):
+            errors.append(f"matrix_review_checklist {category} must be an object")
+            continue
+        status = entry.get("status")
+        evidence = entry.get("evidence")
+        if status not in MATRIX_REVIEW_CHECK_STATUSES:
+            errors.append(f"matrix_review_checklist {category} status must be checked or not-applicable")
+        if not isinstance(evidence, list) or not evidence or not all(
+            isinstance(item, str) and item.strip() for item in evidence
+        ):
+            errors.append(f"matrix_review_checklist {category} requires non-empty evidence")
+        elif status == "not-applicable" and not any(
+            item.strip().casefold().startswith("не применимо:") for item in evidence
+        ):
+            errors.append(
+                f"matrix_review_checklist {category} not-applicable status requires "
+                "'Не применимо: <reason>' evidence"
+            )
+    return errors
+
+
+def validate_matrix_finding_discovery(
+    record: dict[str, Any],
+    findings: list[Any],
+    manifest: dict[str, Any],
+) -> list[str]:
+    errors: list[str] = []
+    previous = manifest.get("previous_review_record")
+    previous_findings = previous.get("findings", []) if isinstance(previous, dict) else []
+    previous_ids = {
+        finding.get("id")
+        for finding in previous_findings
+        if isinstance(finding, dict) and isinstance(finding.get("id"), str)
+    }
+    changed_items = set(manifest.get("changed_items", []))
+    semantic_inputs_changed = bool(manifest.get("changed_semantic_inputs"))
+    omission_found = False
+    for index, finding in enumerate(findings, start=1):
+        if not isinstance(finding, dict):
+            continue
+        status = finding.get("discovery_status")
+        evidence = finding.get("discovery_evidence")
+        if status not in MATRIX_DISCOVERY_STATUSES:
+            errors.append(
+                f"matrix re-review finding {index} discovery_status must be one of "
+                f"{sorted(MATRIX_DISCOVERY_STATUSES)}"
+            )
+            continue
+        if not isinstance(evidence, str) or not evidence.strip():
+            errors.append(f"matrix re-review finding {index} requires discovery_evidence")
+        affected = set(finding.get("affected_items", [])) if isinstance(finding.get("affected_items"), list) else set()
+        if status == "carried-forward":
+            previous_id = finding.get("previous_finding_id")
+            if previous_id not in previous_ids:
+                errors.append(f"matrix re-review finding {index} carried-forward status requires previous_finding_id")
+        elif status == "introduced-by-revision" and not (affected & changed_items):
+            errors.append(
+                f"matrix re-review finding {index} introduced-by-revision must affect a changed item"
+            )
+        elif status == "semantic-input-change" and not semantic_inputs_changed:
+            errors.append(
+                f"matrix re-review finding {index} semantic-input-change requires changed semantic inputs"
+            )
+        elif status == "prior-review-omission":
+            omission_found = True
+
+    expected_quality = "failed-prior-review-incomplete" if omission_found else "complete"
+    if record.get("review_quality_status") != expected_quality:
+        errors.append(f"review_quality_status must be {expected_quality}")
+    return errors
 
 
 def validate(artifact: Path, record_path: Path, kind: str, require_accepted: bool = False) -> list[str]:
@@ -129,6 +226,8 @@ def validate(artifact: Path, record_path: Path, kind: str, require_accepted: boo
                 isinstance(item, str) and item.strip() for item in affected
             ):
                 errors.append(f"finding {index} must contain non-empty affected_items")
+    if kind == "matrix" and schema_version == 2 and record.get("review_mode") == "full":
+        errors.extend(validate_matrix_review_checklist(record))
     if kind == "tc" and verdict == "tc-changes-required" and isinstance(findings, list):
         for index, finding in enumerate(findings, start=1):
             if not isinstance(finding, dict):
@@ -258,6 +357,8 @@ def validate(artifact: Path, record_path: Path, kind: str, require_accepted: boo
                                 manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
                             except (OSError, json.JSONDecodeError):
                                 manifest = None
+                            if kind == "matrix" and isinstance(manifest, dict) and isinstance(findings, list):
+                                errors.extend(validate_matrix_finding_discovery(record, findings, manifest))
                             if review_mode == "delta" and isinstance(manifest, dict) and isinstance(reviewed_items, list):
                                 if set(reviewed_items) != set(manifest.get("changed_items", [])):
                                     errors.append("delta reviewed_items must equal revision manifest changed_items")

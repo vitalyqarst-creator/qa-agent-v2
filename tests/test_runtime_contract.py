@@ -1631,6 +1631,17 @@ class RuntimeContractTests(unittest.TestCase):
             "базовый, жизненный-цикл-создания",
             "базовый, уникальность-и-дубли",
         )
+        self.assertTrue(
+            any("uniqueness control table" in error for error in validate_matrix(profiled))
+        )
+        profiled += """
+
+## Контроль уникальности
+
+| Бизнес-ключ и область | Создание дубликата | Самосовпадение при редактировании | Конфликт при редактировании | Тот же ключ, другое неключевое поле | Основание или исключение |
+| --- | --- | --- | --- | --- | --- |
+| Наименование партнёра в пределах реестра | M-001 | Не применимо: инвентарь содержит только создание. | Не применимо: инвентарь содержит только создание. | Не применимо: инвентарь содержит только создание. | SR-001; проверка создания |
+"""
         self.assertEqual([], validate_matrix(profiled))
         self.assertEqual([], validate_matrix_projection(profiled, inventory, VALID_GAPS))
 
@@ -1641,33 +1652,56 @@ class RuntimeContractTests(unittest.TestCase):
     def test_formal_profiles_require_coverage_model_and_exact_projection(self) -> None:
         formal = VALID_MATRIX.replace(
             "базовый, жизненный-цикл-создания | Сохранение валидной карточки",
-            "допустимые-классы, границы | EP-01; BVA-01",
+            "допустимые-классы, границы | EP-01; BVA-LOW; BVA-BOUND; BVA-ABOVE",
         )
         self.assertTrue(any("coverage model" in error for error in validate_matrix(formal)))
 
-        formal += """
+        formal_without_boundary_control = formal + """
 
 ## Модель покрытия
 
 | Элемент покрытия | Техника | Параметр или условия | Класс, точка, переход или комбинация | Представитель | Ожидаемый результат | Основание |
 | --- | --- | --- | --- | --- | --- | --- |
 | EP-01 | классы-эквивалентности | Наименование | Допустимое значение | `ПАО СБЕРБАНК` | Значение принимается | AS.38 |
-| BVA-01 | граничные-значения | Длина наименования | На границе | `20 символов` | Значение принимается | AS.38 |
+| BVA-LOW | граничные-значения | Длина наименования | Ниже нижней границы | `0 символов` | Значение не принимается | AS.38 |
+| BVA-BOUND | граничные-значения | Длина наименования | На нижней границе | `1 символ` | Значение принимается | AS.38 |
+| BVA-ABOVE | граничные-значения | Длина наименования | Выше нижней границы | `2 символа` | Значение принимается | AS.38 |
+"""
+        self.assertTrue(
+            any(
+                "boundary family table" in error
+                for error in validate_matrix(formal_without_boundary_control)
+            )
+        )
+
+        formal = formal_without_boundary_control + """
+
+## Контроль граничных семейств
+
+| Семейство границы | Тип границы | Точка ниже | Точка на границе | Точка выше | Ожидаемая допустимость | Основание |
+| --- | --- | --- | --- | --- | --- | --- |
+| Минимальная длина наименования | нижняя | BVA-LOW | BVA-BOUND | BVA-ABOVE | нет/да/да | AS.38 |
 """
         self.assertEqual([], validate_matrix(formal))
 
-        missing_projection = formal.replace("EP-01; BVA-01", "EP-01")
+        missing_projection = formal.replace(
+            "EP-01; BVA-LOW; BVA-BOUND; BVA-ABOVE",
+            "EP-01; BVA-BOUND; BVA-ABOVE",
+        )
         self.assertTrue(
-            any("BVA-01 is not projected" in error for error in validate_matrix(missing_projection))
+            any("BVA-LOW is not projected" in error for error in validate_matrix(missing_projection))
         )
 
         wrong_technique = formal.replace(
-            "| BVA-01 | граничные-значения |",
-            "| BVA-01 | таблица-решений |",
+            "| BVA-LOW | граничные-значения |",
+            "| BVA-LOW | таблица-решений |",
         )
         self.assertTrue(any("technique must be" in error for error in validate_matrix(wrong_technique)))
 
-        duplicate_projection = formal.replace("EP-01; BVA-01", "EP-01; BVA-01; EP-01")
+        duplicate_projection = formal.replace(
+            "EP-01; BVA-LOW; BVA-BOUND; BVA-ABOVE",
+            "EP-01; BVA-LOW; BVA-BOUND; BVA-ABOVE; EP-01",
+        )
         self.assertTrue(
             any("already projected" in error for error in validate_matrix(duplicate_projection))
         )
@@ -3282,12 +3316,32 @@ class RuntimeContractTests(unittest.TestCase):
                 ],
                 "reviewed_items": ["M-001", "GAP-001"],
                 "review_scope_complete": True,
+                "matrix_review_checklist": {
+                    "source-coverage": {"status": "checked", "evidence": ["SR-001; SR-002"]},
+                    "formal-techniques": {"status": "checked", "evidence": ["M-001; GAP-001"]},
+                    "uniqueness-lifecycle": {
+                        "status": "not-applicable",
+                        "evidence": ["Не применимо: источник не задаёт уникальность."],
+                    },
+                    "save-data-closure": {"status": "checked", "evidence": ["M-001"]},
+                    "reachability-oracles": {"status": "checked", "evidence": ["M-001; GAP-001"]},
+                    "duplication-parameterization": {"status": "checked", "evidence": ["M-001"]},
+                },
             }
             review_path = review_dir / "matrix-review.json"
             review_path.write_text(json.dumps(first_record, ensure_ascii=False), encoding="utf-8")
             review_path.with_suffix(".md").write_text("# Ревью матрицы\n", encoding="utf-8")
             enrich_review_record(root, artifact, review_path, "matrix", "reviews")
             self.assertEqual([], validate_review(artifact, review_path, "matrix"))
+
+            missing_checklist = json.loads(review_path.read_text(encoding="utf-8"))
+            checklist = missing_checklist.pop("matrix_review_checklist")
+            review_path.write_text(json.dumps(missing_checklist, ensure_ascii=False), encoding="utf-8")
+            self.assertTrue(
+                any("requires matrix_review_checklist" in error for error in validate_review(artifact, review_path, "matrix"))
+            )
+            missing_checklist["matrix_review_checklist"] = checklist
+            review_path.write_text(json.dumps(missing_checklist, ensure_ascii=False), encoding="utf-8")
 
             artifact.write_text(
                 VALID_MATRIX.replace("Карточка сохранена", "Карточка сохранена и доступна для повторного открытия"),
@@ -3321,11 +3375,19 @@ class RuntimeContractTests(unittest.TestCase):
                 "findings": [],
                 "reviewed_items": ["M-001"],
                 "review_scope_complete": True,
+                "review_quality_status": "complete",
             }
             review_path.write_text(json.dumps(second_record, ensure_ascii=False), encoding="utf-8")
             review_path.with_suffix(".md").write_text("# Повторное review matrix\n", encoding="utf-8")
             enrich_review_record(root, artifact, review_path, "matrix", "reviews")
             self.assertEqual([], validate_review(artifact, review_path, "matrix", require_accepted=True))
+
+            missing_quality_status = json.loads(review_path.read_text(encoding="utf-8"))
+            missing_quality_status.pop("review_quality_status")
+            review_path.write_text(json.dumps(missing_quality_status, ensure_ascii=False), encoding="utf-8")
+            self.assertTrue(
+                any("review_quality_status must be complete" in error for error in validate_review(artifact, review_path, "matrix"))
+            )
 
     def test_matrix_item_index_localizes_row_change_without_structure_change(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:

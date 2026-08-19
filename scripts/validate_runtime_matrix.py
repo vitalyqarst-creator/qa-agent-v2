@@ -139,6 +139,30 @@ COVERAGE_TECHNIQUES = {
     "ST-T": "переходы-состояний",
     "CT-C": "комбинаторное-покрытие",
 }
+BOUNDARY_FAMILY_HEADERS = (
+    "Семейство границы",
+    "Тип границы",
+    "Точка ниже",
+    "Точка на границе",
+    "Точка выше",
+    "Ожидаемая допустимость",
+    "Основание",
+)
+BOUNDARY_TYPES = {
+    "нижняя": "нет/да/да",
+    "верхняя": "да/да/нет",
+    "точная": "нет/да/нет",
+}
+UNIQUENESS_CONTROL_HEADERS = (
+    "Бизнес-ключ и область",
+    "Создание дубликата",
+    "Самосовпадение при редактировании",
+    "Конфликт при редактировании",
+    "Тот же ключ, другое неключевое поле",
+    "Основание или исключение",
+)
+MATRIX_ID_FULL_RE = re.compile(r"M-[A-Za-z0-9.-]+")
+NOT_APPLICABLE_RE = re.compile(r"^Не применимо:\s+\S", re.IGNORECASE)
 
 
 def cells(line: str) -> list[str]:
@@ -206,6 +230,111 @@ def validate_coverage_model(content: str, used_items: dict[str, str]) -> list[st
             errors.append(f"{row_id}: formal coverage item {item} is absent from coverage model")
     for item in sorted(model_items - set(used_items)):
         errors.append(f"coverage model item {item} is not projected into the matrix")
+    return errors
+
+
+def validate_boundary_families(content: str, used_items: dict[str, str]) -> list[str]:
+    errors: list[str] = []
+    projected = {item for item in used_items if item.startswith("BVA-")}
+    if not projected:
+        return errors
+    table = find_markdown_table(content, BOUNDARY_FAMILY_HEADERS)
+    if table is None or not table.rows:
+        return ["boundary profile requires a non-empty boundary family table"]
+
+    seen_items: set[str] = set()
+    seen_families: set[str] = set()
+    for row_number, row in enumerate(table.rows, start=1):
+        family = row[table.index("Семейство границы")].strip()
+        boundary_type = row[table.index("Тип границы")].strip().casefold()
+        expected = row[table.index("Ожидаемая допустимость")].strip().casefold().replace(" ", "")
+        basis = row[table.index("Основание")].strip()
+        if not family or EMPTY_RE.fullmatch(family):
+            errors.append(f"boundary family row {row_number}: family is empty")
+        elif family in seen_families:
+            errors.append(f"boundary family row {row_number}: duplicate family {family!r}")
+        else:
+            seen_families.add(family)
+        if boundary_type not in BOUNDARY_TYPES:
+            errors.append(
+                f"boundary family {family or row_number!r}: type must be нижняя, верхняя or точная"
+            )
+        elif expected != BOUNDARY_TYPES[boundary_type]:
+            errors.append(
+                f"boundary family {family!r}: expected admissibility must be "
+                f"{BOUNDARY_TYPES[boundary_type]} for type {boundary_type}"
+            )
+        if not basis or EMPTY_RE.fullmatch(basis):
+            errors.append(f"boundary family {family or row_number!r}: basis is empty")
+        for column in ("Точка ниже", "Точка на границе", "Точка выше"):
+            item = row[table.index(column)].strip()
+            if not re.fullmatch(r"BVA-[A-Za-z0-9.-]+", item):
+                errors.append(f"boundary family {family or row_number!r}: {column} must contain one BVA-* item")
+                continue
+            if item in seen_items:
+                errors.append(f"boundary family {family or row_number!r}: duplicate boundary point {item}")
+            seen_items.add(item)
+
+    for item in sorted(projected - seen_items):
+        errors.append(f"boundary coverage item {item} is absent from boundary family table")
+    for item in sorted(seen_items - projected):
+        errors.append(f"boundary family item {item} is not projected into the matrix")
+    return errors
+
+
+def validate_uniqueness_control(
+    content: str,
+    header: list[str],
+    rows: list[list[str]],
+) -> list[str]:
+    errors: list[str] = []
+    profile_index = header.index("Профили тест-дизайна")
+    id_index = header.index("ID")
+    uniqueness_ids = {
+        row[id_index]
+        for row in rows
+        if "уникальность-и-дубли" in row[profile_index]
+    }
+    if not uniqueness_ids:
+        return errors
+    table = find_markdown_table(content, UNIQUENESS_CONTROL_HEADERS)
+    if table is None or not table.rows:
+        return ["uniqueness profile requires a non-empty uniqueness control table"]
+
+    scenario_columns = UNIQUENESS_CONTROL_HEADERS[1:5]
+    referenced: set[str] = set()
+    seen_keys: set[str] = set()
+    for row_number, row in enumerate(table.rows, start=1):
+        key_scope = row[table.index("Бизнес-ключ и область")].strip()
+        basis = row[table.index("Основание или исключение")].strip()
+        if not key_scope or EMPTY_RE.fullmatch(key_scope):
+            errors.append(f"uniqueness control row {row_number}: business key and scope are empty")
+        elif key_scope in seen_keys:
+            errors.append(f"uniqueness control row {row_number}: duplicate business key {key_scope!r}")
+        else:
+            seen_keys.add(key_scope)
+        if not basis or EMPTY_RE.fullmatch(basis):
+            errors.append(f"uniqueness control row {row_number}: basis is empty")
+        executable_count = 0
+        for column in scenario_columns:
+            value = row[table.index(column)].strip()
+            if NOT_APPLICABLE_RE.match(value):
+                continue
+            if not MATRIX_ID_FULL_RE.fullmatch(value):
+                errors.append(
+                    f"uniqueness control row {row_number}: {column} must contain one M-* item "
+                    "or 'Не применимо: <source-backed reason>'"
+                )
+                continue
+            executable_count += 1
+            referenced.add(value)
+            if value not in uniqueness_ids:
+                errors.append(f"uniqueness control row {row_number}: {value} is not a uniqueness-profile matrix row")
+        if executable_count == 0:
+            errors.append(f"uniqueness control row {row_number}: at least one executable uniqueness scenario is required")
+
+    for row_id in sorted(uniqueness_ids - referenced):
+        errors.append(f"uniqueness-profile matrix row {row_id} is absent from uniqueness control table")
     return errors
 
 
@@ -312,6 +441,8 @@ def validate(content: str) -> list[str]:
                     "contract with separate capture and assertion points"
                 )
     errors.extend(validate_coverage_model(content, used_formal_items))
+    errors.extend(validate_boundary_families(content, used_formal_items))
+    errors.extend(validate_uniqueness_control(content, header, rows))
     return errors
 
 
