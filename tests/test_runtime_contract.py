@@ -735,17 +735,48 @@ class RuntimeContractTests(unittest.TestCase):
     def test_system_generated_identifier_can_use_runtime_binding(self) -> None:
         bound = VALID_TC.replace(
             "1. Открыть карточку добавления партнёра.",
-            "1. Партнёр `ПАО СБЕРБАНК` создан.\n2. Зафиксировать отображаемый системный ID партнёра `ПАО СБЕРБАНК` как `PARTNER-ID-01`.",
+            "1. Партнёр `ПАО СБЕРБАНК` создан.\n2. Зафиксировать системный ID из уведомления о создании партнёра `ПАО СБЕРБАНК` как `PARTNER-ID-01`.",
         ).replace(
             "Карточка партнёра сохранена.",
             "Карточка партнёра `ПАО СБЕРБАНК` отображает системный ID `PARTNER-ID-01`.",
         )
         self.assertEqual([], validate_tc(bound))
 
+    def test_runtime_binding_cannot_assert_the_same_observation_it_was_captured_from(self) -> None:
+        circular = VALID_TC.replace(
+            "1. Открыть карточку добавления партнёра.",
+            "1. Партнёр `ПАО СБЕРБАНК` создан.",
+        ).replace(
+            "1. В поле `Наименование партнёра` ввести `ПАО СБЕРБАНК`.",
+            "1. Зафиксировать отображаемый системный ID карточки партнёра `ПАО СБЕРБАНК` как `PARTNER-ID-01`.",
+        ).replace(
+            "2. Нажать `СОХРАНИТЬ`.",
+            "2. Просмотреть карточку партнёра `ПАО СБЕРБАНК`.",
+        ).replace(
+            "Карточка партнёра сохранена.",
+            "Карточка партнёра `ПАО СБЕРБАНК` отображает системный ID `PARTNER-ID-01`.",
+        )
+        self.assertTrue(any("same observation" in error for error in validate_tc(circular)))
+
+        property_check = VALID_TC.replace(
+            "Карточка партнёра сохранена.",
+            "Карточка партнёра `ПАО СБЕРБАНК` отображает непустое значение системного ID.",
+        )
+        self.assertEqual([], validate_tc(property_check))
+
+        preserved_after_transition = VALID_TC.replace(
+            "1. Открыть карточку добавления партнёра.",
+            "1. Открыть карточку партнёра `ПАО СБЕРБАНК`.\n2. Зафиксировать системный ID карточки партнёра `ПАО СБЕРБАНК` как `PARTNER-ID-01`.",
+        ).replace(
+            "Карточка партнёра сохранена.",
+            "Карточка партнёра `ПАО СБЕРБАНК` после сохранения отображает системный ID `PARTNER-ID-01`.",
+        )
+        self.assertEqual([], validate_tc(preserved_after_transition))
+
     def test_runtime_binding_must_be_reused_in_expected_result(self) -> None:
         unused = VALID_TC.replace(
             "1. Открыть карточку добавления партнёра.",
-            "1. Партнёр `ПАО СБЕРБАНК` создан.\n2. Зафиксировать отображаемый системный ID партнёра `ПАО СБЕРБАНК` как `PARTNER-ID-01`.",
+            "1. Партнёр `ПАО СБЕРБАНК` создан.\n2. Зафиксировать системный ID из уведомления о создании партнёра `ПАО СБЕРБАНК` как `PARTNER-ID-01`.",
         )
         self.assertTrue(any("captured runtime bindings must be reused" in error for error in validate_tc(unused)))
 
@@ -1223,6 +1254,19 @@ class RuntimeContractTests(unittest.TestCase):
         self.assertEqual([], validate_matrix(VALID_MATRIX))
         invalid = VALID_MATRIX.replace("базовый, жизненный-цикл-создания", "")
         self.assertTrue(any("no test-design profile" in error for error in validate_matrix(invalid)))
+
+    def test_matrix_requires_explicit_contract_for_system_generated_output(self) -> None:
+        dynamic = VALID_MATRIX.replace(
+            "`Наименование` = `ПАО СБЕРБАНК`",
+            "`Системный ID` = `ID текущего прогона`",
+        )
+        self.assertTrue(any("system-generated output requires" in error for error in validate_matrix(dynamic)))
+
+        property_contract = dynamic.replace(
+            "Карточка сохранена",
+            "Проверка свойства: отображается непустой системный ID",
+        )
+        self.assertEqual([], validate_matrix(property_contract))
 
     def test_traceability_supports_project_specific_codes_and_uncoded_anchors(self) -> None:
         anchors = extract_anchors(

@@ -99,9 +99,21 @@ RUNTIME_BINDING_RE = re.compile(
     r"^\d+\.\s+Зафиксировать\b[^\n]*?\bкак\s+`([A-Za-zА-Яа-яЁё][A-Za-zА-Яа-яЁё0-9_-]{2,63})`\s*\.?$",
     re.IGNORECASE | re.MULTILINE,
 )
+RUNTIME_BINDING_LINE_RE = re.compile(
+    r"^(?P<line>\d+\.\s+Зафиксировать\b[^\n]*?\bкак\s+`(?P<binding>[A-Za-zА-Яа-яЁё][A-Za-zА-Яа-яЁё0-9_-]{2,63})`\s*\.?)$",
+    re.IGNORECASE | re.MULTILINE,
+)
 ONE_TIME_ISOLATION_RE = re.compile(r"\bодноразов\w*\b[^\n]{0,80}\bизолирован\w*\b", re.IGNORECASE)
 TARGET_KIND_RE = re.compile(
     r"\b(виджет|блок|карточк|партн[её]р|реквизит|кнопк|действи|пол[ея]|строк|ссылк|вкладк)\w*\b",
+    re.IGNORECASE,
+)
+OBSERVATION_SURFACE_RE = re.compile(
+    r"\b(виджет|блок|карточк|форм|окн|спис|таблиц|строк|ответ|уведомлен|сообщен|журнал|api)\w*\b",
+    re.IGNORECASE,
+)
+VALUE_PRESERVING_TRANSITION_RE = re.compile(
+    r"\b(?:Сохранить|Создать|Добавить|Изменить|Удалить|Архивировать|Разархивировать|Вернуть|Подтвердить|Отправить|Обновить)\b",
     re.IGNORECASE,
 )
 
@@ -211,6 +223,54 @@ def impossible_absence_lookups(steps: str, expected: str) -> list[str]:
         if expected_literals & lookup_literals:
             violations.append(line)
     return violations
+
+
+def circular_runtime_bindings(preconditions: str, steps: str, expected: str) -> list[str]:
+    issues: list[str] = []
+    step_lines = [line.strip() for line in steps.splitlines() if NUMBERED_LINE_RE.match(line.strip())]
+    captures: list[tuple[str, int, str, str]] = []
+    for section_name, section_value in (("Предусловия", preconditions), ("Шаги", steps)):
+        numbered_lines = [
+            line.strip() for line in section_value.splitlines() if NUMBERED_LINE_RE.match(line.strip())
+        ]
+        for index, line in enumerate(numbered_lines):
+            match = RUNTIME_BINDING_LINE_RE.fullmatch(line)
+            if match:
+                captures.append((section_name, index, line, match.group("binding")))
+
+    expected_clauses = [clause.strip() for clause in re.split(r"\s*;\s*", expected) if clause.strip()]
+    for section_name, line_index, line, binding in captures:
+        source_surface = OBSERVATION_SURFACE_RE.search(line)
+        if source_surface is None:
+            issues.append(f"runtime binding {binding} does not name its capture observation surface")
+            continue
+        clause = next((item for item in expected_clauses if f"`{binding}`" in item), expected)
+        assertion_surface = OBSERVATION_SURFACE_RE.search(clause)
+        if assertion_surface is None:
+            issues.append(f"runtime binding {binding} does not name its assertion observation surface")
+            continue
+        capture_literals = {
+            value.strip().casefold()
+            for value in BACKTICK_LITERAL_RE.findall(line)
+            if value != binding and len(value.strip()) >= 3
+        }
+        assertion_literals = {
+            value.strip().casefold()
+            for value in BACKTICK_LITERAL_RE.findall(clause)
+            if value != binding and len(value.strip()) >= 3
+        }
+        if section_name == "Предусловия":
+            following_actions = step_lines
+        else:
+            following_actions = step_lines[line_index + 1 :]
+        has_transition = any(VALUE_PRESERVING_TRANSITION_RE.search(item) for item in following_actions)
+        same_surface = normalized_label(source_surface.group(1)) == normalized_label(assertion_surface.group(1))
+        same_object = bool(capture_literals & assertion_literals)
+        if same_surface and same_object and not has_transition:
+            issues.append(
+                f"runtime binding {binding} is captured from and asserted against the same observation without a transition"
+            )
+    return issues
 
 
 def sections(block: str) -> dict[str, str]:
@@ -367,6 +427,8 @@ def validate(content: str) -> list[str]:
                 f"{tc_id}: a step cannot find the same target whose absence is required by the expected result ({lookup})"
             )
         runtime_bindings = set(RUNTIME_BINDING_RE.findall(f"{preconditions}\n{steps}"))
+        for issue in circular_runtime_bindings(preconditions, steps, expected):
+            errors.append(f"{tc_id}: {issue}")
         data_values = [value.strip().casefold() for _key, value in data_pairs if len(value.strip()) >= 3]
         declared_values = {value.strip() for _key, value in data_pairs}.union(runtime_bindings)
         undeclared_identifiers = sorted(

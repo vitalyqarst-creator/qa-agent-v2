@@ -58,6 +58,19 @@ EMPTY_RE = re.compile(r"^(?:-|—|n/?a|не определен[оы]?|требу
 SOURCE_ROW_TOKEN_RE = re.compile(r"(?<![A-Za-z0-9_.-])SR-\d{2,}(?![A-Za-z0-9_.-])")
 MATRIX_ROW_TOKEN_RE = re.compile(r"(?<![A-Za-z0-9_.-])M-\d{2,}(?![A-Za-z0-9_.-])")
 CONCRETE_DATA_RE = re.compile(r"`[^`\n]+`\s*=\s*`[^`\n]+`")
+DYNAMIC_OUTPUT_RE = re.compile(
+    r"\b(?:системн\w*\s+(?:id|идентификатор\w*|номер\w*|timestamp|sequence)|"
+    r"(?:id|идентификатор\w*|номер\w*|timestamp|sequence)\s+текущ\w*\s+прогон\w*|"
+    r"выданн\w*\s+систем\w*\s+(?:id|идентификатор\w*|номер\w*))\b",
+    re.IGNORECASE,
+)
+DYNAMIC_PROPERTY_RE = re.compile(r"\bпроверк\w*\s+свойств\w*\s*:", re.IGNORECASE)
+DYNAMIC_BINDING_RE = re.compile(
+    r"\b(?:runtime\s+binding|связыван\w*\s+(?:динамическ\w*\s+)?значен\w*)\b",
+    re.IGNORECASE,
+)
+BINDING_CAPTURE_POINT_RE = re.compile(r"\bточк\w*\s+фиксац\w*\s*:", re.IGNORECASE)
+BINDING_ASSERTION_POINT_RE = re.compile(r"\bточк\w*\s+сверк\w*\s*:", re.IGNORECASE)
 HOVER_REVEALED_CONTROL_RE = re.compile(
     r"\bпри\s+наведени\w*[^|\n.]{0,180}?\bкнопк\w*\s+[«\"`]([^»\"`]+)[»\"`]",
     re.IGNORECASE,
@@ -273,6 +286,19 @@ def validate(content: str) -> list[str]:
             errors.append(
                 f"{row_id}: missing environment binding requires needs-test-data, not absent test data"
             )
+        row_text = " | ".join(row)
+        if decision == "TC" and DYNAMIC_OUTPUT_RE.search(row_text):
+            has_property_contract = bool(DYNAMIC_PROPERTY_RE.search(row_text))
+            has_binding_contract = bool(
+                DYNAMIC_BINDING_RE.search(row_text)
+                and BINDING_CAPTURE_POINT_RE.search(row_text)
+                and BINDING_ASSERTION_POINT_RE.search(row_text)
+            )
+            if not (has_property_contract or has_binding_contract):
+                errors.append(
+                    f"{row_id}: system-generated output requires a property-check or runtime-binding "
+                    "contract with separate capture and assertion points"
+                )
     errors.extend(validate_coverage_model(content, used_formal_items))
     return errors
 
