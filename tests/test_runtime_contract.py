@@ -21,6 +21,7 @@ from scripts.runtime_review_dispatch import create_dispatch, sha256, validate_di
 from scripts.runtime_review_delta import artifact_index, enrich_review_record, semantic_input_hashes, write_revision_manifest
 from scripts.runtime_session_registry import (
     acknowledge_runtime,
+    canonical_scope,
     inherit_source_locator,
     initialize_registry,
     record_role,
@@ -28,7 +29,7 @@ from scripts.runtime_session_registry import (
     validate_controller,
     validate_topology,
 )
-from scripts.runtime_traceability import extract_anchors
+from scripts.runtime_traceability import diagnose_markdown_table, extract_anchors, find_markdown_table
 from scripts.validate_fixture_catalog import validate as validate_catalog
 from scripts.validate_runtime_matrix import (
     validate as validate_matrix,
@@ -39,7 +40,10 @@ from scripts.validate_runtime_review import tc_repair_stage, validate as validat
 from scripts.validate_runtime_scope import (
     classify_scope_error,
     generic_unavailability_without_observation,
+    independent_property_conflicts,
+    partition_scope_findings,
     public_contract,
+    scope_stage_decision,
     source_row_tokens,
     table_property_coverage_errors,
     table_row_references,
@@ -1121,8 +1125,8 @@ class RuntimeContractTests(unittest.TestCase):
         )
         self.assertIn("| ID | Связанная обязанность |", contract["markdown_templates"]["coverage_gaps"])
         self.assertIn("**Ответ БА:** _Введите ответ здесь._", contract["markdown_templates"]["clarification_card"])
-        self.assertEqual(2, contract["correction_policy"]["maximum_scope_revision_count"])
-        self.assertIn("remaining reported defects", contract["correction_policy"]["before_each_validation"])
+        self.assertEqual(1, contract["correction_policy"]["maximum_scope_revision_count"])
+        self.assertIn("blocking_errors", contract["correction_policy"]["before_validation"])
         self.assertTrue(
             any("один основной наблюдаемый результат" in item for item in contract["atomicity_checks"])
         )
@@ -1173,7 +1177,7 @@ class RuntimeContractTests(unittest.TestCase):
             scope = package / "work" / "stage-handoffs" / "9.3.3"
             scope.mkdir(parents=True)
             workflow = scope / "workflow-state.yaml"
-            workflow.write_text("status: completed\nscope_revision_count: 1\n", encoding="utf-8")
+            workflow.write_text("status: completed\nscope_revision_count: 0\n", encoding="utf-8")
 
             first = subprocess.run(
                 [sys.executable, "scripts/validate_runtime_scope.py", str(package), str(scope)],
@@ -1185,10 +1189,12 @@ class RuntimeContractTests(unittest.TestCase):
             )
             first_payload = json.loads(first.stdout)
             self.assertTrue(first_payload["correction_allowed"])
+            self.assertFalse(first_payload["writer_allowed"])
+            self.assertTrue(first_payload["blocking_errors"])
             self.assertEqual("draft", first_payload["workflow_status"])
             self.assertIn("status: draft", workflow.read_text(encoding="utf-8"))
 
-            workflow.write_text("status: completed\nscope_revision_count: 2\n", encoding="utf-8")
+            workflow.write_text("status: completed\nscope_revision_count: 1\n", encoding="utf-8")
             final = subprocess.run(
                 [sys.executable, "scripts/validate_runtime_scope.py", str(package), str(scope)],
                 cwd=root,
@@ -1199,8 +1205,65 @@ class RuntimeContractTests(unittest.TestCase):
             )
             final_payload = json.loads(final.stdout)
             self.assertFalse(final_payload["correction_allowed"])
+            self.assertFalse(final_payload["writer_allowed"])
             self.assertEqual("failed", final_payload["workflow_status"])
             self.assertIn("status: failed", workflow.read_text(encoding="utf-8"))
+
+    def test_scope_findings_partition_does_not_block_writer_on_quality_only(self) -> None:
+        blocking, quality = partition_scope_findings(
+            [
+                "SR-001: active source row aggregates independent properties: editability, format",
+                "coverage-gaps table row 1 has 5 cells but expected 6",
+            ]
+        )
+        self.assertEqual(1, len(blocking))
+        self.assertEqual(1, len(quality))
+        decision = scope_stage_decision([quality[0]], 0)
+        self.assertTrue(decision["writer_allowed"])
+        self.assertEqual("completed", decision["workflow_status"])
+        self.assertFalse(decision["correction_allowed"])
+
+    def test_scope_identity_uses_section_for_label_and_slug(self) -> None:
+        self.assertEqual("9.3.3", canonical_scope("9.3.3 Карточка реквизита"))
+        self.assertEqual("9.3.3", canonical_scope("9.3.3-kartochka-rekvizita"))
+
+    def test_session_registry_accepts_and_migrates_a_legacy_human_scope_key(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            create_session_topology(root, "9.3.3")
+            registry = root / "work" / "runtime-session-registry.json"
+            payload = json.loads(registry.read_text(encoding="utf-8"))
+            payload["scopes"]["9.3.3 Карточка реквизита"] = payload["scopes"].pop("9.3.3")
+            registry.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+            self.assertEqual([], validate_topology(root, "scope-analyzer", "9.3.3-kartochka-rekvizita"))
+            record_role(root, "scope-analyzer", ANALYZER_THREAD, "local", "9.3.3")
+            migrated = json.loads(registry.read_text(encoding="utf-8"))
+            self.assertIn("9.3.3", migrated["scopes"])
+            self.assertNotIn("9.3.3 Карточка реквизита", migrated["scopes"])
+
+    def test_atomicity_allows_one_autofill_of_required_field_but_not_format_plus_editing(self) -> None:
+        self.assertEqual(
+            [],
+            independent_property_conflicts(
+                "Система автоматически заполняет обязательное поле БИК данными банка."
+            ),
+        )
+        self.assertEqual(
+            {"редактируемость", "формат значения"},
+            set(independent_property_conflicts("Пользователь может редактировать дату в формате дд.мм.гггг.")),
+        )
+
+    def test_markdown_table_rejects_a_malformed_later_row(self) -> None:
+        content = (
+            "| ID | SR | Источник | Класс | Недостаток | Закрытие |\n"
+            "| --- | --- | --- | --- | --- | --- |\n"
+            "| GAP-001 | SR-001 | Раздел 1 | неоднозначность-требования | Нет правила | Ответ БА |\n"
+            "| GAP-002 | SR-002 | Раздел 1 | Пропущена ячейка | Ответ БА |\n"
+        )
+        headers = ("ID", "SR", "Источник", "Класс", "Недостаток", "Закрытие")
+        self.assertIsNone(find_markdown_table(content, headers))
+        self.assertIn("row 2 has 5 cells instead of 6", diagnose_markdown_table(content, headers) or "")
 
     def test_scope_helpers_accept_punctuated_table_anchor_and_expand_sr_ranges(self) -> None:
         self.assertEqual(

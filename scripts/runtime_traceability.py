@@ -82,8 +82,9 @@ def find_markdown_table(content: str, required_headers: tuple[str, ...]) -> Mark
             if not candidate.strip().startswith("|"):
                 break
             row = cells(candidate)
-            if len(row) == len(header):
-                rows.append(tuple(row))
+            if len(row) != len(header):
+                return None
+            rows.append(tuple(row))
         return MarkdownTable(tuple(header), tuple(rows))
     return None
 

@@ -113,7 +113,7 @@ RESOLVED_EXCLUSION_RE = re.compile(
 RESOLVED_GAP_RE = re.compile(r"^\s*Закрыт(?:о|а|ы)?(?:\s+[^:|]{1,60})?\s*:", re.IGNORECASE)
 TABLE_ROW_REFERENCE_RE = re.compile(
     r"Таблица\s+(\d+)\s*,\s*строка(?:\s+первого\s+столбца)?\s+"
-    r"(?:«(.+)»|\"([^\"]+)\"|'([^']+)'|`([^`]+)`)(?:\s*,\s*примечание)?"
+    r"(?:«(.+?)»|\"([^\"]+)\"|'([^']+)'|`([^`]+)`)(?:\s*,\s*примечание)?"
     r"(?=\s*(?:[.;]|$))",
     re.IGNORECASE,
 )
@@ -219,6 +219,13 @@ VISUAL_INCOMPLETE_RE = re.compile(
     r"(?:не\s+показыва|не\s+содерж|не\s+подтвержда|не\s+позволя)",
     re.IGNORECASE,
 )
+VISUAL_ONLY_GAP_RE = re.compile(
+    r"(?:макет|рисунок|визуальн\w*)[^|\n]{0,180}"
+    r"(?:не\s+показыв|не\s+содерж|не\s+подтвержд|отлича|расхожд|"
+    r"написан|подпис)"
+    r"|отсутств\w*[^|\n]{0,120}(?:на\s+макет|в\s+макет|на\s+рисунк)",
+    re.IGNORECASE,
+)
 TABLE_COVERAGE_NUMBER_RE = re.compile(r"^(?:Таблица\s+)?(\d+)$", re.IGNORECASE)
 OPAQUE_TABLE_HEADER_RE = re.compile(r"^[A-Za-zА-Яа-яЁё]{1,2}$")
 UNAMBIGUOUS_SHORT_HEADERS = {"id"}
@@ -287,19 +294,45 @@ def classify_scope_error(error: str) -> str:
     value = error.casefold()
     if any(token in value for token in ("aggregates independent", "atomic", "split mixed", "one object")):
         return "atomicity"
-    if any(token in value for token in ("separator", "required table headers", "has no typed", "has no required", "must contain the source-compatible data table")):
+    if re.search(r"row\s+\d+\s+has\s+\d+\s+cells", value) or any(
+        token in value
+        for token in (
+            "separator",
+            "required table headers",
+            "has no typed",
+            "has no required",
+            "must contain the source-compatible data table",
+            "must contain an explicit",
+            "must contain a non-empty",
+            "has no data rows",
+            "header columns",
+            "row 1 has",
+        )
+    ):
         return "format"
     if any(token in value for token in ("misses", "omitted", "complete table-row", "first and final", "full property")):
         return "completeness"
     if value.startswith("test-data-plan") or "boundary needs" in value:
         return "test-data"
-    if any(token in value for token in ("source cites", "source needs", "source reference", "exact source", "unknown id", "unknown gap", "does not exist in table")):
+    if any(token in value for token in ("source cites", "source needs", "source reference", "exact source", "unknown id", "unknown gap", "does not exist in table", "references unknown")):
         return "traceability"
-    if any(token in value for token in ("missing scope artifact", "workflow-state", "topology", "clarification register", "repository-local temporary")):
+    if any(token in value for token in ("missing scope artifact", "workflow-state", "topology", "clarification register", "repository-local temporary", "session assignment")):
         return "process"
     if "use russian wording" in value or "user-facing text error" in value:
         return "language"
     return "semantic"
+
+
+BLOCKING_SCOPE_ERROR_CLASSES = {"process", "format", "traceability", "completeness"}
+
+
+def partition_scope_findings(errors: list[str]) -> tuple[list[str], list[str]]:
+    blocking: list[str] = []
+    quality: list[str] = []
+    for error in errors:
+        target = blocking if classify_scope_error(error) in BLOCKING_SCOPE_ERROR_CLASSES else quality
+        target.append(error)
+    return blocking, quality
 
 
 def scope_error_summary(errors: list[str]) -> dict[str, int]:
@@ -308,6 +341,23 @@ def scope_error_summary(errors: list[str]) -> dict[str, int]:
         category = classify_scope_error(error)
         result[category] = result.get(category, 0) + 1
     return dict(sorted(result.items()))
+
+
+def scope_stage_decision(errors: list[str], revision_count: int | None) -> dict[str, object]:
+    blocking_errors, quality_findings = partition_scope_findings(errors)
+    correction_allowed = bool(blocking_errors) and revision_count == 0
+    writer_allowed = not blocking_errors
+    return {
+        "valid": writer_allowed,
+        "writer_allowed": writer_allowed,
+        "scope_revision_count": revision_count,
+        "correction_allowed": correction_allowed,
+        "workflow_status": "completed" if writer_allowed else ("draft" if correction_allowed else "failed"),
+        "error_counts_by_class": scope_error_summary(errors),
+        "blocking_errors": blocking_errors,
+        "quality_findings": quality_findings,
+        "errors": errors,
+    }
 
 
 def generic_unavailability_without_observation(observation_surface: str, observed_result: str) -> bool:
@@ -508,11 +558,10 @@ def public_contract(scope: str | None = None, package_root: Path | None = None) 
         "markdown_templates": templates,
         "correction_policy": {
             "initial_scope_revision_count": 0,
-            "maximum_scope_revision_count": 2,
-            "first_local_correction": 1,
-            "final_delta_only_correction": 2,
-            "before_each_validation": "close every returned error; after count 1 change only the remaining reported defects and do not reread semantic sources",
-            "when_invalid_at_count_2": "stop; correction_allowed=false; workflow status is failed",
+            "maximum_scope_revision_count": 1,
+            "structural_correction": 1,
+            "before_validation": "fix blocking_errors once; quality_findings are carried to matrix authoring and review",
+            "when_blocking_at_count_1": "stop; correction_allowed=false; workflow status is failed",
         },
         "atomicity_checks": [
             "один объект или UI-уровень в одной обязанности",
@@ -876,6 +925,17 @@ def single_observation_surface(value: str) -> bool:
     return not MULTI_SURFACE_RE.search(without_labels)
 
 
+def independent_property_conflicts(statement: str) -> list[str]:
+    matched = [
+        name for name, pattern in INDEPENDENT_PROPERTY_PATTERNS.items() if pattern.search(statement)
+    ]
+    automatic_required_field = (
+        set(matched) == {"предзаполнение данных", "обязательность"}
+        and not re.search(r"незаполн|пуст\w*|не\s+сохран", statement, re.IGNORECASE)
+    )
+    return [] if automatic_required_field else matched
+
+
 def duplicates_fully_answered_question(current_question: str, support: str, anchors: set[str]) -> bool:
     current_tokens = meaningful_tokens(current_question)
     for card in re.split(r"(?=^###\s+CLR-)", support, flags=re.MULTILINE):
@@ -1090,9 +1150,7 @@ def validate(package_root: Path, scope_dir: Path) -> list[str]:
                     f"{inventory_id}: split mixed accepted and rejected outcomes into separate source obligations; "
                     "parameterize invalid classes only when they share one rejection result"
                 )
-            matched_properties = [
-                name for name, pattern in INDEPENDENT_PROPERTY_PATTERNS.items() if pattern.search(statement_value)
-            ]
+            matched_properties = independent_property_conflicts(statement_value)
             if len(matched_properties) > 1:
                 errors.append(
                     f"{inventory_id}: active source row aggregates independent properties: "
@@ -1211,10 +1269,9 @@ def validate(package_root: Path, scope_dir: Path) -> list[str]:
     scope_brief_content = (scope_dir / "scope-brief.md").read_text(encoding="utf-8")
     workflow_content = (scope_dir / "workflow-state.yaml").read_text(encoding="utf-8")
     revision_count = scalar_values(workflow_content).get("scope_revision_count")
-    if revision_count not in {"0", "1", "2"}:
+    if revision_count not in {"0", "1"}:
         errors.append(
-            "workflow-state scope_revision_count must be 0 initially, 1 after the first correction "
-            "or 2 after the final delta correction"
+            "workflow-state scope_revision_count must be 0 initially or 1 after the only structural correction"
         )
     if not re.search(
         r"(?m)^clarification_register:\s*[\"']?work/scope-clarification-requests\.md[\"']?\s*$",
@@ -1702,16 +1759,16 @@ def validate(package_root: Path, scope_dir: Path) -> list[str]:
     gap_ids: list[str] = []
     resolved_gap_ids: set[str] = set()
     gap_sources: dict[str, str] = {}
-    gaps_parse_failed = "GAP-" in gaps_content and (gaps is None or not gaps.rows)
+    gap_diagnostic = diagnose_markdown_table(
+        gaps_content,
+        ("ID", "Связанная обязанность", "Источник", "Класс", "Недостаток источника", "Что требуется для закрытия"),
+    )
+    gaps_parse_failed = "GAP-" in gaps_content and (gaps is None or not gaps.rows or gap_diagnostic is not None)
     if "GAP-" in gaps_content:
         if gaps_parse_failed:
-            diagnostic = diagnose_markdown_table(
-                gaps_content,
-                ("ID", "Связанная обязанность", "Источник", "Класс", "Недостаток источника", "Что требуется для закрытия"),
-            )
             errors.append(
                 "coverage-gaps contains GAP IDs but has no typed source-level gap table. "
-                + (diagnostic or "the table has no data rows")
+                + (gap_diagnostic or "the table has no data rows")
             )
         else:
             gap_id_index = gaps.index("ID")
@@ -1746,6 +1803,11 @@ def validate(package_root: Path, scope_dir: Path) -> list[str]:
                 if MISSING_ENVIRONMENT_GAP_RE.search(gap_details):
                     errors.append(
                         f"{gap_id}: missing environment data is execution readiness, not a coverage gap"
+                    )
+                if VISUAL_ONLY_GAP_RE.search(gap_details):
+                    errors.append(
+                        f"{gap_id}: a visual-only mismatch is not a source-level coverage gap when the "
+                        "semantic requirement already defines the field, label or result; record it in visual cross-check"
                     )
                 source_anchors = precise_source_anchors(row[gap_source_index])
                 covered_assumptions = sorted(source_anchors & assumption_anchors)
@@ -1988,9 +2050,9 @@ def main() -> int:
     errors = validate(args.package_root.resolve(), args.scope_dir.resolve())
     workflow = args.scope_dir.resolve() / "workflow-state.yaml"
     revision_raw = scalar_values(workflow.read_text(encoding="utf-8")).get("scope_revision_count") if workflow.is_file() else None
-    revision_count = int(revision_raw) if revision_raw in {"0", "1", "2"} else None
-    correction_allowed = bool(errors) and revision_count is not None and revision_count < 2
-    workflow_status = "completed" if not errors else ("draft" if correction_allowed else "failed")
+    revision_count = int(revision_raw) if revision_raw in {"0", "1"} else None
+    decision = scope_stage_decision(errors, revision_count)
+    workflow_status = str(decision["workflow_status"])
     if workflow.is_file():
         workflow_content = workflow.read_text(encoding="utf-8")
         status_line = f"status: {workflow_status}"
@@ -2000,19 +2062,9 @@ def main() -> int:
             workflow_content = workflow_content.rstrip() + "\n" + status_line + "\n"
         workflow.write_text(workflow_content, encoding="utf-8")
     print(
-        json.dumps(
-            {
-                "valid": not errors,
-                "scope_revision_count": revision_count,
-                "correction_allowed": correction_allowed,
-                "workflow_status": workflow_status,
-                "error_counts_by_class": scope_error_summary(errors),
-                "errors": errors,
-            },
-            ensure_ascii=False,
-        )
+        json.dumps(decision, ensure_ascii=False)
     )
-    return 0 if not errors else 1
+    return 0 if decision["writer_allowed"] else 1
 
 
 if __name__ == "__main__":

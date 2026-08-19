@@ -111,7 +111,9 @@ def find_package_root(path: Path) -> Path | None:
 
 
 def canonical_scope(value: str) -> str:
-    return SCOPE_PREFIX_RE.sub("", value.strip())
+    normalized = SCOPE_PREFIX_RE.sub("", value.strip())
+    section = re.match(r"^(\d+(?:\.\d+)+)(?=$|[\s_-])", normalized)
+    return section.group(1) if section else normalized
 
 
 def session_record(
@@ -324,6 +326,7 @@ def record_role(
     assert payload is not None
     current_commit = runtime_code_commit(package_root)
     record = session_record(thread_id, host_id, current_commit, model, thinking)
+    migrated_scope_key = False
 
     if role == PACKAGE_ROLE:
         if scope is not None:
@@ -338,6 +341,12 @@ def record_role(
         scopes = payload.setdefault("scopes", {})
         if not isinstance(scopes, dict):
             raise ValueError("session registry scopes must be a JSON object")
+        legacy_keys = [key for key in scopes if canonical_scope(str(key)) == scope_key and key != scope_key]
+        if len(legacy_keys) > 1 or (legacy_keys and scope_key in scopes):
+            raise ValueError(f"multiple session assignments resolve to canonical scope {scope_key}")
+        if legacy_keys:
+            scopes[scope_key] = scopes.pop(legacy_keys[0])
+            migrated_scope_key = True
         target = scopes.setdefault(scope_key, {})
         if not isinstance(target, dict):
             raise ValueError(f"session registry scope {scope_key} must be a JSON object")
@@ -358,7 +367,7 @@ def record_role(
         elif current.get("dispatch_profile") != record.get("dispatch_profile"):
             raise ValueError(f"{role} session is already registered with another dispatch profile")
         else:
-            return registry_path(package_root)
+            return write_registry(package_root, payload) if migrated_scope_key else registry_path(package_root)
 
     for assigned_role, assigned in all_role_records(payload):
         if assigned.get("session_id") == thread_id:
@@ -436,7 +445,14 @@ def validate_topology(
         if not isinstance(scopes, dict):
             errors.append("session registry scopes must be a JSON object")
         elif scope_key:
-            candidate = scopes.get(scope_key)
+            matches = [
+                value
+                for key, value in scopes.items()
+                if canonical_scope(str(key)) == scope_key and isinstance(value, dict)
+            ]
+            if len(matches) > 1:
+                errors.append(f"multiple session assignments resolve to canonical scope {scope_key}")
+            candidate = matches[0] if len(matches) == 1 else None
             if not isinstance(candidate, dict):
                 errors.append(f"missing session assignments for scope {scope_key}")
             else:
