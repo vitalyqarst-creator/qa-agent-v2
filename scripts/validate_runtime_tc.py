@@ -73,6 +73,10 @@ LOOKUP_ANYWHERE_LINE_RE = re.compile(r"^\d+\..*\bНайти\b", re.IGNORECASE)
 UI_LOOKUP_RE = re.compile(r"\b(?:кнопк\w*|пол[ея]\b|раздел\w*|вкладк\w*|ссылк\w*|действи\w*)\b", re.IGNORECASE)
 OBJECT_OBSERVATION_RE = re.compile(r"\b(?:виджет\w*|блок\w*|карточк\w*|партн[её]р\w*|реквизит\w*|объект\w*)\b", re.IGNORECASE)
 VISIBILITY_RESULT_RE = re.compile(r"\b(?:отображ\w*|видим\w*|отсутств\w*|открыт\w*)\b", re.IGNORECASE)
+ABSENCE_RESULT_RE = re.compile(
+    r"\b(?:не\s+отображ\w*|не\s+видим\w*|отсутств\w*)\b",
+    re.IGNORECASE,
+)
 IDENTITY_REFERENCE_RE = re.compile(r"\b(?:найденн\w*|выбранн\w*|указанн\w*|подготовленн\w*|этого|этот|этой)\b", re.IGNORECASE)
 EDIT_PREFILL_RESULT_RE = re.compile(r"\bоткрыт\w*\s+(?:окн\w*|форм\w*|карточк\w*)\s+редактирован", re.IGNORECASE)
 QUOTED_CONTROL_RE = re.compile(
@@ -94,6 +98,10 @@ QUOTED_FRAGMENT_RE = re.compile(r"`[^`\n]*`|«[^»\n]*»|\"[^\"\n]*\"")
 RUNTIME_BINDING_RE = re.compile(
     r"^\d+\.\s+Зафиксировать\b[^\n]*?\bкак\s+`([A-Za-zА-Яа-яЁё][A-Za-zА-Яа-яЁё0-9_-]{2,63})`\s*\.?$",
     re.IGNORECASE | re.MULTILINE,
+)
+TARGET_KIND_RE = re.compile(
+    r"\b(виджет|блок|карточк|партн[её]р|реквизит|кнопк|действи|пол[ея]|строк|ссылк|вкладк)\w*\b",
+    re.IGNORECASE,
 )
 
 
@@ -145,6 +153,37 @@ def composite_numbered_actions(value: str) -> list[str]:
 def has_nondeterministic_outcome(value: str) -> bool:
     without_labels = QUOTED_FRAGMENT_RE.sub("", value)
     return re.search(r"\bили\b", without_labels, re.IGNORECASE) is not None
+
+
+def impossible_absence_lookups(steps: str, expected: str) -> list[str]:
+    """Return lookups that try to find the same target whose absence is the oracle."""
+    if not ABSENCE_RESULT_RE.search(expected):
+        return []
+    expected_kind = TARGET_KIND_RE.search(expected)
+    expected_literals = {
+        literal.strip().casefold()
+        for literal in BACKTICK_LITERAL_RE.findall(expected)
+        if len(literal.strip()) >= 3
+    }
+    if not expected_kind or not expected_literals:
+        return []
+    expected_target_kind = normalized_label(expected_kind.group(1))
+    violations: list[str] = []
+    for raw_line in steps.splitlines():
+        line = raw_line.strip()
+        if not NUMBERED_LINE_RE.match(line) or not re.search(r"\bНайти\b", line, re.IGNORECASE):
+            continue
+        lookup_kind = TARGET_KIND_RE.search(line)
+        if not lookup_kind or normalized_label(lookup_kind.group(1)) != expected_target_kind:
+            continue
+        lookup_literals = {
+            literal.strip().casefold()
+            for literal in BACKTICK_LITERAL_RE.findall(line)
+            if len(literal.strip()) >= 3
+        }
+        if expected_literals & lookup_literals:
+            violations.append(line)
+    return violations
 
 
 def sections(block: str) -> dict[str, str]:
@@ -291,6 +330,10 @@ def validate(content: str) -> list[str]:
         if PROCESS_PLACEHOLDER_RE.search(data):
             errors.append(f"{tc_id}: process placeholder in test data")
         expected = tc_sections["Итоговый ожидаемый результат"]
+        for lookup in impossible_absence_lookups(steps, expected):
+            errors.append(
+                f"{tc_id}: a step cannot find the same target whose absence is required by the expected result ({lookup})"
+            )
         runtime_bindings = set(RUNTIME_BINDING_RE.findall(f"{preconditions}\n{steps}"))
         data_values = [value.strip().casefold() for _key, value in data_pairs if len(value.strip()) >= 3]
         declared_values = {value.strip() for _key, value in data_pairs}.union(runtime_bindings)

@@ -811,6 +811,22 @@ class RuntimeContractTests(unittest.TestCase):
         )
         self.assertEqual([], validate_tc(candidate))
 
+    def test_tc_rejects_lookup_of_the_same_target_expected_to_be_absent(self) -> None:
+        invalid = VALID_TC.replace(
+            "1. В поле `Наименование партнёра` ввести `ПАО СБЕРБАНК`.",
+            "1. Найти карточку партнёра `ПАО СБЕРБАНК`.",
+        ).replace(
+            "Карточка партнёра сохранена.",
+            "Карточка партнёра `ПАО СБЕРБАНК` не отображается.",
+        )
+        self.assertTrue(any("cannot find the same target" in error for error in validate_tc(invalid)))
+
+        valid_parent_lookup = invalid.replace(
+            "Найти карточку партнёра `ПАО СБЕРБАНК`.",
+            "Найти виджет группы `ПАО СБЕРБАНК`.",
+        )
+        self.assertFalse(any("cannot find the same target" in error for error in validate_tc(valid_parent_lookup)))
+
     def test_needs_test_data_is_allowed_only_with_concrete_tc_data(self) -> None:
         needs_data = VALID_TC.replace(
             "**Приоритет:** High",
