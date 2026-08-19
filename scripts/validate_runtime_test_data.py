@@ -23,8 +23,8 @@ except ModuleNotFoundError:  # Direct invocation
     from validate_runtime_scope import TEST_DATA_PLAN_HEADERS
 
 
-ROLE_RE = re.compile(r"(?<![A-Za-z0-9_.-])TD-[A-Z0-9.-]+(?![A-Za-z0-9_.-])")
-RELATION_RE = re.compile(r"(?<![A-Za-z0-9_.-])REL-[A-Z0-9.-]+(?![A-Za-z0-9_.-])")
+ROLE_RE = re.compile(r"(?<![A-Za-z0-9_-])TD-[A-Z0-9]+(?:-[A-Z0-9]+)*(?![A-Za-z0-9_-])")
+RELATION_RE = re.compile(r"(?<![A-Za-z0-9_-])REL-[A-Z0-9]+(?:-[A-Z0-9]+)*(?![A-Za-z0-9_-])")
 DIGEST_RE = re.compile(r"^[0-9a-f]{64}$", re.IGNORECASE)
 PLACEHOLDER_RE = re.compile(
     r"(?:<[^>]+>|\[заполн|введите\s+значение|будет\s+подготовлен|требуется\s+получить|"

@@ -529,6 +529,8 @@ def validate_layout(
         return errors
     if state.get("test_case_status") != "completed":
         errors.append("writer workflow-state is missing completed test-case status")
+    if state.get("matrix_status") != "accepted":
+        errors.append("canonical test cases require matrix_status: accepted")
     if state.get("test_cases") != tc_relative:
         errors.append("writer workflow-state does not reference the validated test-case file")
     matrix_content = matrix_path.read_text(encoding="utf-8")
@@ -749,13 +751,7 @@ def main() -> int:
         materialization = args.data_materialization.resolve() if args.data_materialization else None
         errors.extend(validate_layout(args.test_cases, args.matrix, package_root, materialization))
         if materialization is not None:
-            data_plan = (
-                package_root
-                / "work"
-                / "stage-handoffs"
-                / args.matrix.parent.name
-                / "test-data-plan.md"
-            )
+            data_plan = args.matrix.parent / "matrix-data-plan.md"
             if not data_plan.is_file():
                 errors.append(f"data plan is missing for materialization validation: {data_plan}")
             else:

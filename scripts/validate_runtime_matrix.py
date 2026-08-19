@@ -8,15 +8,17 @@ from pathlib import Path
 try:
     from scripts.runtime_cleanliness import validate_no_repository_temp
     from scripts.runtime_io import configure_utf8_stdio
-    from scripts.runtime_state import scalar_values
     from scripts.runtime_traceability import anchor_label, extract_anchors, find_markdown_table
+    from scripts.runtime_workflow_state import validate_state as validate_workflow_state
     from scripts.runtime_session_registry import canonical_scope, find_package_root, validate_topology
+    from scripts.validate_runtime_scope import TEST_DATA_PLAN_HEADERS, validate_test_data_plan
 except ModuleNotFoundError:  # Direct invocation: python scripts/validate_runtime_matrix.py
     from runtime_cleanliness import validate_no_repository_temp
     from runtime_io import configure_utf8_stdio
-    from runtime_state import scalar_values
     from runtime_traceability import anchor_label, extract_anchors, find_markdown_table
+    from runtime_workflow_state import validate_state as validate_workflow_state
     from runtime_session_registry import canonical_scope, find_package_root, validate_topology
+    from validate_runtime_scope import TEST_DATA_PLAN_HEADERS, validate_test_data_plan
 
 
 REQUIRED_HEADERS = (
@@ -34,6 +36,7 @@ REQUIRED_HEADERS = (
 ALLOWED_PROFILES = {
     "базовый",
     "обязательность",
+    "зависимая-обязательность",
     "только-чтение",
     "автозаполнение",
     "допустимые-классы",
@@ -62,8 +65,8 @@ EMPTY_RE = re.compile(r"^(?:-|—|n/?a|не определен[оы]?|требу
 SOURCE_ROW_TOKEN_RE = re.compile(r"(?<![A-Za-z0-9_.-])SR-\d{2,}(?![A-Za-z0-9_.-])")
 MATRIX_ROW_TOKEN_RE = re.compile(r"(?<![A-Za-z0-9_.-])M-\d{2,}(?![A-Za-z0-9_.-])")
 CONCRETE_DATA_RE = re.compile(r"`[^`\n]+`\s*=\s*`[^`\n]+`")
-DATA_ROLE_RE = re.compile(r"(?<![A-Za-z0-9_.-])TD-[A-Z0-9.-]+(?![A-Za-z0-9_.-])")
-DATA_RELATION_RE = re.compile(r"(?<![A-Za-z0-9_.-])REL-[A-Z0-9.-]+(?![A-Za-z0-9_.-])")
+DATA_ROLE_RE = re.compile(r"(?<![A-Za-z0-9_-])TD-[A-Z0-9]+(?:-[A-Z0-9]+)*(?![A-Za-z0-9_-])")
+DATA_RELATION_RE = re.compile(r"(?<![A-Za-z0-9_-])REL-[A-Z0-9]+(?:-[A-Z0-9]+)*(?![A-Za-z0-9_-])")
 DYNAMIC_OUTPUT_RE = re.compile(
     r"\b(?:системн\w*\s+(?:id|идентификатор\w*|номер\w*|timestamp|sequence)|"
     r"(?:id|идентификатор\w*|номер\w*|timestamp|sequence)\s+текущ\w*\s+прогон\w*|"
@@ -163,6 +166,8 @@ UNIQUENESS_CONTROL_HEADERS = (
 )
 MATRIX_ID_FULL_RE = re.compile(r"M-[A-Za-z0-9.-]+")
 NOT_APPLICABLE_RE = re.compile(r"^Не применимо:\s+\S", re.IGNORECASE)
+SAVE_ACTION_RE = re.compile(r"\bсохран", re.IGNORECASE)
+NOT_SAVED_RE = re.compile(r"\bне\s+сохраня", re.IGNORECASE)
 
 
 def cells(line: str) -> list[str]:
@@ -381,6 +386,17 @@ def validate(content: str) -> list[str]:
         for profile in profiles:
             if profile not in ALLOWED_PROFILES and not profile.startswith("другой:"):
                 errors.append(f"{row_id}: unknown test-design profile {profile!r}")
+
+        if "зависимая-обязательность" in profiles:
+            linked_sources = SOURCE_ROW_TOKEN_RE.findall(row[index_by_name["Источник требования"]])
+            if len(set(linked_sources)) < 2:
+                errors.append(f"{row_id}: dependent mandatory group must project at least two SR-* obligations")
+            if not DATA_RELATION_RE.search(row[index_by_name["Тестовые данные и отношения"]]):
+                errors.append(f"{row_id}: dependent mandatory group requires one REL-* dependency")
+            if not SAVE_ACTION_RE.search(row[index_by_name["Проверка"]]):
+                errors.append(f"{row_id}: dependent mandatory group requires an explicit save attempt")
+            if not NOT_SAVED_RE.search(row[index_by_name["Ожидаемый результат"]]):
+                errors.append(f"{row_id}: dependent mandatory group requires a common not-saved oracle")
 
         decision = row[index_by_name["Решение"]]
         if decision not in ALLOWED_DECISIONS:
@@ -616,41 +632,59 @@ def validate_projection(content: str, inventory_content: str, gaps_content: str)
     return errors
 
 
+def data_plan_contract(content: str) -> tuple[dict[str, set[str]], set[str], list[str]]:
+    errors = validate_test_data_plan(content)
+    if re.search(r"(?m)^Данные не требуются\.\s*$", content) and "|" not in content:
+        return {}, set(), errors
+    table = find_markdown_table(content, TEST_DATA_PLAN_HEADERS)
+    if table is None or not table.rows:
+        return {}, set(), errors
+    roles_index = table.index("Роли данных")
+    sources_index = table.index("Допустимый источник")
+    role_sources: dict[str, set[str]] = {}
+    for row in table.rows:
+        sources = {part.strip().strip("`").casefold() for part in row[sources_index].split(";") if part.strip()}
+        for role in DATA_ROLE_RE.findall(row[roles_index]):
+            role_sources[role] = sources
+    return role_sources, set(DATA_RELATION_RE.findall(content)), errors
+
+
 def validate_layout(matrix_path: Path, package_root: Path) -> list[str]:
     errors: list[str] = validate_no_repository_temp(package_root)
     scope = matrix_path.parent.name
     expected = package_root / "work" / "practical" / scope / "test-design-matrix.md"
     if matrix_path.resolve() != expected.resolve():
         return [f"matrix must be stored at {expected}"]
-    state_path = matrix_path.parent / "workflow-state.yaml"
-    if not state_path.is_file():
-        return ["writer workflow-state.yaml is missing next to the matrix"]
-    state = scalar_values(state_path.read_text(encoding="utf-8"))
-    expected_relative = f"work/practical/{scope}/test-design-matrix.md"
-    required_values = {
-        "writer role": ("role", "writer"),
-        "scope": ("scope", scope),
-        "completed matrix status": ("matrix_status", "completed"),
-        "matrix path": ("test_design_matrix", expected_relative),
-    }
-    for label, (key, expected_value) in required_values.items():
-        if state.get(key) != expected_value:
-            errors.append(f"writer workflow-state is missing {label}")
+    errors.extend(f"writer workflow-state: {error}" for error in validate_workflow_state(matrix_path))
     matrix_content = matrix_path.read_text(encoding="utf-8")
     matrix_roles = set(DATA_ROLE_RE.findall(matrix_content))
     matrix_relations = set(DATA_RELATION_RE.findall(matrix_content))
-    if matrix_roles or matrix_relations:
-        data_plan = package_root / "work" / "stage-handoffs" / scope / "test-data-plan.md"
-        if not data_plan.is_file():
-            errors.append(f"matrix data contract requires analyzer-owned plan: {data_plan}")
-        else:
-            plan_content = data_plan.read_text(encoding="utf-8")
-            plan_roles = set(DATA_ROLE_RE.findall(plan_content))
-            plan_relations = set(DATA_RELATION_RE.findall(plan_content))
-            for role in sorted(matrix_roles - plan_roles):
-                errors.append(f"matrix data role {role} is absent from test-data-plan")
-            for relation in sorted(matrix_relations - plan_relations):
-                errors.append(f"matrix data relation {relation} is absent from test-data-plan")
+    baseline_plan = package_root / "work" / "stage-handoffs" / scope / "test-data-plan.md"
+    matrix_plan = matrix_path.parent / "matrix-data-plan.md"
+    if not baseline_plan.is_file():
+        errors.append(f"analyzer baseline data plan is missing: {baseline_plan}")
+        return errors
+    if not matrix_plan.is_file():
+        errors.append(f"writer-owned matrix data plan is missing: {matrix_plan}")
+        return errors
+    baseline_roles, baseline_relations, baseline_errors = data_plan_contract(
+        baseline_plan.read_text(encoding="utf-8")
+    )
+    final_roles, final_relations, final_errors = data_plan_contract(matrix_plan.read_text(encoding="utf-8"))
+    errors.extend(f"analyzer baseline: {error}" for error in baseline_errors)
+    errors.extend(f"matrix data plan: {error}" for error in final_errors)
+    for role in sorted(set(baseline_roles) - set(final_roles)):
+        errors.append(f"matrix data plan omits analyzer baseline role {role}")
+    for role in sorted(set(baseline_roles) & set(final_roles)):
+        added_sources = final_roles[role] - baseline_roles[role]
+        if added_sources:
+            errors.append(f"matrix data plan weakens {role} with unapproved sources: {sorted(added_sources)}")
+    for relation in sorted(baseline_relations - final_relations):
+        errors.append(f"matrix data plan omits analyzer baseline relation {relation}")
+    for role in sorted(matrix_roles - set(final_roles)):
+        errors.append(f"matrix data role {role} is absent from matrix-data-plan")
+    for relation in sorted(matrix_relations - final_relations):
+        errors.append(f"matrix data relation {relation} is absent from matrix-data-plan")
     return errors
 
 

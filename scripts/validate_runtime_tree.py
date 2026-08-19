@@ -38,6 +38,7 @@ REQUIRED_PATHS = (
     "scripts/render_runtime_pdf.py",
     "scripts/runtime_cleanliness.py",
     "scripts/runtime_state.py",
+    "scripts/runtime_workflow_state.py",
     "scripts/capture_dadata_fixture.py",
     "scripts/validate_fixture_catalog.py",
     "scripts/validate_runtime_test_data.py",

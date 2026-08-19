@@ -115,7 +115,11 @@ Source locator использует `--through source-locator` без `--scope`.
 
 Operational prompt — только транспортный конверт этапа, а не место для тест-дизайна. Controller указывает роль, scope, self-check, пути входных/выходных артефактов из canonical references или `workflow-state.yaml` и требование запустить штатный validator. Он не пересказывает findings, не трактует требования, не вводит дополнительные решения по `TC`/`coverage-gap`/готовности, не запрещает допустимые статусы и не придумывает путь результата. Для revision достаточно дать путь к review-record: semantic role сама читает конечные findings и применяет свой skill. Если controller считает нужным добавить содержательное ограничение, он должен остановиться и вернуть вопрос соответствующей semantic role, а не встраивать своё решение в prompt.
 
+Параметр registry `--through` называет semantic role, а не создаваемый artifact: допустимы `source-locator`, `scope-analyzer` и `writer`. Для matrix, materialization, TC и обеих writer revision всегда используется `--through writer`; значения `matrix` и `tc` недопустимы.
+
 ## Переходы
+
+Controller не редактирует `matrix_status` вручную. После каждого валидного matrix review он вызывает `runtime_workflow_state.py apply-review`. Перед materialization/TC controller вызывает `runtime_workflow_state.py validate`; переход разрешён только при `matrix_status: accepted` и текущих SHA-256 matrix/review. Если единственная revision исчерпана и остались findings, controller вызывает `runtime_workflow_state.py exhausted`; это закрывает route для TC, а не разрешает обход review.
 
 Controller запускает следующий этап только после успешного artifact validator-а и проверки registry. Отдельная сессия не означает новый цикл: замечания matrix reviewer возвращаются исходному writer, затем текущая matrix повторно проверяется тем же matrix reviewer; аналогично для TC. Первое review всегда полное. После revision controller передаёт прежний review-record в `runtime_review_dispatch.py create --previous-review`; controller не выбирает объём вручную. Штатный manifest разрешает delta re-review только для заявленных и локализованных изменений при неизменных semantic inputs, структуре и порядке artifact, иначе автоматически требует полный review.
 
@@ -128,5 +132,7 @@ Controller запускает следующий этап только посл�
 При повторной проекции после `repair_stage: matrix` operational prompt содержит путь исходного TC review-record как входной artifact, но не пересказывает его findings. Writer обязан закрыть все `tc|both` findings и применимые изменения принятой matrix; неизменный canonical TC при наличии таких findings не считается завершённой проекцией.
 
 Перед dispatch re-review controller проверяет не только новый SHA и общий validator, но и closure-отчёт writer-а: для каждого `finding_id` должны быть перечислены все `affected_items` исходного record и подтверждено `остаточных нарушений: 0` после повторного чтения этих элементов. Отсутствующий элемент или частично выполненная массовая замена не передаются reviewer-у как завершённая revision. Controller не решает семантику finding-а заново, а проверяет полноту заявленного набора и наличие residual-check.
+
+Writer revision может изменять текущую matrix и writer-owned `matrix-data-plan.md`. Она не изменяет analyzer-owned handoff. Поэтому новые `TD-*`/`REL-*`, выводимые из уже зафиксированного source-backed профиля, закрываются в том же matrix cycle; только новый source-level смысл требует возврата к analyzer.
 
 Если зарегистрированная сессия недоступна, controller не подменяет её другой ролью и не продолжает в собственной сессии. Требуется явное решение пользователя о замене роли или новом practical route.

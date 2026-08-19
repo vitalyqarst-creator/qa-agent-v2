@@ -134,6 +134,10 @@ def semantic_input_files(package_root: Path, artifact: Path, kind: str, scope: s
                 continue
             candidates.add(path)
 
+    matrix_data_plan = package_root / "work" / "practical" / scope / "matrix-data-plan.md"
+    if matrix_data_plan.is_file():
+        candidates.add(matrix_data_plan)
+
     work = package_root / "work"
     if work.is_dir() and kind == "tc":
         candidates.update(path for path in work.rglob("fixture-catalog.json") if path.is_file())

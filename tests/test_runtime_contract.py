@@ -31,8 +31,11 @@ from scripts.runtime_session_registry import (
     validate_topology,
 )
 from scripts.runtime_traceability import diagnose_markdown_table, extract_anchors, find_markdown_table
+from scripts.runtime_workflow_state import apply_review, set_pending, validate_state
 from scripts.validate_fixture_catalog import validate as validate_catalog
 from scripts.validate_runtime_matrix import (
+    DATA_RELATION_RE as MATRIX_DATA_RELATION_RE,
+    DATA_ROLE_RE as MATRIX_DATA_ROLE_RE,
     validate as validate_matrix,
     validate_layout as validate_matrix_layout,
     validate_projection as validate_matrix_projection,
@@ -204,6 +207,40 @@ def create_matrix_dispatch(root: Path, artifact: Path, thread_id: str = "1234567
         "local",
         "2026-08-17T00:00:00Z",
     )
+
+
+def create_accepted_matrix_review(package: Path, matrix: Path, scope: str) -> Path:
+    create_session_topology(package, scope)
+    prompt = package / "matrix-review-prompt.md"
+    prompt.write_text("Проведи независимое review matrix.\n", encoding="utf-8")
+    review_dir = package / "work" / "reviews" / scope
+    dispatch_path = create_dispatch(
+        package,
+        matrix,
+        prompt,
+        review_dir,
+        "matrix",
+        MATRIX_REVIEWER_THREAD,
+        "local",
+        "2026-08-17T00:00:00Z",
+    )
+    record = {
+        "schema_version": 1,
+        "review_kind": "matrix",
+        "artifact_path": matrix.relative_to(package).as_posix(),
+        "artifact_sha256": hashlib.sha256(matrix.read_bytes()).hexdigest(),
+        "dispatch_path": dispatch_path.relative_to(package).as_posix(),
+        "dispatch_sha256": sha256(dispatch_path),
+        "reviewer_session_type": "codex-thread",
+        "reviewer_session_id": MATRIX_REVIEWER_THREAD,
+        "reviewed_at": "2026-08-17T00:01:00Z",
+        "verdict": "matrix-accepted",
+        "findings": [],
+    }
+    review_path = review_dir / "matrix-review.json"
+    review_path.write_text(json.dumps(record, ensure_ascii=False), encoding="utf-8")
+    review_path.with_suffix(".md").write_text("# Review\n", encoding="utf-8")
+    return review_path
 
 
 def create_scope_locator(package: Path) -> None:
@@ -1803,6 +1840,99 @@ class RuntimeContractTests(unittest.TestCase):
                 errors = validate_matrix(invalid)
                 self.assertTrue(any(f"requires a {item[:-1]}" in error for error in errors))
 
+    def test_dependent_mandatory_outputs_form_one_save_oracle(self) -> None:
+        grouped = VALID_MATRIX.replace(
+            "| M-001 | SR-001; AS.38; Таблица 7, строка «Сохранить» | Сохранить карточку | базовый, жизненный-цикл-создания | Сохранение валидной карточки | Открыта форма добавления | `Наименование` = `ПАО СБЕРБАНК` | Карточка сохранена | TC | ready |",
+            "| M-001 | SR-001; SR-003; AS.38; Таблица 7, строка «Сохранить» | Нажать «Сохранить» при незаполненной зависимой группе | зависимая-обязательность | Общий отказ сохранения | Открыта форма добавления | TD-CHOICE-A; REL-FILLS-OUTPUTS | Карточка не сохраняется | TC | needs-test-data |",
+        )
+        self.assertEqual([], validate_matrix(grouped))
+        split = grouped.replace("SR-001; SR-003", "SR-001").replace("REL-FILLS-OUTPUTS", "TD-OUTPUT-A")
+        errors = validate_matrix(split)
+        self.assertTrue(any("at least two SR" in error for error in errors))
+        self.assertTrue(any("requires one REL" in error for error in errors))
+
+    def test_data_role_tokens_exclude_trailing_punctuation(self) -> None:
+        self.assertEqual(["TD-ACCOUNT-A"], MATRIX_DATA_ROLE_RE.findall("TD-ACCOUNT-A."))
+        self.assertEqual(["REL-DIFFERENT-ACCOUNT"], MATRIX_DATA_RELATION_RE.findall("REL-DIFFERENT-ACCOUNT;"))
+
+    def test_writer_matrix_data_plan_may_extend_but_not_weaken_baseline(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            package = Path(temporary_directory) / "FT"
+            (package / "AGENT-NOTES.md").parent.mkdir(parents=True)
+            (package / "AGENT-NOTES.md").write_text("# Notes\n", encoding="utf-8")
+            scope = "9.3.3"
+            baseline = package / "work" / "stage-handoffs" / scope / "test-data-plan.md"
+            baseline.parent.mkdir(parents=True)
+            baseline.write_text(VALID_DATA_PLAN, encoding="utf-8")
+            matrix = package / "work" / "practical" / scope / "test-design-matrix.md"
+            matrix.parent.mkdir(parents=True)
+            matrix.write_text(
+                VALID_MATRIX.replace(
+                    "`Наименование` = `ПАО СБЕРБАНК`",
+                    "TD-PARTNER-A; TD-ACCOUNT-B; REL-DIFFERENT-ACCOUNT",
+                ),
+                encoding="utf-8",
+            )
+            final_plan = VALID_DATA_PLAN + (
+                "| Второй счёт | TD-ACCOUNT-B | стендовая подготовка | "
+                "REL-DIFFERENT-ACCOUNT: счёт отличается от первого. | Не применимо. | "
+                "Подготовить второй счёт. | требуется |\n"
+            )
+            data_plan = matrix.parent / "matrix-data-plan.md"
+            data_plan.write_text(final_plan, encoding="utf-8")
+            set_pending(matrix)
+            self.assertEqual([], validate_matrix_layout(matrix, package))
+
+            data_plan.write_text(
+                final_plan.replace(
+                    "первичный источник; стендовая подготовка",
+                    "первичный источник; стендовая подготовка; синтетический генератор",
+                    1,
+                ),
+                encoding="utf-8",
+            )
+            set_pending(matrix)
+            self.assertTrue(any("weakens TD-PARTNER-A" in error for error in validate_matrix_layout(matrix, package)))
+
+    def test_matrix_workflow_state_is_hash_bound_and_rejects_completed(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            package = Path(temporary_directory) / "FT"
+            (package / "AGENT-NOTES.md").parent.mkdir(parents=True)
+            (package / "AGENT-NOTES.md").write_text("# Notes\n", encoding="utf-8")
+            matrix = package / "work" / "practical" / "9.3.1" / "test-design-matrix.md"
+            matrix.parent.mkdir(parents=True)
+            matrix.write_text(VALID_MATRIX, encoding="utf-8")
+            (matrix.parent / "matrix-data-plan.md").write_text(
+                "# План данных\n\nДанные не требуются.\n", encoding="utf-8"
+            )
+            state = set_pending(matrix)
+            self.assertEqual("review-pending", state["matrix_status"])
+            self.assertEqual([], validate_state(matrix))
+            state_path = matrix.parent / "workflow-state.yaml"
+            state_path.write_text(
+                state_path.read_text(encoding="utf-8").replace("review-pending", "completed"),
+                encoding="utf-8",
+            )
+            self.assertTrue(any("unsupported matrix_status" in error for error in validate_state(matrix)))
+            set_pending(matrix)
+            state_path.write_text(
+                state_path.read_text(encoding="utf-8").replace("review-pending", "accepted"),
+                encoding="utf-8",
+            )
+            self.assertTrue(any("matrix review path is missing" in error for error in validate_state(matrix)))
+
+            state_path.write_text(
+                state_path.read_text(encoding="utf-8")
+                + 'data_materialization: "work/test-data/9.3.1/data-materialization.json"\n'
+                + 'test_cases: "test-cases/9.3.1.md"\n',
+                encoding="utf-8",
+            )
+            state = set_pending(matrix)
+            self.assertEqual("not-started", state["data_status"])
+            self.assertEqual("not-started", state["test_case_status"])
+            self.assertNotIn("data_materialization", state)
+            self.assertNotIn("test_cases", state)
+
     def test_matrix_separates_coverage_from_execution_readiness(self) -> None:
         needs_data = VALID_MATRIX.replace("| TC | ready |", "| TC | needs-test-data |", 1)
         self.assertEqual([], validate_matrix(needs_data))
@@ -1830,17 +1960,24 @@ class RuntimeContractTests(unittest.TestCase):
             matrix = package / "work" / "practical" / "9.3.1" / "test-design-matrix.md"
             matrix.parent.mkdir(parents=True)
             matrix.write_text(VALID_MATRIX, encoding="utf-8")
+            baseline = package / "work" / "stage-handoffs" / "9.3.1" / "test-data-plan.md"
+            baseline.parent.mkdir(parents=True)
+            baseline.write_text("# План данных\n\nДанные не требуются.\n", encoding="utf-8")
+            data_plan = matrix.parent / "matrix-data-plan.md"
+            data_plan.write_text("# План данных\n\nДанные не требуются.\n", encoding="utf-8")
             (matrix.parent / "workflow-state.yaml").write_text(
                 "role: writer\n"
                 'scope: "9.3.1"\n'
-                "matrix_status: completed\n"
+                "matrix_status: review-pending\n"
                 'test_design_matrix: "work/practical/9.3.1/test-design-matrix.md"\n'
+                f'matrix_sha256: "{hashlib.sha256(matrix.read_bytes()).hexdigest()}"\n'
+                'matrix_data_plan: "work/practical/9.3.1/matrix-data-plan.md"\n'
                 "test_case_status: not-started\n",
                 encoding="utf-8",
             )
             self.assertEqual([], validate_matrix_layout(matrix, package))
             wrong = package / "work" / "stage-handoffs" / "9.3.1" / "test-design-matrix.md"
-            wrong.parent.mkdir(parents=True)
+            wrong.parent.mkdir(parents=True, exist_ok=True)
             wrong.write_text(VALID_MATRIX, encoding="utf-8")
             self.assertTrue(any("work" in error and "practical" in error for error in validate_matrix_layout(wrong, package)))
 
@@ -1852,25 +1989,31 @@ class RuntimeContractTests(unittest.TestCase):
             matrix = package / "work" / "practical" / "9.3.1" / "test-design-matrix.md"
             matrix.parent.mkdir(parents=True)
             matrix.write_text(VALID_MATRIX, encoding="utf-8")
+            baseline = package / "work" / "stage-handoffs" / "9.3.1" / "test-data-plan.md"
+            baseline.parent.mkdir(parents=True)
+            baseline.write_text("# План данных\n\nДанные не требуются.\n", encoding="utf-8")
+            data_plan = matrix.parent / "matrix-data-plan.md"
+            data_plan.write_text("# План данных\n\nДанные не требуются.\n", encoding="utf-8")
             test_cases = package / "test-cases" / "9.3.1-partners.md"
             test_cases.parent.mkdir()
             test_cases.write_text(VALID_TC, encoding="utf-8")
-            (matrix.parent / "workflow-state.yaml").write_text(
-                "role: writer\n"
-                'scope: "9.3.1"\n'
-                "matrix_status: completed\n"
-                'test_design_matrix: "work/practical/9.3.1/test-design-matrix.md"\n'
-                "test_case_status: completed\n"
-                'test_cases: "test-cases/9.3.1-partners.md"\n',
+            set_pending(matrix)
+            review_path = create_accepted_matrix_review(package, matrix, "9.3.1")
+            apply_review(matrix, review_path)
+            state_path = matrix.parent / "workflow-state.yaml"
+            state_path.write_text(
+                state_path.read_text(encoding="utf-8").replace(
+                    "test_case_status: not-started",
+                    "test_case_status: completed\n"
+                    'test_cases: "test-cases/9.3.1-partners.md"',
+                ),
                 encoding="utf-8",
             )
             self.assertEqual([], validate_tc_layout(test_cases, matrix, package))
-            (matrix.parent / "workflow-state.yaml").write_text(
-                "role: writer\n"
-                'scope: "9.3.1"\n'
-                "matrix_status: completed\n"
-                'test_design_matrix: "work/practical/9.3.1/test-design-matrix.md"\n'
-                "test_case_status: not-started\n",
+            state_path.write_text(
+                state_path.read_text(encoding="utf-8").replace(
+                    "test_case_status: completed", "test_case_status: not-started"
+                ),
                 encoding="utf-8",
             )
             self.assertTrue(any("test-case status" in error for error in validate_tc_layout(test_cases, matrix, package)))
@@ -2844,6 +2987,66 @@ class RuntimeContractTests(unittest.TestCase):
                 encoding="utf-8",
             )
             self.assertEqual([], validate_scope(package, scope))
+
+    def test_scope_gap_propagates_to_dependent_result_with_same_source_anchor(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            (root / "AGENTS.md").write_text("# Runtime\n", encoding="utf-8")
+            (root / "scripts").mkdir()
+            package = root / "fts" / "Project" / "FT"
+            create_scope_locator(package)
+            scope = package / "work" / "stage-handoffs" / "01-scope"
+            scope.mkdir()
+            shared_anchor = "AS.38; Таблица 7, строка «Сохранить»"
+            inventory = VALID_INVENTORY.replace("AS.39 | Реакция", f"{shared_anchor} | Реакция")
+            gaps = VALID_GAPS.replace("| AS.39 |", f"| {shared_anchor} |")
+            (scope / "source-row-inventory.md").write_text(inventory, encoding="utf-8")
+            (scope / "coverage-gaps.md").write_text(gaps, encoding="utf-8")
+            brief = (
+                "# Границы\n\n"
+                "## Визуальная сверка\n\n"
+                "| UI-уровень | Визуальный источник | Результат сверки |\n"
+                "| --- | --- | --- |\n"
+                "| Форма | `fts/Project/FT/mockups/form.png` | Подтверждена форма. |\n"
+                + VALID_BOUNDARY_CONTROL
+                + VALID_TABLE_COVERAGE
+                + VALID_CONSISTENCY
+            )
+            brief_path = scope / "scope-brief.md"
+            brief_path.write_text(brief, encoding="utf-8")
+            (scope / "test-data-plan.md").write_text(VALID_DATA_PLAN, encoding="utf-8")
+            (scope / "prompt.scope-to-writer.md").write_text(
+                "Создай матрицу по активным строкам.\n", encoding="utf-8"
+            )
+            (scope / "workflow-state.yaml").write_text(
+                "stage: ft-scope-analyzer\nscope_revision_count: 0\n"
+                'clarification_register: "work/scope-clarification-requests.md"\n',
+                encoding="utf-8",
+            )
+
+            errors = validate_scope(package, scope)
+            self.assertTrue(any("requires 'Контроль зависимых результатов'" in error for error in errors))
+
+            brief_path.write_text(
+                brief
+                + "\n## Контроль зависимых результатов\n\n"
+                + "| Причинная обязанность | Зависимая обязанность | Связь | Обработка неопределённости |\n"
+                + "| --- | --- | --- | --- |\n"
+                + "| SR-002 | SR-001 | Общий источник, но независимые oracles. | Независима: SR-001 имеет отдельный наблюдаемый результ. |\n",
+                encoding="utf-8",
+            )
+            errors = validate_scope(package, scope)
+            self.assertFalse(any("requires 'Контроль зависимых результатов'" in error for error in errors))
+            self.assertFalse(any("dependent-results control omits SR-002 -> SR-001" in error for error in errors))
+
+            (scope / "source-row-inventory.md").write_text(
+                inventory.replace(
+                    f"| SR-001 | {shared_anchor} |", "| SR-001 | AS.37 |"
+                ),
+                encoding="utf-8",
+            )
+            errors = validate_scope(package, scope)
+            self.assertFalse(any("dependent-results row" in error for error in errors))
 
     def test_scope_validator_rejects_gap_and_question_covered_by_nonblocking_working_assumption(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:

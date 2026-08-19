@@ -176,6 +176,12 @@ TEST_DATA_PLAN_HEADERS = (
     "Воспроизводимая подготовка",
     "Готовность материализации",
 )
+DEPENDENT_RESULTS_HEADERS = (
+    "Причинная обязанность",
+    "Зависимая обязанность",
+    "Связь",
+    "Обработка неопределённости",
+)
 ALLOWED_DATA_SOURCE_PREFIXES = (
     "первичный источник",
     "утверждённый ответ ба",
@@ -190,7 +196,7 @@ ALLOWED_DATA_SOURCE_PREFIXES = (
     "не требуются",
 )
 ALLOWED_DATA_READINESS = {"не требуется", "требуется", "готово"}
-DATA_ROLE_RE = re.compile(r"(?<![A-Za-z0-9_.-])TD-[A-Z0-9.-]+(?![A-Za-z0-9_.-])")
+DATA_ROLE_RE = re.compile(r"(?<![A-Za-z0-9_-])TD-[A-Z0-9]+(?:-[A-Z0-9]+)*(?![A-Za-z0-9_-])")
 QUANTITATIVE_DATA_RE = re.compile(
     r"\b(?:размер|длин|количеств|диапазон|предел|максим|миним)\w*\b|"
     r"\bне\s+(?:более|менее)\b|"
@@ -464,6 +470,15 @@ def public_contract(scope: str | None = None, package_root: Path | None = None) 
             ("Аспект", "Вывод анализа", "Связанные обязанности/пробелы"),
             ("Идентичность объекта", "Один конкретный вывод", f"SR-{scope_digits}001"),
         ),
+        "dependent_results": markdown_table_template(
+            DEPENDENT_RESULTS_HEADERS,
+            (
+                f"SR-{scope_digits}001",
+                f"SR-{scope_digits}002",
+                "Причинная связь одного source-backed события",
+                "Независима: точное source-backed основание",
+            ),
+        ),
         "coverage_gaps": markdown_table_template(
             ("ID", "Связанная обязанность", "Источник", "Класс", "Недостаток источника", "Что требуется для закрытия"),
             (f"GAP-{scope_digits}001", f"SR-{scope_digits}001", source_example, "нет-бизнес-результата", "Точный недостаток", "Один ответ"),
@@ -551,6 +566,7 @@ def public_contract(scope: str | None = None, package_root: Path | None = None) 
                 "Что требуется для закрытия",
             ],
             "test_data": list(TEST_DATA_PLAN_HEADERS),
+            "dependent_results": list(DEPENDENT_RESULTS_HEADERS),
         },
         "accepted_values": {
             "test_data_source_prefixes": list(ALLOWED_DATA_SOURCE_PREFIXES),
@@ -577,6 +593,7 @@ def public_contract(scope: str | None = None, package_root: Path | None = None) 
             "table_rows": "только если область использует таблицу ФТ",
             "opaque_headers": "только для используемых коротких заголовков без явной семантики",
             "visual_crosscheck": "только для включённых UI-уровней",
+            "dependent_results": "когда атомарные результаты причинно связаны и хотя бы один из них имеет GAP; одинаковый source anchor включает automatic gate",
             "figma": "только если релевантного локального визуального материала недостаточно",
             "second_pass": "только при сигнале сложности из ft-scope-analyzer",
         },
@@ -1761,6 +1778,7 @@ def validate(package_root: Path, scope_dir: Path) -> list[str]:
     gap_ids: list[str] = []
     resolved_gap_ids: set[str] = set()
     gap_sources: dict[str, str] = {}
+    gap_linked_sources: dict[str, str] = {}
     gap_diagnostic = diagnose_markdown_table(
         gaps_content,
         ("ID", "Связанная обязанность", "Источник", "Класс", "Недостаток источника", "Что требуется для закрытия"),
@@ -1796,6 +1814,8 @@ def validate(package_root: Path, scope_dir: Path) -> list[str]:
                     errors.append(
                         f"{gap_id}: source reference must exactly reuse the linked {linked_sources[0]} source anchor"
                     )
+                else:
+                    gap_linked_sources[gap_id] = linked_sources[0]
                 gap_class = row[gap_class_index].strip()
                 if gap_class not in ALLOWED_GAP_CLASSES:
                     errors.append(f"{gap_id}: unsupported coverage-gap class {gap_class!r}")
@@ -1820,6 +1840,64 @@ def validate(package_root: Path, scope_dir: Path) -> list[str]:
                         + "; record future update instead of a coverage gap"
                     )
 
+    open_gap_by_source = {
+        source_id: gap_id
+        for gap_id, source_id in gap_linked_sources.items()
+        if gap_id not in resolved_gap_ids
+    }
+    source_groups: dict[str, set[str]] = {}
+    for source_id, source_anchor in inventory_sources.items():
+        source_groups.setdefault(canonical_source_reference(source_anchor), set()).add(source_id)
+    required_dependency_pairs = {
+        (cause, dependent)
+        for group in source_groups.values()
+        for cause in group
+        if cause in open_gap_by_source
+        for dependent in group
+        if dependent != cause
+    }
+    dependency_table = find_markdown_table(scope_brief_content, DEPENDENT_RESULTS_HEADERS)
+    covered_dependency_pairs: set[tuple[str, str]] = set()
+    if required_dependency_pairs and (dependency_table is None or not dependency_table.rows):
+        errors.append(
+            "scope-brief requires 'Контроль зависимых результатов' because one shared source anchor "
+            "has an open GAP and sibling observable obligations"
+        )
+    elif dependency_table is not None:
+        cause_index = dependency_table.index("Причинная обязанность")
+        dependent_index = dependency_table.index("Зависимая обязанность")
+        relation_index = dependency_table.index("Связь")
+        handling_index = dependency_table.index("Обработка неопределённости")
+        for row_number, row in enumerate(dependency_table.rows, start=1):
+            causes = sorted(source_row_tokens(row[cause_index]))
+            dependents = sorted(source_row_tokens(row[dependent_index]))
+            if len(causes) != 1 or len(dependents) != 1 or causes[0] == dependents[0]:
+                errors.append(
+                    f"dependent-results row {row_number}: cause and dependent must be two different single SR-* IDs"
+                )
+                continue
+            cause, dependent = causes[0], dependents[0]
+            covered_dependency_pairs.add((cause, dependent))
+            if cause not in active_inventory_ids or dependent not in active_inventory_ids:
+                errors.append(f"dependent-results row {row_number}: references an inactive SR-* obligation")
+            if not row[relation_index].strip():
+                errors.append(f"dependent-results row {row_number}: relation is empty")
+            handling = row[handling_index].strip()
+            handling_gaps = re.findall(r"(?<![A-Za-z0-9_.-])GAP-\d{2,}(?![A-Za-z0-9_.-])", handling)
+            independent = re.match(r"^Независима:\s+\S", handling, re.IGNORECASE)
+            if independent is None:
+                if len(handling_gaps) != 1:
+                    errors.append(
+                        f"dependent-results row {row_number}: handling must contain one GAP-* or 'Независима: <reason>'"
+                    )
+                elif gap_linked_sources.get(handling_gaps[0]) != dependent or handling_gaps[0] in resolved_gap_ids:
+                    errors.append(
+                        f"dependent-results row {row_number}: {handling_gaps[0]} must be an open GAP linked to {dependent}"
+                    )
+        for cause, dependent in sorted(required_dependency_pairs - covered_dependency_pairs):
+            errors.append(
+                f"dependent-results control omits {cause} -> {dependent} for a shared source anchor with an open GAP"
+            )
     known_gap_ids = set(gap_ids)
     if not gaps_parse_failed:
         unknown_header_semantics_gaps = sorted(header_semantics_gap_ids - known_gap_ids)
