@@ -1213,12 +1213,13 @@ class RuntimeContractTests(unittest.TestCase):
         blocking, quality = partition_scope_findings(
             [
                 "SR-001: active source row aggregates independent properties: editability, format",
+                "table 8 row 'БИК': full property coverage misses autofill behavior",
                 "coverage-gaps table row 1 has 5 cells but expected 6",
             ]
         )
         self.assertEqual(1, len(blocking))
-        self.assertEqual(1, len(quality))
-        decision = scope_stage_decision([quality[0]], 0)
+        self.assertEqual(2, len(quality))
+        decision = scope_stage_decision(quality, 0)
         self.assertTrue(decision["writer_allowed"])
         self.assertEqual("completed", decision["workflow_status"])
         self.assertFalse(decision["correction_allowed"])
@@ -1292,7 +1293,7 @@ class RuntimeContractTests(unittest.TestCase):
 
         self.assertEqual(1, len(errors))
         self.assertIn("mandatory-field behavior", errors[0])
-        self.assertEqual("completeness", classify_scope_error(errors[0]))
+        self.assertEqual("semantic", classify_scope_error(errors[0]))
 
     def test_session_topology_uses_cost_aware_role_defaults(self) -> None:
         root = Path(__file__).resolve().parents[1]

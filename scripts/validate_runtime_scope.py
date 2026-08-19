@@ -294,6 +294,8 @@ def classify_scope_error(error: str) -> str:
     value = error.casefold()
     if any(token in value for token in ("aggregates independent", "atomic", "split mixed", "one object")):
         return "atomicity"
+    if "full property coverage misses" in value:
+        return "semantic"
     if re.search(r"row\s+\d+\s+has\s+\d+\s+cells", value) or any(
         token in value
         for token in (
