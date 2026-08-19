@@ -9,8 +9,10 @@ from pathlib import Path
 from xml.etree import ElementTree as ET
 
 try:
+    from scripts.runtime_io import configure_utf8_stdio
     from scripts.runtime_session_registry import load_registry, validate_topology
 except ModuleNotFoundError:  # Direct invocation: python scripts/validate_runtime_source.py
+    from runtime_io import configure_utf8_stdio
     from runtime_session_registry import load_registry, validate_topology
 
 
@@ -26,6 +28,14 @@ MACHINE_ROLE = "machine_readable_primary"
 VISUAL_ROLE = "visual_structural_crosscheck_only"
 LOCAL_SECTIONS = ("primary_sources", "support_sources", "visual_sources")
 REQUIRED_HANDOFF_FILES = ("source-selection.md", "workflow-state.yaml")
+NOTES_ROLE_PATTERNS = {
+    SEMANTIC_ROLE: re.compile(
+        r"(?im)^\s*[-*]?\s*(?:Основное|Каноническое)\s+ФТ[^`\n]*`([^`]+)`"
+    ),
+    MACHINE_ROLE: re.compile(
+        r"(?im)^\s*[-*]?\s*Машиночитаем(?:ая|ое)\s+(?:версия|представление)[^`\n]*`([^`]+)`"
+    ),
+}
 
 
 def scalar(value: str) -> str:
@@ -91,6 +101,50 @@ def sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def agent_notes_role_hints(package_root: Path, repo_root: Path) -> dict[str, str]:
+    notes_path = package_root / "AGENT-NOTES.md"
+    if not notes_path.is_file():
+        return {}
+    notes = notes_path.read_text(encoding="utf-8")
+    result: dict[str, str] = {}
+    for role, pattern in NOTES_ROLE_PATTERNS.items():
+        match = pattern.search(notes)
+        if match is None:
+            continue
+        declared = Path(match.group(1).strip())
+        resolved = declared if declared.is_absolute() else package_root / declared
+        try:
+            result[role] = resolved.resolve().relative_to(repo_root.resolve()).as_posix()
+        except ValueError:
+            continue
+    return result
+
+
+def input_inventory(package_root: Path) -> dict[str, object]:
+    package_root = package_root.resolve()
+    repo_root = repository_root(package_root)
+    if repo_root is None:
+        return {"valid": False, "errors": ["cannot locate repository root for source inventory"]}
+    entries: list[dict[str, str]] = []
+    for directory_name in ("source", "support", "mockups"):
+        directory = package_root / directory_name
+        if not directory.is_dir():
+            continue
+        for path in sorted(candidate for candidate in directory.rglob("*") if candidate.is_file()):
+            entries.append(
+                {
+                    "path": path.relative_to(repo_root).as_posix(),
+                    "sha256": sha256(path),
+                    "input_section": directory_name,
+                }
+            )
+    return {
+        "valid": True,
+        "inputs": entries,
+        "agent_notes_role_hints": agent_notes_role_hints(package_root, repo_root),
+    }
+
+
 def role_tokens(value: str) -> set[str]:
     return {token.strip().casefold() for token in re.split(r"[+,]", value) if token.strip()}
 
@@ -124,6 +178,7 @@ def validate(package_root: Path, handoff_dir: Path, allow_downstream: bool = Fal
     if repo_root is None:
         errors.append("cannot locate repository root for source validation")
         return errors
+    notes_role_hints = agent_notes_role_hints(package_root, repo_root)
 
     declared_selection = top.get("source_selection")
     expected_selection = selection_path.relative_to(repo_root).as_posix()
@@ -196,6 +251,13 @@ def validate(package_root: Path, handoff_dir: Path, allow_downstream: bool = Fal
             errors.append("source contract v2 requires exactly one canonical semantic_primary")
         if len(machine_entries) != 1:
             errors.append("source contract v2 requires exactly one machine_readable_primary")
+        for role, declared_path in notes_role_hints.items():
+            matching_entries = semantic_entries if role == SEMANTIC_ROLE else machine_entries
+            if len(matching_entries) == 1 and matching_entries[0].get("path") != declared_path:
+                errors.append(
+                    f"AGENT-NOTES.md declares {declared_path} as {role}, but workflow registers "
+                    f"{matching_entries[0].get('path') or '<missing>'}"
+                )
 
         visual_decision = top.get("visual_crosscheck")
         if visual_decision not in {"required", "not_required"}:
@@ -299,9 +361,15 @@ def validate(package_root: Path, handoff_dir: Path, allow_downstream: bool = Fal
 
 
 def main() -> int:
+    configure_utf8_stdio()
     parser = argparse.ArgumentParser(description="Validate runtime source selection and source-stage cleanliness.")
     parser.add_argument("package_root", type=Path)
-    parser.add_argument("handoff_dir", type=Path)
+    parser.add_argument("handoff_dir", type=Path, nargs="?")
+    parser.add_argument(
+        "--print-input-inventory",
+        action="store_true",
+        help="Print repo-relative input paths, computed SHA-256 values and explicit AGENT-NOTES role hints.",
+    )
     parser.add_argument(
         "--support-update",
         action="store_true",
@@ -313,6 +381,12 @@ def main() -> int:
         help="Revalidate an unchanged existing source selection while preserving downstream artifacts.",
     )
     args = parser.parse_args()
+    if args.print_input_inventory:
+        result = input_inventory(args.package_root)
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+        return 0 if result.get("valid") else 1
+    if args.handoff_dir is None:
+        parser.error("handoff_dir is required unless --print-input-inventory is used")
     errors = validate(
         args.package_root,
         args.handoff_dir,

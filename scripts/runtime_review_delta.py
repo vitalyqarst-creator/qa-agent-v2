@@ -8,9 +8,11 @@ from pathlib import Path
 from typing import Any
 
 try:
+    from scripts.runtime_io import configure_utf8_stdio
     from scripts.runtime_traceability import find_markdown_table
     from scripts.validate_runtime_matrix import COVERAGE_MODEL_HEADERS, REQUIRED_HEADERS
 except ModuleNotFoundError:  # Direct invocation
+    from runtime_io import configure_utf8_stdio
     from runtime_traceability import find_markdown_table
     from validate_runtime_matrix import COVERAGE_MODEL_HEADERS, REQUIRED_HEADERS
 
@@ -420,6 +422,7 @@ def enrich_review_record(package_root: Path, artifact: Path, record_path: Path, 
 
 
 def main() -> int:
+    configure_utf8_stdio()
     parser = argparse.ArgumentParser(description="Build and validate bounded re-review evidence.")
     subparsers = parser.add_subparsers(dest="command", required=True)
 

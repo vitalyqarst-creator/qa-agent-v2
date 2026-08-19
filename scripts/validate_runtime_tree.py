@@ -3,6 +3,11 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+try:
+    from scripts.runtime_io import configure_utf8_stdio
+except ModuleNotFoundError:  # Direct invocation
+    from runtime_io import configure_utf8_stdio
+
 
 FORBIDDEN_PATHS = (
     "evals",
@@ -176,6 +181,7 @@ def validate(root: Path) -> list[str]:
 
 
 def main() -> int:
+    configure_utf8_stdio()
     root = Path(__file__).resolve().parents[1]
     errors = validate(root)
     print(json.dumps({"valid": not errors, "errors": errors}, ensure_ascii=False))

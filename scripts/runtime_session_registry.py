@@ -10,6 +10,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+try:
+    from scripts.runtime_io import configure_utf8_stdio
+except ModuleNotFoundError:  # Direct invocation
+    from runtime_io import configure_utf8_stdio
+
 
 THREAD_ID_RE = re.compile(
     r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
@@ -420,6 +425,7 @@ def validate_topology(
 
 
 def main() -> int:
+    configure_utf8_stdio()
     sys.stdout.reconfigure(encoding="utf-8")
     parser = argparse.ArgumentParser(description="Register and verify the practical runtime session topology.")
     subparsers = parser.add_subparsers(dest="command", required=True)

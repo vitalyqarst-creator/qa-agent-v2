@@ -3,6 +3,11 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
+try:
+    from scripts.runtime_io import configure_utf8_stdio
+except ModuleNotFoundError:  # Direct invocation
+    from runtime_io import configure_utf8_stdio
+
 
 PACKAGE_DIRS = ("source", "support", "mockups", "work", "test-cases")
 NOTES = """# Контекст FT-пакета
@@ -47,6 +52,7 @@ def create_package(destination: Path) -> None:
 
 
 def main() -> int:
+    configure_utf8_stdio()
     parser = argparse.ArgumentParser(
         description="Create an empty FT package without copying repository artifacts."
     )

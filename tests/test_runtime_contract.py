@@ -36,14 +36,17 @@ from scripts.validate_runtime_matrix import (
 )
 from scripts.validate_runtime_review import tc_repair_stage, validate as validate_review
 from scripts.validate_runtime_scope import (
+    classify_scope_error,
     generic_unavailability_without_observation,
     public_contract,
+    source_row_tokens,
+    table_property_coverage_errors,
     table_row_references,
     validate as validate_scope,
     validate_test_data_plan,
     xhtml_table_rows,
 )
-from scripts.validate_runtime_source import validate as validate_source
+from scripts.validate_runtime_source import input_inventory, validate as validate_source
 from scripts.validate_runtime_test_data import validate as validate_test_data
 from scripts.validate_runtime_tc import (
     validate as validate_tc,
@@ -426,6 +429,46 @@ class RuntimeContractTests(unittest.TestCase):
                 encoding="utf-8",
             )
             self.assertEqual([], validate_source(package, handoff))
+
+    def test_source_inventory_computes_hashes_and_agent_notes_role_hints(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            package, _handoff = create_valid_source_stage(root)
+            (package / "AGENT-NOTES.md").write_text(
+                "- Основное ФТ (DOCX): `source/requirements.docx`.\n"
+                "- Машиночитаемая версия ФТ (XHTML): `source/requirements.xhtml`.\n",
+                encoding="utf-8",
+            )
+
+            inventory = input_inventory(package)
+
+            self.assertTrue(inventory["valid"])
+            self.assertEqual(
+                "fts/Project/FT/source/requirements.docx",
+                inventory["agent_notes_role_hints"]["semantic_primary"],
+            )
+            docx = next(item for item in inventory["inputs"] if item["path"].endswith("requirements.docx"))
+            self.assertEqual(hashlib.sha256(b"docx").hexdigest(), docx["sha256"])
+
+    def test_source_contract_enforces_explicit_agent_notes_roles(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            package, handoff = create_valid_source_stage(root)
+            (package / "AGENT-NOTES.md").write_text(
+                "- Основное ФТ (DOCX): `source/requirements.docx`.\n"
+                "- Машиночитаемая версия ФТ (XHTML): `source/requirements.xhtml`.\n",
+                encoding="utf-8",
+            )
+            workflow = handoff / "workflow-state.yaml"
+            content = workflow.read_text(encoding="utf-8")
+            content = content.replace("role: semantic_primary", "role: temporary_role", 1)
+            content = content.replace("role: machine_readable_primary", "role: semantic_primary", 1)
+            content = content.replace("role: temporary_role", "role: machine_readable_primary", 1)
+            workflow.write_text(content, encoding="utf-8")
+
+            errors = validate_source(package, handoff)
+
+            self.assertTrue(any("AGENT-NOTES.md declares" in error for error in errors))
 
     def test_legacy_three_file_source_selection_remains_valid(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
@@ -992,6 +1035,47 @@ class RuntimeContractTests(unittest.TestCase):
             "**Почему существующий ответ не закрывает вопрос:**",
             contract["clarification_fields"]["partial_support_answer_residual_heading"],
         )
+        self.assertIn("| ID | Связанная обязанность |", contract["markdown_templates"]["coverage_gaps"])
+        self.assertIn("scope_revision_count: 0", contract["markdown_templates"]["workflow_state"])
+
+    def test_scope_contract_cli_emits_utf8_on_windows_console(self) -> None:
+        root = Path(__file__).resolve().parents[1]
+        result = subprocess.run(
+            [sys.executable, "scripts/validate_runtime_scope.py", "--print-contract", "--scope", "9.3.3"],
+            cwd=root,
+            capture_output=True,
+            check=False,
+        )
+
+        decoded = result.stdout.decode("utf-8")
+        self.assertEqual(0, result.returncode, result.stderr.decode("utf-8", errors="replace"))
+        self.assertIn("Связанная обязанность", decoded)
+        self.assertNotIn("�", decoded)
+
+    def test_scope_helpers_accept_punctuated_table_anchor_and_expand_sr_ranges(self) -> None:
+        self.assertEqual(
+            [("8", "Расчетный счет")],
+            table_row_references("Таблица 8, строка «Расчетный счет»."),
+        )
+        self.assertEqual(
+            {"SR-933010", "SR-933011", "SR-933012"},
+            source_row_tokens("SR-933010–SR-933012"),
+        )
+
+    def test_table_property_gate_detects_omitted_mandatory_behavior(self) -> None:
+        errors = table_property_coverage_errors(
+            8,
+            "Расчетный счет",
+            ("Название", "О", "Р", "Тип значения"),
+            ("Расчетный счет", "Да", "Да", "Текст, только цифры"),
+            {(8, "о"): "Обязательность", (8, "р"): "Редактируемость"},
+            {"SR-933021"},
+            {"SR-933021": "Расчётный счёт не принимает нецифровой символ."},
+        )
+
+        self.assertEqual(1, len(errors))
+        self.assertIn("mandatory-field behavior", errors[0])
+        self.assertEqual("completeness", classify_scope_error(errors[0]))
 
     def test_session_topology_uses_cost_aware_role_defaults(self) -> None:
         root = Path(__file__).resolve().parents[1]
@@ -1602,6 +1686,7 @@ class RuntimeContractTests(unittest.TestCase):
             )
             (scope / "workflow-state.yaml").write_text(
                 "stage: ft-scope-analyzer\n"
+                "scope_revision_count: 0\n"
                 'clarification_register: "work/scope-clarification-requests.md"\n',
                 encoding="utf-8",
             )
@@ -1649,10 +1734,19 @@ class RuntimeContractTests(unittest.TestCase):
             )
             (scope / "workflow-state.yaml").write_text(
                 "stage: ft-scope-analyzer\n"
+                "scope_revision_count: 0\n"
                 'clarification_register: "work/scope-clarification-requests.md"\n',
                 encoding="utf-8",
             )
             self.assertEqual([], validate_scope(package, scope))
+
+            workflow_path = scope / "workflow-state.yaml"
+            valid_workflow = workflow_path.read_text(encoding="utf-8")
+            workflow_path.write_text(valid_workflow.replace("scope_revision_count: 0\n", ""), encoding="utf-8")
+            self.assertTrue(
+                any("scope_revision_count" in error for error in validate_scope(package, scope))
+            )
+            workflow_path.write_text(valid_workflow, encoding="utf-8")
 
             brief_path = scope / "scope-brief.md"
             valid_brief = brief_path.read_text(encoding="utf-8")
@@ -2059,6 +2153,19 @@ class RuntimeContractTests(unittest.TestCase):
         )
         self.assertEqual([], validate_test_data_plan(valid))
 
+    def test_test_data_plan_reports_root_column_mismatch(self) -> None:
+        malformed = """# План тестовых данных
+
+| Группа проверок | Роли данных | Допустимый источник | Ограничения и отношения | Границы и классы | Воспроизводимая подготовка | Готовность материализации |
+| --- | --- | --- | --- | --- | --- |
+| Сохранение | TD-A | стендовая подготовка | Уникальность | Не применимо: нет границы | Подготовить | требуется |
+"""
+
+        errors = validate_test_data_plan(malformed)
+
+        self.assertEqual(1, len(errors))
+        self.assertIn("7 header columns but 6 separator columns", errors[0])
+
     def test_test_data_plan_rejects_unsourced_date_limits(self) -> None:
         plan = """# План тестовых данных
 
@@ -2236,6 +2343,7 @@ class RuntimeContractTests(unittest.TestCase):
             )
             (scope / "workflow-state.yaml").write_text(
                 "stage: ft-scope-analyzer\n"
+                "scope_revision_count: 0\n"
                 'clarification_register: "work/scope-clarification-requests.md"\n',
                 encoding="utf-8",
             )
@@ -2301,6 +2409,7 @@ class RuntimeContractTests(unittest.TestCase):
             )
             (scope / "workflow-state.yaml").write_text(
                 "stage: ft-scope-analyzer\n"
+                "scope_revision_count: 0\n"
                 'clarification_register: "work/scope-clarification-requests.md"\n',
                 encoding="utf-8",
             )

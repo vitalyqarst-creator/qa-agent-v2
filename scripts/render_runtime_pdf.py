@@ -12,8 +12,10 @@ import fitz
 
 try:
     from scripts.cleanup_runtime_temp import cleanup
+    from scripts.runtime_io import configure_utf8_stdio
 except ModuleNotFoundError:  # Direct invocation: python scripts/render_runtime_pdf.py
     from cleanup_runtime_temp import cleanup
+    from runtime_io import configure_utf8_stdio
 
 
 TEMP_PREFIX = "ft-runtime-pdf-visual-"
@@ -136,6 +138,7 @@ def render_pdf(
 
 
 def main() -> int:
+    configure_utf8_stdio()
     sys.stdout.reconfigure(encoding="utf-8")
     parser = argparse.ArgumentParser(
         description="Render a PDF with Unicode paths into an isolated system temp directory."

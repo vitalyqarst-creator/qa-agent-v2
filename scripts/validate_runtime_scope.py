@@ -8,11 +8,15 @@ from pathlib import Path
 
 try:
     from scripts.runtime_cleanliness import validate_no_repository_temp
-    from scripts.runtime_traceability import extract_anchors, find_markdown_table
+    from scripts.runtime_io import configure_utf8_stdio
+    from scripts.runtime_state import scalar_values
+    from scripts.runtime_traceability import diagnose_markdown_table, extract_anchors, find_markdown_table
     from scripts.runtime_session_registry import canonical_scope, validate_topology
 except ModuleNotFoundError:  # Direct invocation: python scripts/validate_runtime_scope.py
     from runtime_cleanliness import validate_no_repository_temp
-    from runtime_traceability import extract_anchors, find_markdown_table
+    from runtime_io import configure_utf8_stdio
+    from runtime_state import scalar_values
+    from runtime_traceability import diagnose_markdown_table, extract_anchors, find_markdown_table
     from runtime_session_registry import canonical_scope, validate_topology
 
 
@@ -96,7 +100,8 @@ OMIT_GAP_RE = re.compile(
 )
 SOURCE_ROW_ID_RE = re.compile(r"^SR-\d{2,}$")
 GAP_ID_RE = re.compile(r"^GAP-\d{2,}$")
-SOURCE_ROW_TOKEN_RE = re.compile(r"(?<![A-Za-z0-9_.-])SR-\d{2,}(?![A-Za-z0-9_.-])")
+SOURCE_ROW_TOKEN_RE = re.compile(r"(?<![A-Za-z0-9_-])SR-\d{2,}(?![A-Za-z0-9_-])")
+SOURCE_ROW_RANGE_RE = re.compile(r"SR-(\d{2,})\s*[–—-]\s*(?:SR-)?(\d{2,})")
 RESOLVED_EXCLUSION_RE = re.compile(
     r"не\s+образует\s+проверяемого\s+поведения|"
     r"не\s+является\s+проверяемой\s+обязанностью|"
@@ -107,7 +112,9 @@ RESOLVED_EXCLUSION_RE = re.compile(
 )
 RESOLVED_GAP_RE = re.compile(r"^\s*Закрыт(?:о|а|ы)?(?:\s+[^:|]{1,60})?\s*:", re.IGNORECASE)
 TABLE_ROW_REFERENCE_RE = re.compile(
-    r"Таблица\s+(\d+)\s*,\s*строка\s+(?:«(.+)»|\"([^\"]+)\")(?:\s*,\s*примечание)?(?=\s*(?:;|$))",
+    r"Таблица\s+(\d+)\s*,\s*строка(?:\s+первого\s+столбца)?\s+"
+    r"(?:«(.+)»|\"([^\"]+)\"|'([^']+)'|`([^`]+)`)(?:\s*,\s*примечание)?"
+    r"(?=\s*(?:[.;]|$))",
     re.IGNORECASE,
 )
 TABLE_REFERENCE_RE = re.compile(r"\bТаблица\s+(\d+)\b", re.IGNORECASE)
@@ -122,17 +129,19 @@ INDEPENDENT_PROPERTY_PATTERNS = {
         re.IGNORECASE,
     ),
     "предзаполнение данных": re.compile(
-        r"\b(?:предзаполн\w*|заполня\w*|заполненн\w*)\b[^|\n]{0,80}\b(?:данн|значен|пол)\w*",
+        r"\b(?:предзаполн\w*|автозаполн\w*|автоматически\s+заполня\w*|заполня\w*\s+систем\w*)\b",
         re.IGNORECASE,
     ),
-    "обязательность": re.compile(r"\bобязатель\w*", re.IGNORECASE),
+    "обязательность": re.compile(r"\b(?:не)?обязатель\w*", re.IGNORECASE),
     "редактируемость": re.compile(
         r"\b(?:не\s+)?редактируем\w*|\b(?:не\s+)?редактиру(?:ется|ются|ют)\b|"
-        r"\b(?:нельзя|можно)\s+редактировать\b|\bтолько\s+для\s+чтения\b",
+        r"\b(?:нельзя|можно|может)\s+редактировать\b|\bтолько\s+для\s+чтения\b",
         re.IGNORECASE,
     ),
     "представление": re.compile(r"\bинформационн\w*\s+(?:блок\w*|виджет\w*)", re.IGNORECASE),
     "ссылка или переход": re.compile(r"\bссылк\w*|\bпереход\w*", re.IGNORECASE),
+    "формат значения": re.compile(r"\bформат\w*|\bдд[.\-/]мм[.\-/](?:гг|гггг)\b|\bмаск\w*", re.IGNORECASE),
+    "механизм загрузки": re.compile(r"\bdrag\s*&?\s*drop\b|\bконтейнер\w*[^|\n]{0,80}\bприкреп", re.IGNORECASE),
 }
 MULTI_SURFACE_RE = re.compile(r"\s(?:и|или)\s|(?<=\w)\s*/\s*(?=\w)", re.IGNORECASE)
 QUESTION_EXTRA_BEHAVIOR_RE = re.compile(
@@ -235,6 +244,70 @@ SOURCE_TRIGGER_RE = re.compile(
     r"\bпосле\s+(?:ввод|выбор|нажат|сохран|открыт|закрыт|загруз)\w*",
     re.IGNORECASE,
 )
+AFFIRMATIVE_CELL_RE = re.compile(r"^(?:да|yes|true|1)$", re.IGNORECASE)
+NEGATIVE_CELL_RE = re.compile(r"^(?:нет|no|false|0)$", re.IGNORECASE)
+REQUIRED_POSITIVE_RE = re.compile(r"обязатель\w*|пуст\w*[^|\n]{0,100}не\s+сохраня", re.IGNORECASE)
+REQUIRED_NEGATIVE_RE = re.compile(
+    r"необязатель\w*|без\s+[^|\n]{1,100}\s+мож\w*(?:\s+быть)?\s+сохран|пуст\w*[^|\n]{0,100}сохраня",
+    re.IGNORECASE,
+)
+EDITABLE_POSITIVE_RE = re.compile(
+    r"редакт\w*|ввод\w*|выбира\w*|прикреп\w*|измен\w*|принима\w*",
+    re.IGNORECASE,
+)
+EDITABLE_NEGATIVE_RE = re.compile(
+    r"не\s+редакт\w*|недоступ\w*[^|\n]{0,80}редакт|только\s+для\s+чтения",
+    re.IGNORECASE,
+)
+
+
+def markdown_table_template(headers: tuple[str, ...], example: tuple[str, ...]) -> str:
+    return "\n".join(
+        (
+            "| " + " | ".join(headers) + " |",
+            "| " + " | ".join("---" for _ in headers) + " |",
+            "| " + " | ".join(example) + " |",
+        )
+    )
+
+
+def source_row_tokens(value: str) -> set[str]:
+    result = set(SOURCE_ROW_TOKEN_RE.findall(value))
+    for start_raw, end_raw in SOURCE_ROW_RANGE_RE.findall(value):
+        start = int(start_raw)
+        end = int(end_raw)
+        if end < start or end - start > 500:
+            continue
+        width = max(len(start_raw), len(end_raw))
+        result.update(f"SR-{number:0{width}d}" for number in range(start, end + 1))
+    return result
+
+
+def classify_scope_error(error: str) -> str:
+    value = error.casefold()
+    if any(token in value for token in ("aggregates independent", "atomic", "split mixed", "one object")):
+        return "atomicity"
+    if any(token in value for token in ("misses", "omitted", "complete table-row", "first and final", "full property")):
+        return "completeness"
+    if value.startswith("test-data-plan") or "boundary needs" in value:
+        return "test-data"
+    if any(token in value for token in ("source cites", "source needs", "source reference", "exact source", "unknown id", "unknown gap", "does not exist in table")):
+        return "traceability"
+    if any(token in value for token in ("missing scope artifact", "workflow-state", "topology", "clarification register", "repository-local temporary")):
+        return "process"
+    if "use russian wording" in value or "user-facing text error" in value:
+        return "language"
+    if any(token in value for token in ("separator", "required table headers", "has no typed", "has no required", "must contain the source-compatible data table")):
+        return "format"
+    return "semantic"
+
+
+def scope_error_summary(errors: list[str]) -> dict[str, int]:
+    result: dict[str, int] = {}
+    for error in errors:
+        category = classify_scope_error(error)
+        result[category] = result.get(category, 0) + 1
+    return dict(sorted(result.items()))
 
 
 def generic_unavailability_without_observation(observation_surface: str, observed_result: str) -> bool:
@@ -273,8 +346,67 @@ def public_contract(scope: str | None = None) -> dict[str, object]:
     scope_digits = "".join(re.findall(r"\d+", scope_value)) or "00"
     section_match = re.match(r"(\d+(?:\.\d+)*)", scope_value)
     section_id = section_match.group(1) if section_match else scope_digits
+    source_example = f"Таблица 1, строка «Точное значение первого столбца»; Раздел {section_id}"
+    templates = {
+        "source_inventory": markdown_table_template(
+            ("ID", "Источник", "Утверждение для покрытия"),
+            (f"SR-{scope_digits}001", source_example, "Один наблюдаемый результат"),
+        ),
+        "verifiability": markdown_table_template(
+            ("SR", "Объект или UI-уровень", "Актор и условие", "Действие или событие", "Наблюдаемый результат"),
+            (f"SR-{scope_digits}001", "Один объект", "Одно исходное условие", "Одно действие", "Один результат"),
+        ),
+        "boundaries": markdown_table_template(
+            ("Фрагмент", "Структурный якорь", "Решение", "Связанные обязанности или область"),
+            ("Выбранный раздел", f"Раздел {section_id}", "Включён", f"SR-{scope_digits}001"),
+        ),
+        "parent_ownership": markdown_table_template(
+            ("Источник", "Родительская обязанность", "Целевая область", "Связанные обязанности или решение"),
+            (f"Раздел {section_id}; абзац «Точная цитата»", "Одна обязанность", scope_value, f"SR-{scope_digits}001"),
+        ),
+        "table_rows": markdown_table_template(
+            ("Таблица", "Строка", "Решение", "Связанные обязанности/пробелы"),
+            ("Таблица 1", "Точное значение первого столбца", "Включена", f"SR-{scope_digits}001"),
+        ),
+        "opaque_headers": markdown_table_template(
+            ("Таблица", "Заголовок", "Значение", "Основание или пробел"),
+            ("Таблица 1", "О", "Расшифровка из легенды", "`support/column-legend.md`"),
+        ),
+        "visual_crosscheck": markdown_table_template(
+            ("UI-уровень", "Визуальный источник", "Результат сверки"),
+            ("Один UI-уровень", "`mockups/exact-file.png`", "Подтверждённые подписи и механика"),
+        ),
+        "consistency": markdown_table_template(
+            ("Аспект", "Вывод анализа", "Связанные обязанности/пробелы"),
+            ("Идентичность объекта", "Один конкретный вывод", f"SR-{scope_digits}001"),
+        ),
+        "coverage_gaps": markdown_table_template(
+            ("ID", "Связанная обязанность", "Источник", "Класс", "Недостаток источника", "Что требуется для закрытия"),
+            (f"GAP-{scope_digits}001", f"SR-{scope_digits}001", source_example, "нет-бизнес-результата", "Точный недостаток", "Один ответ"),
+        ),
+        "test_data": markdown_table_template(
+            TEST_DATA_PLAN_HEADERS,
+            (
+                "Одна группа проверок",
+                "TD-OBJECT-A",
+                "стендовая подготовка",
+                "Отношения равенства и различия",
+                "Классы или Не применимо: причина",
+                "Воспроизводимая подготовка",
+                "требуется",
+            ),
+        ),
+        "workflow_state": (
+            f'scope: "{scope_value}"\n'
+            f'canonical_scope: "{scope_value}"\n'
+            "stage: scope-analyzer\n"
+            "status: completed\n"
+            "scope_revision_count: 0\n"
+            'clarification_register: "work/scope-clarification-requests.md"'
+        ),
+    }
     return {
-        "contract_version": 1,
+        "contract_version": 2,
         "scope": scope_value,
         "required_files": list(REQUIRED_FILES),
         "id_formats": {
@@ -293,6 +425,11 @@ def public_contract(scope: str | None = None) -> dict[str, object]:
         },
         "clarification_fields": {
             "partial_support_answer_residual_heading": RESIDUAL_EXPLANATION,
+        },
+        "source_anchor_examples": {
+            "table_row": "Таблица 8, строка «Точное значение первого столбца».",
+            "table_row_explicit": "Таблица 8, строка первого столбца «Точное значение».",
+            "uncoded_text": f"Раздел {section_id}; абзац «Короткая точная цитата».",
         },
         "required_tables": {
             "source_inventory": ["ID", "Источник", "Утверждение для покрытия"],
@@ -323,6 +460,12 @@ def public_contract(scope: str | None = None) -> dict[str, object]:
         "accepted_values": {
             "test_data_source_prefixes": list(ALLOWED_DATA_SOURCE_PREFIXES),
             "test_data_materialization_readiness": sorted(ALLOWED_DATA_READINESS),
+        },
+        "markdown_templates": templates,
+        "correction_policy": {
+            "initial_scope_revision_count": 0,
+            "after_single_local_correction": 1,
+            "when_invalid_at_count_1": "stop; correction_allowed=false",
         },
         "conditional_controls": {
             "table_rows": "только если область использует таблицу ФТ",
@@ -406,10 +549,11 @@ def xhtml_cell_text(cell: ET.Element) -> str:
 
 
 def table_row_references(value: str) -> list[tuple[str, str]]:
-    return [
-        (match.group(1), match.group(2) or match.group(3))
-        for match in TABLE_ROW_REFERENCE_RE.finditer(value)
-    ]
+    result: list[tuple[str, str]] = []
+    for match in TABLE_ROW_REFERENCE_RE.finditer(value):
+        row_name = next(group for group in match.groups()[1:] if group)
+        result.append((match.group(1), row_name))
+    return result
 
 
 def xhtml_table_rows(path: Path) -> dict[int, set[str]]:
@@ -468,6 +612,86 @@ def xhtml_table_headers(path: Path) -> dict[int, tuple[str, ...]]:
     return result
 
 
+def xhtml_table_cells(path: Path) -> dict[int, dict[str, tuple[str, ...]]]:
+    """Return complete XHTML rows keyed by normalized first-column text."""
+
+    tree = ET.parse(path)
+    current_table_number: int | None = None
+    result: dict[int, dict[str, tuple[str, ...]]] = {}
+    for element in tree.iter():
+        tag = element.tag.rsplit("}", 1)[-1].casefold()
+        text = " ".join("".join(element.itertext()).replace("\u00a0", " ").split())
+        if tag in {"h1", "h2", "h3", "h4", "h5", "h6", "p"}:
+            label_match = TABLE_LABEL_RE.match(text)
+            if label_match:
+                current_table_number = int(label_match.group(1))
+        if tag != "table" or current_table_number is None:
+            continue
+        rows: list[tuple[str, ...]] = []
+        for row in (child for child in element.iter() if child.tag.rsplit("}", 1)[-1].casefold() == "tr"):
+            cells = tuple(
+                xhtml_cell_text(child)
+                for child in list(row)
+                if child.tag.rsplit("}", 1)[-1].casefold() in {"td", "th"}
+            )
+            if cells:
+                rows.append(cells)
+        result[current_table_number] = {
+            normalized_source_text(row[0]): row for row in rows[1:] if row and row[0]
+        }
+        current_table_number = None
+    return result
+
+
+def table_property_coverage_errors(
+    table_number: int,
+    row_name: str,
+    headers: tuple[str, ...],
+    cells: tuple[str, ...],
+    semantic_meanings: dict[tuple[int, str], str],
+    linked_source_rows: set[str],
+    inventory_statements: dict[str, str],
+) -> list[str]:
+    statements = " | ".join(inventory_statements.get(source_id, "") for source_id in linked_source_rows)
+    if not statements:
+        return []
+    errors: list[str] = []
+    for header, cell in zip(headers, cells):
+        meaning = semantic_meanings.get((table_number, normalized_source_text(header)), "")
+        if "обязатель" in meaning.casefold():
+            if AFFIRMATIVE_CELL_RE.fullmatch(cell.strip()) and not REQUIRED_POSITIVE_RE.search(statements):
+                errors.append(
+                    f"table {table_number} row {row_name!r}: full property coverage misses mandatory-field behavior"
+                )
+            if NEGATIVE_CELL_RE.fullmatch(cell.strip()) and not REQUIRED_NEGATIVE_RE.search(statements):
+                errors.append(
+                    f"table {table_number} row {row_name!r}: full property coverage misses optional-field behavior"
+                )
+        if "редакт" in meaning.casefold():
+            if AFFIRMATIVE_CELL_RE.fullmatch(cell.strip()) and not EDITABLE_POSITIVE_RE.search(statements):
+                errors.append(
+                    f"table {table_number} row {row_name!r}: full property coverage misses editable-field behavior"
+                )
+            if NEGATIVE_CELL_RE.fullmatch(cell.strip()) and not EDITABLE_NEGATIVE_RE.search(statements):
+                errors.append(
+                    f"table {table_number} row {row_name!r}: full property coverage misses read-only behavior"
+                )
+    combined_cells = " | ".join(cells)
+    if re.search(r"только\s+цифр", combined_cells, re.IGNORECASE) and not re.search(
+        r"цифр", statements, re.IGNORECASE
+    ):
+        errors.append(f"table {table_number} row {row_name!r}: full property coverage misses digits-only behavior")
+    if re.search(r"множественн\w*\s+выбор", combined_cells, re.IGNORECASE) and not re.search(
+        r"множествен|несколько|два\s+разн", statements, re.IGNORECASE
+    ):
+        errors.append(f"table {table_number} row {row_name!r}: full property coverage misses multi-select behavior")
+    if re.search(r"автозаполн", combined_cells, re.IGNORECASE) and not re.search(
+        r"автозаполн|автоматически\s+заполня|заполня\w*\s+систем|систем\w*\s+заполня", statements, re.IGNORECASE
+    ):
+        errors.append(f"table {table_number} row {row_name!r}: full property coverage misses autofill behavior")
+    return errors
+
+
 def machine_readable_primary(package_root: Path) -> Path | None:
     for entry in locator_sections(package_root).get("primary_sources", []):
         if "machine_readable_primary" in entry.get("role", "").casefold():
@@ -511,11 +735,12 @@ def validate_visual_reference(
     return errors
 
 
-def approved_support_paths(package_root: Path) -> list[Path]:
+def registered_support_paths(package_root: Path, allowed_roles: set[str]) -> list[Path]:
     root = runtime_root(package_root)
     paths: list[Path] = []
     for entry in locator_sections(package_root).get("support_sources", []):
-        if "approved_ba" not in entry.get("role", "").casefold():
+        roles = {value.strip().casefold() for value in re.split(r"[+,]", entry.get("role", ""))}
+        if not any(role == allowed or role.startswith(allowed + "_") for role in roles for allowed in allowed_roles):
             continue
         candidate = root / entry["path"]
         if not candidate.is_file():
@@ -523,6 +748,27 @@ def approved_support_paths(package_root: Path) -> list[Path]:
         if candidate.is_file():
             paths.append(candidate)
     return paths
+
+
+def approved_support_paths(package_root: Path) -> list[Path]:
+    return registered_support_paths(package_root, {"approved_ba"})
+
+
+def table_header_meanings_from_support(package_root: Path) -> dict[str, str]:
+    result: dict[str, str] = {}
+    for path in registered_support_paths(package_root, {"table_column_legend"}):
+        content = path.read_text(encoding="utf-8")
+        table = find_markdown_table(content, ("Колонка", "Значение"))
+        if table is None:
+            continue
+        header_index = table.index("Колонка")
+        meaning_index = table.index("Значение")
+        for row in table.rows:
+            header = row[header_index].strip().strip("` ")
+            meaning = row[meaning_index].strip()
+            if header and meaning:
+                result[normalized_source_text(header)] = meaning
+    return result
 
 
 def question_blocks(content: str) -> list[tuple[str, str]]:
@@ -631,9 +877,11 @@ def validate_test_data_plan(content: str, source_evidence: str = "") -> list[str
         return []
     table = find_markdown_table(content, TEST_DATA_PLAN_HEADERS)
     if table is None or not table.rows:
+        diagnostic = diagnose_markdown_table(content, TEST_DATA_PLAN_HEADERS)
         return [
             "test-data-plan must contain the source-compatible data table from test-data-fixtures.md "
-            "or the exact line 'Данные не требуются.'"
+            "or the exact line 'Данные не требуются.'. "
+            + (diagnostic or "the table has no data rows")
         ]
     errors: list[str] = []
     group_index = table.index("Группа проверок")
@@ -737,6 +985,7 @@ def validate(package_root: Path, scope_dir: Path) -> list[str]:
     row_references: list[tuple[str, int, str]] = []
     normalized_table_rows: dict[int, set[str]] = {}
     normalized_table_headers: dict[int, tuple[str, ...]] = {}
+    normalized_table_cells: dict[int, dict[str, tuple[str, ...]]] = {}
     active_inventory_ids: set[str] = set()
     inventory_statements: dict[str, str] = {}
     inventory_sources: dict[str, str] = {}
@@ -804,6 +1053,7 @@ def validate(package_root: Path, scope_dir: Path) -> list[str]:
                 table_rows = xhtml_table_rows(xhtml_path)
                 normalized_table_rows = table_rows
                 normalized_table_headers = xhtml_table_headers(xhtml_path)
+                normalized_table_cells = xhtml_table_cells(xhtml_path)
             except (ET.ParseError, OSError) as exc:
                 errors.append(f"normalized machine-readable primary cannot be parsed for table-row validation: {exc}")
             else:
@@ -897,6 +1147,9 @@ def validate(package_root: Path, scope_dir: Path) -> list[str]:
 
     scope_brief_content = (scope_dir / "scope-brief.md").read_text(encoding="utf-8")
     workflow_content = (scope_dir / "workflow-state.yaml").read_text(encoding="utf-8")
+    revision_count = scalar_values(workflow_content).get("scope_revision_count")
+    if revision_count not in {"0", "1"}:
+        errors.append("workflow-state scope_revision_count must be 0 initially or 1 after the single correction")
     if not re.search(
         r"(?m)^clarification_register:\s*[\"']?work/scope-clarification-requests\.md[\"']?\s*$",
         workflow_content,
@@ -945,7 +1198,7 @@ def validate(package_root: Path, scope_dir: Path) -> list[str]:
                         f"scope-brief parent fragment {fragment!r} must distribute obligations by target scope "
                         "instead of including the whole fragment"
                     )
-                linked = set(SOURCE_ROW_TOKEN_RE.findall(related)) | set(
+                linked = source_row_tokens(related) | set(
                     re.findall(r"(?<![A-Za-z0-9_.-])GAP-\d{2,}(?![A-Za-z0-9_.-])", related)
                 )
                 boundary_refs.update(linked)
@@ -1039,7 +1292,7 @@ def validate(package_root: Path, scope_dir: Path) -> list[str]:
                     errors.append(f"parent ownership row {row_number}: atomic parent obligation is missing")
                 if not target or re.search(r"\b(?:будущ|друг\w*\s+scope|не\s+определ)\w*", target, re.IGNORECASE):
                     errors.append(f"parent ownership row {row_number}: target scope must be explicit")
-                linked = set(SOURCE_ROW_TOKEN_RE.findall(resolution)) | set(
+                linked = source_row_tokens(resolution) | set(
                     re.findall(r"(?<![A-Za-z0-9_.-])GAP-\d{2,}(?![A-Za-z0-9_.-])", resolution)
                 )
                 if canonical_scope(target) == current_scope:
@@ -1066,6 +1319,7 @@ def validate(package_root: Path, scope_dir: Path) -> list[str]:
 
     referenced_table_numbers = {table_number for _inventory_id, table_number, _row_name in row_references}
     table_coverage_refs: set[str] = set()
+    table_coverage_links: dict[tuple[int, str], set[str]] = {}
     header_semantics_gap_ids: set[str] = set()
     table_coverage = find_markdown_table(
         scope_brief_content,
@@ -1096,11 +1350,14 @@ def validate(package_root: Path, scope_dir: Path) -> list[str]:
                         f"table-row coverage row {row_number}: row {source_row!r} is absent from table {table_number}"
                     )
                 decision = row[decision_index].strip()
-                linked = set(SOURCE_ROW_TOKEN_RE.findall(row[refs_index])) | set(
+                linked = source_row_tokens(row[refs_index]) | set(
                     re.findall(r"(?<![A-Za-z0-9_.-])GAP-\d{2,}(?![A-Za-z0-9_.-])", row[refs_index])
                 )
                 if decision.casefold() == "включена":
                     table_coverage_refs.update(linked)
+                    table_coverage_links[(table_number, normalized_row)] = {
+                        value for value in linked if SOURCE_ROW_ID_RE.fullmatch(value)
+                    }
                     if not linked:
                         errors.append(f"table-row coverage row {row_number}: included row must link SR-* or GAP-*")
                 elif decision.casefold().startswith("передана:"):
@@ -1137,6 +1394,12 @@ def validate(package_root: Path, scope_dir: Path) -> list[str]:
         scope_brief_content,
         ("Таблица", "Заголовок", "Значение", "Основание или пробел"),
     )
+    support_header_meanings = table_header_meanings_from_support(package_root)
+    semantic_meanings: dict[tuple[int, str], str] = {
+        (table_number, header): meaning
+        for table_number in referenced_table_numbers
+        for header, meaning in support_header_meanings.items()
+    }
     if opaque_headers:
         if semantics is None or not semantics.rows:
             labels = ", ".join(f"Таблица {number}: {header}" for number, header in sorted(opaque_headers))
@@ -1149,7 +1412,10 @@ def validate(package_root: Path, scope_dir: Path) -> list[str]:
             semantics_value_index = semantics.index("Значение")
             semantics_basis_index = semantics.index("Основание или пробел")
             declared_semantics: list[tuple[int, str]] = []
-            approved_support = approved_support_paths(package_root)
+            approved_support = registered_support_paths(
+                package_root,
+                {"approved_ba", "table_column_legend"},
+            )
             root = runtime_root(package_root)
             support_labels: set[str] = set()
             for path in approved_support:
@@ -1169,6 +1435,7 @@ def validate(package_root: Path, scope_dir: Path) -> list[str]:
                 key = (int(table_match.group(1)), row[semantics_header_index].strip())
                 declared_semantics.append(key)
                 value = row[semantics_value_index].strip()
+                semantic_meanings[(key[0], normalized_source_text(key[1]))] = value
                 basis = row[semantics_basis_index].strip()
                 gaps = set(re.findall(r"(?<![A-Za-z0-9_.-])GAP-\d{2,}(?![A-Za-z0-9_.-])", basis))
                 header_semantics_gap_ids.update(gaps)
@@ -1201,6 +1468,23 @@ def validate(package_root: Path, scope_dir: Path) -> list[str]:
                 errors.append("table-header semantics contains non-opaque or unreferenced headers: " + repr(extras))
     elif semantics is not None and semantics.rows:
         errors.append("scope-brief has table-header semantics rows but referenced tables have no opaque headers")
+
+    for (table_number, normalized_row), linked_source_rows in sorted(table_coverage_links.items()):
+        row_cells = normalized_table_cells.get(table_number, {}).get(normalized_row)
+        headers = normalized_table_headers.get(table_number)
+        if row_cells is None or headers is None:
+            continue
+        errors.extend(
+            table_property_coverage_errors(
+                table_number,
+                row_cells[0],
+                headers,
+                row_cells,
+                semantic_meanings,
+                linked_source_rows,
+                inventory_statements,
+            )
+        )
     visual_check = find_markdown_table(
         scope_brief_content,
         ("UI-уровень", "Визуальный источник", "Результат сверки"),
@@ -1314,7 +1598,7 @@ def validate(package_root: Path, scope_dir: Path) -> list[str]:
                     f"scope-brief consistency aspect {aspect!r}: omit non-applicable aspects instead of adding a row"
                 )
                 continue
-            linked = set(SOURCE_ROW_TOKEN_RE.findall(references)) | set(
+            linked = source_row_tokens(references) | set(
                 re.findall(r"(?<![A-Za-z0-9_.-])GAP-\d{2,}(?![A-Za-z0-9_.-])", references)
             )
             consistency_refs.update(linked)
@@ -1338,9 +1622,17 @@ def validate(package_root: Path, scope_dir: Path) -> list[str]:
     gap_ids: list[str] = []
     resolved_gap_ids: set[str] = set()
     gap_sources: dict[str, str] = {}
+    gaps_parse_failed = "GAP-" in gaps_content and (gaps is None or not gaps.rows)
     if "GAP-" in gaps_content:
-        if gaps is None or not gaps.rows:
-            errors.append("coverage-gaps contains GAP IDs but has no typed source-level gap table")
+        if gaps_parse_failed:
+            diagnostic = diagnose_markdown_table(
+                gaps_content,
+                ("ID", "Связанная обязанность", "Источник", "Класс", "Недостаток источника", "Что требуется для закрытия"),
+            )
+            errors.append(
+                "coverage-gaps contains GAP IDs but has no typed source-level gap table. "
+                + (diagnostic or "the table has no data rows")
+            )
         else:
             gap_id_index = gaps.index("ID")
             linked_source_index = gaps.index("Связанная обязанность")
@@ -1354,7 +1646,7 @@ def validate(package_root: Path, scope_dir: Path) -> list[str]:
                 gap_sources[gap_id] = row[gap_source_index].strip()
                 if not GAP_ID_RE.fullmatch(gap_id):
                     errors.append(f"coverage-gaps has invalid ID {gap_id!r}")
-                linked_sources = SOURCE_ROW_TOKEN_RE.findall(row[linked_source_index])
+                linked_sources = sorted(source_row_tokens(row[linked_source_index]))
                 if len(linked_sources) != 1:
                     errors.append(f"{gap_id}: coverage gap must link exactly one atomic SR obligation")
                 elif linked_sources[0] not in active_inventory_ids:
@@ -1385,45 +1677,50 @@ def validate(package_root: Path, scope_dir: Path) -> list[str]:
                     )
 
     known_gap_ids = set(gap_ids)
-    unknown_header_semantics_gaps = sorted(header_semantics_gap_ids - known_gap_ids)
-    if unknown_header_semantics_gaps:
-        errors.append(
-            "table-header semantics references unknown gaps: " + ", ".join(unknown_header_semantics_gaps)
-        )
-    unknown_contract_gaps = sorted(contract_gap_ids - known_gap_ids)
-    if unknown_contract_gaps:
-        errors.append("verifiability contract references unknown gaps: " + ", ".join(unknown_contract_gaps))
+    if not gaps_parse_failed:
+        unknown_header_semantics_gaps = sorted(header_semantics_gap_ids - known_gap_ids)
+        if unknown_header_semantics_gaps:
+            errors.append(
+                "table-header semantics references unknown gaps: " + ", ".join(unknown_header_semantics_gaps)
+            )
+        unknown_contract_gaps = sorted(contract_gap_ids - known_gap_ids)
+        if unknown_contract_gaps:
+            errors.append("verifiability contract references unknown gaps: " + ", ".join(unknown_contract_gaps))
     unknown_consistency_refs = sorted(
         reference
         for reference in consistency_refs
-        if reference not in active_inventory_ids and reference not in known_gap_ids
+        if reference not in active_inventory_ids
+        and (not reference.startswith("GAP-") or (not gaps_parse_failed and reference not in known_gap_ids))
     )
     if unknown_consistency_refs:
         errors.append("scope-brief consistency analysis references unknown IDs: " + ", ".join(unknown_consistency_refs))
     unknown_boundary_refs = sorted(
         reference
         for reference in boundary_refs
-        if reference not in active_inventory_ids and reference not in known_gap_ids
+        if reference not in active_inventory_ids
+        and (not reference.startswith("GAP-") or (not gaps_parse_failed and reference not in known_gap_ids))
     )
     if unknown_boundary_refs:
         errors.append("scope-brief source boundary control references unknown IDs: " + ", ".join(unknown_boundary_refs))
     unknown_ownership_refs = sorted(
         reference
         for reference in ownership_refs
-        if reference not in active_inventory_ids and reference not in known_gap_ids
+        if reference not in active_inventory_ids
+        and (not reference.startswith("GAP-") or (not gaps_parse_failed and reference not in known_gap_ids))
     )
     if unknown_ownership_refs:
         errors.append("parent requirement ownership references unknown IDs: " + ", ".join(unknown_ownership_refs))
     unknown_table_refs = sorted(
         reference
         for reference in table_coverage_refs
-        if reference not in active_inventory_ids and reference not in known_gap_ids
+        if reference not in active_inventory_ids
+        and (not reference.startswith("GAP-") or (not gaps_parse_failed and reference not in known_gap_ids))
     )
     if unknown_table_refs:
         errors.append("table-row coverage references unknown IDs: " + ", ".join(unknown_table_refs))
 
     prompt = (scope_dir / "prompt.scope-to-writer.md").read_text(encoding="utf-8")
-    unknown_prompt_source_rows = sorted(set(SOURCE_ROW_TOKEN_RE.findall(prompt)) - active_inventory_ids)
+    unknown_prompt_source_rows = sorted(source_row_tokens(prompt) - active_inventory_ids)
     if unknown_prompt_source_rows:
         errors.append(
             "writer prompt references source rows absent from active inventory: "
@@ -1488,7 +1785,7 @@ def validate(package_root: Path, scope_dir: Path) -> list[str]:
         elif len(linked_gaps) == 1:
             linked_gap = next(iter(linked_gaps))
             if linked_gap not in gap_sources:
-                if status not in {"ответ-получен", "отменён"}:
+                if not gaps_parse_failed and status not in {"ответ-получен", "отменён"}:
                     errors.append(f"{question_id}: clarification card references unknown coverage gap {linked_gap}")
             elif canonical_source_reference(requirement_basis) != canonical_source_reference(
                 gap_sources[linked_gap]
@@ -1500,7 +1797,7 @@ def validate(package_root: Path, scope_dir: Path) -> list[str]:
             question_basis_anchors = precise_source_anchors(requirement_basis)
             for linked_gap in sorted(linked_gaps):
                 if linked_gap not in gap_sources:
-                    if status not in {"ответ-получен", "отменён"}:
+                    if not gaps_parse_failed and status not in {"ответ-получен", "отменён"}:
                         errors.append(f"{question_id}: clarification card references unknown coverage gap {linked_gap}")
                     continue
                 gap_anchors = precise_source_anchors(gap_sources[linked_gap])
@@ -1508,7 +1805,7 @@ def validate(package_root: Path, scope_dir: Path) -> list[str]:
                     errors.append(
                         f"{question_id}: multi-gap FT basis must include the exact source anchor of {linked_gap}"
                     )
-        if status in {"ответ-получен", "отменён"}:
+        if not gaps_parse_failed and status in {"ответ-получен", "отменён"}:
             still_open = sorted(linked_gaps - resolved_gap_ids)
             if still_open:
                 errors.append(
@@ -1592,6 +1889,7 @@ def validate(package_root: Path, scope_dir: Path) -> list[str]:
 
 
 def main() -> int:
+    configure_utf8_stdio()
     parser = argparse.ArgumentParser(description="Validate a lean runtime scope handoff.")
     parser.add_argument("package_root", type=Path, nargs="?")
     parser.add_argument("scope_dir", type=Path, nargs="?")
@@ -1608,7 +1906,21 @@ def main() -> int:
     if args.package_root is None or args.scope_dir is None:
         parser.error("package_root and scope_dir are required unless --print-contract is used")
     errors = validate(args.package_root.resolve(), args.scope_dir.resolve())
-    print(json.dumps({"valid": not errors, "errors": errors}, ensure_ascii=False))
+    workflow = args.scope_dir.resolve() / "workflow-state.yaml"
+    revision_raw = scalar_values(workflow.read_text(encoding="utf-8")).get("scope_revision_count") if workflow.is_file() else None
+    revision_count = int(revision_raw) if revision_raw in {"0", "1"} else None
+    print(
+        json.dumps(
+            {
+                "valid": not errors,
+                "scope_revision_count": revision_count,
+                "correction_allowed": bool(errors) and revision_count == 0,
+                "error_counts_by_class": scope_error_summary(errors),
+                "errors": errors,
+            },
+            ensure_ascii=False,
+        )
+    )
     return 0 if not errors else 1
 
 

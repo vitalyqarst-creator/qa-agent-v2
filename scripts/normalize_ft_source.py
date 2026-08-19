@@ -8,6 +8,11 @@ from dataclasses import dataclass
 from pathlib import Path
 from xml.etree import ElementTree as ET
 
+try:
+    from scripts.runtime_io import configure_utf8_stdio
+except ModuleNotFoundError:  # Direct invocation
+    from runtime_io import configure_utf8_stdio
+
 
 WORD_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
 XHTML_NS = "http://www.w3.org/1999/xhtml"
@@ -307,6 +312,7 @@ def normalize_docx(source: Path, destination: Path, overwrite: bool = False) -> 
 
 
 def main() -> int:
+    configure_utf8_stdio()
     parser = argparse.ArgumentParser(description="Create deterministic XHTML extraction from a canonical DOCX FT.")
     parser.add_argument("source", type=Path)
     parser.add_argument("destination", type=Path)

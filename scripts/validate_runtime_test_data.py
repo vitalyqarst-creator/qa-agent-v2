@@ -8,12 +8,14 @@ from pathlib import Path
 from typing import Any
 
 try:
+    from scripts.runtime_io import configure_utf8_stdio
     from scripts.runtime_traceability import find_markdown_table
     from scripts.runtime_session_registry import find_package_root
     from scripts.validate_fixture_catalog import validate as validate_fixture_catalog
     from scripts.validate_runtime_matrix import REQUIRED_HEADERS
     from scripts.validate_runtime_scope import TEST_DATA_PLAN_HEADERS
 except ModuleNotFoundError:  # Direct invocation
+    from runtime_io import configure_utf8_stdio
     from runtime_traceability import find_markdown_table
     from runtime_session_registry import find_package_root
     from validate_fixture_catalog import validate as validate_fixture_catalog
@@ -291,6 +293,7 @@ def validate(materialization_path: Path, matrix_path: Path, data_plan_path: Path
 
 
 def main() -> int:
+    configure_utf8_stdio()
     parser = argparse.ArgumentParser(description="Validate post-matrix runtime test-data materialization.")
     parser.add_argument("materialization", type=Path)
     parser.add_argument("--matrix", type=Path, required=True)

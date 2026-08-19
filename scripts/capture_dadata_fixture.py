@@ -10,6 +10,11 @@ from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
+try:
+    from scripts.runtime_io import configure_utf8_stdio
+except ModuleNotFoundError:  # Direct invocation
+    from runtime_io import configure_utf8_stdio
+
 
 TOKEN_ENV = "DADATA_API_KEY"
 FIXTURE_ID = re.compile(r"^FX-[A-Z0-9_-]+$")
@@ -166,6 +171,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
+    configure_utf8_stdio()
     args = build_parser().parse_args(argv)
     try:
         entry = capture_fixture(

@@ -7,12 +7,14 @@ import re
 from pathlib import Path
 
 try:
+    from scripts.runtime_io import configure_utf8_stdio
     from scripts.runtime_state import scalar_values as state_scalar_values
     from scripts.runtime_traceability import anchor_label, extract_anchors, find_markdown_table
     from scripts.runtime_session_registry import canonical_scope, find_package_root, validate_topology
     from scripts.validate_runtime_test_data import ROLE_RE as DATA_ROLE_RE, validate as validate_test_data
     from scripts.validate_runtime_matrix import validate_layout as validate_matrix_layout
 except ModuleNotFoundError:  # Direct invocation: python scripts/validate_runtime_tc.py
+    from runtime_io import configure_utf8_stdio
     from runtime_state import scalar_values as state_scalar_values
     from runtime_traceability import anchor_label, extract_anchors, find_markdown_table
     from runtime_session_registry import canonical_scope, find_package_root, validate_topology
@@ -730,6 +732,7 @@ def validate_projection(content: str, matrix_content: str) -> list[str]:
 
 
 def main() -> int:
+    configure_utf8_stdio()
     parser = argparse.ArgumentParser(description="Validate lean runtime test cases.")
     parser.add_argument("test_cases", type=Path)
     parser.add_argument("--matrix", type=Path, required=True)

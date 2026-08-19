@@ -9,11 +9,13 @@ from typing import Any
 
 try:
     from scripts.runtime_cleanliness import validate_no_repository_temp
+    from scripts.runtime_io import configure_utf8_stdio
     from scripts.runtime_review_dispatch import load_json as load_dispatch_json
     from scripts.runtime_review_dispatch import validate_dispatch
     from scripts.runtime_review_delta import review_snapshot
 except ModuleNotFoundError:  # Direct invocation: python scripts/validate_runtime_review.py
     from runtime_cleanliness import validate_no_repository_temp
+    from runtime_io import configure_utf8_stdio
     from runtime_review_dispatch import load_json as load_dispatch_json
     from runtime_review_dispatch import validate_dispatch
     from runtime_review_delta import review_snapshot
@@ -267,6 +269,7 @@ def validate(artifact: Path, record_path: Path, kind: str, require_accepted: boo
 
 
 def main() -> int:
+    configure_utf8_stdio()
     parser = argparse.ArgumentParser(description="Validate a hash-bound runtime review record.")
     parser.add_argument("artifact", type=Path)
     parser.add_argument("review_record", type=Path)

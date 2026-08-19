@@ -41,7 +41,8 @@ SEPARATED_CODE_RE = re.compile(
 SPACE_CODE_RE = re.compile(r"\b([A-ZА-ЯЁ]{2,10})\s+(\d+(?:\.\d+)*)\b")
 TABLE_RE = re.compile(
     r"\bтаблиц(?:а|ы|е|у|ей)\s*(\d+)"
-    r"(?:\s*[,;/]\s*строк(?:а|и|е|у)\s*[`\"«]?([^`\"»;|\n]+)[`\"»]?)?",
+    r"(?:\s*[,;/]\s*строк(?:а|и|е|у)(?:\s+первого\s+столбца)?\s*"
+    r"[`\"'«]?([^`\"'»;|\n.]+)[`\"'»]?)?",
     re.IGNORECASE,
 )
 SECTION_RE = re.compile(
@@ -85,6 +86,37 @@ def find_markdown_table(content: str, required_headers: tuple[str, ...]) -> Mark
                 rows.append(tuple(row))
         return MarkdownTable(tuple(header), tuple(rows))
     return None
+
+
+def diagnose_markdown_table(content: str, required_headers: tuple[str, ...]) -> str | None:
+    """Explain a malformed expected table without exposing validator internals."""
+
+    lines = content.splitlines()
+    for index, line in enumerate(lines):
+        header = cells(line)
+        if not all(name in header for name in required_headers):
+            continue
+        if index + 1 >= len(lines):
+            return f"table with headers {list(required_headers)!r} has no separator row"
+        separator = cells(lines[index + 1])
+        if len(separator) != len(header):
+            return (
+                f"table with headers {list(required_headers)!r} has {len(header)} header columns "
+                f"but {len(separator)} separator columns"
+            )
+        if not all(re.fullmatch(r":?-{3,}:?", item) for item in separator):
+            return f"table with headers {list(required_headers)!r} has an invalid separator row"
+        for row_number, candidate in enumerate(lines[index + 2 :], start=1):
+            if not candidate.strip().startswith("|"):
+                break
+            row = cells(candidate)
+            if len(row) != len(header):
+                return (
+                    f"table with headers {list(required_headers)!r} row {row_number} has "
+                    f"{len(row)} cells instead of {len(header)}"
+                )
+        return None
+    return f"required table headers are absent: {list(required_headers)!r}"
 
 
 def normalize_label(value: str) -> str:

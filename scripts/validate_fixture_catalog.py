@@ -6,6 +6,11 @@ import json
 from pathlib import Path
 from typing import Any
 
+try:
+    from scripts.runtime_io import configure_utf8_stdio
+except ModuleNotFoundError:  # Direct invocation
+    from runtime_io import configure_utf8_stdio
+
 
 ALLOWED_SOURCE_TYPES = {"local", "provider", "public_reference", "synthetic"}
 SECRET_KEYS = {"token", "api_key", "apikey", "secret", "password", "authorization"}
@@ -106,6 +111,7 @@ def validate(path: Path) -> list[str]:
 
 
 def main() -> int:
+    configure_utf8_stdio()
     parser = argparse.ArgumentParser(description="Validate a runtime fixture catalog without calling providers.")
     parser.add_argument("catalog", type=Path)
     args = parser.parse_args()

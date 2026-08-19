@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any
 
 try:
+    from scripts.runtime_io import configure_utf8_stdio
     from scripts.runtime_review_delta import validate_revision_manifest, write_revision_manifest
     from scripts.runtime_session_registry import (
         canonical_scope,
@@ -19,6 +20,7 @@ try:
         validate_topology,
     )
 except ModuleNotFoundError:  # Direct invocation: python scripts/runtime_review_dispatch.py
+    from runtime_io import configure_utf8_stdio
     from runtime_review_delta import validate_revision_manifest, write_revision_manifest
     from runtime_session_registry import canonical_scope, record_role, required_skill_contract, validate_topology
 
@@ -259,6 +261,7 @@ def create_dispatch(
 
 
 def main() -> int:
+    configure_utf8_stdio()
     sys.stdout.reconfigure(encoding="utf-8")
     parser = argparse.ArgumentParser(description="Create or verify a controller-owned runtime review dispatch receipt.")
     subparsers = parser.add_subparsers(dest="command", required=True)

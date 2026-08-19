@@ -7,6 +7,8 @@ Source locator создаёт только:
 - `work/stage-handoffs/00-<ft>/workflow-state.yaml`;
 - controller-owned `work/runtime-session-registry.json` уже существует до начала этапа.
 
+До записи handoff source locator получает пути и hashes штатной командой `python -X utf8 scripts/validate_runtime_source.py <FT-package> --print-input-inventory`. Вывод также показывает явные подсказки ролей из `AGENT-NOTES.md`; перепечатывать digest вручную не нужно.
+
 `AGENT-NOTES.md` — пользовательский вход и package-specific контракт. Source locator читает его, но не изменяет. Фактическая runtime-классификация, происхождение сгенерированного XHTML и поздние support-файлы записываются в source handoff.
 
 Созданный при инициализации пакета пустой `work/scope-clarification-requests.md` также допустим, но source locator не добавляет в него вопросы.
@@ -51,7 +53,7 @@ visual_sources:
 python scripts/validate_runtime_source.py <FT-package> <source-handoff-dir>
 ```
 
-Validator проверяет registry, роли, пути, hashes, полноту регистрации локальных входов, отсутствие преждевременных downstream-артефактов и оставленных временных файлов. Самопроверка текстом или только `validate_runtime_tree.py` её не заменяет.
+Validator проверяет registry, роли, пути, hashes, соответствие явно названных в `AGENT-NOTES.md` канонического и машиночитаемого источников, полноту регистрации локальных входов, отсутствие преждевременных downstream-артефактов и оставленных временных файлов. Самопроверка текстом или только `validate_runtime_tree.py` её не заменяет.
 
 ## Возобновление существующего route
 

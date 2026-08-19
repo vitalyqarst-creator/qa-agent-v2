@@ -7,6 +7,11 @@ import sys
 import tempfile
 from pathlib import Path
 
+try:
+    from scripts.runtime_io import configure_utf8_stdio
+except ModuleNotFoundError:  # Direct invocation
+    from runtime_io import configure_utf8_stdio
+
 
 SAFE_PREFIX = "ft-runtime-"
 
@@ -36,6 +41,7 @@ def cleanup(paths: list[Path]) -> tuple[list[str], list[str]]:
 
 
 def main() -> int:
+    configure_utf8_stdio()
     sys.stdout.reconfigure(encoding="utf-8")
     parser = argparse.ArgumentParser(
         description="Safely remove isolated FT runtime artifacts from the system temporary directory."
