@@ -33,7 +33,7 @@ python scripts/runtime_review_dispatch.py create --package-root <FT-package> --a
 --previous-review <work/reviews/scope/matrix-or-tc-review.json>
 ```
 
-До перезаписи прежнего record dispatch встраивает его в controller-owned manifest. `delta` разрешён только когда source/support/mockup, scope handoff, ответы БА, fixtures и принятая matrix для TC не изменились; структура/порядок artifact прежние; изменены только элементы, перечисленные в `affected_items` findings. Иначе manifest автоматически выбирает `full`. No-op revision отклоняется.
+До перезаписи прежнего record dispatch встраивает его в controller-owned manifest. `delta` разрешён только когда source/support/mockup, scope handoff, ответы БА, materialization/fixtures и принятая matrix для TC не изменились; структура/порядок artifact прежние; изменены только элементы, перечисленные в `affected_items` findings. Иначе manifest автоматически выбирает `full`. No-op revision отклоняется.
 
 Reviewer проверяет receipt:
 

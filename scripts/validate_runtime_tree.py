@@ -32,8 +32,10 @@ REQUIRED_PATHS = (
     "scripts/cleanup_runtime_temp.py",
     "scripts/render_runtime_pdf.py",
     "scripts/runtime_cleanliness.py",
+    "scripts/runtime_state.py",
     "scripts/capture_dadata_fixture.py",
     "scripts/validate_fixture_catalog.py",
+    "scripts/validate_runtime_test_data.py",
     "scripts/validate_runtime_source.py",
     "scripts/validate_runtime_tc.py",
     "scripts/validate_runtime_matrix.py",
@@ -101,6 +103,7 @@ REQUIRED_POLICY_MARKERS = {
         "доступны writer-у только для чтения",
         "work/practical/<scope>/test-design-matrix.md",
         "blocked-data-preparation",
+        "validate_runtime_test_data.py",
     ),
     "skills/ft-test-case-reviewer/SKILL.md": (
         "Отсутствие стендовой записи",
@@ -117,7 +120,8 @@ REQUIRED_POLICY_MARKERS = {
     "references/runtime/test-data-fixtures.md": (
         "| Границы и классы |",
         "Шаг представления:",
-        "не доказывает бизнес-валидность",
+        "Источник наследуется транзитивно",
+        "data-materialization.json",
     ),
     "references/runtime/test-design-matrix.md": (
         "| Готовность |",

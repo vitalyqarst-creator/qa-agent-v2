@@ -160,11 +160,12 @@ ALLOWED_GAP_CLASSES = {
 }
 TEST_DATA_PLAN_HEADERS = (
     "Группа проверок",
-    "Источник значений",
-    "Данные или контракт получения",
-    "Воспроизводимая подготовка",
+    "Роли данных",
+    "Допустимый источник",
+    "Ограничения и отношения",
     "Границы и классы",
-    "Готовность",
+    "Воспроизводимая подготовка",
+    "Готовность материализации",
 )
 ALLOWED_DATA_SOURCE_PREFIXES = (
     "первичный источник",
@@ -179,7 +180,8 @@ ALLOWED_DATA_SOURCE_PREFIXES = (
     "стендовая подготовка",
     "не требуются",
 )
-ALLOWED_DATA_READINESS = {"ready", "готово", "needs-test-data", "требуется получение данных"}
+ALLOWED_DATA_READINESS = {"не требуется", "требуется", "готово"}
+DATA_ROLE_RE = re.compile(r"(?<![A-Za-z0-9_.-])TD-[A-Z0-9.-]+(?![A-Za-z0-9_.-])")
 QUANTITATIVE_DATA_RE = re.compile(
     r"\b(?:размер|длин|количеств|диапазон|предел|максим|миним)\w*\b|"
     r"\bне\s+(?:более|менее)\b|"
@@ -317,6 +319,10 @@ def public_contract(scope: str | None = None) -> dict[str, object]:
                 "Что требуется для закрытия",
             ],
             "test_data": list(TEST_DATA_PLAN_HEADERS),
+        },
+        "accepted_values": {
+            "test_data_source_prefixes": list(ALLOWED_DATA_SOURCE_PREFIXES),
+            "test_data_materialization_readiness": sorted(ALLOWED_DATA_READINESS),
         },
         "conditional_controls": {
             "table_rows": "только если область использует таблицу ФТ",
@@ -631,18 +637,27 @@ def validate_test_data_plan(content: str, source_evidence: str = "") -> list[str
         ]
     errors: list[str] = []
     group_index = table.index("Группа проверок")
-    source_index = table.index("Источник значений")
-    data_index = table.index("Данные или контракт получения")
+    roles_index = table.index("Роли данных")
+    source_index = table.index("Допустимый источник")
+    constraints_index = table.index("Ограничения и отношения")
     preparation_index = table.index("Воспроизводимая подготовка")
     boundaries_index = table.index("Границы и классы")
-    readiness_index = table.index("Готовность")
+    readiness_index = table.index("Готовность материализации")
+    seen_roles: set[str] = set()
     for row in table.rows:
         group = row[group_index].strip() or "<без группы>"
+        roles = DATA_ROLE_RE.findall(row[roles_index])
         source = row[source_index].strip()
-        data = row[data_index].strip()
+        constraints = row[constraints_index].strip()
         preparation = row[preparation_index].strip()
         boundaries = row[boundaries_index].strip()
         readiness = row[readiness_index].strip().casefold()
+        if not roles:
+            errors.append(f"test-data-plan {group}: at least one TD-* data role is required")
+        for role in roles:
+            if role in seen_roles:
+                errors.append(f"test-data-plan {group}: duplicate data role {role}")
+            seen_roles.add(role)
         source_parts = [part.strip().strip("`").casefold() for part in source.split(";") if part.strip()]
         if not source_parts or any(
             not any(part.startswith(prefix) for prefix in ALLOWED_DATA_SOURCE_PREFIXES)
@@ -651,9 +666,11 @@ def validate_test_data_plan(content: str, source_evidence: str = "") -> list[str
             errors.append(f"test-data-plan {group}: unsupported or missing value source {source!r}")
         if readiness not in ALLOWED_DATA_READINESS:
             errors.append(f"test-data-plan {group}: unsupported readiness {row[readiness_index]!r}")
+        if not constraints:
+            errors.append(f"test-data-plan {group}: 'Ограничения и отношения' must not be empty")
         if not boundaries:
             errors.append(f"test-data-plan {group}: 'Границы и классы' must not be empty")
-        quantitative = bool(QUANTITATIVE_DATA_RE.search(" | ".join((group, data, preparation))))
+        quantitative = bool(QUANTITATIVE_DATA_RE.search(" | ".join((group, constraints, preparation))))
         boundary_plan = BOUNDARY_PLAN_RE.search(boundaries)
         if quantitative and not (boundary_plan or BOUNDARY_CLARIFICATION_RE.search(boundaries)):
             errors.append(
@@ -678,16 +695,14 @@ def validate_test_data_plan(content: str, source_evidence: str = "") -> list[str
                             )
         external = any(part.startswith("внешний сервис:") for part in source_parts)
         saved = any(part.startswith(("сохранённый ответ", "сохраненный ответ")) for part in source_parts)
-        if external and not saved:
-            if not data.casefold().startswith("контракт получения:"):
-                errors.append(
-                    f"test-data-plan {group}: external value without a saved response must use 'Контракт получения:'"
-                )
-            if readiness != "требуется получение данных":
-                errors.append(
-                    f"test-data-plan {group}: external value without a saved response requires readiness "
-                    "'требуется получение данных'"
-                )
+        if external and not saved and readiness != "требуется":
+            errors.append(
+                f"test-data-plan {group}: external value without a saved response requires readiness 'требуется'"
+            )
+        if external and not saved and not re.search(r"контракт\s+получения\s*:", constraints, re.IGNORECASE):
+            errors.append(
+                f"test-data-plan {group}: external value without a saved response must define 'Контракт получения:'"
+            )
     return errors
 
 

@@ -18,7 +18,7 @@ from scripts.create_ft_package import PACKAGE_DIRS, create_package
 from scripts.normalize_ft_source import normalize_docx
 from scripts.render_runtime_pdf import parse_pages, render_pdf
 from scripts.runtime_review_dispatch import create_dispatch, sha256, validate_dispatch
-from scripts.runtime_review_delta import artifact_index, enrich_review_record, write_revision_manifest
+from scripts.runtime_review_delta import artifact_index, enrich_review_record, semantic_input_hashes, write_revision_manifest
 from scripts.runtime_session_registry import (
     acknowledge_runtime,
     initialize_registry,
@@ -44,9 +44,11 @@ from scripts.validate_runtime_scope import (
     xhtml_table_rows,
 )
 from scripts.validate_runtime_source import validate as validate_source
+from scripts.validate_runtime_test_data import validate as validate_test_data
 from scripts.validate_runtime_tc import (
     validate as validate_tc,
     validate_layout as validate_tc_layout,
+    validate_materialized_projection,
     validate_projection as validate_tc_projection,
 )
 from scripts.validate_runtime_tree import validate as validate_tree
@@ -88,7 +90,7 @@ VALID_TC = """## TC-9.3.2-001
 
 VALID_MATRIX = """# Матрица
 
-| ID | Источник требования | Проверка | Профили тест-дизайна | Элемент покрытия | Предусловие/исходное состояние | Конкретные тестовые данные | Ожидаемый результат | Решение | Готовность |
+| ID | Источник требования | Проверка | Профили тест-дизайна | Элемент покрытия | Предусловие/исходное состояние | Тестовые данные и отношения | Ожидаемый результат | Решение | Готовность |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | M-001 | SR-001; AS.38; Таблица 7, строка «Сохранить» | Сохранить карточку | базовый, жизненный-цикл-создания | Сохранение валидной карточки | Открыта форма добавления | `Наименование` = `ПАО СБЕРБАНК` | Карточка сохранена | TC | ready |
 | GAP-001 | SR-002; AS.39 | Проверить неизвестную реакцию | допустимые-классы | GAP-001 | Открыта форма | Не определены | Требуется уточнение результата | coverage-gap | blocked-observability |
@@ -160,9 +162,9 @@ VALID_GAPS = """# Пробелы покрытия
 
 VALID_DATA_PLAN = """# План тестовых данных
 
-| Группа проверок | Источник значений | Данные или контракт получения | Воспроизводимая подготовка | Границы и классы | Готовность |
-| --- | --- | --- | --- | --- | --- |
-| Сохранение карточки | первичный источник; стендовая подготовка | `Наименование` = `Проверка 001` | Создать запись с указанным наименованием. | Не применимо: количественное ограничение отсутствует. | needs-test-data |
+| Группа проверок | Роли данных | Допустимый источник | Ограничения и отношения | Границы и классы | Воспроизводимая подготовка | Готовность материализации |
+| --- | --- | --- | --- | --- | --- | --- |
+| Сохранение карточки | TD-PARTNER-A | первичный источник; стендовая подготовка | Уникальное наименование; отсутствие дубля. | Не применимо: количественное ограничение отсутствует. | Создать запись с указанным наименованием. | требуется |
 """
 
 CONTROLLER_THREAD = "00000000-0000-4000-8000-000000000001"
@@ -970,7 +972,7 @@ class RuntimeContractTests(unittest.TestCase):
         reference = (root / "references" / "runtime" / "scope-analysis.md").read_text(encoding="utf-8")
 
         self.assertLessEqual(len(agents.split()), 800)
-        self.assertLessEqual(len(skill.split()), 550)
+        self.assertLessEqual(len(skill.split()), 600)
         self.assertLessEqual(len(reference.split()), 800)
         self.assertIn("AGENTS.md` уже загружен средой: не перечитывай", skill)
         self.assertIn("Один содержательный проход — default", skill)
@@ -985,6 +987,7 @@ class RuntimeContractTests(unittest.TestCase):
         self.assertEqual(r"SR-\d{2,}", contract["id_formats"]["source_row"]["pattern"])
         self.assertIn("source-row-inventory.md", contract["required_files"])
         self.assertIn("visual_crosscheck", contract["conditional_controls"])
+        self.assertEqual(["готово", "не требуется", "требуется"], contract["accepted_values"]["test_data_materialization_readiness"])
         self.assertEqual(
             "**Почему существующий ответ не закрывает вопрос:**",
             contract["clarification_fields"]["partial_support_answer_residual_heading"],
@@ -995,11 +998,11 @@ class RuntimeContractTests(unittest.TestCase):
         topology = (root / "references" / "runtime" / "session-topology.md").read_text(encoding="utf-8")
 
         self.assertIn("| `source-locator` | `gpt-5.6-luna` | `medium` |", topology)
-        self.assertIn("| `scope-analyzer` | `gpt-5.6-terra` | `medium` |", topology)
-        self.assertIn("| `writer` | `gpt-5.6-terra` | `medium` |", topology)
-        self.assertIn("| `matrix-reviewer` | `gpt-5.6-sol` | `medium` |", topology)
-        self.assertIn("| `tc-reviewer` | `gpt-5.6-sol` | `medium` |", topology)
-        self.assertIn("`high` не является default ни для одной роли", topology)
+        self.assertIn("| `scope-analyzer` | `gpt-5.6-terra` | `xhigh` |", topology)
+        self.assertIn("| `writer` | `gpt-5.6-terra` | `high` |", topology)
+        self.assertIn("| `matrix-reviewer` | `gpt-5.6-terra` | `xhigh` |", topology)
+        self.assertIn("| `tc-reviewer` | `gpt-5.6-terra` | `xhigh` |", topology)
+        self.assertIn("Модель `gpt-5.6-sol` в default route не используется", topology)
 
     def test_tc_rejects_hybrid_state_setup_and_accepts_declarative_state(self) -> None:
         ambiguous = VALID_TC.replace(
@@ -1378,7 +1381,7 @@ class RuntimeContractTests(unittest.TestCase):
             "`Наименование` = `ПАО СБЕРБАНК`",
             "Подготовленный партнёр",
         )
-        self.assertTrue(any("concrete `field` = `value`" in error for error in validate_matrix(descriptive)))
+        self.assertTrue(any("requires TD-*/REL-*" in error for error in validate_matrix(descriptive)))
         wrong_gap_readiness = VALID_MATRIX.replace(
             "| coverage-gap | blocked-observability |",
             "| coverage-gap | needs-test-data |",
@@ -2025,17 +2028,17 @@ class RuntimeContractTests(unittest.TestCase):
     def test_test_data_plan_requires_provenance_and_provider_acquisition_contract(self) -> None:
         invalid = """# План тестовых данных
 
-| Группа проверок | Источник значений | Данные или контракт получения | Воспроизводимая подготовка | Границы и классы | Готовность |
-| --- | --- | --- | --- | --- | --- |
-| Подсказка организации | внешний сервис: Provider | `Наименование` = `ООО Тест` | Выбрать подсказку. | Не применимо: количественное ограничение отсутствует. | needs-test-data |
+| Группа проверок | Роли данных | Допустимый источник | Ограничения и отношения | Границы и классы | Воспроизводимая подготовка | Готовность материализации |
+| --- | --- | --- | --- | --- | --- | --- |
+| Подсказка организации | TD-PARTNER-A | внешний сервис: Provider | Выбрать одну связную запись. | Не применимо: количественное ограничение отсутствует. | Выбрать подсказку. | готово |
 """
         errors = validate_test_data_plan(invalid)
-        self.assertTrue(any("must use 'Контракт получения:'" in error for error in errors))
-        self.assertTrue(any("requires readiness 'требуется получение данных'" in error for error in errors))
+        self.assertTrue(any("must define 'Контракт получения:'" in error for error in errors))
+        self.assertTrue(any("requires readiness 'требуется'" in error for error in errors))
 
         valid = invalid.replace(
-            "`Наименование` = `ООО Тест` | Выбрать подсказку. | Не применимо: количественное ограничение отсутствует. | needs-test-data",
-            "Контракт получения: запрос `Тест`; сохранить выбранное наименование и связанные реквизиты одной записи | Выбрать сохранённую подсказку. | Не применимо: количественное ограничение отсутствует. | требуется получение данных",
+            "Выбрать одну связную запись. | Не применимо: количественное ограничение отсутствует. | Выбрать подсказку. | готово",
+            "Контракт получения: запрос `Тест`; сохранить выбранное наименование и связанные реквизиты одной записи. | Не применимо: количественное ограничение отсутствует. | Выбрать сохранённую подсказку. | требуется",
         )
         self.assertEqual([], validate_test_data_plan(valid))
         self.assertTrue(validate_test_data_plan("# План\n\nЗначения будут подготовлены.\n"))
@@ -2043,9 +2046,9 @@ class RuntimeContractTests(unittest.TestCase):
     def test_test_data_plan_requires_explicit_quantitative_boundary_contract(self) -> None:
         plan = """# План тестовых данных
 
-| Группа проверок | Источник значений | Данные или контракт получения | Воспроизводимая подготовка | Границы и классы | Готовность |
-| --- | --- | --- | --- | --- | --- |
-| Размер файла не более 40 МБ | стендовая подготовка | Файлы размером 40 МБ и 41 МБ | Создать файлы до проверки. | Допустимо 40 МБ; недопустимо 41 МБ. | needs-test-data |
+| Группа проверок | Роли данных | Допустимый источник | Ограничения и отношения | Границы и классы | Воспроизводимая подготовка | Готовность материализации |
+| --- | --- | --- | --- | --- | --- | --- |
+| Размер файла не более 40 МБ | TD-FILE-LIMIT; TD-FILE-OVER | стендовая подготовка | Два открываемых файла допустимого формата. | Допустимо 40 МБ; недопустимо 41 МБ. | Создать файлы до проверки. | требуется |
 """
         errors = validate_test_data_plan(plan)
         self.assertTrue(any("Шаг представления" in error for error in errors))
@@ -2059,13 +2062,129 @@ class RuntimeContractTests(unittest.TestCase):
     def test_test_data_plan_rejects_unsourced_date_limits(self) -> None:
         plan = """# План тестовых данных
 
-| Группа проверок | Источник значений | Данные или контракт получения | Воспроизводимая подготовка | Границы и классы | Готовность |
-| --- | --- | --- | --- | --- | --- |
-| Диапазон даты | первичный источник | Значения даты | Ввести дату. | Шаг представления: 1 день; валидная граница: 01.01.1900; ближайшее недопустимое: 31.12.1899; Основание границы: Таблица 6, строка «Дата». | needs-test-data |
+| Группа проверок | Роли данных | Допустимый источник | Ограничения и отношения | Границы и классы | Воспроизводимая подготовка | Готовность материализации |
+| --- | --- | --- | --- | --- | --- | --- |
+| Диапазон даты | TD-DATE-LIMIT | первичный источник | Валидная и ближайшая недопустимая дата. | Шаг представления: 1 день; валидная граница: 01.01.1900; ближайшее недопустимое: 31.12.1899; Основание границы: Таблица 6, строка «Дата». | Ввести дату. | готово |
 """
         errors = validate_test_data_plan(plan, "<td>Дата</td><td>Дата</td>")
         self.assertTrue(any("date boundary" in error and "absent" in error for error in errors))
         self.assertEqual([], validate_test_data_plan(plan, "Источник устанавливает границу 01.01.1900."))
+
+    def test_post_matrix_materialization_enforces_provider_provenance_and_relations(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            package = Path(temporary_directory) / "FT"
+            (package / "AGENT-NOTES.md").parent.mkdir(parents=True)
+            (package / "AGENT-NOTES.md").write_text("# Notes\n", encoding="utf-8")
+            matrix = package / "work" / "practical" / "9.3.2" / "test-design-matrix.md"
+            matrix.parent.mkdir(parents=True)
+            matrix_content = VALID_MATRIX.replace(
+                "`Наименование` = `ПАО СБЕРБАНК`",
+                "TD-PARTNER-A; TD-PARTNER-B; REL-DIFFERENT-INN",
+            )
+            matrix.write_text(matrix_content, encoding="utf-8")
+            data_plan = package / "work" / "stage-handoffs" / "9.3.2" / "test-data-plan.md"
+            data_plan.parent.mkdir(parents=True)
+            data_plan.write_text(
+                "# План данных\n\n"
+                "| Группа проверок | Роли данных | Допустимый источник | Ограничения и отношения | Границы и классы | Воспроизводимая подготовка | Готовность материализации |\n"
+                "| --- | --- | --- | --- | --- | --- | --- |\n"
+                "| Два партнёра | TD-PARTNER-A; TD-PARTNER-B | внешний сервис: Provider | Контракт получения: сохранить две разные организации; REL-DIFFERENT-INN. | Не применимо: количественное ограничение отсутствует. | Выбрать две подсказки. | требуется |\n",
+                encoding="utf-8",
+            )
+            fixtures = package / "work" / "test-data" / "9.3.2" / "fixtures"
+            fixtures.mkdir(parents=True)
+            snapshot_payload = {
+                "suggestions": [
+                    {"value": "ПАО СБЕРБАНК", "data": {"inn": "7707083893"}},
+                    {"value": "АО АЛЬФА-БАНК", "data": {"inn": "7728168971"}},
+                ]
+            }
+            snapshot = fixtures / "provider.json"
+            snapshot.write_text(json.dumps(snapshot_payload, ensure_ascii=False), encoding="utf-8")
+            catalog = {
+                "fixtures": [
+                    {
+                        "fixture_id": "FX-PARTNER-A",
+                        "purpose": "Первая организация",
+                        "source_type": "provider",
+                        "provider": "Provider",
+                        "request": {"query": "СБЕРБАНК"},
+                        "runtime_data": {"name": "ПАО СБЕРБАНК", "inn": "7707083893"},
+                        "snapshot_path": "provider.json",
+                        "snapshot_sha256": hashlib.sha256(snapshot.read_bytes()).hexdigest(),
+                    },
+                    {
+                        "fixture_id": "FX-PARTNER-B",
+                        "purpose": "Вторая организация",
+                        "source_type": "provider",
+                        "provider": "Provider",
+                        "request": {"query": "АЛЬФА"},
+                        "runtime_data": {"name": "АО АЛЬФА-БАНК", "inn": "7728168971"},
+                        "snapshot_path": "provider.json",
+                        "snapshot_sha256": hashlib.sha256(snapshot.read_bytes()).hexdigest(),
+                    },
+                ]
+            }
+            catalog_path = fixtures / "fixture-catalog.json"
+            catalog_path.write_text(json.dumps(catalog, ensure_ascii=False), encoding="utf-8")
+            materialization = package / "work" / "test-data" / "9.3.2" / "data-materialization.json"
+            payload = {
+                "schema_version": 1,
+                "scope": "9.3.2",
+                "status": "completed",
+                "matrix_path": "work/practical/9.3.2/test-design-matrix.md",
+                "matrix_sha256": hashlib.sha256(matrix.read_bytes()).hexdigest(),
+                "fixture_catalog": "work/test-data/9.3.2/fixtures/fixture-catalog.json",
+                "bindings": [
+                    {
+                        "role_id": "TD-PARTNER-A",
+                        "used_by": ["M-001"],
+                        "source_type": "provider",
+                        "source_name": "Provider",
+                        "fixture_id": "FX-PARTNER-A",
+                        "values": {"Наименование партнёра": "ПАО СБЕРБАНК", "ИНН": "7707083893"},
+                    },
+                    {
+                        "role_id": "TD-PARTNER-B",
+                        "used_by": ["M-001"],
+                        "source_type": "provider",
+                        "source_name": "Provider",
+                        "fixture_id": "FX-PARTNER-B",
+                        "values": {"Наименование партнёра": "АО АЛЬФА-БАНК", "ИНН": "7728168971"},
+                    },
+                ],
+                "relations": [
+                    {
+                        "id": "REL-DIFFERENT-INN",
+                        "used_by": ["M-001"],
+                        "left": "TD-PARTNER-A.ИНН",
+                        "operator": "not-equal",
+                        "right": "TD-PARTNER-B.ИНН",
+                    }
+                ],
+            }
+            materialization.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+            self.assertEqual([], validate_test_data(materialization, matrix, data_plan))
+            projected_tc = VALID_TC.replace(
+                "- `Наименование партнёра` = `ПАО СБЕРБАНК`.",
+                "- `Наименование партнёра A` = `ПАО СБЕРБАНК`.\n"
+                "- `ИНН A` = `7707083893`.\n"
+                "- `Наименование партнёра B` = `АО АЛЬФА-БАНК`.\n"
+                "- `ИНН B` = `7728168971`.",
+            )
+            self.assertEqual([], validate_materialized_projection(projected_tc, matrix_content, materialization))
+
+            payload["bindings"][0]["values"]["Наименование партнёра"] = "ПАО СБЕРБАНК RUN-ID"
+            materialization.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+            errors = validate_test_data(materialization, matrix, data_plan)
+            self.assertTrue(any("RUN-ID/timestamp is forbidden" in error for error in errors))
+
+    def test_tc_accepts_concrete_file_preparation_in_preconditions(self) -> None:
+        test_case = VALID_TC.replace(
+            "1. Открыть карточку добавления партнёра.",
+            "1. Файл `document.pdf` формата PDF размером 40 МБ создан и доступен для выбора.",
+        )
+        self.assertEqual([], validate_tc(test_case))
 
     def test_scope_validator_blocks_bulk_parent_ownership_row_loss_visual_omission_and_repo_temp(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
@@ -2821,6 +2940,18 @@ class RuntimeContractTests(unittest.TestCase):
             }
             self.assertEqual({"M-001"}, changed)
             self.assertEqual(before["structure_sha256"], after["structure_sha256"])
+
+    def test_data_materialization_is_a_tc_review_input_but_not_a_matrix_review_input(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            package = Path(temporary_directory)
+            artifact = package / "test-design-matrix.md"
+            artifact.write_text(VALID_MATRIX, encoding="utf-8")
+            data = package / "work" / "test-data" / "scope" / "data-materialization.json"
+            data.parent.mkdir(parents=True)
+            data.write_text('{"schema_version": 1}', encoding="utf-8")
+            relative = data.relative_to(package).as_posix()
+            self.assertNotIn(relative, semantic_input_hashes(package, artifact, "matrix", "scope"))
+            self.assertIn(relative, semantic_input_hashes(package, artifact, "tc", "scope"))
 
     def test_revision_manifest_falls_back_to_full_for_undeclared_or_source_changes(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:

@@ -7,10 +7,12 @@ from pathlib import Path
 
 try:
     from scripts.runtime_cleanliness import validate_no_repository_temp
+    from scripts.runtime_state import scalar_values
     from scripts.runtime_traceability import anchor_label, extract_anchors, find_markdown_table
     from scripts.runtime_session_registry import canonical_scope, find_package_root, validate_topology
 except ModuleNotFoundError:  # Direct invocation: python scripts/validate_runtime_matrix.py
     from runtime_cleanliness import validate_no_repository_temp
+    from runtime_state import scalar_values
     from runtime_traceability import anchor_label, extract_anchors, find_markdown_table
     from runtime_session_registry import canonical_scope, find_package_root, validate_topology
 
@@ -22,7 +24,7 @@ REQUIRED_HEADERS = (
     "Профили тест-дизайна",
     "Элемент покрытия",
     "Предусловие/исходное состояние",
-    "Конкретные тестовые данные",
+    "Тестовые данные и отношения",
     "Ожидаемый результат",
     "Решение",
     "Готовность",
@@ -58,6 +60,8 @@ EMPTY_RE = re.compile(r"^(?:-|—|n/?a|не определен[оы]?|требу
 SOURCE_ROW_TOKEN_RE = re.compile(r"(?<![A-Za-z0-9_.-])SR-\d{2,}(?![A-Za-z0-9_.-])")
 MATRIX_ROW_TOKEN_RE = re.compile(r"(?<![A-Za-z0-9_.-])M-\d{2,}(?![A-Za-z0-9_.-])")
 CONCRETE_DATA_RE = re.compile(r"`[^`\n]+`\s*=\s*`[^`\n]+`")
+DATA_ROLE_RE = re.compile(r"(?<![A-Za-z0-9_.-])TD-[A-Z0-9.-]+(?![A-Za-z0-9_.-])")
+DATA_RELATION_RE = re.compile(r"(?<![A-Za-z0-9_.-])REL-[A-Z0-9.-]+(?![A-Za-z0-9_.-])")
 DYNAMIC_OUTPUT_RE = re.compile(
     r"\b(?:системн\w*\s+(?:id|идентификатор\w*|номер\w*|timestamp|sequence)|"
     r"(?:id|идентификатор\w*|номер\w*|timestamp|sequence)\s+текущ\w*\s+прогон\w*|"
@@ -277,11 +281,17 @@ def validate(content: str) -> list[str]:
                     )
                 else:
                     used_formal_items[item] = row_id
-        data = row[index_by_name["Конкретные тестовые данные"]]
+        data = row[index_by_name["Тестовые данные и отношения"]]
         if decision == "TC" and (not data or EMPTY_RE.fullmatch(data)):
-            errors.append(f"{row_id}: TC decision requires concrete data or 'Не требуются.'")
-        if decision == "TC" and data != "Не требуются." and not CONCRETE_DATA_RE.search(data):
-            errors.append(f"{row_id}: TC matrix row requires a concrete `field` = `value` literal")
+            errors.append(f"{row_id}: TC decision requires data roles, exact coverage literals or 'Не требуются.'")
+        if (
+            decision == "TC"
+            and data != "Не требуются."
+            and not CONCRETE_DATA_RE.search(data)
+            and not DATA_ROLE_RE.search(data)
+            and not DATA_RELATION_RE.search(data)
+        ):
+            errors.append(f"{row_id}: TC matrix row requires TD-*/REL-* or a concrete `field` = `value` literal")
         if decision == "TC" and MISSING_ENVIRONMENT_DATA_RE.search(data):
             errors.append(
                 f"{row_id}: missing environment binding requires needs-test-data, not absent test data"
@@ -482,17 +492,32 @@ def validate_layout(matrix_path: Path, package_root: Path) -> list[str]:
     state_path = matrix_path.parent / "workflow-state.yaml"
     if not state_path.is_file():
         return ["writer workflow-state.yaml is missing next to the matrix"]
-    state = state_path.read_text(encoding="utf-8")
+    state = scalar_values(state_path.read_text(encoding="utf-8"))
     expected_relative = f"work/practical/{scope}/test-design-matrix.md"
-    required_patterns = {
-        "writer role": r"(?m)^role:\s*writer\s*$",
-        "scope": rf"(?m)^scope:\s*[\"']?{re.escape(scope)}[\"']?\s*$",
-        "completed matrix status": r"(?m)^matrix_status:\s*completed\s*$",
-        "matrix path": rf"(?m)^test_design_matrix:\s*[\"']?{re.escape(expected_relative)}[\"']?\s*$",
+    required_values = {
+        "writer role": ("role", "writer"),
+        "scope": ("scope", scope),
+        "completed matrix status": ("matrix_status", "completed"),
+        "matrix path": ("test_design_matrix", expected_relative),
     }
-    for label, pattern in required_patterns.items():
-        if not re.search(pattern, state):
+    for label, (key, expected_value) in required_values.items():
+        if state.get(key) != expected_value:
             errors.append(f"writer workflow-state is missing {label}")
+    matrix_content = matrix_path.read_text(encoding="utf-8")
+    matrix_roles = set(DATA_ROLE_RE.findall(matrix_content))
+    matrix_relations = set(DATA_RELATION_RE.findall(matrix_content))
+    if matrix_roles or matrix_relations:
+        data_plan = package_root / "work" / "stage-handoffs" / scope / "test-data-plan.md"
+        if not data_plan.is_file():
+            errors.append(f"matrix data contract requires analyzer-owned plan: {data_plan}")
+        else:
+            plan_content = data_plan.read_text(encoding="utf-8")
+            plan_roles = set(DATA_ROLE_RE.findall(plan_content))
+            plan_relations = set(DATA_RELATION_RE.findall(plan_content))
+            for role in sorted(matrix_roles - plan_roles):
+                errors.append(f"matrix data role {role} is absent from test-data-plan")
+            for relation in sorted(matrix_relations - plan_relations):
+                errors.append(f"matrix data relation {relation} is absent from test-data-plan")
     return errors
 
 

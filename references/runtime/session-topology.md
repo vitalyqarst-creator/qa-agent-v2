@@ -6,7 +6,7 @@ Controller — одна верхнеуровневая Codex-сессия на �
 
 - Один `source-locator` на FT-пакет, в отдельной от controller верхнеуровневой сессии.
 - Для каждого внешнего scope — свой `scope-analyzer` в отдельной верхнеуровневой сессии.
-- Для каждого scope — свой `writer` в отдельной верхнеуровневой сессии. Этот же writer создаёт matrix, выполняет разрешённую правку matrix, пишет TC и выполняет разрешённую правку TC.
+- Для каждого scope — свой `writer` в отдельной верхнеуровневой сессии. Этот же writer создаёт matrix, выполняет разрешённую правку matrix, после `matrix-accepted` материализует данные, пишет TC и выполняет разрешённую правку TC.
 - Для каждого scope — отдельные `matrix-reviewer` и `tc-reviewer`. Они отличаются от controller, locator, analyzer, writer и друг от друга.
 
 Новые сессии для fixture materialization, запуска validator-а и каждой revision не создаются, пока commit agent-layer не изменился. Повторная работа по тому же scope возвращается в ранее зарегистрированную analyzer/writer/reviewer-сессию соответствующей роли только при совпадении `runtime_commit`. После обновления agent-layer controller создаёт новую верхнеуровневую сессию для каждой реально вызываемой semantic role и заменяет её stale-запись в registry; существующие артефакты переиспользуются, полный этап не повторяется без содержательной причины.
@@ -46,12 +46,12 @@ Scope analyzer-ы одного FT-пакета не работают однов�
 | Роль | Модель | Уровень рассуждений |
 | --- | --- | --- |
 | `source-locator` | `gpt-5.6-luna` | `medium` |
-| `scope-analyzer` | `gpt-5.6-terra` | `medium` |
-| `writer` | `gpt-5.6-terra` | `medium` |
-| `matrix-reviewer` | `gpt-5.6-sol` | `medium` |
-| `tc-reviewer` | `gpt-5.6-sol` | `medium` |
+| `scope-analyzer` | `gpt-5.6-terra` | `xhigh` |
+| `writer` | `gpt-5.6-terra` | `high` |
+| `matrix-reviewer` | `gpt-5.6-terra` | `xhigh` |
+| `tc-reviewer` | `gpt-5.6-terra` | `xhigh` |
 
-Для controller-сессии рекомендуемый профиль при ручном создании — `gpt-5.6-terra` / `low`. `high` не является default ни для одной роли: он оправдан только явным запросом пользователя или повторяющейся доказанной сложностью, которую не покрывает обычный review. Профиль не повышается из-за длины инструкций или ошибки формата.
+Для controller-сессии рекомендуемый профиль при ручном создании — `gpt-5.6-terra` / `low`. Эти defaults заданы по смысловой сложности роли: analyzer и независимые reviewer используют `xhigh`, writer — `high`; профиль не повышается из-за длины инструкций или ошибки формата. Модель `gpt-5.6-sol` в default route не используется.
 
 Фактический выбор фиксируется в `runtime-session-registry.json`; команда `record` получает оба флага `--model` и `--thinking`. В итоговом stage summary controller берёт этот факт из registry, а не из памяти; это служебная информация и не попадает в FT-артефакты.
 

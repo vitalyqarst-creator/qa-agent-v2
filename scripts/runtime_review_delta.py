@@ -133,8 +133,9 @@ def semantic_input_files(package_root: Path, artifact: Path, kind: str, scope: s
             candidates.add(path)
 
     work = package_root / "work"
-    if work.is_dir():
+    if work.is_dir() and kind == "tc":
         candidates.update(path for path in work.rglob("fixture-catalog.json") if path.is_file())
+        candidates.update(path for path in work.rglob("data-materialization.json") if path.is_file())
     for fixture_directory in (package_root / "fixtures", package_root / "work" / "fixtures"):
         if fixture_directory.is_dir():
             candidates.update(path for path in fixture_directory.rglob("*") if path.is_file())

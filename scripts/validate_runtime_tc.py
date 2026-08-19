@@ -7,12 +7,16 @@ import re
 from pathlib import Path
 
 try:
+    from scripts.runtime_state import scalar_values as state_scalar_values
     from scripts.runtime_traceability import anchor_label, extract_anchors, find_markdown_table
     from scripts.runtime_session_registry import canonical_scope, find_package_root, validate_topology
+    from scripts.validate_runtime_test_data import ROLE_RE as DATA_ROLE_RE, validate as validate_test_data
     from scripts.validate_runtime_matrix import validate_layout as validate_matrix_layout
 except ModuleNotFoundError:  # Direct invocation: python scripts/validate_runtime_tc.py
+    from runtime_state import scalar_values as state_scalar_values
     from runtime_traceability import anchor_label, extract_anchors, find_markdown_table
     from runtime_session_registry import canonical_scope, find_package_root, validate_topology
+    from validate_runtime_test_data import ROLE_RE as DATA_ROLE_RE, validate as validate_test_data
     from validate_runtime_matrix import validate_layout as validate_matrix_layout
 
 
@@ -27,7 +31,7 @@ SECTION_RE = re.compile(
 REQUIRED_FIELDS = {"Название", "Цель", "Тип", "Приоритет", "Трассировка"}
 REQUIRED_SECTIONS = {"Предусловия", "Тестовые данные", "Шаги", "Итоговый ожидаемый результат", "Постусловия"}
 FORBIDDEN_RUNTIME_RE = re.compile(
-    r"\b(?:AS\.\d+|GAP-[A-Z0-9.-]+|SRC-[A-Z0-9.-]+|ATOM-[A-Z0-9.-]+|OBL-[A-Z0-9.-]+|FX-[A-Z0-9-]+|FIX-[A-Z0-9-]+|fixture_id|snapshot|sha-?256|needs-test-data|candidate-ui-calibration|blocked-observability)\b",
+    r"\b(?:AS\.\d+|GAP-[A-Z0-9.-]+|SRC-[A-Z0-9.-]+|ATOM-[A-Z0-9.-]+|OBL-[A-Z0-9.-]+|TD-[A-Z0-9.-]+|REL-[A-Z0-9.-]+|FX-[A-Z0-9-]+|FIX-[A-Z0-9-]+|fixture_id|snapshot|sha-?256|needs-test-data|candidate-ui-calibration|blocked-observability)\b",
     re.IGNORECASE,
 )
 FORBIDDEN_DATA_RE = re.compile(
@@ -52,7 +56,7 @@ UNBOUND_RUNTIME_REFERENCE_RE = re.compile(
 STATUS_RE = re.compile(r"\*\*Статус исполнения:\*\*\s*([^\n]+)")
 CONFIRMATION_RE = re.compile(r"\*\*Требуется подтверждение:\*\*\s*([^\n]+)")
 PRECONDITION_ITEM_RE = re.compile(
-    r"^\d+\.\s+(?:(?:Открыть|Перейти|Найти|Нажать|Выбрать|Ввести|Заполнить|Создать|Добавить|Подготовить|Очистить|Загрузить|Войти|Выполнить|Подтвердить|Зафиксировать)\b|(?:Пользователь|Партн[её]р|Реквизит|Объект|Запись|У\s+партн[её]ра)\b)",
+    r"^\d+\.\s+(?:(?:Открыть|Перейти|Найти|Нажать|Выбрать|Ввести|Заполнить|Создать|Добавить|Подготовить|Очистить|Загрузить|Войти|Выполнить|Подтвердить|Зафиксировать)\b|(?:Пользователь|Партн[её]р|Реквизит|Объект|Запись|Файл|У\s+партн[её]ра)\b)",
     re.IGNORECASE,
 )
 AMBIGUOUS_STATE_SETUP_RE = re.compile(
@@ -501,7 +505,12 @@ def validate(content: str) -> list[str]:
     return errors
 
 
-def validate_layout(test_cases_path: Path, matrix_path: Path, package_root: Path) -> list[str]:
+def validate_layout(
+    test_cases_path: Path,
+    matrix_path: Path,
+    package_root: Path,
+    data_materialization_path: Path | None = None,
+) -> list[str]:
     errors = validate_matrix_layout(matrix_path, package_root)
     expected_tc_root = (package_root / "test-cases").resolve()
     try:
@@ -511,15 +520,29 @@ def validate_layout(test_cases_path: Path, matrix_path: Path, package_root: Path
     state_path = matrix_path.parent / "workflow-state.yaml"
     if not state_path.is_file():
         return errors
-    state = state_path.read_text(encoding="utf-8")
+    state = state_scalar_values(state_path.read_text(encoding="utf-8"))
     try:
         tc_relative = test_cases_path.resolve().relative_to(package_root.resolve()).as_posix()
     except ValueError:
         return errors
-    if not re.search(r"(?m)^test_case_status:\s*completed\s*$", state):
+    if state.get("test_case_status") != "completed":
         errors.append("writer workflow-state is missing completed test-case status")
-    if not re.search(rf"(?m)^test_cases:\s*[\"']?{re.escape(tc_relative)}[\"']?\s*$", state):
+    if state.get("test_cases") != tc_relative:
         errors.append("writer workflow-state does not reference the validated test-case file")
+    matrix_content = matrix_path.read_text(encoding="utf-8")
+    if DATA_ROLE_RE.search(matrix_content):
+        if data_materialization_path is None:
+            errors.append("matrix uses TD-* roles but --data-materialization was not provided")
+        else:
+            try:
+                data_relative = data_materialization_path.resolve().relative_to(package_root.resolve()).as_posix()
+            except ValueError:
+                data_relative = ""
+                errors.append("data materialization escapes FT package")
+            if state.get("data_status") != "completed":
+                errors.append("writer workflow-state is missing completed data status")
+            if data_relative and state.get("data_materialization") != data_relative:
+                errors.append("writer workflow-state does not reference the validated data materialization")
     review_path = package_root / "work" / "reviews" / matrix_path.parent.name / "tc-review.json"
     if review_path.is_file():
         try:
@@ -544,6 +567,56 @@ def validate_layout(test_cases_path: Path, matrix_path: Path, package_root: Path
     return errors
 
 
+def validate_materialized_projection(
+    content: str,
+    matrix_content: str,
+    materialization_path: Path,
+) -> list[str]:
+    errors: list[str] = []
+    try:
+        payload = json.loads(materialization_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        return [f"cannot project invalid data materialization into TC: {exc}"]
+    bindings = {
+        binding.get("role_id"): binding
+        for binding in payload.get("bindings", [])
+        if isinstance(binding, dict) and isinstance(binding.get("role_id"), str)
+    }
+    matrix = find_markdown_table(matrix_content, ("ID", "Тестовые данные и отношения", "Решение"))
+    if matrix is None:
+        return ["cannot project materialized data without matrix data roles"]
+    roles_by_matrix: dict[str, set[str]] = {}
+    for row in matrix.rows:
+        if row[matrix.index("Решение")] == "TC":
+            roles_by_matrix[row[matrix.index("ID")]] = set(
+                DATA_ROLE_RE.findall(row[matrix.index("Тестовые данные и отношения")])
+            )
+    matches = list(TC_HEADING_RE.finditer(content))
+    for index, match in enumerate(matches):
+        tc_id = match.group(1)
+        block = content[match.end() : matches[index + 1].start() if index + 1 < len(matches) else len(content)]
+        fields = {name: value.strip() for name, value in FIELD_RE.findall(block)}
+        traceability = fields.get("Трассировка", "")
+        tc_data = sections(block).get("Тестовые данные", "")
+        linked_matrix = {
+            matrix_id
+            for matrix_id in roles_by_matrix
+            if re.search(rf"(?<![A-Za-z0-9_.-]){re.escape(matrix_id)}(?![A-Za-z0-9_.-])", traceability)
+        }
+        roles = {role for matrix_id in linked_matrix for role in roles_by_matrix[matrix_id]}
+        for role in sorted(roles):
+            binding = bindings.get(role)
+            if not isinstance(binding, dict):
+                continue
+            values = binding.get("values")
+            if not isinstance(values, dict):
+                continue
+            for field, value in values.items():
+                if str(value) not in tc_data:
+                    errors.append(f"{tc_id}: materialized value {role}.{field} is absent from test data")
+    return errors
+
+
 def validate_projection(content: str, matrix_content: str) -> list[str]:
     errors: list[str] = []
     matrix = find_markdown_table(
@@ -558,7 +631,7 @@ def validate_projection(content: str, matrix_content: str) -> list[str]:
     decision_index = matrix.index("Решение")
     matrix_id_index = matrix.index("ID")
     result_index = matrix.index("Ожидаемый результат")
-    data_index = matrix.index("Конкретные тестовые данные")
+    data_index = matrix.index("Тестовые данные и отношения")
     coverage_index = matrix.index("Элемент покрытия")
     hover_controls = hover_revealed_controls(matrix.rows, check_index, result_index)
     required_anchors: set[str] = set()
@@ -660,15 +733,31 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Validate lean runtime test cases.")
     parser.add_argument("test_cases", type=Path)
     parser.add_argument("--matrix", type=Path, required=True)
+    parser.add_argument("--data-materialization", type=Path)
     args = parser.parse_args()
     content = args.test_cases.read_text(encoding="utf-8")
+    matrix_content = args.matrix.read_text(encoding="utf-8")
     errors = validate(content)
-    errors.extend(validate_projection(content, args.matrix.read_text(encoding="utf-8")))
+    errors.extend(validate_projection(content, matrix_content))
     package_root = find_package_root(args.matrix)
     if package_root is None:
         errors.append("cannot locate FT package root for session topology validation")
     else:
-        errors.extend(validate_layout(args.test_cases, args.matrix, package_root))
+        materialization = args.data_materialization.resolve() if args.data_materialization else None
+        errors.extend(validate_layout(args.test_cases, args.matrix, package_root, materialization))
+        if materialization is not None:
+            data_plan = (
+                package_root
+                / "work"
+                / "stage-handoffs"
+                / args.matrix.parent.name
+                / "test-data-plan.md"
+            )
+            if not data_plan.is_file():
+                errors.append(f"data plan is missing for materialization validation: {data_plan}")
+            else:
+                errors.extend(validate_test_data(materialization, args.matrix.resolve(), data_plan))
+                errors.extend(validate_materialized_projection(content, matrix_content, materialization))
         errors.extend(validate_topology(package_root, "writer", canonical_scope(args.matrix.parent.name)))
     print(json.dumps({"valid": not errors, "errors": errors}, ensure_ascii=False))
     return 0 if not errors else 1
