@@ -827,6 +827,19 @@ class RuntimeContractTests(unittest.TestCase):
         )
         self.assertFalse(any("cannot find the same target" in error for error in validate_tc(valid_parent_lookup)))
 
+    def test_tc_rejects_reused_one_time_isolated_identity(self) -> None:
+        first = VALID_TC.replace(
+            "1. Открыть карточку добавления партнёра.",
+            "1. Партнёр `ПАО СБЕРБАНК` подготовлен как одноразовый изолированный объект.",
+        )
+        second = first.replace("TC-9.3.2-001", "TC-9.3.2-002", 1).replace("`TC-001`", "`TC-002`", 1)
+        errors = validate_tc(f"{first}\n\n{second}")
+        self.assertTrue(any("one-time isolated identity tuple is reused" in error for error in errors))
+
+        distinct_second = second.replace("ПАО СБЕРБАНК", "ООО РОМАШКА")
+        distinct_errors = validate_tc(f"{first}\n\n{distinct_second}")
+        self.assertFalse(any("one-time isolated identity tuple is reused" in error for error in distinct_errors))
+
     def test_needs_test_data_is_allowed_only_with_concrete_tc_data(self) -> None:
         needs_data = VALID_TC.replace(
             "**Приоритет:** High",

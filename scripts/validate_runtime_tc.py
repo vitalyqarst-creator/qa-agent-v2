@@ -99,6 +99,7 @@ RUNTIME_BINDING_RE = re.compile(
     r"^\d+\.\s+Зафиксировать\b[^\n]*?\bкак\s+`([A-Za-zА-Яа-яЁё][A-Za-zА-Яа-яЁё0-9_-]{2,63})`\s*\.?$",
     re.IGNORECASE | re.MULTILINE,
 )
+ONE_TIME_ISOLATION_RE = re.compile(r"\bодноразов\w*\b[^\n]{0,80}\bизолирован\w*\b", re.IGNORECASE)
 TARGET_KIND_RE = re.compile(
     r"\b(виджет|блок|карточк|партн[её]р|реквизит|кнопк|действи|пол[ея]|строк|ссылк|вкладк)\w*\b",
     re.IGNORECASE,
@@ -129,6 +130,32 @@ def visible_selector_values(data: str) -> list[str]:
         for key, value in DATA_PAIR_RE.findall(data)
         if normalized_label(key) in selector_keys and len(value.strip()) >= 3
     ]
+
+
+def isolation_identity(data: str) -> tuple[tuple[str, str], ...]:
+    identity_keys = {
+        "партнер",
+        "партнеры",
+        "наименование партнера",
+        "наименование",
+        "организация",
+        "объект",
+        "запись",
+        "реквизит",
+        "бик",
+        "расчетный счет",
+        "расч счет",
+        "р с",
+        "инн",
+        "id",
+    }
+    return tuple(
+        sorted(
+            (normalized_label(key), value.strip().casefold())
+            for key, value in DATA_PAIR_RE.findall(data)
+            if normalized_label(key) in identity_keys and value.strip()
+        )
+    )
 
 
 def action_count(line: str) -> int:
@@ -259,6 +286,7 @@ def validate(content: str) -> list[str]:
     if not matches:
         return ["no canonical TC headings found"]
     numbers: list[int] = []
+    one_time_identities: dict[tuple[tuple[str, str], ...], list[str]] = {}
     for index, match in enumerate(matches):
         tc_id = match.group(1)
         block = content[match.end() : matches[index + 1].start() if index + 1 < len(matches) else len(content)]
@@ -323,6 +351,10 @@ def validate(content: str) -> list[str]:
         if data != "Не требуются." and not CONCRETE_DATA_RE.search(data) and not has_parameter_table(data):
             errors.append(f"{tc_id}: test data must include a concrete `field` = `value` literal")
         data_pairs = DATA_PAIR_RE.findall(data)
+        if ONE_TIME_ISOLATION_RE.search(f"{preconditions}\n{tc_sections['Постусловия']}"):
+            identity = isolation_identity(data)
+            if identity:
+                one_time_identities.setdefault(identity, []).append(tc_id)
         data_keys = [key.strip().casefold() for key, _value in data_pairs]
         duplicate_keys = sorted({key for key in data_keys if data_keys.count(key) > 1})
         if duplicate_keys:
@@ -399,6 +431,11 @@ def validate(content: str) -> list[str]:
             )
     if numbers and numbers != list(range(1, len(numbers) + 1)):
         errors.append("sequential TC numbers are not continuous from TC-001")
+    for tc_ids in one_time_identities.values():
+        if len(tc_ids) > 1:
+            errors.append(
+                "one-time isolated identity tuple is reused across test cases: " + ", ".join(tc_ids)
+            )
     return errors
 
 
