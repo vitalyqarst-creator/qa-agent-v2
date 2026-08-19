@@ -1526,6 +1526,11 @@ class RuntimeContractTests(unittest.TestCase):
             }.issubset(anchors)
         )
 
+    def test_traceability_does_not_turn_lowercase_prose_before_a_number_into_a_code(self) -> None:
+        anchors = extract_anchors("AS.43; размер файла не более 40 МБ")
+        self.assertIn("CODE:AS.43", anchors)
+        self.assertNotIn("CODE:БОЛЕЕ 40", anchors)
+
     def test_tc_projection_keeps_any_project_requirement_code_in_traceability_only(self) -> None:
         matrix = VALID_MATRIX.replace("AS.38", "REQ-7")
         test_case = VALID_TC.replace("AS.38", "REQ-7")
@@ -1894,6 +1899,26 @@ class RuntimeContractTests(unittest.TestCase):
             )
             self.assertEqual([], validate_scope(package, scope))
 
+            brief_path = scope / "scope-brief.md"
+            valid_brief = brief_path.read_text(encoding="utf-8")
+            malformed_table_coverage = VALID_TABLE_COVERAGE.replace(
+                "| --- | --- | --- | --- |",
+                "| --- | --- | --- |",
+            )
+            brief_path.write_text(
+                valid_brief.replace(VALID_TABLE_COVERAGE, malformed_table_coverage),
+                encoding="utf-8",
+            )
+            errors = validate_scope(package, scope)
+            self.assertTrue(
+                any(
+                    "complete table-row coverage" in error
+                    and "4 header columns but 3 separator columns" in error
+                    for error in errors
+                )
+            )
+            brief_path.write_text(valid_brief, encoding="utf-8")
+
             workflow_path = scope / "workflow-state.yaml"
             valid_workflow = workflow_path.read_text(encoding="utf-8")
             workflow_path.write_text(valid_workflow.replace("scope_revision_count: 0\n", ""), encoding="utf-8")
@@ -1960,6 +1985,22 @@ class RuntimeContractTests(unittest.TestCase):
                 brief_without_semantics
                 + "\n## Семантика заголовков таблиц\n\n"
                 + "| Таблица | Заголовок | Значение | Основание или пробел |\n"
+                + "| --- | --- | --- |\n"
+                + "| Таблица 7 | О | Не определено | GAP-001 |\n",
+                encoding="utf-8",
+            )
+            errors = validate_scope(package, scope)
+            self.assertTrue(
+                any(
+                    "opaque table headers" in error
+                    and "4 header columns but 3 separator columns" in error
+                    for error in errors
+                )
+            )
+            brief_path.write_text(
+                brief_without_semantics
+                + "\n## Семантика заголовков таблиц\n\n"
+                + "| Таблица | Заголовок | Значение | Основание или пробел |\n"
                 + "| --- | --- | --- | --- |\n"
                 + "| Таблица 7 | О | Не определено | GAP-001 |\n",
                 encoding="utf-8",
@@ -2013,6 +2054,19 @@ class RuntimeContractTests(unittest.TestCase):
             inventory_path.write_text(reactive_inventory, encoding="utf-8")
             errors = validate_scope(package, scope)
             self.assertTrue(any("source-backed trigger/action" in error for error in errors))
+            inventory_path.write_text(original_inventory, encoding="utf-8")
+
+            mixed_upload_inventory = original_inventory.replace(
+                "| Карточка сохраняется |",
+                "| Система принимает допустимый файл, а недопустимый файл не загружает и выводит ошибку |",
+            ).replace(
+                "Нажатие кнопки сохранения после заполнения | Карточка сохранена",
+                "Пользователь пытается прикрепить файл | Допустимый файл прикреплён, недопустимый файл не загружен и отображается ошибка",
+            )
+            inventory_path.write_text(mixed_upload_inventory, encoding="utf-8")
+            errors = validate_scope(package, scope)
+            self.assertTrue(any("split mixed accepted and rejected outcomes" in error for error in errors))
+            self.assertFalse(any("source-backed trigger/action" in error for error in errors))
             inventory_path.write_text(original_inventory, encoding="utf-8")
 
             gaps_path = scope / "coverage-gaps.md"

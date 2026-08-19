@@ -143,7 +143,11 @@ def extract_anchors(value: str) -> set[str]:
     for prefix, separator, number in SEPARATED_CODE_RE.findall(value.upper()):
         if prefix not in PROCESS_PREFIXES:
             anchors.add(f"CODE:{prefix}{separator}{number}")
-    for prefix, number in SPACE_CODE_RE.findall(value.upper()):
+    # Keep the original case here. Uppercasing prose turns ordinary phrases such
+    # as "не более 40 МБ" into fake requirement codes ("БОЛЕЕ 40"). Genuine
+    # space-separated project codes are already written in uppercase by the
+    # source and are matched by SPACE_CODE_RE as-is.
+    for prefix, number in SPACE_CODE_RE.findall(value):
         if prefix not in PROCESS_PREFIXES:
             anchors.add(f"CODE:{prefix} {number}")
     for table_number, row_label in TABLE_RE.findall(value):

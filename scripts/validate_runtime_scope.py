@@ -287,6 +287,8 @@ def classify_scope_error(error: str) -> str:
     value = error.casefold()
     if any(token in value for token in ("aggregates independent", "atomic", "split mixed", "one object")):
         return "atomicity"
+    if any(token in value for token in ("separator", "required table headers", "has no typed", "has no required", "must contain the source-compatible data table")):
+        return "format"
     if any(token in value for token in ("misses", "omitted", "complete table-row", "first and final", "full property")):
         return "completeness"
     if value.startswith("test-data-plan") or "boundary needs" in value:
@@ -297,8 +299,6 @@ def classify_scope_error(error: str) -> str:
         return "process"
     if "use russian wording" in value or "user-facing text error" in value:
         return "language"
-    if any(token in value for token in ("separator", "required table headers", "has no typed", "has no required", "must contain the source-compatible data table")):
-        return "format"
     return "semantic"
 
 
@@ -321,7 +321,16 @@ def generic_unavailability_without_observation(observation_surface: str, observe
 
 
 EXPLICIT_ACTION_TRIGGER_RE = re.compile(
-    r"\b(?:нажима|выбира|сохраня|открыва|закрыва|заверша|снимает\s+фокус|переводит\s+фокус)\w*",
+    r"\b(?:нажима|выбира|сохраня|открыва|закрыва|заверша|ввод|прикреп|загруз|перетаск|"
+    r"снимает\s+фокус|переводит\s+фокус)\w*",
+    re.IGNORECASE,
+)
+ACCEPTED_OUTCOME_RE = re.compile(
+    r"\b(?:принима\w*|прикрепл[её]н\w*|загружен\w*|успешно\s+(?:прикрепл|загруж)\w*)\b",
+    re.IGNORECASE,
+)
+REJECTED_OUTCOME_RE = re.compile(
+    r"\b(?:не\s+(?:принима|прикрепля|загружа)\w*|отклон\w*|ошиб\w*)\b",
     re.IGNORECASE,
 )
 HIGH_CONFIDENCE_TEXT_ERRORS = (
@@ -1076,6 +1085,11 @@ def validate(package_root: Path, scope_dir: Path) -> list[str]:
                 )
             if len(source_codes) > 1:
                 errors.append(f"{inventory_id}: active source row must contain one atomic requirement code")
+            if ACCEPTED_OUTCOME_RE.search(statement_value) and REJECTED_OUTCOME_RE.search(statement_value):
+                errors.append(
+                    f"{inventory_id}: split mixed accepted and rejected outcomes into separate source obligations; "
+                    "parameterize invalid classes only when they share one rejection result"
+                )
             matched_properties = [
                 name for name, pattern in INDEPENDENT_PROPERTY_PATTERNS.items() if pattern.search(statement_value)
             ]
@@ -1379,7 +1393,14 @@ def validate(package_root: Path, scope_dir: Path) -> list[str]:
     )
     if referenced_table_numbers:
         if table_coverage is None or not table_coverage.rows:
-            errors.append("scope-brief must contain complete table-row coverage for every referenced source table")
+            diagnosis = diagnose_markdown_table(
+                scope_brief_content,
+                ("Таблица", "Строка", "Решение", "Связанные обязанности/пробелы"),
+            )
+            errors.append(
+                "scope-brief must contain complete table-row coverage for every referenced source table; "
+                + (diagnosis or "the table has no data rows")
+            )
         else:
             table_index = table_coverage.index("Таблица")
             row_index = table_coverage.index("Строка")
@@ -1455,8 +1476,15 @@ def validate(package_root: Path, scope_dir: Path) -> list[str]:
     if opaque_headers:
         if semantics is None or not semantics.rows:
             labels = ", ".join(f"Таблица {number}: {header}" for number, header in sorted(opaque_headers))
+            diagnosis = diagnose_markdown_table(
+                scope_brief_content,
+                ("Таблица", "Заголовок", "Значение", "Основание или пробел"),
+            )
             errors.append(
-                "scope-brief must resolve or explicitly gap opaque table headers: " + labels
+                "scope-brief must resolve or explicitly gap opaque table headers: "
+                + labels
+                + "; "
+                + (diagnosis or "the table has no data rows")
             )
         else:
             semantics_table_index = semantics.index("Таблица")
