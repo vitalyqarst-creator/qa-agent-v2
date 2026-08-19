@@ -1024,6 +1024,7 @@ class RuntimeContractTests(unittest.TestCase):
         ):
             self.assertIn(gate, runtime)
         self.assertIn("обязательные gates", writer)
+
         self.assertIn("переход, изменение значения или счётчика", reviewer)
         self.assertIn("изменяющий состояние TC", reviewer)
         self.assertIn("выдуманный cleanup", reviewer)
@@ -1037,6 +1038,16 @@ class RuntimeContractTests(unittest.TestCase):
         self.assertIn("runtime binding", fixtures)
         self.assertIn("не требуй заранее известный литерал", reviewer.casefold())
         self.assertIn("системно создаваемый output выдан за заранее известный вход", reviewer)
+
+    def test_matrix_roles_consume_scope_quality_findings_without_reopening_scope(self) -> None:
+        root = Path(__file__).resolve().parents[1]
+        writer = (root / "skills" / "ft-test-case-writer" / "SKILL.md").read_text(encoding="utf-8")
+        reviewer = (root / "skills" / "ft-test-case-reviewer" / "SKILL.md").read_text(encoding="utf-8")
+        for instructions in (writer, reviewer):
+            self.assertIn("validate_runtime_scope.py", instructions)
+            self.assertIn("writer_allowed", instructions)
+            self.assertIn("quality_findings", instructions)
+            self.assertIn("analyzer-owned", instructions)
 
     def test_matrix_roles_require_reachable_observation_points(self) -> None:
         root = Path(__file__).resolve().parents[1]
