@@ -15,6 +15,14 @@ Controller — одна верхнеуровневая Codex-сессия на �
 
 Новый practical route по существующему пакету начинается не с source locator, а с определения первого отсутствующего, stale или невалидного артефакта. Controller последовательно проверяет существующие source (`validate_runtime_source.py --resume-existing`), handoff, matrix/review и canonical TC/review и переиспользует все валидные предшествующие результаты. Semantic role вызывается только для первого этапа, который действительно требует изменения; смена runtime commit сама по себе не является причиной пересоздавать артефакты.
 
+Если валидный source handoff скопирован в новую чистую папку того же FT-пакета, controller не выдумывает locator session и не запускает locator повторно. После `init` он переносит точную историческую запись из исходного пакета штатной командой, затем запускает source validator с `--resume-existing`:
+
+```text
+python scripts/runtime_session_registry.py inherit-source --package-root <new-package> --from-package-root <source-package>
+```
+
+Команда разрешает перенос только при совпадении SHA-256 `AGENT-NOTES.md`, сохраняет исходные thread/host/runtime/timestamp/profile и не переносит controller или scope-роли.
+
 `validate_runtime_source.py --resume-existing` запускается только после того, как controller нашёл существующий source handoff и подтвердил наличие обоих обязательных файлов `source-selection.md` и `workflow-state.yaml`; package root и handoff directory передаются как два позиционных аргумента. Если handoff отсутствует, validator не вызывается с неполной командой — первым этапом сразу считается source locator.
 
 Один analyzer или writer нельзя использовать для двух scope: перенос контекста между разделами ухудшает независимость и увеличивает риск скрытого смешения требований.
@@ -103,7 +111,7 @@ Operational prompt — только транспортный конверт эт
 
 Controller запускает следующий этап только после успешного artifact validator-а и проверки registry. Отдельная сессия не означает новый цикл: замечания matrix reviewer возвращаются исходному writer, затем текущая matrix повторно проверяется тем же matrix reviewer; аналогично для TC. Первое review всегда полное. После revision controller передаёт прежний review-record в `runtime_review_dispatch.py create --previous-review`; controller не выбирает объём вручную. Штатный manifest разрешает delta re-review только для заявленных и локализованных изменений при неизменных semantic inputs, структуре и порядке artifact, иначе автоматически требует полный review.
 
-Для scope-validator controller использует поля `scope_revision_count`, `correction_allowed` и `error_counts_by_class` из JSON. При первом `valid=false` локальная коррекция разрешена только при `correction_allowed=true`; analyzer перед ней меняет count с `0` на `1`. Повторный `valid=false` при count `1` завершает этап как `scope-stage-failed`: controller не отправляет третью попытку и не называет ошибки форматными, если классификация содержит смысловые категории.
+Для scope-validator controller использует поля `scope_revision_count`, `correction_allowed`, `workflow_status` и `error_counts_by_class` из JSON. Первая коррекция меняет count с `0` на `1`. Если при count `1` остаются ошибки и `correction_allowed=true`, controller возвращает analyzer-у только JSON последней проверки для одной финальной delta-only коррекции без перечитывания источников; analyzer меняет count на `2`. Ошибка при count `2` завершает этап как `scope-stage-failed`. Controller не отправляет следующую попытку и не называет смысловые ошибки форматными.
 
 При `tc-changes-required` controller запускает `validate_runtime_review.py` и использует только его `repair_stage`. Для `repair_stage: tc` findings возвращаются writer-у на ограниченную правку canonical TC. Для `repair_stage: matrix` первым невалидным артефактом снова становится matrix: writer исправляет matrix, отдельный matrix reviewer проверяет её новую версию, после `matrix-accepted` writer заново проецирует затронутые TC, а отдельный TC reviewer проверяет весь актуальный набор. Старые matrix/TC review-record после изменения соответствующего artifact остаются историческими и не разрешают следующий этап. Controller не определяет происхождение дефекта сам и не пересказывает findings в operational prompt.
 

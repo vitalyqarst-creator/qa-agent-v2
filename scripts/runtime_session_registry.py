@@ -200,6 +200,54 @@ def acknowledge_runtime(package_root: Path, controller_thread_id: str) -> Path:
     return write_registry(package_root, payload)
 
 
+def inherit_source_locator(package_root: Path, source_package_root: Path) -> Path:
+    """Reuse an actual source-locator session record in a clean copy of the same FT package."""
+
+    destination, destination_errors = load_registry(package_root)
+    if destination_errors:
+        raise ValueError(destination_errors[0])
+    source, source_errors = load_registry(source_package_root)
+    if source_errors:
+        raise ValueError(source_errors[0])
+    assert destination is not None and source is not None
+
+    destination_contract_errors = validate_runtime_acknowledgement(package_root, destination)
+    destination_contract_errors.extend(validate_record("controller", destination.get("controller")))
+    if destination_contract_errors:
+        raise ValueError(destination_contract_errors[0])
+
+    source_record = source.get("source_locator")
+    record_errors = validate_record(PACKAGE_ROLE, source_record)
+    if record_errors:
+        raise ValueError(record_errors[0])
+
+    destination_inputs = package_input_baseline(package_root)
+    source_inputs = package_input_baseline(source_package_root)
+    if destination_inputs != source_inputs:
+        raise ValueError(
+            "source locator can be inherited only when AGENT-NOTES.md has the same SHA-256 in both packages"
+        )
+    if destination.get("package_inputs") != destination_inputs:
+        raise ValueError("destination package input baseline is stale")
+    if source.get("package_inputs") != source_inputs:
+        raise ValueError("source package input baseline is stale")
+
+    current = destination.get("source_locator")
+    if isinstance(current, dict):
+        if current == source_record:
+            return registry_path(package_root)
+        raise ValueError("destination package already has another source-locator session")
+
+    source_session_id = source_record.get("session_id")
+    for assigned_role, assigned in all_role_records(destination):
+        if assigned.get("session_id") == source_session_id:
+            raise ValueError(f"source-locator session is already assigned to {assigned_role}")
+
+    # Preserve the original thread, host, runtime commit, timestamp and dispatch profile.
+    destination["source_locator"] = dict(source_record)
+    return write_registry(package_root, destination)
+
+
 def validate_runtime_acknowledgement(package_root: Path, payload: dict[str, Any]) -> list[str]:
     errors: list[str] = []
     if payload.get("schema_version") != REGISTRY_SCHEMA_VERSION:
@@ -459,6 +507,10 @@ def main() -> int:
     acknowledge_parser.add_argument("--package-root", type=Path, required=True)
     acknowledge_parser.add_argument("--controller-thread-id", required=True)
 
+    inherit_parser = subparsers.add_parser("inherit-source")
+    inherit_parser.add_argument("--package-root", type=Path, required=True)
+    inherit_parser.add_argument("--from-package-root", type=Path, required=True)
+
     args = parser.parse_args()
     try:
         if args.command == "init":
@@ -480,6 +532,10 @@ def main() -> int:
         if args.command == "acknowledge-runtime":
             path = acknowledge_runtime(args.package_root, args.controller_thread_id)
             print(json.dumps({"acknowledged": True, "path": str(path)}, ensure_ascii=False))
+            return 0
+        if args.command == "inherit-source":
+            path = inherit_source_locator(args.package_root, args.from_package_root)
+            print(json.dumps({"inherited": True, "path": str(path)}, ensure_ascii=False))
             return 0
         if args.command == "controller-check":
             errors = validate_controller(args.package_root, args.expected_thread_id)

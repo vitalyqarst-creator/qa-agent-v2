@@ -340,7 +340,30 @@ def runtime_root(package_root: Path) -> Path:
     raise ValueError("runtime root was not found above package root")
 
 
-def public_contract(scope: str | None = None) -> dict[str, object]:
+def source_table_catalog(package_root: Path | None) -> dict[str, object]:
+    """Expose exact XHTML table labels so an author never has to transcribe them."""
+
+    if package_root is None:
+        return {"available": False, "tables": {}}
+    xhtml_path = machine_readable_primary(package_root.resolve())
+    if xhtml_path is None or not xhtml_path.is_file():
+        return {"available": False, "tables": {}}
+    headers = xhtml_table_headers(xhtml_path)
+    cells = xhtml_table_cells(xhtml_path)
+    tables: dict[str, object] = {}
+    for table_number, table_rows in sorted(cells.items()):
+        tables[f"Таблица {table_number}"] = {
+            "headers": list(headers.get(table_number, ())),
+            "first_column_values": [row[0] for row in table_rows.values() if row],
+        }
+    return {
+        "available": True,
+        "source": str(xhtml_path),
+        "tables": tables,
+    }
+
+
+def public_contract(scope: str | None = None, package_root: Path | None = None) -> dict[str, object]:
     """Return the small, stable authoring contract without exposing validator internals."""
     scope_value = canonical_scope(scope or "scope")
     scope_digits = "".join(re.findall(r"\d+", scope_value)) or "00"
@@ -409,7 +432,7 @@ def public_contract(scope: str | None = None) -> dict[str, object]:
             f'scope: "{scope_value}"\n'
             f'canonical_scope: "{scope_value}"\n'
             "stage: scope-analyzer\n"
-            "status: completed\n"
+            "status: draft\n"
             "scope_revision_count: 0\n"
             'clarification_register: "work/scope-clarification-requests.md"'
         ),
@@ -439,7 +462,9 @@ def public_contract(scope: str | None = None) -> dict[str, object]:
             "table_row": "Таблица 8, строка «Точное значение первого столбца».",
             "table_row_explicit": "Таблица 8, строка первого столбца «Точное значение».",
             "uncoded_text": f"Раздел {section_id}; абзац «Короткая точная цитата».",
+            "uncoded_heading_or_list": "элемент списка «Короткая точная цитата элемента».",
         },
+        "source_table_catalog": source_table_catalog(package_root),
         "required_tables": {
             "source_inventory": ["ID", "Источник", "Утверждение для покрытия"],
             "verifiability": [
@@ -474,10 +499,20 @@ def public_contract(scope: str | None = None) -> dict[str, object]:
         "markdown_templates": templates,
         "correction_policy": {
             "initial_scope_revision_count": 0,
-            "after_single_local_correction": 1,
-            "before_final_validation": "close every error returned by the initial validation; do not knowingly carry an unchanged error into the only revision",
-            "when_invalid_at_count_1": "stop; correction_allowed=false",
+            "maximum_scope_revision_count": 2,
+            "first_local_correction": 1,
+            "final_delta_only_correction": 2,
+            "before_each_validation": "close every returned error; after count 1 change only the remaining reported defects and do not reread semantic sources",
+            "when_invalid_at_count_2": "stop; correction_allowed=false; workflow status is failed",
         },
+        "atomicity_checks": [
+            "один объект или UI-уровень в одной обязанности",
+            "одна обязанность из источника; несколько якорей допустимы только для подтверждения того же результата",
+            "один основной наблюдаемый результат в одной обязанности",
+            "обязательность, редактируемость, формат и автозаполнение разделяются, если у них разные результаты",
+            "альтернативные ключи или способы ввода разделяются",
+            "однотипные классы данных с одинаковым действием и результатом параметризуются",
+        ],
         "conditional_controls": {
             "table_rows": "только если область использует таблицу ФТ",
             "opaque_headers": "только для используемых коротких заголовков без явной семантики",
@@ -958,7 +993,10 @@ def validate_test_data_plan(content: str, source_evidence: str = "") -> list[str
             errors.append(
                 f"test-data-plan {group}: external value without a saved response requires readiness 'требуется'"
             )
-        if external and not saved and not re.search(r"контракт\s+получения\s*:", constraints, re.IGNORECASE):
+        acquisition_contract = " | ".join((constraints, preparation))
+        if external and not saved and not re.search(
+            r"контракт\s+получения\s*:", acquisition_contract, re.IGNORECASE
+        ):
             errors.append(
                 f"test-data-plan {group}: external value without a saved response must define 'Контракт получения:'"
             )
@@ -1159,8 +1197,11 @@ def validate(package_root: Path, scope_dir: Path) -> list[str]:
     scope_brief_content = (scope_dir / "scope-brief.md").read_text(encoding="utf-8")
     workflow_content = (scope_dir / "workflow-state.yaml").read_text(encoding="utf-8")
     revision_count = scalar_values(workflow_content).get("scope_revision_count")
-    if revision_count not in {"0", "1"}:
-        errors.append("workflow-state scope_revision_count must be 0 initially or 1 after the single correction")
+    if revision_count not in {"0", "1", "2"}:
+        errors.append(
+            "workflow-state scope_revision_count must be 0 initially, 1 after the first correction "
+            "or 2 after the final delta correction"
+        )
     if not re.search(
         r"(?m)^clarification_register:\s*[\"']?work/scope-clarification-requests\.md[\"']?\s*$",
         workflow_content,
@@ -1912,20 +1953,31 @@ def main() -> int:
     parser.add_argument("--scope", help="Scope identifier used to build non-normative ID examples.")
     args = parser.parse_args()
     if args.print_contract:
-        print(json.dumps(public_contract(args.scope), ensure_ascii=False, indent=2))
+        print(json.dumps(public_contract(args.scope, args.package_root), ensure_ascii=False, indent=2))
         return 0
     if args.package_root is None or args.scope_dir is None:
         parser.error("package_root and scope_dir are required unless --print-contract is used")
     errors = validate(args.package_root.resolve(), args.scope_dir.resolve())
     workflow = args.scope_dir.resolve() / "workflow-state.yaml"
     revision_raw = scalar_values(workflow.read_text(encoding="utf-8")).get("scope_revision_count") if workflow.is_file() else None
-    revision_count = int(revision_raw) if revision_raw in {"0", "1"} else None
+    revision_count = int(revision_raw) if revision_raw in {"0", "1", "2"} else None
+    correction_allowed = bool(errors) and revision_count is not None and revision_count < 2
+    workflow_status = "completed" if not errors else ("draft" if correction_allowed else "failed")
+    if workflow.is_file():
+        workflow_content = workflow.read_text(encoding="utf-8")
+        status_line = f"status: {workflow_status}"
+        if re.search(r"(?m)^status:\s*.*$", workflow_content):
+            workflow_content = re.sub(r"(?m)^status:\s*.*$", status_line, workflow_content, count=1)
+        else:
+            workflow_content = workflow_content.rstrip() + "\n" + status_line + "\n"
+        workflow.write_text(workflow_content, encoding="utf-8")
     print(
         json.dumps(
             {
                 "valid": not errors,
                 "scope_revision_count": revision_count,
-                "correction_allowed": bool(errors) and revision_count == 0,
+                "correction_allowed": correction_allowed,
+                "workflow_status": workflow_status,
                 "error_counts_by_class": scope_error_summary(errors),
                 "errors": errors,
             },

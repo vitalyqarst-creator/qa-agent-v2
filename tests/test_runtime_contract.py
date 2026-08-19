@@ -21,6 +21,7 @@ from scripts.runtime_review_dispatch import create_dispatch, sha256, validate_di
 from scripts.runtime_review_delta import artifact_index, enrich_review_record, semantic_input_hashes, write_revision_manifest
 from scripts.runtime_session_registry import (
     acknowledge_runtime,
+    inherit_source_locator,
     initialize_registry,
     record_role,
     required_skill_contract,
@@ -700,6 +701,54 @@ class RuntimeContractTests(unittest.TestCase):
                     model="gpt-5.6-sol",
                 )
 
+    def test_source_locator_record_is_inherited_without_fabrication(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            (root / "source-run").mkdir()
+            (root / "destination-run").mkdir()
+            source_package, _ = create_valid_source_stage(root / "source-run")
+            destination_package, _ = create_valid_source_stage(root / "destination-run")
+            destination_registry = destination_package / "work" / "runtime-session-registry.json"
+            destination_payload = json.loads(destination_registry.read_text(encoding="utf-8"))
+            destination_payload["source_locator"] = None
+            destination_registry.write_text(
+                json.dumps(destination_payload, ensure_ascii=False, indent=2) + "\n",
+                encoding="utf-8",
+            )
+            source_payload = json.loads(
+                (source_package / "work" / "runtime-session-registry.json").read_text(encoding="utf-8")
+            )
+
+            inherit_source_locator(destination_package, source_package)
+
+            inherited_payload = json.loads(destination_registry.read_text(encoding="utf-8"))
+            self.assertEqual(source_payload["source_locator"], inherited_payload["source_locator"])
+            self.assertEqual([], validate_topology(destination_package, "source-locator"))
+
+    def test_source_locator_inheritance_rejects_different_package_notes(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            (root / "source-run").mkdir()
+            (root / "destination-run").mkdir()
+            source_package, _ = create_valid_source_stage(root / "source-run")
+            destination_package, _ = create_valid_source_stage(root / "destination-run")
+            destination_registry = destination_package / "work" / "runtime-session-registry.json"
+            destination_payload = json.loads(destination_registry.read_text(encoding="utf-8"))
+            destination_payload["source_locator"] = None
+            (destination_package / "AGENT-NOTES.md").write_text("# Другой пакет\n", encoding="utf-8")
+            destination_payload["package_inputs"] = {
+                "agent_notes_sha256": hashlib.sha256(
+                    (destination_package / "AGENT-NOTES.md").read_bytes()
+                ).hexdigest()
+            }
+            destination_registry.write_text(
+                json.dumps(destination_payload, ensure_ascii=False, indent=2) + "\n",
+                encoding="utf-8",
+            )
+
+            with self.assertRaisesRegex(ValueError, "same SHA-256"):
+                inherit_source_locator(destination_package, source_package)
+
     def test_session_topology_rejects_role_reuse(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
             root = Path(temporary_directory)
@@ -1072,8 +1121,36 @@ class RuntimeContractTests(unittest.TestCase):
         )
         self.assertIn("| ID | Связанная обязанность |", contract["markdown_templates"]["coverage_gaps"])
         self.assertIn("**Ответ БА:** _Введите ответ здесь._", contract["markdown_templates"]["clarification_card"])
-        self.assertIn("close every error", contract["correction_policy"]["before_final_validation"])
+        self.assertEqual(2, contract["correction_policy"]["maximum_scope_revision_count"])
+        self.assertIn("remaining reported defects", contract["correction_policy"]["before_each_validation"])
+        self.assertTrue(
+            any("один основной наблюдаемый результат" in item for item in contract["atomicity_checks"])
+        )
         self.assertIn("scope_revision_count: 0", contract["markdown_templates"]["workflow_state"])
+        self.assertIn("status: draft", contract["markdown_templates"]["workflow_state"])
+
+    def test_scope_public_contract_exposes_exact_xhtml_table_catalog(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            (root / "AGENTS.md").write_text("# Runtime\n", encoding="utf-8")
+            (root / "scripts").mkdir()
+            package = root / "fts" / "Project" / "FT"
+            create_scope_locator(package)
+            xhtml = package / "source" / "requirements.xhtml"
+            xhtml.write_text(
+                xhtml.read_text(encoding="utf-8").replace(
+                    "</table>",
+                    "<tr><td><p>Отменить</p><p>или кнопка</p></td><td>Карточка закрывается</td></tr></table>",
+                ),
+                encoding="utf-8",
+            )
+
+            contract = public_contract("9.3.3", package)
+            table = contract["source_table_catalog"]["tables"]["Таблица 7"]
+
+            self.assertTrue(contract["source_table_catalog"]["available"])
+            self.assertEqual(["Название", "Примечание"], table["headers"])
+            self.assertEqual(["Сохранить", "Отменить или кнопка"], table["first_column_values"])
 
     def test_scope_contract_cli_emits_utf8_on_windows_console(self) -> None:
         root = Path(__file__).resolve().parents[1]
@@ -1089,6 +1166,42 @@ class RuntimeContractTests(unittest.TestCase):
         self.assertIn("Связанная обязанность", decoded)
         self.assertNotIn("�", decoded)
 
+    def test_scope_cli_owns_truthful_terminal_status_and_bounded_corrections(self) -> None:
+        root = Path(__file__).resolve().parents[1]
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            package = Path(temporary_directory) / "FT"
+            scope = package / "work" / "stage-handoffs" / "9.3.3"
+            scope.mkdir(parents=True)
+            workflow = scope / "workflow-state.yaml"
+            workflow.write_text("status: completed\nscope_revision_count: 1\n", encoding="utf-8")
+
+            first = subprocess.run(
+                [sys.executable, "scripts/validate_runtime_scope.py", str(package), str(scope)],
+                cwd=root,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                check=False,
+            )
+            first_payload = json.loads(first.stdout)
+            self.assertTrue(first_payload["correction_allowed"])
+            self.assertEqual("draft", first_payload["workflow_status"])
+            self.assertIn("status: draft", workflow.read_text(encoding="utf-8"))
+
+            workflow.write_text("status: completed\nscope_revision_count: 2\n", encoding="utf-8")
+            final = subprocess.run(
+                [sys.executable, "scripts/validate_runtime_scope.py", str(package), str(scope)],
+                cwd=root,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                check=False,
+            )
+            final_payload = json.loads(final.stdout)
+            self.assertFalse(final_payload["correction_allowed"])
+            self.assertEqual("failed", final_payload["workflow_status"])
+            self.assertIn("status: failed", workflow.read_text(encoding="utf-8"))
+
     def test_scope_helpers_accept_punctuated_table_anchor_and_expand_sr_ranges(self) -> None:
         self.assertEqual(
             [("8", "Расчетный счет")],
@@ -1097,6 +1210,10 @@ class RuntimeContractTests(unittest.TestCase):
         self.assertEqual(
             {"SR-933010", "SR-933011", "SR-933012"},
             source_row_tokens("SR-933010–SR-933012"),
+        )
+        self.assertIn(
+            "TEXT:точная цитата элемента",
+            extract_anchors("элемент списка «Точная цитата элемента»."),
         )
 
     def test_table_property_gate_detects_omitted_mandatory_behavior(self) -> None:
@@ -2178,6 +2295,12 @@ class RuntimeContractTests(unittest.TestCase):
         )
         self.assertEqual([], validate_test_data_plan(valid))
         self.assertTrue(validate_test_data_plan("# План\n\nЗначения будут подготовлены.\n"))
+
+        contract_in_preparation = invalid.replace(
+            "Выбрать одну связную запись. | Не применимо: количественное ограничение отсутствует. | Выбрать подсказку. | готово",
+            "Выбрать одну связную запись. | Не применимо: количественное ограничение отсутствует. | Контракт получения: запрос `Тест`; сохранить наименование и реквизиты одной записи. | требуется",
+        )
+        self.assertEqual([], validate_test_data_plan(contract_in_preparation))
 
     def test_test_data_plan_requires_explicit_quantitative_boundary_contract(self) -> None:
         plan = """# План тестовых данных

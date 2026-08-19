@@ -11,9 +11,9 @@ description: Подтверждает одну внешнюю область п�
 2. Прочитай этот skill и `references/runtime/scope-analysis.md`. `references/runtime/test-data-fixtures.md` открывай только если активные обязанности требуют конкретных значений, справочника, интеграции, границ или подготовки состояния.
 3. До записи артефактов получи точный публичный контракт:
 
-   `python -X utf8 scripts/validate_runtime_scope.py --print-contract --scope <scope>`
+   `python -X utf8 scripts/validate_runtime_scope.py <package-root> --print-contract --scope <scope>`
 
-   Копируй показанные Markdown-шаблоны целиком, включая строку-разделитель; не собирай таблицы по памяти. Используй показанные форматы ID, обязательные файлы и заголовки. Реализацию validator-а заранее не читай.
+   Копируй показанные Markdown-шаблоны целиком, включая строку-разделитель; не собирай таблицы по памяти. Заголовки и названия строк первого столбца копируй только из `source_table_catalog` этого контракта; остальные свойства строки читай в XHTML. Используй показанные форматы ID, обязательные файлы и `atomicity_checks`. Реализацию validator-а заранее не читай.
 
 ## Анализ
 
@@ -51,4 +51,4 @@ description: Подтверждает одну внешнюю область п�
 
 `python -X utf8 scripts/validate_runtime_scope.py <package-root> <scope-handoff-dir>`
 
-В initial `workflow-state.yaml` установи `scope_revision_count: 0`. При `correction_allowed=true` сопоставь каждую исходную ошибку с конкретной правкой и до повторного запуска проверь, что ни одна известная ошибка не осталась без изменения; только затем установи count `1` и запусти validator. Повторный `valid=false` останавливает этап. Передача writer-у разрешена только при `valid=true`.
+В initial `workflow-state.yaml` установи `scope_revision_count: 0` и `status: draft`; итоговый status устанавливает validator. При первом `correction_allowed=true` сопоставь каждую ошибку с конкретной правкой, установи count `1` и повтори validator. Если он снова разрешил correction, выполни одну финальную delta-only правку только оставшихся ошибок без перечитывания источников, установи count `2` и проверь снова. При `correction_allowed=false` остановись. Передача writer-у разрешена только при `valid=true` и `workflow_status=completed`.
