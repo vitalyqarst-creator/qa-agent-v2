@@ -402,7 +402,9 @@ class AgentArchitectureTests(unittest.TestCase):
         self.assertIn("audit_agent_architecture.py", content)
         self.assertIn('env["PYTHONDONTWRITEBYTECODE"] = "1"', content)
         self.assertIn('"--fail-on"', content)
-        self.assertIn('"warning"', content)
+        self.assertIn('"--architecture-root"', content)
+        self.assertIn('"runtime-v1"', content)
+        self.assertIn('"error"', content)
 
 
 if __name__ == "__main__":

@@ -3,566 +3,651 @@ from __future__ import annotations
 import argparse
 import importlib.util
 import json
+import os
 import re
+import subprocess
 import sys
-from collections import Counter, defaultdict
+from collections import defaultdict, deque
 from pathlib import Path
+from typing import Any
 
-REQ_SKILLS={
+
+PROFILE_ID = "runtime-v1"
+EXPECTED_SKILLS = {
     "ft-source-locator",
     "ft-scope-analyzer",
-    "ft-test-case-iteration",
     "ft-test-case-writer",
     "ft-test-case-reviewer",
-    "ft-ui-automation-prep",
-    "agent-architecture-auditor",
 }
-REQ_AGENT={"content-placement.md","skill-boundaries.md","duplication-policy.md","instruction-authoring-policy.md","maintenance-checklist.md","audit-output-format.md","task-start-skill-routing-format.md","session-based-review-cycle-format.md","codex-sdk-orchestration-format.md"}
-REQ_QA={
-    "test-case-format.md",
-    "coverage-checklist.md",
-    "traceability-rules.md",
-    "review-findings-format.md",
-    "traceability-matrix-format.md",
-    "ui-automation-prep-format.md",
+PROFILE_MARKERS = (
+    "AGENTS.md",
+    "scripts/validate_runtime_tree.py",
+    "references/runtime",
+    *tuple(f"skills/{name}/SKILL.md" for name in sorted(EXPECTED_SKILLS)),
+)
+STALE_TEXT_MARKERS = {
+    "practical route v0.6": "ссылка на устаревший practical route",
+    "ft-test-case-iteration": "ссылка на legacy skill",
+    "ft-ui-automation-prep": "ссылка на skill вне runtime-v1",
+    "references/agent/": "ссылка на legacy references",
+    "references/qa/": "ссылка на legacy references",
+    "test_case_agent/": "ссылка на удалённый runtime-слой",
+    "codex_review_cycle_runner": "ссылка на legacy orchestration runner",
 }
-STALE=("uv run ft-test-agent"," ft-test-agent "," list-sections ","skills/ft-test-case-writer/references","/output/")
-SECTIONS=("## Входы","## Выходы","## Ограничения")
-REQUIRED_INSTRUCTION_CONTEXT_SCENARIOS=frozenset({
-    "source_locator.discovery",
-    "scope.bounded_production",
-    "iteration.deterministic_production",
-    "architecture.audit",
-})
-TASK_ROUTING_RE=re.compile(r"<!--\s*task-start-skill-routing:v1\s*-->\s*```json\s*(.*?)\s*```",re.DOTALL)
+MARKDOWN_LINK_RE = re.compile(r"\[[^\]]*\]\(([^)]+)\)")
+ROOT_PATH_RE = re.compile(
+    r"(?<![\w./-])((?:references/runtime|skills/[a-z0-9-]+)/[a-zA-Z0-9_.\-/]+\.md)"
+)
 
-def args_parser():
-    p=argparse.ArgumentParser(description="Read-only audit for agent-layer architecture.")
-    p.add_argument("--root",type=Path)
-    p.add_argument("--json",action="store_true",dest="json_only")
-    p.add_argument("--text",action="store_true",dest="text_only")
-    p.add_argument("--output",type=Path)
-    p.add_argument("--fail-on",choices=("error","warning"))
-    return p.parse_args()
 
-def root_default()->Path:
-    return Path(__file__).resolve().parents[3]
+def configure_utf8_stdio() -> None:
+    for stream_name in ("stdout", "stderr"):
+        stream = getattr(sys, stream_name, None)
+        if stream is not None and hasattr(stream, "reconfigure"):
+            stream.reconfigure(encoding="utf-8", errors="replace")
 
-def txt(path:Path)->str:
-    try:return path.read_text(encoding="utf-8")
-    except FileNotFoundError:return ""
 
-def rel(path:Path,root:Path)->str:
-    try:return path.relative_to(root).as_posix()
-    except ValueError:return path.as_posix()
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="Read-only architecture audit for the lean QA runtime."
+    )
+    parser.add_argument(
+        "--root",
+        type=Path,
+        default=Path.cwd(),
+        help="Root of the runtime-v1 repository (default: current directory).",
+    )
+    parser.add_argument("--profile", choices=("auto", PROFILE_ID), default="auto")
+    parser.add_argument("--json", action="store_true", dest="json_only")
+    parser.add_argument("--text", action="store_true", dest="text_only")
+    parser.add_argument("--output", type=Path)
+    parser.add_argument("--fail-on", choices=("error", "warning"))
+    parser.add_argument(
+        "--with-tests",
+        action="store_true",
+        help="Also run tests.test_runtime_contract. Disabled by default for a fast audit.",
+    )
+    return parser.parse_args()
 
-def add_check(checks,name,status,details,paths=None):
-    checks.append({"name":name,"status":status,"details":details,"paths":paths or []})
 
-def add_finding(findings,fid,severity,category,title,details,evidence=None,move="",paths=None):
-    findings.append({"id":fid,"severity":severity,"category":category,"title":title,"details":details,"evidence":evidence or [],"recommended_move":move,"paths":paths or []})
-
-def load_instruction_resolver(root:Path):
-    script=root/"scripts"/"resolve_instruction_context.py"
-    if not script.exists():
-        return None
-    spec=importlib.util.spec_from_file_location("resolve_instruction_context",script)
-    if spec is None or spec.loader is None:
-        return None
-    module=importlib.util.module_from_spec(spec)
-    sys.modules[spec.name]=module
-    spec.loader.exec_module(module)
-    return module
-
-def audit_instruction_budgets(root:Path,checks,findings):
-    resolver=load_instruction_resolver(root)
-    manifest=root/"references"/"agent"/"instruction-loading-manifest.md"
-    if resolver is None or not manifest.exists():
-        paths=[rel(p,root) for p in (root/"scripts"/"resolve_instruction_context.py",manifest)]
-        add_check(checks,"instruction-context-resolver","warn","Instruction context resolver or manifest is missing.",paths)
-        add_finding(
-            findings,
-            "instruction-context-resolver-missing",
-            "warning",
-            "scripts",
-            "Instruction context resolver is not wired",
-            "Architecture audit cannot measure instruction budgets without scripts/resolve_instruction_context.py and references/agent/instruction-loading-manifest.md.",
-            paths,
-            "Add the resolver and manifest, then rerun architecture audit.",
-            paths,
-        )
-        return []
+def relative(path: Path, root: Path) -> str:
     try:
-        data=resolver.load_manifest(root)
+        return path.resolve().relative_to(root.resolve()).as_posix()
+    except ValueError:
+        return path.resolve().as_posix()
+
+
+def read_text(path: Path) -> str:
+    try:
+        return path.read_text(encoding="utf-8")
+    except (FileNotFoundError, UnicodeDecodeError):
+        return ""
+
+
+def detect_profile(root: Path) -> tuple[str | None, list[str]]:
+    missing = [marker for marker in PROFILE_MARKERS if not (root / marker).exists()]
+    return (PROFILE_ID if not missing else None), missing
+
+
+def add_check(
+    checks: list[dict[str, Any]],
+    check_id: str,
+    status: str,
+    details: str,
+    paths: list[str] | None = None,
+) -> None:
+    checks.append(
+        {"id": check_id, "status": status, "details": details, "paths": paths or []}
+    )
+
+
+def add_finding(
+    findings: list[dict[str, Any]],
+    finding_id: str,
+    severity: str,
+    category: str,
+    title: str,
+    details: str,
+    *,
+    evidence: list[str] | None = None,
+    recommended_move: str,
+    paths: list[str] | None = None,
+) -> None:
+    findings.append(
+        {
+            "id": finding_id,
+            "severity": severity,
+            "category": category,
+            "title": title,
+            "details": details,
+            "evidence": evidence or [],
+            "recommended_move": recommended_move,
+            "paths": paths or [],
+        }
+    )
+
+
+def load_runtime_tree_validator(root: Path):
+    path = root / "scripts" / "validate_runtime_tree.py"
+    spec = importlib.util.spec_from_file_location("runtime_v1_tree_validator", path)
+    if spec is None or spec.loader is None:
+        raise RuntimeError(f"cannot load {path}")
+    module = importlib.util.module_from_spec(spec)
+    sys.path.insert(0, str(root))
+    try:
+        spec.loader.exec_module(module)
+    finally:
+        sys.path.pop(0)
+    if not callable(getattr(module, "validate", None)):
+        raise RuntimeError("validate_runtime_tree.py does not expose validate(root)")
+    return module.validate
+
+
+def audit_runtime_tree(
+    root: Path,
+    checks: list[dict[str, Any]],
+    findings: list[dict[str, Any]],
+) -> None:
+    validator_path = root / "scripts" / "validate_runtime_tree.py"
+    try:
+        errors = list(load_runtime_tree_validator(root)(root))
     except Exception as exc:
-        add_check(checks,"instruction-loading-manifest","warn",f"Manifest could not be parsed: {exc}",[rel(manifest,root)])
-        add_finding(
-            findings,
-            "instruction-loading-manifest-invalid",
-            "warning",
-            "references",
-            "Instruction loading manifest is invalid",
-            "The manifest must expose a parseable instruction-loading-manifest:v1 JSON block.",
-            [str(exc)],
-            "Fix references/agent/instruction-loading-manifest.md.",
-            [rel(manifest,root)],
-        )
-        return []
-    raw_scenarios=data.get("scenarios")
-    scenario_ids=[]
-    if isinstance(raw_scenarios,list):
-        scenario_ids=[
-            item.get("id")
-            for item in raw_scenarios
-            if isinstance(item,dict) and isinstance(item.get("id"),str)
-        ]
-    duplicate_ids=sorted(
-        scenario_id
-        for scenario_id,count in Counter(scenario_ids).items()
-        if count>1
-    )
-    missing_required=sorted(REQUIRED_INSTRUCTION_CONTEXT_SCENARIOS-set(scenario_ids))
-    scenario_contract_valid=(
-        isinstance(raw_scenarios,list)
-        and len(scenario_ids)==len(raw_scenarios)
-        and not duplicate_ids
-        and not missing_required
-    )
-    if not scenario_contract_valid:
-        evidence=[]
-        if not isinstance(raw_scenarios,list):evidence.append("scenarios must be an array")
-        elif len(scenario_ids)!=len(raw_scenarios):evidence.append("every scenario requires a string id")
-        if duplicate_ids:evidence.append("duplicate ids: "+", ".join(duplicate_ids))
-        if missing_required:evidence.append("missing required ids: "+", ".join(missing_required))
-        add_check(checks,"instruction-loading-manifest-scenario-contract","warn","Instruction scenario registry is invalid.",[rel(manifest,root)])
-        add_finding(
-            findings,
-            "instruction-loading-manifest-scenario-contract",
-            "warning",
-            "references",
-            "Instruction loading scenario registry is incomplete",
-            "Architecture audit must resolve every declared scenario and retain the small required production/governance ID set.",
-            evidence,
-            "Fix missing, duplicate or malformed scenario ids in instruction-loading-manifest.md.",
-            [rel(manifest,root)],
-        )
-    rows=[]
-    for scenario_id in dict.fromkeys(scenario_ids):
-        try:
-            result=resolver.resolve_instruction_context(root=root,manifest=data,scenario_id=scenario_id)
-        except Exception as exc:
-            add_check(checks,f"instruction-budget:{scenario_id}","warn",f"Scenario could not be resolved: {exc}",[rel(manifest,root)])
-            add_finding(
-                findings,
-                f"instruction-budget-unresolved:{scenario_id}",
-                "warning",
-                "references",
-                f"Instruction scenario {scenario_id} cannot be resolved",
-                "Every required instruction-loading scenario must resolve to existing files.",
-                [str(exc)],
-                "Fix the scenario entry in instruction-loading-manifest.md.",
-                [rel(manifest,root)],
-            )
-            continue
-        budget=result["budget"]
-        status="pass" if budget["status"]=="pass" and not result["missing"] else "warn"
         add_check(
             checks,
-            f"instruction-budget:{scenario_id}",
-            status,
-            f"{budget['total_kib']} KiB / {budget['limit_kib']} KiB, headroom {budget.get('headroom_kib')} KiB",
-            [item["path"] for item in result["files"]],
+            "runtime-tree-validator",
+            "fail",
+            f"Не удалось запустить канонический validator: {exc}",
+            [relative(validator_path, root)],
         )
-        rows.append({
-            "scenario": scenario_id,
-            "files_count": len(result["files"]),
-            "total_kib": budget["total_kib"],
-            "limit_kib": budget["limit_kib"],
-            "headroom_kib": budget.get("headroom_kib"),
-            "min_headroom_kib": budget.get("min_headroom_kib"),
-            "status": status,
-        })
-        if status!="pass":
-            evidence=[
-                f"{budget['total_kib']} KiB / {budget['limit_kib']} KiB",
-                f"headroom {budget.get('headroom_kib')} KiB / min {budget.get('min_headroom_kib')} KiB",
-                f"budget_status={budget['status']}",
-            ]
-            evidence+=result["missing"]
-            title = (
-                f"Instruction budget near limit for {scenario_id}"
-                if budget["status"] == "near_limit"
-                else f"Instruction budget exceeded for {scenario_id}"
-            )
+        add_finding(
+            findings,
+            "runtime-tree-validator-unavailable",
+            "error",
+            "runtime-structure",
+            "Канонический validator runtime-дерева не запускается",
+            "Аудитор не подменяет встроенную проверку структуры.",
+            evidence=[str(exc)],
+            recommended_move="Исправить scripts/validate_runtime_tree.py и повторить аудит.",
+            paths=[relative(validator_path, root)],
+        )
+        return
+
+    status = "pass" if not errors else "fail"
+    add_check(
+        checks,
+        "runtime-tree-validator",
+        status,
+        "Канонический runtime tree валиден."
+        if not errors
+        else f"Канонический validator вернул {len(errors)} ошибок.",
+        [relative(validator_path, root)],
+    )
+    for index, error in enumerate(errors, 1):
+        add_finding(
+            findings,
+            f"runtime-tree-{index:03d}",
+            "error",
+            "runtime-structure",
+            "Нарушен контракт runtime-дерева",
+            error,
+            evidence=[error],
+            recommended_move=(
+                "Исправить runtime artifact или обоснованно изменить "
+                "validate_runtime_tree.py."
+            ),
+            paths=[relative(validator_path, root)],
+        )
+
+
+def active_documents(root: Path) -> list[Path]:
+    result = [root / "AGENTS.md"]
+    result.extend(sorted(root.glob("skills/*/SKILL.md")))
+    result.extend(sorted(root.glob("references/runtime/*.md")))
+    return [path for path in result if path.is_file()]
+
+
+def resolve_document_targets(path: Path, content: str, root: Path) -> set[Path]:
+    targets: set[Path] = set()
+    for raw_target in MARKDOWN_LINK_RE.findall(content):
+        target = raw_target.strip().split("#", 1)[0]
+        if not target or "://" in target or target.startswith("mailto:"):
+            continue
+        resolved = (path.parent / target).resolve()
+        if resolved.suffix.casefold() == ".md":
+            targets.add(resolved)
+    for target in ROOT_PATH_RE.findall(content):
+        targets.add((root / target).resolve())
+    return targets
+
+
+def audit_reference_graph(
+    root: Path,
+    checks: list[dict[str, Any]],
+    findings: list[dict[str, Any]],
+) -> dict[Path, set[Path]]:
+    documents = active_documents(root)
+    graph: dict[Path, set[Path]] = {}
+    broken: list[tuple[Path, Path]] = []
+    for path in documents:
+        targets = resolve_document_targets(path, read_text(path), root)
+        graph[path.resolve()] = targets
+        broken.extend((path, target) for target in targets if not target.is_file())
+
+    add_check(
+        checks,
+        "reference-links",
+        "pass" if not broken else "fail",
+        "Все локальные Markdown/reference links разрешаются."
+        if not broken
+        else f"Найдено {len(broken)} битых ссылок.",
+        sorted({relative(source, root) for source, _ in broken}),
+    )
+    for index, (source, target) in enumerate(broken, 1):
+        add_finding(
+            findings,
+            f"broken-reference-{index:03d}",
+            "error",
+            "references",
+            "Битая ссылка в активной инструкции",
+            f"{relative(source, root)} ссылается на {relative(target, root)}.",
+            evidence=[relative(source, root), relative(target, root)],
+            recommended_move="Исправить ссылку либо удалить недостижимую инструкцию.",
+            paths=[relative(source, root)],
+        )
+
+    roots = [root / "AGENTS.md", *sorted(root.glob("skills/*/SKILL.md"))]
+    queue = deque(path.resolve() for path in roots if path.is_file())
+    reachable: set[Path] = set(queue)
+    while queue:
+        current = queue.popleft()
+        for target in graph.get(current, set()):
+            if target.is_file() and target not in reachable:
+                reachable.add(target)
+                queue.append(target)
+
+    orphaned = [
+        path
+        for path in sorted(root.glob("references/runtime/*.md"))
+        if path.resolve() not in reachable
+    ]
+    add_check(
+        checks,
+        "reference-reachability",
+        "pass" if not orphaned else "warn",
+        "Все runtime references достижимы из AGENTS.md или active skills."
+        if not orphaned
+        else f"Найдено {len(orphaned)} недостижимых runtime references.",
+        [relative(path, root) for path in orphaned],
+    )
+    for path in orphaned:
+        add_finding(
+            findings,
+            f"orphan-reference:{path.name}",
+            "warning",
+            "references",
+            "Runtime reference недостижим из активных инструкций",
+            "Файл не загружается AGENTS.md или active skill прямо/транзитивно.",
+            recommended_move="Связать reference с consumer-ом или удалить устаревший файл.",
+            paths=[relative(path, root)],
+        )
+    return graph
+
+
+def audit_stale_markers(
+    root: Path,
+    checks: list[dict[str, Any]],
+    findings: list[dict[str, Any]],
+) -> list[dict[str, str]]:
+    stale_items: list[dict[str, str]] = []
+    for path in active_documents(root):
+        content = read_text(path).casefold()
+        for marker, reason in STALE_TEXT_MARKERS.items():
+            if marker.casefold() not in content:
+                continue
+            item = {
+                "type": "legacy-marker",
+                "path": relative(path, root),
+                "marker": marker,
+                "reason": reason,
+            }
+            stale_items.append(item)
             add_finding(
                 findings,
-                f"instruction-budget:{scenario_id}",
+                f"stale-marker:{relative(path, root)}:{marker}",
                 "warning",
-                "references",
-                title,
-                "The scenario's runtime instruction context exceeds the manifest budget, violates safety headroom, or references missing files.",
-                evidence,
-                "Tighten the manifest groups, move rarely used references to conditional/audit-only, or explicitly raise the limit with rationale.",
-                [rel(manifest,root)],
+                "stale-items",
+                "Устаревший маркер в активной инструкции",
+                reason,
+                evidence=[marker],
+                recommended_move="Удалить legacy-ссылку или заменить её runtime-v1 контрактом.",
+                paths=[relative(path, root)],
             )
-    all_resolved=scenario_contract_valid and len(rows)==len(scenario_ids)
-    add_check(checks,"instruction-loading-manifest-scenarios","pass" if all_resolved else "warn","All declared instruction-loading scenarios resolved.",[rel(manifest,root)])
+    add_check(
+        checks,
+        "stale-instruction-markers",
+        "pass" if not stale_items else "warn",
+        "Legacy markers в активных инструкциях не найдены."
+        if not stale_items
+        else f"Найдено {len(stale_items)} legacy markers.",
+        sorted({item["path"] for item in stale_items}),
+    )
+    return stale_items
+
+
+def normalized_instruction_lines(path: Path) -> set[str]:
+    result: set[str] = set()
+    in_fence = False
+    for raw in read_text(path).splitlines():
+        line = raw.strip()
+        if line.startswith("```"):
+            in_fence = not in_fence
+            continue
+        if in_fence or not line or line.startswith(("#", "|", "[")):
+            continue
+        line = re.sub(r"^(?:[-*+]\s+|\d+[.)]\s+)", "", line)
+        normalized = re.sub(r"\s+", " ", line).casefold().strip()
+        if len(normalized) >= 80 and "references/runtime/" not in normalized:
+            result.add(normalized)
+    return result
+
+
+def build_duplication_map(root: Path) -> list[dict[str, Any]]:
+    occurrences: dict[str, list[str]] = defaultdict(list)
+    for path in active_documents(root):
+        for line in normalized_instruction_lines(path):
+            occurrences[line].append(relative(path, root))
+    return [
+        {
+            "status": "possible",
+            "text": line,
+            "sources": sorted(paths),
+            "note": "Точное нормализованное совпадение; нужна ручная оценка.",
+        }
+        for line, paths in sorted(occurrences.items())
+        if len(paths) > 1
+    ]
+
+
+def instruction_contexts(root: Path, graph: dict[Path, set[Path]]) -> list[dict[str, Any]]:
+    agents = (root / "AGENTS.md").resolve()
+    rows: list[dict[str, Any]] = []
+    for skill_path in sorted(root.glob("skills/*/SKILL.md")):
+        queue = deque([skill_path.resolve()])
+        included = {agents, skill_path.resolve()}
+        while queue:
+            current = queue.popleft()
+            for target in graph.get(current, set()):
+                try:
+                    target.relative_to((root / "references" / "runtime").resolve())
+                except ValueError:
+                    continue
+                if target.is_file() and target not in included:
+                    included.add(target)
+                    queue.append(target)
+        files = sorted(relative(path, root) for path in included if path.is_file())
+        total_bytes = sum((root / path).stat().st_size for path in files)
+        rows.append(
+            {
+                "role": skill_path.parent.name,
+                "files": files,
+                "files_count": len(files),
+                "total_bytes": total_bytes,
+                "total_kib": round(total_bytes / 1024, 1),
+                "measurement": "reachable-linked-upper-bound",
+                "status": "info",
+            }
+        )
     return rows
 
-def load_task_start_routing(root:Path):
-    path=root/"references"/"agent"/"task-start-skill-routing-format.md"
-    content=txt(path)
-    if not path.exists():
-        raise FileNotFoundError(path)
-    match=TASK_ROUTING_RE.search(content)
-    if not match:
-        raise ValueError("task-start-skill-routing:v1 JSON block not found")
-    data=json.loads(match.group(1))
-    if data.get("version")!=1:
-        raise ValueError(f"Unsupported task-start routing version: {data.get('version')}")
-    return data
 
-def audit_task_start_routing(root:Path,checks,findings):
-    routing_path=root/"references"/"agent"/"task-start-skill-routing-format.md"
-    paths=[rel(routing_path,root)]
-    try:
-        data=load_task_start_routing(root)
-    except Exception as exc:
-        add_check(checks,"task-start-skill-routing","warn",f"Task-start routing contract could not be parsed: {exc}",paths)
-        add_finding(
-            findings,
-            "task-start-skill-routing-invalid",
-            "warning",
-            "dispatch-map",
-            "Task-start skill routing contract is invalid",
-            "The architecture layer cannot verify preflight skill routing without a parseable task-start-skill-routing:v1 JSON block.",
-            [str(exc)],
-            "Fix references/agent/task-start-skill-routing-format.md.",
-            paths,
-        )
-        return {"status":"warn","routes_count":0,"golden_examples_count":0}
-
-    active_skills={p.name for p in (root/"skills").iterdir() if p.is_dir()} if (root/"skills").exists() else set()
-    resolver=load_instruction_resolver(root)
-    manifest_scenarios=set()
-    if resolver is not None and (root/"references"/"agent"/"instruction-loading-manifest.md").exists():
-        try:
-            manifest=resolver.load_manifest(root)
-            manifest_scenarios={item["id"] for item in manifest.get("scenarios",[])}
-        except Exception:
-            manifest_scenarios=set()
-
-    routes=data.get("routes",[])
-    examples=data.get("golden_examples",[])
-    route_ids=[item.get("id") for item in routes]
-    duplicate_route_ids=sorted([rid for rid,count in Counter(route_ids).items() if rid and count>1])
-    route_by_id={item.get("id"):item for item in routes if item.get("id")}
-    route_skills={skill for item in routes for skill in item.get("skill_chain",[])}
-    route_scenarios={entry.get("scenario") for item in routes for entry in item.get("instruction_scenarios",[]) if entry.get("scenario")}
-
-    errors=[]
-    missing_skills=sorted(active_skills-route_skills)
-    unknown_skills=sorted(route_skills-active_skills)
-    missing_scenarios=sorted(manifest_scenarios-route_scenarios)
-    unknown_scenarios=sorted(route_scenarios-manifest_scenarios)
-    if duplicate_route_ids:errors.append(f"duplicate route ids: {', '.join(duplicate_route_ids)}")
-    if missing_skills:errors.append(f"active skills without route: {', '.join(missing_skills)}")
-    if unknown_skills:errors.append(f"route skills not active: {', '.join(unknown_skills)}")
-    if missing_scenarios:errors.append(f"manifest scenarios without route: {', '.join(missing_scenarios)}")
-    if unknown_scenarios:errors.append(f"route scenarios not in manifest: {', '.join(unknown_scenarios)}")
-
-    for idx,example in enumerate(examples,1):
-        route_id=example.get("expected_route_id")
-        route=route_by_id.get(route_id)
-        if route is None:
-            errors.append(f"golden example {idx} references unknown route: {route_id}")
-            continue
-        expected_chain=example.get("expected_skill_chain",[])
-        actual_chain=route.get("skill_chain",[])
-        if expected_chain!=actual_chain:
-            errors.append(f"golden example {idx} skill chain mismatch for {route_id}")
-        expected_scenarios=example.get("expected_instruction_scenarios",[])
-        actual_scenarios=[entry.get("scenario") for entry in route.get("instruction_scenarios",[])]
-        if expected_scenarios!=actual_scenarios:
-            errors.append(f"golden example {idx} scenario mismatch for {route_id}")
-
-    status="pass" if not errors else "warn"
+def run_runtime_tests(
+    root: Path,
+    checks: list[dict[str, Any]],
+    findings: list[dict[str, Any]],
+) -> None:
+    env = os.environ.copy()
+    env["PYTHONDONTWRITEBYTECODE"] = "1"
+    completed = subprocess.run(
+        [sys.executable, "-m", "unittest", "tests.test_runtime_contract"],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=180,
+        check=False,
+        env=env,
+    )
+    status = "pass" if completed.returncode == 0 else "fail"
     add_check(
         checks,
-        "task-start-skill-routing",
+        "runtime-contract-tests",
         status,
-        f"{len(routes)} routes, {len(examples)} golden examples.",
-        paths,
+        "tests.test_runtime_contract проходит."
+        if status == "pass"
+        else "tests.test_runtime_contract не проходит.",
+        ["tests/test_runtime_contract.py"],
     )
-    if errors:
+    if status == "fail":
+        evidence = (completed.stdout + "\n" + completed.stderr).strip()[-4000:]
         add_finding(
             findings,
-            "task-start-skill-routing-drift",
-            "warning",
-            "dispatch-map",
-            "Task-start skill routing is out of sync",
-            "Every active skill and instruction-loading scenario should be reachable from the preflight routing map, and golden examples must match their routes.",
-            errors,
-            "Update task-start-skill-routing-format.md or instruction-loading-manifest.md so routing and scenarios agree.",
-            paths,
-        )
-    return {"status":status,"routes_count":len(routes),"golden_examples_count":len(examples)}
-
-def audit(root:Path):
-    findings=[]; checks=[]; stale=[]
-    instruction_budgets=audit_instruction_budgets(root,checks,findings)
-    ap=root/"AGENTS.md"; ac=txt(ap); low=ac.lower(); steps=len(re.findall(r"(?m)^\d+\.\s",ac))
-    if not ap.exists():
-        add_check(checks,"agents-file","fail","AGENTS.md is missing.")
-        add_finding(findings,"agents-file-missing","error","agents-policy","Missing AGENTS.md","The policy layer is missing.","Restore AGENTS.md as the single policy file.")
-    else:
-        bad=("## рабочий процесс" in low) or ("## workflow" in low) or steps>=3
-        add_check(checks,"agents-procedural-workflow","fail" if bad else "pass","AGENTS.md workflow check.",[rel(ap,root)])
-        if bad:
-            add_finding(findings,"agents-procedural-workflow","error","agents-policy","AGENTS.md contains procedural workflow","Policy should stay thin and avoid step-by-step workflow.",[f"numbered_steps={steps}"],"Move workflow into the relevant skill and keep AGENTS.md policy-only.",[rel(ap,root)])
-        miss=[s for s in sorted(REQ_SKILLS) if s not in ac]
-        add_check(checks,"agents-routing","fail" if miss else "pass","AGENTS.md routing check.",[rel(ap,root)])
-        if miss:
-            add_finding(findings,"agents-missing-routing","error","agents-policy","AGENTS.md misses active skill routing","The routing section should mention every active skill.",miss,"Update AGENTS.md routing to cover all active skills.",[rel(ap,root)])
-        if "не дублируй" not in low and "canonical" not in low:
-            add_check(checks,"agents-dedup-policy","warn","AGENTS.md anti-duplication rule missing.",[rel(ap,root)])
-            add_finding(findings,"agents-missing-dedup-rule","warning","agents-policy","AGENTS.md misses anti-duplication guidance","The policy layer should discourage duplication across AGENTS, skills and references.","Add a short anti-duplication rule and keep the detailed policy in references/agent/duplication-policy.md.",[rel(ap,root)])
-        else:
-            add_check(checks,"agents-dedup-policy","pass","AGENTS.md anti-duplication rule present.",[rel(ap,root)])
-
-    sd=root/"skills"; skills=sorted([p for p in sd.iterdir() if p.is_dir()]) if sd.exists() else []
-    add_check(checks,"skills-count","pass" if 4<=len(skills)<=7 else "warn",f"Detected {len(skills)} skill directories.",[rel(p,root) for p in skills])
-    if not 4<=len(skills)<=7:
-        add_finding(findings,"skills-count-out-of-range","warning","skills-structure","Skill count is outside the recommended range","Keep 4-7 active skills so the layer stays focused.",[f"skills_count={len(skills)}"],"Merge overlapping skills or split overloaded ones until the active set fits the 4-7 range.",[rel(sd,root)])
-    for d in skills:
-        sm=d/"SKILL.md"; oy=d/"agents"/"openai.yaml"; sp=rel(d,root)
-        if not sm.exists() or not oy.exists():
-            add_check(checks,f"skill-required:{d.name}","fail","Skill missing required files.",[sp])
-            add_finding(findings,f"skill-missing-required-files:{d.name}","error","skills-structure",f"Skill {d.name} is missing required files","Every active skill must include SKILL.md and agents/openai.yaml.","Restore the missing files.",[sp])
-            continue
-        sc=txt(sm)
-        miss_sec=[s for s in SECTIONS if s not in sc]
-        add_check(checks,f"skill-sections:{d.name}","warn" if miss_sec else "pass","Skill section check.",[rel(sm,root)])
-        if miss_sec:
-            add_finding(findings,f"skill-missing-sections:{d.name}","warning","skill-content",f"Skill {d.name} misses canonical sections","Each skill should describe inputs, outputs and limitations.",miss_sec,"Add the missing sections to SKILL.md.",[rel(sm,root)])
-        if "references/" not in sc:
-            add_check(checks,f"skill-references:{d.name}","warn","Skill does not link to canonical references.",[rel(sm,root)])
-            add_finding(findings,f"skill-missing-references:{d.name}","warning","skill-content",f"Skill {d.name} misses canonical references","Skills should point to shared references instead of embedding all rules locally.","Link the skill to references/agent or references/qa.",[rel(sm,root)])
-        else:
-            add_check(checks,f"skill-references:{d.name}","pass","Skill links to canonical references.",[rel(sm,root)])
-        if d.name=="ft-test-case-writer":
-            size=sm.stat().st_size
-            limit=20*1024
-            add_check(checks,"writer-skill-runtime-size","warn" if size>=limit else "pass",f"{round(size/1024,1)} KiB / 20.0 KiB",[rel(sm,root)])
-            if size>=limit:
-                add_finding(
-                    findings,
-                    "writer-skill-runtime-size",
-                    "warning",
-                    "skill-content",
-                    "Writer skill is too large for runtime loading",
-                    "The writer skill should stay a compact entrypoint; deep workflow belongs in writer workflow references.",
-                    [f"{size} bytes"],
-                    "Move procedural workflow back into references/agent/writer-*-workflow.md and keep SKILL.md below 20 KiB.",
-                    [rel(sm,root)],
-                )
-        local_refs=d/"references"
-        if local_refs.exists():
-            rp=rel(local_refs,root); stale.append({"type":"skill-reference-dir","path":rp,"reason":"Prefer shared references/ unless the material is truly skill-local."})
-            add_check(checks,f"skill-local-references:{d.name}","warn","Local references directory detected.",[rp])
-            add_finding(findings,f"skill-local-references:{d.name}","warning","references",f"Skill {d.name} uses a local references directory","Shared governance and QA rules should live in references/.","Move shared material into references/agent or references/qa.",[rp])
-        else:
-            add_check(checks,f"skill-local-references:{d.name}","pass","No local references directory detected.",[sp])
-
-    all_refs=[]
-    for name,req in (("agent",REQ_AGENT),("qa",REQ_QA)):
-        rd=root/"references"/name; got={p.name for p in rd.glob("*.md")} if rd.exists() else set(); all_refs+=list(rd.glob("*.md"))
-        miss=sorted(req-got)
-        add_check(checks,f"references:{name}","fail" if miss else "pass","Shared references check.",[rel(rd,root)])
-        if miss:
-            add_finding(findings,f"references-missing:{name}","error","references",f"Shared {name} references are incomplete","The shared knowledge layer is missing mandatory files.",miss,"Restore the missing canonical references under references/.",[rel(rd,root)])
-
-    review_cycle_runner=root/"scripts"/"codex_review_cycle_runner.py"
-    add_check(checks,"codex-review-cycle-runner","pass" if review_cycle_runner.exists() else "fail","Session-based review-cycle runner check.",[rel(review_cycle_runner,root)])
-    if not review_cycle_runner.exists():
-        add_finding(findings,"codex-review-cycle-runner-missing","error","scripts","Codex review-cycle runner is missing","The session-based review-cycle contract requires scripts/codex_review_cycle_runner.py for validation, dry-run orchestration and snapshots.","Create the runner or remove the SDK orchestration contract until it exists.",[rel(review_cycle_runner,root)])
-
-    exec_runner=root/"scripts"/"codex_exec_review_cycle_runner.py"
-    backend_dispatcher=root/"scripts"/"review_cycle_backend_dispatcher.py"
-    stage_backend=root/"test_case_agent"/"stage_backend.py"
-    immutable_iteration=root/"test_case_agent"/"immutable_iteration.py"
-    readme=root/"README.md"
-    readme_content=txt(readme).lower()
-    legacy_exec_default_activated=(
-        exec_runner.exists()
-        and backend_dispatcher.exists()
-        and "review_cycle_backend_dispatcher.py" in readme_content
-        and "--backend auto" in readme_content
-        and "--backend sdk" in readme_content
-    )
-    source_qualified_exec_default_activated=(
-        stage_backend.exists()
-        and immutable_iteration.exists()
-        and "ft-agent run" in readme_content
-        and "class codexexecstagebackend" in txt(stage_backend).lower()
-        and "codexexecstagebackend(timeout_seconds=none)" in txt(immutable_iteration).lower()
-    )
-    exec_default_activated=(
-        legacy_exec_default_activated or source_qualified_exec_default_activated
-    )
-    add_check(
-        checks,
-        "codex-exec-default-activation",
-        "pass" if exec_default_activated else ("warn" if exec_runner.exists() else "fail"),
-        "Verified exec backend dispatcher is the documented default."
-        if exec_default_activated else "Exec backend default activation is incomplete.",
-        [rel(exec_runner,root),rel(backend_dispatcher,root),rel(stage_backend,root),rel(immutable_iteration,root),rel(readme,root)],
-    )
-    if exec_runner.exists() and not exec_default_activated:
-        add_finding(
-            findings,
-            "codex-exec-backend-not-default",
-            "warning",
-            "orchestration",
-            "Codex exec exists but is not the default review-cycle backend",
-            "The repository contains an exec runner, but the documented production route still selects the SDK runner by default.",
-            ["Dispatcher file or explicit auto/SDK fallback documentation is missing."],
-            "Add an explicit backend dispatcher and make exec the verified default, with SDK retained only as a declared fallback.",
-            [rel(exec_runner,root),rel(backend_dispatcher,root),rel(stage_backend,root),rel(immutable_iteration,root),rel(review_cycle_runner,root),rel(readme,root)],
+            "runtime-contract-tests-failed",
+            "error",
+            "tests",
+            "Контрактные runtime-тесты не проходят",
+            "До публикации agent-layer нужно вернуть зелёный runtime contract.",
+            evidence=[evidence],
+            recommended_move="Исправить первую содержательную ошибку теста и повторить аудит.",
+            paths=["tests/test_runtime_contract.py"],
         )
 
-    prepared_writer_profile=root/"references"/"agent"/"prepared-writer-runtime-profile.md"
-    exec_content=txt(exec_runner)
-    profile_content=txt(prepared_writer_profile).lower()
-    structured_writer_default=(
-        'DEFAULT_PREPARED_FAST_WRITER_MODE = "structured"' in exec_content
-        and "runner alone atomically materializes" in profile_content
-        and "zero-command budget" in profile_content
-    )
-    add_check(
-        checks,
-        "prepared-fast-structured-writer-default",
-        "pass" if structured_writer_default else "warn",
-        "Prepared-fast writer is read-only and runner-materialized by default."
-        if structured_writer_default else "Prepared-fast structured writer activation is incomplete.",
-        [rel(exec_runner,root),rel(prepared_writer_profile,root)],
-    )
-    if not structured_writer_default:
-        add_finding(
-            findings,
-            "prepared-fast-structured-writer-not-default",
-            "warning",
-            "orchestration",
-            "Prepared-fast writer still requires workspace interaction",
-            "The simple-field-property route should return a structured draft from a read-only stage and let the runner materialize it.",
-            ["Structured default constant, zero-command profile, or runner-owned materialization rule is missing."],
-            "Restore the structured writer default or explicitly document and measure a replacement optimization.",
-            [rel(exec_runner,root),rel(prepared_writer_profile,root)],
-        )
 
-    searchable=[txt(p) for p in [root/"AGENTS.md",root/"skills"/"README.md"] if p.exists()]
-    searchable+=[txt(p) for p in [
-        root/"references"/"agent"/"instruction-loading-manifest.md",
-        root/"references"/"agent"/"instruction-contract-index.md",
-        root/"references"/"agent"/"task-start-skill-routing-format.md",
-    ] if p.exists()]
-    searchable+=[txt(p) for p in root.glob("skills/*/SKILL.md")]
-    searchable+=[txt(p) for p in root.glob("skills/*/scripts/*.py")]
-    for rp in all_refs:
-        r=rel(rp,root)
-        if not any(rp.name in c or r in c for c in searchable):
-            stale.append({"type":"orphan-reference","path":r,"reason":"No policy file, skill or script references this shared document."})
-            add_check(checks,f"orphan-reference:{rp.name}","warn","Orphan shared reference detected.",[r])
-            add_finding(findings,f"orphan-reference:{rp.name}","warning","references",f"Shared reference {rp.name} is orphaned","A canonical reference exists but is not linked from the active agent layer.","Either link the reference from the relevant skill or remove it from the shared layer.",[r])
-
-    for sp in sorted(root.glob("skills/*/scripts/*.py")):
-        r=rel(sp,root)
-        if sp.name=="audit_agent_architecture.py":
-            add_check(checks,f"script-stale-markers:{sp.name}","pass","Skipped self-scan to avoid matching the auditor pattern list.",[r])
-            continue
-        c=txt(sp); hits=[m for m in STALE if m in c];
-        add_check(checks,f"script-stale-markers:{sp.name}","warn" if hits else "pass","Script stale marker check.",[r])
-        if hits:
-            stale.append({"type":"stale-script-marker","path":r,"reason":", ".join(hits)})
-            add_finding(findings,f"script-stale-markers:{sp.stem}","warning","scripts",f"Script {sp.name} contains stale architecture markers","Helper scripts should not reference removed CLI flows or obsolete structure names.",hits,"Update the script to use the current skill names and Python API.",[r])
-
-    sr=root/"skills"/"README.md"; src=txt(sr)
-    if not sr.exists():
-        add_check(checks,"skills-readme","fail","skills/README.md is missing.")
-        add_finding(findings,"skills-readme-missing","error","dispatch-map","Skills dispatch map is missing","The active skills need a shared entry point that explains when to use each one.","Restore skills/README.md as the canonical dispatch map.",[rel(sr,root)])
-    else:
-        miss=[d.name for d in skills if f"`{d.name}`" not in src]
-        add_check(checks,"skills-readme-entries","fail" if miss else "pass","skills/README.md listing check.",[rel(sr,root)])
-        if miss:
-            add_finding(findings,"skills-readme-missing-entries","error","dispatch-map","Skills dispatch map misses active skills","The dispatch map should enumerate every active skill.",miss,"Add the missing skills to skills/README.md.",[rel(sr,root)])
-        if "script-first workflow" not in src or "audit_agent_architecture.py" not in src:
-            add_check(checks,"skills-readme-auditor-flow","warn","Auditor script-first workflow missing from dispatch map.",[rel(sr,root)])
-            add_finding(findings,"skills-readme-auditor-flow-missing","warning","dispatch-map","Dispatch map misses the auditor script-first workflow","The map should explain that agent-architecture-auditor starts with the helper script and then does manual interpretation.","Update skills/README.md to mention the auditor script-first workflow.",[rel(sr,root)])
-        else:
-            add_check(checks,"skills-readme-auditor-flow","pass","Dispatch map describes the auditor script-first workflow.",[rel(sr,root)])
-
-    task_start_routing=audit_task_start_routing(root,checks,findings)
-
-    docs={rel(p,root):txt(p).splitlines() for p in ([root/"AGENTS.md"]+sorted(root.glob("skills/*/SKILL.md"))) if p.exists()}
-    dup=defaultdict(set)
-    for name,lines in docs.items():
-        for raw in lines:
-            s=raw.strip()
-            if len(s)<25 or "references/" in s or s.startswith("#") or s.startswith("```"):continue
-            n=re.sub(r"\s+"," ",s.lower())
-            if n.startswith(("- `","1. ","2. ","3. ")):n=n[3:].strip()
-            if len(n)>=25:dup[n].add(name)
-    dmap=[]
-    for line,sources in sorted(dup.items()):
-        if len(sources)<2:continue
-        status="confirmed" if "AGENTS.md" in sources else "possible"
-        dmap.append({"status":status,"line":line,"sources":sorted(sources),"canonical_target":"AGENTS.md" if status=="confirmed" else None})
-        if status=="confirmed":
-            add_finding(findings,f"confirmed-duplicate:{abs(hash(line))}","warning","duplication","Confirmed duplicate between AGENTS.md and skill docs","The same substantial instruction appears in AGENTS.md and at least one skill document.",sorted(sources),"Keep the policy statement in AGENTS.md and move procedural or domain detail into the relevant skill or shared reference.",sorted(sources))
-
-    cnt=Counter(f["severity"] for f in findings)
+def unsupported_report(root: Path, requested_profile: str, missing: list[str]) -> dict[str, Any]:
+    finding = {
+        "id": "unsupported-architecture-profile",
+        "severity": "error",
+        "category": "profile",
+        "title": "Целевой каталог не соответствует runtime-v1",
+        "details": "Аудитор не применяет legacy-инварианты к неизвестной архитектуре.",
+        "evidence": missing,
+        "recommended_move": "Указать --root актуального runtime-v1 репозитория.",
+        "paths": [],
+    }
     return {
-        "summary":{"skills_count":len(skills),"findings_count":len(findings),"errors_count":cnt["error"],"warnings_count":cnt["warning"],"info_count":cnt["info"]},
-        "findings":sorted(findings,key=lambda x:({"error":0,"warning":1,"info":2}[x["severity"]],x["id"])),
-        "duplication_map":dmap,
-        "stale_items":stale,
-        "instruction_budgets":instruction_budgets,
-        "task_start_routing":task_start_routing,
-        "checks":checks,
+        "profile": {"requested": requested_profile, "resolved": None, "target_root": str(root)},
+        "summary": {
+            "valid": False,
+            "skills_count": 0,
+            "checks_count": 1,
+            "findings_count": 1,
+            "errors_count": 1,
+            "warnings_count": 0,
+            "info_count": 0,
+        },
+        "findings": [finding],
+        "duplication_map": [],
+        "stale_items": [],
+        "instruction_contexts": [],
+        "skipped_checks": [{"id": "runtime-audit", "reason": "unsupported architecture profile"}],
+        "checks": [
+            {
+                "id": "profile-detection",
+                "status": "fail",
+                "details": "runtime-v1 profile markers are incomplete",
+                "paths": missing,
+            }
+        ],
     }
 
-def text_report(report):
-    s=report["summary"]
-    lines=["Agent architecture audit summary",f"- skills: {s['skills_count']}",f"- findings: {s['findings_count']} (errors: {s['errors_count']}, warnings: {s['warnings_count']}, info: {s['info_count']})",f"- checks: {len(report['checks'])}"]
+
+def audit(root: Path, requested_profile: str, with_tests: bool) -> dict[str, Any]:
+    detected, missing = detect_profile(root)
+    if detected is None:
+        return unsupported_report(root, requested_profile, missing)
+
+    checks: list[dict[str, Any]] = []
+    findings: list[dict[str, Any]] = []
+    skipped_checks: list[dict[str, str]] = []
+    add_check(
+        checks,
+        "profile-detection",
+        "pass",
+        "Активирован профиль runtime-v1.",
+        list(PROFILE_MARKERS),
+    )
+
+    actual_skills = {path.name for path in (root / "skills").iterdir() if path.is_dir()}
+    skill_delta = sorted(actual_skills.symmetric_difference(EXPECTED_SKILLS))
+    add_check(
+        checks,
+        "active-skills",
+        "pass" if not skill_delta else "fail",
+        "Активны ровно четыре runtime skill."
+        if not skill_delta
+        else "Набор active skills отличается от runtime-v1.",
+        [f"skills/{name}" for name in skill_delta],
+    )
+    if skill_delta:
+        add_finding(
+            findings,
+            "active-skill-set-drift",
+            "error",
+            "skills-structure",
+            "Набор runtime skills изменён без изменения профиля",
+            "Профиль runtime-v1 содержит locator, analyzer, writer и reviewer.",
+            evidence=skill_delta,
+            recommended_move="Вернуть канонический набор либо оформить новую версию профиля.",
+            paths=[f"skills/{name}" for name in skill_delta],
+        )
+
+    audit_runtime_tree(root, checks, findings)
+    graph = audit_reference_graph(root, checks, findings)
+    stale_items = audit_stale_markers(root, checks, findings)
+    duplication_map = build_duplication_map(root)
+    contexts = instruction_contexts(root, graph)
+    add_check(
+        checks,
+        "instruction-context-size",
+        "info",
+        (
+            f"Замерена верхняя оценка {len(contexts)} объявленных runtime contexts "
+            "без произвольного fail-threshold."
+        ),
+        [f"skills/{row['role']}/SKILL.md" for row in contexts],
+    )
+    add_check(
+        checks,
+        "exact-duplication-candidates",
+        "info",
+        (
+            f"Найдено {len(duplication_map)} точных совпадений; они не считаются "
+            "ошибками без ручной оценки."
+        ),
+    )
+
+    if with_tests:
+        run_runtime_tests(root, checks, findings)
+    else:
+        skipped_checks.append(
+            {
+                "id": "runtime-contract-tests",
+                "reason": "не запрошен --with-tests; baseline audit остаётся быстрым",
+            }
+        )
+
+    counts = defaultdict(int)
+    for finding in findings:
+        counts[finding["severity"]] += 1
+    summary = {
+        "valid": counts["error"] == 0,
+        "skills_count": len(actual_skills),
+        "checks_count": len(checks),
+        "findings_count": len(findings),
+        "errors_count": counts["error"],
+        "warnings_count": counts["warning"],
+        "info_count": counts["info"],
+    }
+    return {
+        "profile": {
+            "requested": requested_profile,
+            "resolved": PROFILE_ID,
+            "target_root": str(root),
+        },
+        "summary": summary,
+        "findings": sorted(
+            findings,
+            key=lambda item: ({"error": 0, "warning": 1, "info": 2}[item["severity"]], item["id"]),
+        ),
+        "duplication_map": duplication_map,
+        "stale_items": stale_items,
+        "instruction_contexts": contexts,
+        "skipped_checks": skipped_checks,
+        "checks": checks,
+    }
+
+
+def text_report(report: dict[str, Any]) -> str:
+    profile = report["profile"]
+    summary = report["summary"]
+    lines = [
+        "Аудит архитектуры QA runtime",
+        f"- профиль: {profile['resolved'] or 'не определён'}",
+        f"- корень: {profile['target_root']}",
+        f"- валиден: {'да' if summary['valid'] else 'нет'}",
+        (
+            f"- findings: {summary['findings_count']} "
+            f"(errors: {summary['errors_count']}, warnings: {summary['warnings_count']})"
+        ),
+        f"- checks: {summary['checks_count']}",
+    ]
     if report["findings"]:
-        lines.append("- top findings:")
-        for f in report["findings"][:5]:lines.append(f"  - [{f['severity']}] {f['id']}: {f['title']}")
-    else:lines.append("- top findings: none")
-    if report.get("instruction_budgets"):
-        lines.append("- instruction budgets:")
-        for b in report["instruction_budgets"]:
-            lines.append(f"  - [{b['status']}] {b['scenario']}: {b['total_kib']} KiB / {b['limit_kib']} KiB, headroom {b.get('headroom_kib')} KiB ({b['files_count']} files)")
-    if report.get("task_start_routing"):
-        r=report["task_start_routing"]
-        lines.append(f"- task start routing: {r['status']} ({r['routes_count']} routes, {r['golden_examples_count']} golden examples)")
-    if report["stale_items"]:lines.append(f"- stale items: {len(report['stale_items'])}")
+        lines.append("- основные findings:")
+        for finding in report["findings"][:10]:
+            lines.append(f"  - [{finding['severity']}] {finding['id']}: {finding['title']}")
+    else:
+        lines.append("- findings: нет")
+    if report.get("instruction_contexts"):
+        lines.append("- верхняя оценка объявленных instruction contexts:")
+        for row in report["instruction_contexts"]:
+            lines.append(f"  - {row['role']}: {row['total_kib']} KiB ({row['files_count']} files)")
+    if report.get("skipped_checks"):
+        lines.append("- пропущенные проверки:")
+        for item in report["skipped_checks"]:
+            lines.append(f"  - {item['id']}: {item['reason']}")
     return "\n".join(lines)
 
-def main():
-    a=args_parser(); root=(a.root or root_default()).resolve(); report=audit(root)
-    js=json.dumps(report,ensure_ascii=False,indent=2); tx=text_report(report)
-    if a.output:
-        a.output.parent.mkdir(parents=True,exist_ok=True)
-        a.output.write_text(js+"\n",encoding="utf-8")
-    emit_json=a.json_only or (not a.json_only and not a.text_only)
-    emit_text=a.text_only or (not a.json_only and not a.text_only)
-    if emit_text:print(tx)
-    if emit_text and emit_json:print()
-    if emit_json:print(js)
-    s=report["summary"]
-    if a.fail_on=="error" and s["errors_count"]>0:return 1
-    if a.fail_on=="warning" and (s["errors_count"]>0 or s["warnings_count"]>0):return 1
+
+def exit_code(report: dict[str, Any], fail_on: str | None) -> int:
+    if fail_on == "error" and report["summary"]["errors_count"]:
+        return 1
+    if fail_on == "warning" and (
+        report["summary"]["errors_count"] or report["summary"]["warnings_count"]
+    ):
+        return 1
     return 0
 
-if __name__=="__main__":
-    sys.exit(main())
+
+def main() -> int:
+    configure_utf8_stdio()
+    args = parse_args()
+    root = args.root.resolve()
+    report = audit(root, args.profile, args.with_tests)
+    json_report = json.dumps(report, ensure_ascii=False, indent=2)
+    rendered_text = text_report(report)
+    if args.output:
+        args.output.parent.mkdir(parents=True, exist_ok=True)
+        args.output.write_text(json_report + "\n", encoding="utf-8")
+    emit_json = args.json_only or not (args.json_only or args.text_only)
+    emit_text = args.text_only or not (args.json_only or args.text_only)
+    if emit_text:
+        print(rendered_text)
+    if emit_text and emit_json:
+        print()
+    if emit_json:
+        print(json_report)
+    return exit_code(report, args.fail_on)
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

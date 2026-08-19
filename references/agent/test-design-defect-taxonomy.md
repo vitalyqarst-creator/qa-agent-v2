@@ -46,7 +46,7 @@ This reference records recurring test-design defect classes that the agent must 
 3. Add or extend a validator rule when the defect can be caught reliably by static analysis.
 4. Add a regression test/eval candidate based on the real failure.
 5. Update writer/reviewer instructions only by linking to the canonical reference; do not duplicate long rules.
-6. Run `python scripts/run_tests.py` and `python scripts/run_tests.py --suite architecture`.
+6. Run `python scripts/run_tests.py`; for runtime-v1 instruction changes also run `python scripts/run_tests.py --suite architecture --architecture-root <runtime-v1-root>`.
 
 ## Severity
 

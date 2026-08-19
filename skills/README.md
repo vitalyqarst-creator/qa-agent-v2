@@ -8,7 +8,7 @@ Canonical list of active skills:
 - `ft-test-case-writer` - write new test cases for an already selected scope.
 - `ft-test-case-reviewer` - review existing test cases.
 - `ft-ui-automation-prep` - post-iteration verification of signed-off cases in the real UI and preparation of an automation-ready version.
-- `agent-architecture-auditor` - audit `AGENTS.md`, `skills/`, `references/`, and scripts.
+- `agent-architecture-auditor` - dev-only audit of an explicitly selected lean `runtime-v1`; it is not part of an FT route.
 
 ## Which Skill to Use
 
@@ -33,7 +33,7 @@ Canonical list of active skills:
 - New FT-version update: `ft-test-case-iteration` in `incremental-update` mode after explicit selection of both versions and target scope.
 - Automation-ready preparation after baseline release: `ft-ui-automation-prep`
 - Existing-suite review: `ft-source-locator` -> `ft-scope-analyzer` -> `ft-test-case-reviewer`
-- Agent-layer audit: `agent-architecture-auditor` with script-first workflow (`skills/agent-architecture-auditor/scripts/audit_agent_architecture.py` -> manual interpretation)
+- Agent-layer audit: `agent-architecture-auditor` with script-first workflow (`audit_agent_architecture.py --root <runtime-v1-root>` -> manual interpretation). Do not copy the auditor into a clean FT workspace.
 
 ## Instruction Context
 

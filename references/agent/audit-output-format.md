@@ -1,4 +1,4 @@
-# Audit Output Format
+# Audit Output Format: runtime-v1
 
 ## Severity
 
@@ -8,31 +8,33 @@
 
 ## Finding Categories
 
-- `agents-policy`
+- `profile`
+- `runtime-structure`
 - `skills-structure`
-- `skill-content`
 - `references`
-- `scripts`
-- `duplication`
-- `dispatch-map`
 - `stale-items`
+- `tests`
 
 ## JSON Shape
 
 Верхний уровень JSON-отчета должен содержать:
 
+- `profile`
 - `summary`
 - `findings`
 - `duplication_map`
 - `stale_items`
-- `instruction_budgets`
+- `instruction_contexts`
+- `skipped_checks`
 - `checks`
 
 Если формируется человекочитаемое описание audit findings или значений текстовых полей внутри JSON-отчета, оно должно быть на русском языке. Служебные ключи JSON сохраняются в каноническом виде, указанном в этом формате.
 
 `summary` должен включать:
 
+- `valid`
 - `skills_count`
+- `checks_count`
 - `findings_count`
 - `errors_count`
 - `warnings_count`
@@ -49,21 +51,27 @@
 - `recommended_move`
 - `paths`
 
-`duplication_map` хранит confirmed и possible duplicates с указанием источников и canonical target.
+`duplication_map` хранит точные нормализованные совпадения как `possible`. Они не становятся findings без ручной оценки.
 
 `stale_items` хранит references, skills, sections или scripts, которые больше не участвуют в актуальной agent-architecture.
 
-`instruction_budgets` хранит budget rows по сценариям из `references/agent/instruction-loading-manifest.md`:
+`instruction_contexts` хранит верхнюю оценку AGENTS + skill + транзитивно достижимых runtime references. Это не доказательство фактической загрузки каждого файла:
 
-- `scenario`
+- `role`
 - `files_count`
+- `files`
+- `total_bytes`
 - `total_kib`
-- `limit_kib`
+- `measurement = reachable-linked-upper-bound`
 - `status`
+
+Аудитор не вводит произвольный fail-threshold для размера контекста. Рост оценивается по динамике и реальному влиянию.
+
+`skipped_checks` явно показывает, какие optional checks не запускались и почему.
 
 `checks` хранит результаты отдельных автоматических проверок с полями:
 
-- `name`
+- `id`
 - `status`
 - `details`
 - `paths`

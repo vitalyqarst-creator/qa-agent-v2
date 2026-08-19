@@ -51,7 +51,7 @@
 - `ft-test-case-writer` - писать новые тест-кейсы по уже выбранному фрагменту требований.
 - `ft-test-case-reviewer` - review существующих кейсов и поиск пробелов покрытия. По умолчанию работает как umbrella-reviewer в режиме `full`, но допускает узкие режимы `traceability`, `structure`, `test-design`.
 - `ft-ui-automation-prep` - после выпуска baseline test cases пройти готовые кейсы в реальном UI, собрать Playwright evidence, использовать package-level UI notes при их наличии и выпустить отдельную automation-ready версию без перезаписи FT-first baseline. Если `automation-ready` файл для scope отсутствует, но baseline файл уже есть, skill может сначала создать initial `automation-ready` версию и только затем переходить к UI-прогону.
-- `agent-architecture-auditor` - аудит структуры `AGENTS.md`, `skills/`, `references/` и scripts.
+- `agent-architecture-auditor` - dev-only аудит явно указанного lean `runtime-v1`; в FT route и clean workspace не входит.
 
 Карту skill-ов и канонических references смотри в `skills/README.md`. Архитектурный аудит agent-layer выполняй через `agent-architecture-auditor`, а не через ad-hoc procedural checklist в ответе.
 

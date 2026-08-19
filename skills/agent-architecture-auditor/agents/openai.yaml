@@ -1,4 +1,4 @@
 interface:
   display_name: "Agent Architecture Auditor"
-  short_description: "Audits skills, references, and agent structure"
-  default_prompt: "Use -architecture-auditor to audit the agent-layer structure, duplication, and canonical knowledge placement."
+  short_description: "Audits the lean runtime-v1 architecture"
+  default_prompt: "Use agent-architecture-auditor to audit the specified runtime-v1 root without changing it."

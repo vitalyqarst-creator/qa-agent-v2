@@ -268,15 +268,27 @@ def main() -> int:
             "artifact-validator and 7 for artifact-validator-sharded."
         ),
     )
+    parser.add_argument(
+        "--architecture-root",
+        type=Path,
+        help="Explicit runtime-v1 root for --suite architecture.",
+    )
     args = parser.parse_args()
 
     if args.suite == "architecture":
+        if args.architecture_root is None:
+            parser.error("--suite architecture requires --architecture-root <runtime-v1-root>")
         command = [
             sys.executable,
             str(ARCHITECTURE_AUDIT_SCRIPT),
+            "--root",
+            str(args.architecture_root.resolve()),
+            "--profile",
+            "runtime-v1",
             "--text",
+            "--with-tests",
             "--fail-on",
-            "warning",
+            "error",
         ]
     elif args.suite == "artifact-validator":
         return run_artifact_validator_tests(args.shard_index, args.shard_count or 1)

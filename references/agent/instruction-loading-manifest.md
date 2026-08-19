@@ -925,5 +925,5 @@ Resolver должен читать JSON-блок ниже как канонич�
 
 ```powershell
 python scripts/resolve_instruction_context.py --scenario writer.initial_draft.simple --budget-report
-python scripts/run_tests.py --suite architecture
+python scripts/run_tests.py --suite architecture --architecture-root <runtime-v1-root>
 ```

@@ -50,7 +50,7 @@
 
 ```powershell
 python scripts/probe_environment.py
-python scripts/run_tests.py --suite architecture
+python scripts/run_tests.py --suite architecture --architecture-root <runtime-v1-root>
 python scripts/run_tests.py --suite agent-layer
 python scripts/resolve_instruction_context.py --scenario writer.initial_draft.simple --budget-report --fail-on-budget
 python scripts/resolve_instruction_context.py --scenario writer.initial_draft.table --budget-report --fail-on-budget

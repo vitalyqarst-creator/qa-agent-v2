@@ -6,139 +6,173 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
-from textwrap import dedent
 
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
-SCRIPT_PATH = ROOT_DIR / "skills" / "agent-architecture-auditor" / "scripts" / "audit_agent_architecture.py"
+SCRIPT_PATH = (
+    ROOT_DIR
+    / "skills"
+    / "agent-architecture-auditor"
+    / "scripts"
+    / "audit_agent_architecture.py"
+)
+RUNTIME_SKILLS = (
+    "ft-source-locator",
+    "ft-scope-analyzer",
+    "ft-test-case-writer",
+    "ft-test-case-reviewer",
+)
 
 
 class AgentAuditScriptTests(unittest.TestCase):
-    def run_script(self, *args: str, cwd: Path | None = None) -> subprocess.CompletedProcess[str]:
+    def run_script(self, *args: str) -> subprocess.CompletedProcess[str]:
         return subprocess.run(
             [sys.executable, str(SCRIPT_PATH), *args],
-            cwd=str(cwd or ROOT_DIR),
+            cwd=ROOT_DIR,
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             check=False,
+        )
+
+    def create_runtime_fixture(self, root: Path) -> None:
+        (root / "references" / "runtime").mkdir(parents=True)
+        (root / "scripts").mkdir()
+        (root / "tests").mkdir()
+        (root / "AGENTS.md").write_text(
+            "# Agent\n\nUse [shared rules](references/runtime/shared.md).\n",
+            encoding="utf-8",
+        )
+        (root / "references" / "runtime" / "shared.md").write_text(
+            "# Shared\n",
+            encoding="utf-8",
+        )
+        for skill_name in RUNTIME_SKILLS:
+            skill_dir = root / "skills" / skill_name
+            skill_dir.mkdir(parents=True)
+            (skill_dir / "SKILL.md").write_text(
+                (
+                    "---\n"
+                    f"name: {skill_name}\n"
+                    "description: Runtime fixture.\n"
+                    "---\n\n"
+                    "# Skill\n\n"
+                    "Use [shared rules](../../references/runtime/shared.md).\n"
+                ),
+                encoding="utf-8",
+            )
+        (root / "scripts" / "validate_runtime_tree.py").write_text(
+            "def validate(root):\n    return []\n",
+            encoding="utf-8",
+        )
+        (root / "tests" / "__init__.py").write_text("", encoding="utf-8")
+        (root / "tests" / "test_runtime_contract.py").write_text(
+            "import unittest\n\nclass ContractTest(unittest.TestCase):\n"
+            "    def test_green(self):\n        self.assertTrue(True)\n",
+            encoding="utf-8",
         )
 
     def test_script_exists(self) -> None:
         self.assertTrue(SCRIPT_PATH.exists())
 
-    def test_script_runs_from_repo_root_without_arguments(self) -> None:
-        result = self.run_script()
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn('"summary"', result.stdout)
-        self.assertIn("Agent architecture audit summary", result.stdout)
-
-    def test_script_supports_json_output(self) -> None:
-        result = self.run_script("--json")
-        self.assertEqual(result.returncode, 0, result.stderr)
-        payload = json.loads(result.stdout)
-        self.assertEqual(
-            {"summary", "findings", "duplication_map", "stale_items", "instruction_budgets", "task_start_routing", "checks"},
-            set(payload),
-        )
-        severities = {item["severity"] for item in payload["findings"]}
-        self.assertTrue(severities.issubset({"error", "warning", "info"}))
-        self.assertIn("skills_count", payload["summary"])
-        finding_ids = {item["id"] for item in payload["findings"]}
-        self.assertNotIn("codex-exec-backend-not-default", finding_ids)
-        budget_scenarios = {
-            item["scenario"] for item in payload["instruction_budgets"]
-        }
-        self.assertTrue(
-            {
-                "iteration.incremental_update",
-                "iteration.lean_v2",
-                "iteration.deterministic_production",
-            }.issubset(budget_scenarios)
-        )
-
-    def test_script_supports_text_output(self) -> None:
-        result = self.run_script("--text")
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn("Agent architecture audit summary", result.stdout)
-        self.assertIn("instruction budgets", result.stdout)
-        self.assertIn("writer.initial_draft.simple", result.stdout)
-        self.assertIn("task start routing", result.stdout)
-        self.assertNotEqual("", result.stdout.strip())
-
-    def test_script_can_write_json_report_to_file(self) -> None:
+    def test_valid_runtime_profile_returns_factual_report(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
-            output_path = Path(tmp_dir) / "audit.json"
-            result = self.run_script("--json", "--output", str(output_path))
-            self.assertEqual(result.returncode, 0, result.stderr)
-            self.assertTrue(output_path.exists())
-            payload = json.loads(output_path.read_text(encoding="utf-8"))
-            self.assertIn("summary", payload)
-
-    def test_skill_and_reference_describe_script_contract(self) -> None:
-        skill_content = (ROOT_DIR / "skills" / "agent-architecture-auditor" / "SKILL.md").read_text(encoding="utf-8")
-        ref_content = (ROOT_DIR / "references" / "agent" / "audit-output-format.md").read_text(encoding="utf-8")
-        self.assertIn("audit_agent_architecture.py", skill_content)
-        self.assertIn("script-first", skill_content)
-        self.assertIn("severity", ref_content.lower())
-        self.assertIn("summary", ref_content)
-
-    def test_synthetic_fixture_reports_known_violation(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            fixture_root = Path(tmp_dir)
-            (fixture_root / "skills" / "sample-skill" / "agents").mkdir(parents=True)
-            (fixture_root / "references" / "agent").mkdir(parents=True)
-            (fixture_root / "references" / "qa").mkdir(parents=True)
-
-            (fixture_root / "AGENTS.md").write_text(
-                dedent(
-                    """
-                    # Agent
-
-                    ## Рабочий процесс
-
-                    1. Найди документ.
-                    2. Напиши кейсы.
-                    3. Проверь их.
-                    """
-                ).strip() + "\n",
-                encoding="utf-8",
+            root = Path(tmp_dir)
+            self.create_runtime_fixture(root)
+            result = self.run_script(
+                "--root", str(root), "--profile", "runtime-v1", "--json", "--fail-on", "error"
             )
-            (fixture_root / "skills" / "README.md").write_text("# Skills\n", encoding="utf-8")
-            (fixture_root / "skills" / "sample-skill" / "SKILL.md").write_text(
-                dedent(
-                    """
-                    ---
-                    name: sample-skill
-                    description: Test fixture.
-                    ---
-
-                    # Sample
-
-                    ## Входы
-
-                    - input
-
-                    ## Выходы
-
-                    - output
-
-                    ## Ограничения
-
-                    - none
-                    """
-                ).strip() + "\n",
-                encoding="utf-8",
-            )
-            (fixture_root / "skills" / "sample-skill" / "agents" / "openai.yaml").write_text(
-                "display_name: Sample\nshort_description: Sample\ndefault_prompt: Sample\n",
-                encoding="utf-8",
-            )
-
-            result = self.run_script("--root", str(fixture_root), "--json")
             self.assertEqual(result.returncode, 0, result.stderr)
             payload = json.loads(result.stdout)
-            finding_ids = {item["id"] for item in payload["findings"]}
-            self.assertIn("agents-procedural-workflow", finding_ids)
+            self.assertEqual("runtime-v1", payload["profile"]["resolved"])
+            self.assertTrue(payload["summary"]["valid"])
+            self.assertEqual(4, payload["summary"]["skills_count"])
+            self.assertEqual([], payload["findings"])
+            self.assertEqual(4, len(payload["instruction_contexts"]))
+            self.assertEqual("runtime-contract-tests", payload["skipped_checks"][0]["id"])
+
+    def test_unsupported_tree_fails_without_legacy_fallback(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            result = self.run_script(
+                "--root", tmp_dir, "--json", "--fail-on", "error"
+            )
+            self.assertEqual(result.returncode, 1)
+            payload = json.loads(result.stdout)
+            self.assertIsNone(payload["profile"]["resolved"])
+            self.assertEqual(
+                "unsupported-architecture-profile", payload["findings"][0]["id"]
+            )
+
+    def test_broken_reference_is_an_error(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            root = Path(tmp_dir)
+            self.create_runtime_fixture(root)
+            (root / "skills" / "ft-source-locator" / "SKILL.md").write_text(
+                "---\nname: ft-source-locator\ndescription: Fixture.\n---\n\n"
+                "[missing](../../references/runtime/missing.md)\n",
+                encoding="utf-8",
+            )
+            result = self.run_script(
+                "--root", str(root), "--json", "--fail-on", "error"
+            )
+            self.assertEqual(result.returncode, 1)
+            payload = json.loads(result.stdout)
+            self.assertTrue(
+                any(item["id"].startswith("broken-reference-") for item in payload["findings"])
+            )
+
+    def test_stale_marker_is_a_warning(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            root = Path(tmp_dir)
+            self.create_runtime_fixture(root)
+            agents = root / "AGENTS.md"
+            agents.write_text(
+                agents.read_text(encoding="utf-8") + "Use practical route v0.6.\n",
+                encoding="utf-8",
+            )
+            result = self.run_script(
+                "--root", str(root), "--json", "--fail-on", "warning"
+            )
+            self.assertEqual(result.returncode, 1)
+            payload = json.loads(result.stdout)
+            self.assertEqual(1, payload["summary"]["warnings_count"])
+            self.assertEqual("legacy-marker", payload["stale_items"][0]["type"])
+
+    def test_optional_runtime_tests_are_executed(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            root = Path(tmp_dir)
+            self.create_runtime_fixture(root)
+            result = self.run_script(
+                "--root", str(root), "--json", "--with-tests", "--fail-on", "error"
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            payload = json.loads(result.stdout)
+            statuses = {item["id"]: item["status"] for item in payload["checks"]}
+            self.assertEqual("pass", statuses["runtime-contract-tests"])
+            self.assertEqual([], payload["skipped_checks"])
+
+    def test_skill_describes_dev_only_runtime_profile(self) -> None:
+        content = (
+            ROOT_DIR / "skills" / "agent-architecture-auditor" / "SKILL.md"
+        ).read_text(encoding="utf-8")
+        self.assertIn("script-first workflow", content)
+        self.assertIn("--root <runtime-v1-root>", content)
+        self.assertIn("Dev-only", content)
+        self.assertIn("legacy/full", content)
+
+    def test_architecture_suite_requires_explicit_runtime_root(self) -> None:
+        result = subprocess.run(
+            [sys.executable, str(ROOT_DIR / "scripts" / "run_tests.py"), "--suite", "architecture"],
+            cwd=ROOT_DIR,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            check=False,
+        )
+        self.assertEqual(2, result.returncode)
+        self.assertIn("requires --architecture-root", result.stderr)
 
 
 if __name__ == "__main__":
