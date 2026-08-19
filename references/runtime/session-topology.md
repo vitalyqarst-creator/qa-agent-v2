@@ -23,6 +23,14 @@ python scripts/runtime_session_registry.py inherit-source --package-root <new-pa
 
 Команда разрешает перенос только при совпадении SHA-256 `AGENT-NOTES.md`, сохраняет исходные thread/host/runtime/timestamp/profile и не переносит controller или scope-роли.
 
+Если вместе с source handoff в чистую папку перенесён уже завершённый scope handoff, controller не запускает analyzer только ради заполнения нового registry. После `inherit-source` и успешных source/scope validator-ов он переносит историческую analyzer-запись:
+
+```text
+python scripts/runtime_session_registry.py inherit-scope --package-root <new-package> --from-package-root <source-package> --scope <scope>
+```
+
+`inherit-scope` разрешён только при одинаковом `AGENT-NOTES.md`, том же унаследованном source-locator и побайтовом совпадении всех analyzer-owned scope-файлов вместе с общим реестром вопросов. Команда сохраняет фактические thread/host/runtime/timestamp/profile analyzer-а и не переносит writer/reviewer. Несовпадение любого входа означает, что scope действительно изменился и требует новой analyzer-сессии; вручную копировать запись запрещено.
+
 `validate_runtime_source.py --resume-existing` запускается только после того, как controller нашёл существующий source handoff и подтвердил наличие обоих обязательных файлов `source-selection.md` и `workflow-state.yaml`; package root и handoff directory передаются как два позиционных аргумента. Если handoff отсутствует, validator не вызывается с неполной командой — первым этапом сразу считается source locator.
 
 Один analyzer или writer нельзя использовать для двух scope: перенос контекста между разделами ухудшает независимость и увеличивает риск скрытого смешения требований.

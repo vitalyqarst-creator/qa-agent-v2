@@ -22,6 +22,7 @@ from scripts.runtime_review_delta import artifact_index, enrich_review_record, s
 from scripts.runtime_session_registry import (
     acknowledge_runtime,
     canonical_scope,
+    inherit_scope_analyzer,
     inherit_source_locator,
     initialize_registry,
     record_role,
@@ -297,6 +298,26 @@ def create_valid_source_stage(root: Path) -> tuple[Path, Path]:
     (handoff / "source-selection.md").write_text("\n".join(selection_lines) + "\n", encoding="utf-8")
     (handoff / "workflow-state.yaml").write_text("\n".join(workflow_lines) + "\n", encoding="utf-8")
     return package, handoff
+
+
+def create_scope_handoff_inputs(package: Path, scope: str) -> Path:
+    handoff = package / "work" / "stage-handoffs" / scope
+    handoff.mkdir(parents=True, exist_ok=True)
+    contents = {
+        "workflow-state.yaml": f'scope: "{scope}"\nstage: scope-analyzer\nstatus: completed\n',
+        "scope-brief.md": "# Область проверки\n\nГраница подтверждена.\n",
+        "source-row-inventory.md": "# Инвентарь\n\n| ID | Источник | Утверждение |\n| --- | --- | --- |\n| SR-001 | Раздел 1 | Объект сохраняется |\n",
+        "coverage-gaps.md": "# Пробелы покрытия\n\nОткрытые пробелы отсутствуют.\n",
+        "test-data-plan.md": "# План тестовых данных\n\nДанные определены логически.\n",
+        "prompt.scope-to-writer.md": "# Передача writer\n\nСоздай матрицу по активному инвентарю.\n",
+    }
+    for name, content in contents.items():
+        (handoff / name).write_text(content, encoding="utf-8")
+    (package / "work" / "scope-clarification-requests.md").write_text(
+        "# Реестр вопросов к БА\n\nОткрытые вопросы отсутствуют.\n",
+        encoding="utf-8",
+    )
+    return handoff
 
 
 class RuntimeContractTests(unittest.TestCase):
@@ -752,6 +773,65 @@ class RuntimeContractTests(unittest.TestCase):
 
             with self.assertRaisesRegex(ValueError, "same SHA-256"):
                 inherit_source_locator(destination_package, source_package)
+
+    def test_scope_analyzer_record_is_inherited_only_for_identical_handoff(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            (root / "source-run").mkdir()
+            (root / "destination-run").mkdir()
+            source_package, _ = create_valid_source_stage(root / "source-run")
+            destination_package, _ = create_valid_source_stage(root / "destination-run")
+            create_scope_handoff_inputs(source_package, "9.3.3")
+            create_scope_handoff_inputs(destination_package, "9.3.3")
+            record_role(source_package, "scope-analyzer", ANALYZER_THREAD, "local", "9.3.3")
+
+            destination_registry = destination_package / "work" / "runtime-session-registry.json"
+            destination_payload = json.loads(destination_registry.read_text(encoding="utf-8"))
+            destination_payload["source_locator"] = None
+            destination_registry.write_text(
+                json.dumps(destination_payload, ensure_ascii=False, indent=2) + "\n",
+                encoding="utf-8",
+            )
+            inherit_source_locator(destination_package, source_package)
+            inherit_scope_analyzer(destination_package, source_package, "9.3.3")
+
+            source_payload = json.loads(
+                (source_package / "work" / "runtime-session-registry.json").read_text(encoding="utf-8")
+            )
+            inherited_payload = json.loads(destination_registry.read_text(encoding="utf-8"))
+            self.assertEqual(
+                source_payload["scopes"]["9.3.3"]["scope_analyzer"],
+                inherited_payload["scopes"]["9.3.3"]["scope_analyzer"],
+            )
+            record_role(destination_package, "writer", WRITER_THREAD, "local", "9.3.3")
+            self.assertEqual([], validate_topology(destination_package, "writer", "9.3.3"))
+
+    def test_scope_analyzer_inheritance_rejects_changed_handoff(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            (root / "source-run").mkdir()
+            (root / "destination-run").mkdir()
+            source_package, _ = create_valid_source_stage(root / "source-run")
+            destination_package, _ = create_valid_source_stage(root / "destination-run")
+            create_scope_handoff_inputs(source_package, "9.3.3")
+            destination_handoff = create_scope_handoff_inputs(destination_package, "9.3.3")
+            record_role(source_package, "scope-analyzer", ANALYZER_THREAD, "local", "9.3.3")
+
+            destination_registry = destination_package / "work" / "runtime-session-registry.json"
+            destination_payload = json.loads(destination_registry.read_text(encoding="utf-8"))
+            destination_payload["source_locator"] = None
+            destination_registry.write_text(
+                json.dumps(destination_payload, ensure_ascii=False, indent=2) + "\n",
+                encoding="utf-8",
+            )
+            inherit_source_locator(destination_package, source_package)
+            (destination_handoff / "scope-brief.md").write_text(
+                "# Область проверки\n\nГраница изменена.\n",
+                encoding="utf-8",
+            )
+
+            with self.assertRaisesRegex(ValueError, "byte-identical"):
+                inherit_scope_analyzer(destination_package, source_package, "9.3.3")
 
     def test_session_topology_rejects_role_reuse(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:

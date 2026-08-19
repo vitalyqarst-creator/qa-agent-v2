@@ -31,6 +31,14 @@ STAGE_REQUIREMENTS = {
     "tc-reviewer": ("scope-analyzer", "writer", "matrix-reviewer", "tc-reviewer"),
 }
 REGISTRY_SCHEMA_VERSION = 4
+SCOPE_HANDOFF_FILES = (
+    "workflow-state.yaml",
+    "scope-brief.md",
+    "source-row-inventory.md",
+    "coverage-gaps.md",
+    "test-data-plan.md",
+    "prompt.scope-to-writer.md",
+)
 ROLE_SKILL_PATHS = {
     "source-locator": "skills/ft-source-locator/SKILL.md",
     "scope-analyzer": "skills/ft-scope-analyzer/SKILL.md",
@@ -247,6 +255,127 @@ def inherit_source_locator(package_root: Path, source_package_root: Path) -> Pat
 
     # Preserve the original thread, host, runtime commit, timestamp and dispatch profile.
     destination["source_locator"] = dict(source_record)
+    return write_registry(package_root, destination)
+
+
+def scope_handoff(package_root: Path, scope: str) -> Path:
+    scope_key = canonical_scope(scope)
+    if not scope_key:
+        raise ValueError("scope inheritance requires a non-empty scope")
+    handoff_root = package_root.resolve() / "work" / "stage-handoffs"
+    matches = [
+        candidate
+        for candidate in handoff_root.iterdir()
+        if candidate.is_dir() and canonical_scope(candidate.name) == scope_key
+    ] if handoff_root.is_dir() else []
+    if len(matches) != 1:
+        raise ValueError(f"expected exactly one scope handoff for {scope_key}, found {len(matches)}")
+    return matches[0]
+
+
+def scope_input_hashes(package_root: Path, scope: str) -> dict[str, str]:
+    handoff = scope_handoff(package_root, scope)
+    inputs: dict[str, str] = {}
+    for name in SCOPE_HANDOFF_FILES:
+        path = handoff / name
+        if not path.is_file():
+            raise ValueError(f"scope handoff is incomplete: missing {name}")
+        inputs[f"scope/{name}"] = hashlib.sha256(path.read_bytes()).hexdigest()
+    clarifications = package_root.resolve() / "work" / "scope-clarification-requests.md"
+    if not clarifications.is_file():
+        raise ValueError("scope handoff is incomplete: missing work/scope-clarification-requests.md")
+    inputs["work/scope-clarification-requests.md"] = hashlib.sha256(clarifications.read_bytes()).hexdigest()
+    return inputs
+
+
+def inherit_scope_analyzer(package_root: Path, source_package_root: Path, scope: str) -> Path:
+    """Reuse the actual analyzer session only for a byte-identical completed scope handoff."""
+
+    scope_key = canonical_scope(scope)
+    if not scope_key:
+        raise ValueError("scope inheritance requires a non-empty scope")
+    destination, destination_errors = load_registry(package_root)
+    if destination_errors:
+        raise ValueError(destination_errors[0])
+    source, source_errors = load_registry(source_package_root)
+    if source_errors:
+        raise ValueError(source_errors[0])
+    assert destination is not None and source is not None
+
+    destination_errors = validate_runtime_acknowledgement(package_root, destination)
+    destination_errors.extend(validate_record("controller", destination.get("controller")))
+    destination_errors.extend(validate_record(PACKAGE_ROLE, destination.get("source_locator")))
+    if destination_errors:
+        raise ValueError(destination_errors[0])
+
+    source_locator = source.get("source_locator")
+    source_locator_errors = validate_record(PACKAGE_ROLE, source_locator)
+    if source_locator_errors:
+        raise ValueError(source_locator_errors[0])
+    if destination.get("source_locator") != source_locator:
+        raise ValueError("scope analyzer can be inherited only after inheriting the same source-locator record")
+
+    destination_inputs = package_input_baseline(package_root)
+    source_inputs = package_input_baseline(source_package_root)
+    if destination_inputs != source_inputs:
+        raise ValueError(
+            "scope analyzer can be inherited only when AGENT-NOTES.md has the same SHA-256 in both packages"
+        )
+    if destination.get("package_inputs") != destination_inputs:
+        raise ValueError("destination package input baseline is stale")
+    if source.get("package_inputs") != source_inputs:
+        raise ValueError("source package input baseline is stale")
+
+    destination_hashes = scope_input_hashes(package_root, scope_key)
+    source_hashes = scope_input_hashes(source_package_root, scope_key)
+    if destination_hashes != source_hashes:
+        raise ValueError("scope analyzer can be inherited only for byte-identical scope handoff inputs")
+
+    source_scopes = source.get("scopes")
+    if not isinstance(source_scopes, dict):
+        raise ValueError("source session registry scopes must be a JSON object")
+    source_matches = [
+        value
+        for key, value in source_scopes.items()
+        if canonical_scope(str(key)) == scope_key and isinstance(value, dict)
+    ]
+    if len(source_matches) != 1:
+        raise ValueError(f"source registry must contain exactly one assignment for scope {scope_key}")
+    source_record = source_matches[0].get("scope_analyzer")
+    record_errors = validate_record(f"{scope_key}:scope-analyzer", source_record)
+    if record_errors:
+        raise ValueError(record_errors[0])
+
+    destination_scopes = destination.setdefault("scopes", {})
+    if not isinstance(destination_scopes, dict):
+        raise ValueError("destination session registry scopes must be a JSON object")
+    destination_matches = [
+        (key, value)
+        for key, value in destination_scopes.items()
+        if canonical_scope(str(key)) == scope_key and isinstance(value, dict)
+    ]
+    if len(destination_matches) > 1:
+        raise ValueError(f"multiple destination assignments resolve to canonical scope {scope_key}")
+    if destination_matches:
+        existing_key, target = destination_matches[0]
+        if existing_key != scope_key:
+            destination_scopes[scope_key] = destination_scopes.pop(existing_key)
+    else:
+        target = {}
+        destination_scopes[scope_key] = target
+    current = target.get("scope_analyzer")
+    if isinstance(current, dict):
+        if current == source_record:
+            return registry_path(package_root)
+        raise ValueError("destination scope already has another scope-analyzer session")
+
+    source_session_id = source_record.get("session_id")
+    for assigned_role, assigned in all_role_records(destination):
+        if assigned.get("session_id") == source_session_id:
+            raise ValueError(f"scope-analyzer session is already assigned to {assigned_role}")
+
+    # Preserve the actual historical analyzer identity; only its immutable output is reused.
+    target["scope_analyzer"] = dict(source_record)
     return write_registry(package_root, destination)
 
 
@@ -527,6 +656,11 @@ def main() -> int:
     inherit_parser.add_argument("--package-root", type=Path, required=True)
     inherit_parser.add_argument("--from-package-root", type=Path, required=True)
 
+    inherit_scope_parser = subparsers.add_parser("inherit-scope")
+    inherit_scope_parser.add_argument("--package-root", type=Path, required=True)
+    inherit_scope_parser.add_argument("--from-package-root", type=Path, required=True)
+    inherit_scope_parser.add_argument("--scope", required=True)
+
     args = parser.parse_args()
     try:
         if args.command == "init":
@@ -551,6 +685,10 @@ def main() -> int:
             return 0
         if args.command == "inherit-source":
             path = inherit_source_locator(args.package_root, args.from_package_root)
+            print(json.dumps({"inherited": True, "path": str(path)}, ensure_ascii=False))
+            return 0
+        if args.command == "inherit-scope":
+            path = inherit_scope_analyzer(args.package_root, args.from_package_root, args.scope)
             print(json.dumps({"inherited": True, "path": str(path)}, ensure_ascii=False))
             return 0
         if args.command == "controller-check":
