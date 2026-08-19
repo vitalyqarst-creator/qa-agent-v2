@@ -311,6 +311,35 @@ class RuntimeContractTests(unittest.TestCase):
             package, handoff = create_valid_source_stage(Path(temporary_directory))
             self.assertEqual([], validate_source(package, handoff))
 
+    def test_source_stage_normalizes_figma_url_from_markdown_code_span(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            package, handoff = create_valid_source_stage(root)
+            figma_url = "https://www.figma.com/design/file-id/design?node-id=1-2&p=f"
+            (package / "AGENT-NOTES.md").write_text(
+                f"- Figma: `{figma_url}`. Использовать только как визуальный вход.\n",
+                encoding="utf-8",
+            )
+            (package / "work" / "runtime-session-registry.json").unlink()
+            initialize_registry(package, CONTROLLER_THREAD, "local")
+            record_role(package, "source-locator", LOCATOR_THREAD, "local")
+            selection = handoff / "source-selection.md"
+            selection.write_text(
+                selection.read_text(encoding="utf-8")
+                + f"- `{figma_url}` — Figma, visual reference only.\n",
+                encoding="utf-8",
+            )
+            workflow = handoff / "workflow-state.yaml"
+            workflow.write_text(
+                workflow.read_text(encoding="utf-8")
+                + "figma_sources:\n"
+                + f'  - url: "{figma_url}"\n'
+                + "    role: visual_reference_only\n",
+                encoding="utf-8",
+            )
+
+            self.assertEqual([], validate_source(package, handoff))
+
     def test_source_contract_v2_requires_visual_input_only_when_declared(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
             root = Path(temporary_directory)

@@ -17,7 +17,8 @@ except ModuleNotFoundError:  # Direct invocation: python scripts/validate_runtim
 
 
 DIGEST_RE = re.compile(r"^[0-9a-f]{64}$", re.IGNORECASE)
-URL_RE = re.compile(r"https://www\.figma\.com/\S+")
+FIGMA_URL_RE = re.compile(r"https://www\.figma\.com/[^\s`\"'<>]+")
+URL_TRAILING_PUNCTUATION = ".,;:!?)]}"
 LEGACY_PRIMARY_ROLES = {
     "semantic_primary",
     "machine_readable_primary",
@@ -317,7 +318,10 @@ def validate(package_root: Path, handoff_dir: Path, allow_downstream: bool = Fal
     for path_value in sorted(registered_paths - actual_inputs):
         errors.append(f"registered local path is outside source/support/mockups: {path_value}")
 
-    figma_urls = {url.rstrip(".,") for url in URL_RE.findall(notes)}
+    figma_urls = {
+        url.rstrip(URL_TRAILING_PUNCTUATION)
+        for url in FIGMA_URL_RE.findall(notes)
+    }
     for url in figma_urls:
         if url not in workflow or url not in selection:
             errors.append("Figma URL from AGENT-NOTES.md is not registered in workflow and source selection")
