@@ -793,6 +793,8 @@ class RuntimeContractTests(unittest.TestCase):
                 encoding="utf-8",
             )
             inherit_source_locator(destination_package, source_package)
+            workflow = destination_package / "work" / "stage-handoffs" / "9.3.3" / "workflow-state.yaml"
+            workflow.write_bytes(workflow.read_text(encoding="utf-8").replace("\n", "\r\n").encode("utf-8"))
             inherit_scope_analyzer(destination_package, source_package, "9.3.3")
 
             source_payload = json.loads(
@@ -830,7 +832,7 @@ class RuntimeContractTests(unittest.TestCase):
                 encoding="utf-8",
             )
 
-            with self.assertRaisesRegex(ValueError, "byte-identical"):
+            with self.assertRaisesRegex(ValueError, "identical normalized"):
                 inherit_scope_analyzer(destination_package, source_package, "9.3.3")
 
     def test_session_topology_rejects_role_reuse(self) -> None:

@@ -273,6 +273,15 @@ def scope_handoff(package_root: Path, scope: str) -> Path:
     return matches[0]
 
 
+def normalized_text_sha256(path: Path) -> str:
+    try:
+        content = path.read_bytes().decode("utf-8-sig")
+    except UnicodeDecodeError as exc:
+        raise ValueError(f"scope handoff file is not valid UTF-8: {path.name}") from exc
+    normalized = content.replace("\r\n", "\n").replace("\r", "\n")
+    return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
+
+
 def scope_input_hashes(package_root: Path, scope: str) -> dict[str, str]:
     handoff = scope_handoff(package_root, scope)
     inputs: dict[str, str] = {}
@@ -280,11 +289,11 @@ def scope_input_hashes(package_root: Path, scope: str) -> dict[str, str]:
         path = handoff / name
         if not path.is_file():
             raise ValueError(f"scope handoff is incomplete: missing {name}")
-        inputs[f"scope/{name}"] = hashlib.sha256(path.read_bytes()).hexdigest()
+        inputs[f"scope/{name}"] = normalized_text_sha256(path)
     clarifications = package_root.resolve() / "work" / "scope-clarification-requests.md"
     if not clarifications.is_file():
         raise ValueError("scope handoff is incomplete: missing work/scope-clarification-requests.md")
-    inputs["work/scope-clarification-requests.md"] = hashlib.sha256(clarifications.read_bytes()).hexdigest()
+    inputs["work/scope-clarification-requests.md"] = normalized_text_sha256(clarifications)
     return inputs
 
 
@@ -329,7 +338,7 @@ def inherit_scope_analyzer(package_root: Path, source_package_root: Path, scope:
     destination_hashes = scope_input_hashes(package_root, scope_key)
     source_hashes = scope_input_hashes(source_package_root, scope_key)
     if destination_hashes != source_hashes:
-        raise ValueError("scope analyzer can be inherited only for byte-identical scope handoff inputs")
+        raise ValueError("scope analyzer can be inherited only for identical normalized scope handoff inputs")
 
     source_scopes = source.get("scopes")
     if not isinstance(source_scopes, dict):

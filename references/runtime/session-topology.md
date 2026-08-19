@@ -29,7 +29,7 @@ python scripts/runtime_session_registry.py inherit-source --package-root <new-pa
 python scripts/runtime_session_registry.py inherit-scope --package-root <new-package> --from-package-root <source-package> --scope <scope>
 ```
 
-`inherit-scope` разрешён только при одинаковом `AGENT-NOTES.md`, том же унаследованном source-locator и побайтовом совпадении всех analyzer-owned scope-файлов вместе с общим реестром вопросов. Команда сохраняет фактические thread/host/runtime/timestamp/profile analyzer-а и не переносит writer/reviewer. Несовпадение любого входа означает, что scope действительно изменился и требует новой analyzer-сессии; вручную копировать запись запрещено.
+`inherit-scope` разрешён только при одинаковом `AGENT-NOTES.md`, том же унаследованном source-locator и совпадении SHA-256 нормализованного UTF-8 текста всех analyzer-owned scope-файлов вместе с общим реестром вопросов. Нормализуются только BOM и переводы строк LF/CRLF; содержательные символы и пробелы остаются значимыми. Команда сохраняет фактические thread/host/runtime/timestamp/profile analyzer-а и не переносит writer/reviewer. Несовпадение любого входа означает, что scope действительно изменился и требует новой analyzer-сессии; вручную копировать запись запрещено.
 
 `validate_runtime_source.py --resume-existing` запускается только после того, как controller нашёл существующий source handoff и подтвердил наличие обоих обязательных файлов `source-selection.md` и `workflow-state.yaml`; package root и handoff directory передаются как два позиционных аргумента. Если handoff отсутствует, validator не вызывается с неполной командой — первым этапом сразу считается source locator.
 
