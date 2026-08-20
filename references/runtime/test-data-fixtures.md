@@ -125,6 +125,8 @@ python scripts/validate_runtime_test_data.py <data-materialization.json> --matri
 
 Validator проверяет SHA matrix, полноту ролей/отношений, совместимость источника, связи `equal`/`not-equal`, отсутствие placeholders и соответствие provider-bound значений сохранённой fixture. Если matrix не использует `TD-*`/`REL-*`, materialization-файл не обязателен.
 
+Для matrix без `TD-*`/`REL-*` writer записывает `data_status: not-required`, а reviewer не запускает materialization-validator и проверяет TC без аргумента `--data-materialization`. Создавать пустой или фиктивный materialization-файл запрещено.
+
 ## External provider fixture
 
 Для provider writer создаёт или переиспользует `work/test-data/<scope>/fixtures/fixture-catalog.json`. Каждая запись содержит `fixture_id`, назначение, provider/request, выбранные `runtime_data`, путь и SHA-256 token-free snapshot. Секреты не сохраняются.

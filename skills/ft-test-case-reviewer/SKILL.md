@@ -71,7 +71,7 @@ Review выполняется только в отдельной верхнеу�
 
 ## TC review
 
-До содержательного review заново запусти materialization-validator, затем TC-validator с `--matrix` и `--data-materialization`, если matrix использует `TD-*`/`REL-*`; неполная проекция или неподтверждённые данные блокируют review.
+До содержательного review сначала определи, использует ли принятая matrix `TD-*`/`REL-*`. Если использует — заново запусти materialization-validator, затем TC-validator с `--matrix` и `--data-materialization`; неполная проекция или неподтверждённые данные блокируют review. Если не использует — materialization-validator не запускай, проверь в writer `workflow-state.yaml` значение `data_status: not-required`, отсутствие фиктивного `data-materialization.json` и запусти TC-validator только с `--matrix`. Отсутствие materialization в этой ветке не является blocker-ом.
 
 В режиме `full` проверь весь canonical TC artifact по принятой matrix, полному source slice выбранного scope, `data-materialization.json` и fixture catalog; в режиме `delta` примени те же критерии к изменённым TC и их зависимостям. Обязательно блокируй:
 
