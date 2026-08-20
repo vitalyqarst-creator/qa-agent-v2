@@ -1489,6 +1489,7 @@ def strip_allowed_technical_fragments(content: str) -> str:
 
 def validate(package_root: Path, scope_dir: Path) -> list[str]:
     errors: list[str] = []
+    current_scope = canonical_scope(scope_dir.name)
     errors.extend(validate_no_repository_temp(package_root))
     expected_source_dir = (
         package_root.resolve() / "work" / "stage-handoffs" / f"00-{package_root.resolve().name}"
@@ -1498,7 +1499,7 @@ def validate(package_root: Path, scope_dir: Path) -> list[str]:
             "scope handoff directory must be separate from the source handoff; "
             "use work/stage-handoffs/<canonical-scope>"
         )
-    errors.extend(validate_topology(package_root, "scope-analyzer", canonical_scope(scope_dir.name)))
+    errors.extend(validate_topology(package_root, "scope-analyzer", current_scope))
     missing_files: list[str] = []
     for name in REQUIRED_FILES:
         if not (scope_dir / name).is_file():
@@ -2460,8 +2461,12 @@ def validate(package_root: Path, scope_dir: Path) -> list[str]:
     duplicate_question_ids = sorted({question_id for question_id in question_ids if question_ids.count(question_id) > 1})
     if duplicate_question_ids:
         errors.append("clarification register contains duplicate IDs: " + ", ".join(duplicate_question_ids))
+    current_scope_question_blocks: list[str] = []
     for question_id, block in question_cards:
         question_scope = question_field(block, "Область проверки").strip("` ")
+        if question_scope and canonical_scope(question_scope) != current_scope:
+            continue
+        current_scope_question_blocks.append(block)
         status = question_field(block, "Статус").strip("` ").casefold()
         explicit_question = question_field(block, "Вопрос")
         requirement_basis = question_field(block, "Основание в ФТ")
@@ -2579,7 +2584,7 @@ def validate(package_root: Path, scope_dir: Path) -> list[str]:
         for pattern, description in HIGH_CONFIDENCE_TEXT_ERRORS:
             if pattern.search(visible):
                 errors.append(f"{name}: high-confidence user-facing text error: {description}")
-    visible_questions = strip_allowed_technical_fragments(questions_content)
+    visible_questions = strip_allowed_technical_fragments("\n".join(current_scope_question_blocks))
     for word, replacement in FORBIDDEN_PROCESS_WORDS.items():
         if re.search(rf"\b{re.escape(word)}s?\b", visible_questions, re.IGNORECASE):
             errors.append(

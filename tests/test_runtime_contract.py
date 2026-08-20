@@ -2574,6 +2574,25 @@ residual_missing: none
             )
             self.assertEqual([], validate_scope(package, scope))
 
+            register = package / "work" / "scope-clarification-requests.md"
+            register.write_text(
+                "# Реестр вопросов к БА\n\n"
+                "## CLR-9.3.3-001 — вопрос другой области\n\n"
+                "**Область проверки:** `9.3.3`\n\n"
+                "**Статус:** `частичный-ответ`\n\n"
+                "**Вопрос:** Каков остаток требования другой области?\n\n"
+                "**Основание в ФТ:** AS.99.\n\n"
+                "**Влияние на покрытие:** Не закрыт GAP-933001.\n\n"
+                "**Ответ БА:** Получена только часть ответа.\n\n"
+                "**Осталось уточнить:** Точный результат.\n",
+                encoding="utf-8",
+            )
+            self.assertEqual([], validate_scope(package, scope))
+            register.write_text(
+                "# Вопросы к БА\n\nОткрытые вопросы отсутствуют.\n",
+                encoding="utf-8",
+            )
+
             brief_path = scope / "scope-brief.md"
             valid_brief = brief_path.read_text(encoding="utf-8")
             malformed_table_coverage = VALID_TABLE_COVERAGE.replace(
