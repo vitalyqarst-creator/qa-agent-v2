@@ -1025,22 +1025,33 @@ def validate_test_data_plan(content: str, source_evidence: str = "") -> list[str
     preparation_index = table.index("Воспроизводимая подготовка")
     boundaries_index = table.index("Границы и классы")
     readiness_index = table.index("Готовность материализации")
-    seen_roles: set[str] = set()
+    seen_role_sources: dict[str, set[str]] = {}
     for row in table.rows:
         group = row[group_index].strip() or "<без группы>"
         roles = DATA_ROLE_RE.findall(row[roles_index])
         source = row[source_index].strip()
+        source_parts = [part.strip().strip("`").casefold() for part in source.split(";") if part.strip()]
+        source_set = set(source_parts)
         constraints = row[constraints_index].strip()
         preparation = row[preparation_index].strip()
         boundaries = row[boundaries_index].strip()
         readiness = row[readiness_index].strip().casefold()
         if not roles:
             errors.append(f"test-data-plan {group}: at least one TD-* data role is required")
+        row_roles: set[str] = set()
         for role in roles:
-            if role in seen_roles:
-                errors.append(f"test-data-plan {group}: duplicate data role {role}")
-            seen_roles.add(role)
-        source_parts = [part.strip().strip("`").casefold() for part in source.split(";") if part.strip()]
+            if role in row_roles:
+                errors.append(f"test-data-plan {group}: duplicate data role {role} within one group")
+                continue
+            row_roles.add(role)
+            previous_sources = seen_role_sources.get(role)
+            if previous_sources is not None and previous_sources != source_set:
+                errors.append(
+                    f"test-data-plan {group}: reused data role {role} has conflicting allowed sources: "
+                    f"{sorted(previous_sources)} vs {sorted(source_set)}"
+                )
+            else:
+                seen_role_sources.setdefault(role, source_set)
         if not source_parts or any(
             not any(part.startswith(prefix) for prefix in ALLOWED_DATA_SOURCE_PREFIXES)
             for part in source_parts

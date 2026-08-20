@@ -2690,6 +2690,46 @@ class RuntimeContractTests(unittest.TestCase):
         )
         self.assertEqual([], validate_test_data_plan(contract_in_preparation))
 
+    def test_test_data_plan_allows_compatible_role_reuse_and_rejects_source_conflicts(self) -> None:
+        reused_role = VALID_DATA_PLAN + (
+            "| Отмена карточки | TD-PARTNER-A | первичный источник; стендовая подготовка | "
+            "Тот же партнёр используется для проверки отмены. | "
+            "Не применимо: количественное ограничение отсутствует. | "
+            "Открыть новую карточку того же партнёра. | требуется |\n"
+        )
+        self.assertEqual([], validate_test_data_plan(reused_role))
+
+        conflicting_source = reused_role.replace(
+            "| Отмена карточки | TD-PARTNER-A | первичный источник; стендовая подготовка |",
+            "| Отмена карточки | TD-PARTNER-A | синтетический генератор |",
+        )
+        errors = validate_test_data_plan(conflicting_source)
+        self.assertTrue(any("conflicting allowed sources" in error for error in errors))
+
+    def test_matrix_accepts_consolidated_compatible_baseline_role_reuse(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            package = Path(temporary_directory) / "FT"
+            (package / "AGENT-NOTES.md").parent.mkdir(parents=True)
+            (package / "AGENT-NOTES.md").write_text("# Notes\n", encoding="utf-8")
+            scope = "9.3.3"
+            baseline = package / "work" / "stage-handoffs" / scope / "test-data-plan.md"
+            baseline.parent.mkdir(parents=True)
+            baseline.write_text(
+                VALID_DATA_PLAN
+                + "| Отмена карточки | TD-PARTNER-A | первичный источник; стендовая подготовка | "
+                "Тот же партнёр используется для проверки отмены. | "
+                "Не применимо: количественное ограничение отсутствует. | "
+                "Открыть новую карточку того же партнёра. | требуется |\n",
+                encoding="utf-8",
+            )
+            matrix = package / "work" / "practical" / scope / "test-design-matrix.md"
+            matrix.parent.mkdir(parents=True)
+            matrix.write_text(VALID_MATRIX, encoding="utf-8")
+            (matrix.parent / "matrix-data-plan.md").write_text(VALID_DATA_PLAN, encoding="utf-8")
+            set_pending(matrix)
+
+            self.assertEqual([], validate_matrix_layout(matrix, package))
+
     def test_test_data_plan_requires_explicit_quantitative_boundary_contract(self) -> None:
         plan = """# План тестовых данных
 
