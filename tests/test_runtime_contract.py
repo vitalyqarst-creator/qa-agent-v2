@@ -4145,6 +4145,7 @@ residual_missing: none
                 ],
                 "reviewed_items": ["M-001", "GAP-001"],
                 "review_scope_complete": True,
+                "matrix_review_checklist_version": 2,
                 "matrix_review_checklist": {
                     "source-coverage": {"status": "checked", "evidence": ["SR-001; SR-002"]},
                     "formal-techniques": {"status": "checked", "evidence": ["M-001; GAP-001"]},
@@ -4156,6 +4157,10 @@ residual_missing: none
                     "identity-provenance": {
                         "status": "checked",
                         "evidence": ["TD-PARTNER-A; TD-PARTNER-B -> Provider"],
+                    },
+                    "data-materializability": {
+                        "status": "checked",
+                        "evidence": ["REL-DIFFERENT-INN: достижимо через две записи Provider"],
                     },
                     "reachability-oracles": {"status": "checked", "evidence": ["M-001; GAP-001"]},
                     "duplication-parameterization": {"status": "checked", "evidence": ["M-001"]},
@@ -4174,6 +4179,19 @@ residual_missing: none
                 any("requires matrix_review_checklist" in error for error in validate_review(artifact, review_path, "matrix"))
             )
             missing_checklist["matrix_review_checklist"] = checklist
+            review_path.write_text(json.dumps(missing_checklist, ensure_ascii=False), encoding="utf-8")
+
+            missing_materializability = json.loads(review_path.read_text(encoding="utf-8"))
+            missing_materializability["matrix_review_checklist"].pop("data-materializability")
+            review_path.write_text(
+                json.dumps(missing_materializability, ensure_ascii=False), encoding="utf-8"
+            )
+            self.assertTrue(
+                any(
+                    "data-materializability" in error
+                    for error in validate_review(artifact, review_path, "matrix")
+                )
+            )
             review_path.write_text(json.dumps(missing_checklist, ensure_ascii=False), encoding="utf-8")
 
             invalid_identity = json.loads(review_path.read_text(encoding="utf-8"))
@@ -4237,6 +4255,12 @@ residual_missing: none
                 "reviewed_items": ["M-001"],
                 "review_scope_complete": True,
                 "review_quality_status": "complete",
+                "matrix_review_checklist": {
+                    "data-materializability": {
+                        "status": "checked",
+                        "evidence": ["M-001: исправленная проекция данных достижима"],
+                    }
+                },
             }
             review_path.write_text(json.dumps(second_record, ensure_ascii=False), encoding="utf-8")
             review_path.with_suffix(".md").write_text("# Повторное review matrix\n", encoding="utf-8")

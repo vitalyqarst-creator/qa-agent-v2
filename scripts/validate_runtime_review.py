@@ -30,7 +30,7 @@ VERDICTS = {
     "tc": {"tc-accepted", "tc-changes-required"},
 }
 TC_FINDING_ORIGINS = {"matrix", "tc", "both"}
-MATRIX_REVIEW_CHECKS = {
+MATRIX_REVIEW_CHECKS_V1 = {
     "source-coverage",
     "formal-techniques",
     "uniqueness-lifecycle",
@@ -39,6 +39,7 @@ MATRIX_REVIEW_CHECKS = {
     "reachability-oracles",
     "duplication-parameterization",
 }
+MATRIX_REVIEW_CHECKS_V2 = MATRIX_REVIEW_CHECKS_V1 | {"data-materializability"}
 MATRIX_REVIEW_CHECK_STATUSES = {"checked", "not-applicable"}
 IDENTITY_ORIGIN_MARKERS = (
     "внешний сервис",
@@ -82,15 +83,23 @@ def load_record(path: Path) -> tuple[dict[str, Any] | None, list[str]]:
     return payload, []
 
 
-def validate_matrix_review_checklist(record: dict[str, Any]) -> list[str]:
+def validate_matrix_review_checklist(record: dict[str, Any], *, delta_only: bool = False) -> list[str]:
     errors: list[str] = []
+    version = record.get("matrix_review_checklist_version", 1)
+    if version not in {1, 2}:
+        return ["matrix_review_checklist_version must be 1 or 2"]
+    required_checks = (
+        {"data-materializability"}
+        if delta_only and version == 2
+        else MATRIX_REVIEW_CHECKS_V2 if version == 2 else MATRIX_REVIEW_CHECKS_V1
+    )
     checklist = record.get("matrix_review_checklist")
     if not isinstance(checklist, dict):
-        return ["full matrix review requires matrix_review_checklist"]
-    missing = MATRIX_REVIEW_CHECKS - set(checklist)
+        return ["matrix review requires matrix_review_checklist"]
+    missing = required_checks - set(checklist)
     if missing:
         errors.append(f"matrix_review_checklist is missing categories: {sorted(missing)}")
-    for category in sorted(MATRIX_REVIEW_CHECKS & set(checklist)):
+    for category in sorted(required_checks & set(checklist)):
         entry = checklist.get(category)
         if not isinstance(entry, dict):
             errors.append(f"matrix_review_checklist {category} must be an object")
@@ -265,8 +274,15 @@ def validate(artifact: Path, record_path: Path, kind: str, require_accepted: boo
                 isinstance(item, str) and item.strip() for item in affected
             ):
                 errors.append(f"finding {index} must contain non-empty affected_items")
-    if kind == "matrix" and schema_version == 2 and record.get("review_mode") == "full":
-        errors.extend(validate_matrix_review_checklist(record))
+    if kind == "matrix" and schema_version == 2 and (
+        record.get("review_mode") == "full" or record.get("matrix_review_checklist_version") == 2
+    ):
+        errors.extend(
+            validate_matrix_review_checklist(
+                record,
+                delta_only=record.get("review_mode") == "delta",
+            )
+        )
     if kind == "tc" and verdict == "tc-changes-required" and isinstance(findings, list):
         for index, finding in enumerate(findings, start=1):
             if not isinstance(finding, dict):
