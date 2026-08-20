@@ -400,6 +400,28 @@ class RuntimeContractTests(unittest.TestCase):
             package, handoff = create_valid_source_stage(Path(temporary_directory))
             self.assertEqual([], validate_source(package, handoff))
 
+    def test_source_stage_rejects_handoff_named_after_target_scope(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            package, handoff = create_valid_source_stage(Path(temporary_directory))
+            wrong = handoff.parent / "00-9.3.3"
+            handoff.rename(wrong)
+
+            errors = validate_source(package, wrong)
+
+            self.assertTrue(
+                any("do not derive the source handoff name from the target scope" in error for error in errors)
+            )
+
+    def test_scope_stage_rejects_source_handoff_directory(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            package, handoff = create_valid_source_stage(Path(temporary_directory))
+
+            errors = validate_scope(package, handoff)
+
+            self.assertTrue(
+                any("scope handoff directory must be separate from the source handoff" in error for error in errors)
+            )
+
     def test_source_stage_normalizes_figma_url_from_markdown_code_span(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
             root = Path(temporary_directory)

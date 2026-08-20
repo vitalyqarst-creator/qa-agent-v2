@@ -1404,6 +1404,14 @@ def strip_allowed_technical_fragments(content: str) -> str:
 def validate(package_root: Path, scope_dir: Path) -> list[str]:
     errors: list[str] = []
     errors.extend(validate_no_repository_temp(package_root))
+    expected_source_dir = (
+        package_root.resolve() / "work" / "stage-handoffs" / f"00-{package_root.resolve().name}"
+    )
+    if scope_dir.resolve() == expected_source_dir.resolve() or (scope_dir / "source-selection.md").is_file():
+        errors.append(
+            "scope handoff directory must be separate from the source handoff; "
+            "use work/stage-handoffs/<canonical-scope>"
+        )
     errors.extend(validate_topology(package_root, "scope-analyzer", canonical_scope(scope_dir.name)))
     missing_files: list[str] = []
     for name in REQUIRED_FILES:

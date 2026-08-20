@@ -156,6 +156,14 @@ def validate(package_root: Path, handoff_dir: Path, allow_downstream: bool = Fal
     errors: list[str] = []
     errors.extend(validate_topology(package_root, "source-locator"))
 
+    expected_handoff_dir = package_root / "work" / "stage-handoffs" / f"00-{package_root.name}"
+    if handoff_dir != expected_handoff_dir.resolve():
+        errors.append(
+            "source handoff directory must be "
+            f"work/stage-handoffs/00-{package_root.name}; "
+            "do not derive the source handoff name from the target scope"
+        )
+
     missing = [name for name in REQUIRED_HANDOFF_FILES if not (handoff_dir / name).is_file()]
     errors.extend(f"missing source artifact: {name}" for name in missing)
     notes_path = package_root / "AGENT-NOTES.md"

@@ -3,8 +3,10 @@
 Source locator создаёт только:
 
 - производное машинное представление канонического источника, если оно отсутствовало;
-- `work/stage-handoffs/00-<ft>/source-selection.md`;
-- `work/stage-handoffs/00-<ft>/workflow-state.yaml`;
+- `work/stage-handoffs/00-<package-root.name>/source-selection.md`;
+- `work/stage-handoffs/00-<package-root.name>/workflow-state.yaml`.
+
+Имя source handoff выводится только из имени корня FT-пакета. Номер или slug будущего scope использовать нельзя: иначе source и scope handoff могут совпасть и перезаписать друг друга.
 - controller-owned `work/runtime-session-registry.json` уже существует до начала этапа.
 
 До записи handoff source locator получает пути и hashes штатной командой `python -X utf8 scripts/validate_runtime_source.py <FT-package> --print-input-inventory`. Вывод также показывает явные подсказки ролей из `AGENT-NOTES.md`; перепечатывать digest вручную не нужно.

@@ -2,6 +2,8 @@
 
 Controller — одна верхнеуровневая Codex-сессия на весь FT-пакет. Она управляет переходами, но не анализирует требования, не пишет matrix/TC и не выносит review-verdict.
 
+Source handoff всегда находится в `work/stage-handoffs/00-<package-root.name>/`. Scope handoff находится отдельно в `work/stage-handoffs/<canonical-scope>/`. Целевой scope из пользовательской задачи не участвует в имени source handoff; controller проверяет это source-validator-ом до регистрации analyzer-а.
+
 ## Роли
 
 - Один `source-locator` на FT-пакет, в отдельной от controller верхнеуровневой сессии.
