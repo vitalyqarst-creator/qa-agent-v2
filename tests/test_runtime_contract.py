@@ -1293,6 +1293,24 @@ class RuntimeContractTests(unittest.TestCase):
         self.assertIn("не проектируй недостижимое пустое состояние", reference)
         self.assertNotIn("прочитай `AGENTS.md`", skill.casefold())
 
+    def test_matrix_materializability_distinguishes_plain_distinct_records_from_coupled_constraints(self) -> None:
+        root = Path(__file__).resolve().parents[1]
+        writer = (root / "skills" / "ft-test-case-writer" / "SKILL.md").read_text(encoding="utf-8")
+        reviewer = (root / "skills" / "ft-test-case-reviewer" / "SKILL.md").read_text(encoding="utf-8")
+        matrix = (root / "references" / "runtime" / "test-design-matrix.md").read_text(encoding="utf-8")
+        fixtures = (root / "references" / "runtime" / "test-data-fixtures.md").read_text(encoding="utf-8")
+        review = (root / "references" / "runtime" / "review-record.md").read_text(encoding="utf-8")
+
+        self.assertIn("Для обычного отношения «две целиком разные связные записи»", writer)
+        self.assertIn("Обычное получение двух целиком разных связных записей", reviewer)
+        self.assertIn("Для двух целиком разных связных записей", matrix)
+        self.assertIn("Для обычной пары двух целиком разных связных записей", fixtures)
+        self.assertIn("Для двух целиком разных связных записей", review)
+        for content in (writer, reviewer, matrix, fixtures, review):
+            self.assertIn("`matrix-accepted`", content)
+        self.assertIn("не требуй конкретные fixtures до `matrix-accepted`", reviewer)
+        self.assertIn("одинаковый provider-bound идентификатор", reviewer)
+
     def test_scope_public_contract_exposes_authoring_schema_and_id_examples(self) -> None:
         contract = public_contract("9.1-menu-upravleniya-partnerami")
 
