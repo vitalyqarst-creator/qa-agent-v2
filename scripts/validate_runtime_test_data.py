@@ -87,9 +87,14 @@ def plan_sources(content: str) -> tuple[dict[str, tuple[str, ...]], list[str]]:
     for row in table.rows:
         sources = tuple(part.strip().strip("`").casefold() for part in row[source_index].split(";") if part.strip())
         for role in ROLE_RE.findall(row[role_index]):
-            if role in result:
-                errors.append(f"test-data-plan declares {role} more than once")
-            result[role] = sources
+            previous_sources = result.get(role)
+            if previous_sources is not None and set(previous_sources) != set(sources):
+                errors.append(
+                    f"test-data-plan reuses {role} with conflicting allowed sources: "
+                    f"{sorted(previous_sources)} vs {sorted(sources)}"
+                )
+                continue
+            result.setdefault(role, sources)
     return result, errors
 
 

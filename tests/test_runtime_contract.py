@@ -65,7 +65,7 @@ from scripts.validate_runtime_scope import (
     xhtml_table_rows,
 )
 from scripts.validate_runtime_source import input_inventory, validate as validate_source
-from scripts.validate_runtime_test_data import validate as validate_test_data
+from scripts.validate_runtime_test_data import plan_sources, validate as validate_test_data
 from scripts.validate_runtime_tc import (
     validate as validate_tc,
     validate_layout as validate_tc_layout,
@@ -1310,6 +1310,25 @@ class RuntimeContractTests(unittest.TestCase):
             self.assertIn("`matrix-accepted`", content)
         self.assertIn("не требуй конкретные fixtures до `matrix-accepted`", reviewer)
         self.assertIn("одинаковый provider-bound идентификатор", reviewer)
+
+    def test_materialization_allows_compatible_data_role_reuse_and_rejects_source_conflict(self) -> None:
+        compatible = """# План данных
+
+| Группа проверок | Роли данных | Допустимый источник | Ограничения и отношения | Границы и классы | Воспроизводимая подготовка | Готовность материализации |
+| --- | --- | --- | --- | --- | --- | --- |
+| Поиск | TD-ORG | внешний сервис: Provider | Связная запись. | Не применимо: границ нет. | Получить запись. | требуется |
+| Автозаполнение | TD-ORG | внешний сервис: Provider | Та же связная запись. | Не применимо: границ нет. | Использовать сохранённый ответ. | требуется |
+"""
+        sources, errors = plan_sources(compatible)
+        self.assertEqual([], errors)
+        self.assertEqual(("внешний сервис: provider",), sources["TD-ORG"])
+
+        conflicting = compatible.replace(
+            "| Автозаполнение | TD-ORG | внешний сервис: Provider |",
+            "| Автозаполнение | TD-ORG | синтетический генератор |",
+        )
+        _, errors = plan_sources(conflicting)
+        self.assertTrue(any("conflicting allowed sources" in error for error in errors))
 
     def test_scope_public_contract_exposes_authoring_schema_and_id_examples(self) -> None:
         contract = public_contract("9.1-menu-upravleniya-partnerami")
