@@ -110,6 +110,8 @@ python scripts/runtime_workflow_state.py validate --matrix <matrix>
 
 Writer вызывает `pending` после создания и каждой revision matrix. Controller вызывает `apply-review` только для валидного review-record текущей matrix. `exhausted` допустим лишь после единственной revision при остаточных findings, явно закрытых в closure-отчёте. Перед материализацией и TC controller обязан запустить `validate`; только `accepted` разрешает продолжение.
 
+Если неизменная matrix получает новый полный review после обновления agent-layer, новый валидный record может атомарно заменить прежний по тому же каноническому пути: `apply-review` допускает только ожидаемое расхождение SHA прежнего record и сразу привязывает state к SHA нового. Любая иная ошибка pre-review state остаётся блокирующей.
+
 ## Результат review
 
 Reviewer сверяет матрицу с первичными источниками и профилями тест-дизайна, затем выносит только `matrix-accepted` либо `matrix-changes-required`. Review-record связывается с SHA-256 matrix по `references/runtime/review-record.md`. После одной ограниченной правки повторяет review; второй дополнительный цикл не запускается без решения пользователя.

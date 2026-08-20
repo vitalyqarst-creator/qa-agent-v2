@@ -143,6 +143,11 @@ def set_pending(matrix: Path) -> dict[str, str]:
 
 def apply_review(matrix: Path, review_path: Path) -> dict[str, str]:
     state_errors = validate_state(matrix)
+    if state_errors == ["matrix review SHA-256 mismatch"]:
+        package_root, _state_path, values = state_context(matrix)
+        current_review = package_root / values.get("matrix_review", "")
+        if current_review.resolve() == review_path.resolve():
+            state_errors = []
     if state_errors:
         raise ValueError("invalid pre-review workflow state: " + "; ".join(state_errors))
     errors = validate_matrix_review(matrix, review_path)

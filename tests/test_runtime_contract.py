@@ -1952,6 +1952,40 @@ class RuntimeContractTests(unittest.TestCase):
         )
         self.assertTrue(any("coverage-gap readiness" in error for error in validate_matrix(wrong_gap_readiness)))
 
+    def test_workflow_apply_review_may_atomically_supersede_same_path_record(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            package = Path(temporary_directory) / "FT"
+            (package / "AGENT-NOTES.md").parent.mkdir(parents=True)
+            (package / "AGENT-NOTES.md").write_text("# Notes\n", encoding="utf-8")
+            matrix = package / "work" / "practical" / "9.3.1" / "test-design-matrix.md"
+            matrix.parent.mkdir(parents=True)
+            matrix.write_text(VALID_MATRIX, encoding="utf-8")
+            (matrix.parent / "matrix-data-plan.md").write_text(
+                "# План данных\n\nДанные не требуются.\n", encoding="utf-8"
+            )
+            set_pending(matrix)
+            review_path = create_accepted_matrix_review(package, matrix, "9.3.1")
+            first_state = apply_review(matrix, review_path)
+            self.assertEqual("accepted", first_state["matrix_status"])
+
+            replacement = json.loads(review_path.read_text(encoding="utf-8"))
+            replacement["reviewed_at"] = "2026-08-17T00:02:00Z"
+            replacement["verdict"] = "matrix-changes-required"
+            replacement["findings"] = [
+                {
+                    "id": "M-R-001",
+                    "severity": "material",
+                    "affected_items": ["M-001"],
+                    "description": "Источник идентичности не подтверждён.",
+                    "required_correction": "Указать source-compatible источник.",
+                }
+            ]
+            review_path.write_text(json.dumps(replacement, ensure_ascii=False), encoding="utf-8")
+            self.assertEqual(["matrix review SHA-256 mismatch"], validate_state(matrix))
+            replacement_state = apply_review(matrix, review_path)
+            self.assertEqual("changes-required", replacement_state["matrix_status"])
+            self.assertEqual([], validate_state(matrix))
+
     def test_matrix_layout_requires_practical_directory_and_writer_state(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
             package = Path(temporary_directory) / "FT"
