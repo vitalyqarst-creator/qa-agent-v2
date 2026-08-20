@@ -414,11 +414,22 @@ def scope_stage_decision(errors: list[str], revision_count: int | None) -> dict[
     blocking_errors, quality_findings = partition_scope_findings(errors)
     blocking_classes = {classify_scope_error(error) for error in blocking_errors}
     preflight_repair_allowed = "format" in blocking_classes and revision_count == 0
-    final_closure_allowed = (
+    narrow_final_closure_allowed = (
         revision_count == 2
         and 0 < len(blocking_errors) <= 2
         and blocking_classes <= {"atomicity", "completeness", "traceability", "source-contract"}
     )
+    catalog_closure_patterns = (
+        "requirement-code boundary is partial; omitted active codes",
+        "incoming actions that open the selected UI scope are not assigned",
+        "has no explicit ownership row with an exact quoted fragment",
+    )
+    catalog_final_closure_allowed = (
+        revision_count == 2
+        and bool(blocking_errors)
+        and all(any(pattern in error for pattern in catalog_closure_patterns) for error in blocking_errors)
+    )
+    final_closure_allowed = narrow_final_closure_allowed or catalog_final_closure_allowed
     reconciliation_patterns = (
         "approved answer source mentions its requirement",
         "duplicates a fully answered approved clarification",
@@ -704,7 +715,7 @@ def public_contract(scope: str | None = None, package_root: Path | None = None) 
             "maximum_scope_revision_count": 4,
             "preflight_repair": "one preflight pass repairs only format errors, even when content errors coexist, and keeps scope_revision_count at 0",
             "content_correction": "up to two blocking content corrections increment scope_revision_count from 0 to 1 and then to 2",
-            "final_closure": "at count 2, one final correction is allowed only for at most two atomicity, completeness, traceability or source-contract blockers and changes count to 3",
+            "final_closure": "at count 2, one final correction changes count to 3 and is allowed for at most two atomicity/completeness/traceability/source-contract blockers, or for any number of deterministic catalog-closure omissions only",
             "answer_reconciliation": "at count 3, one last correction is allowed only to reconcile an already approved answer, its source and a duplicate readiness GAP; it changes count to 4",
             "validator_repair": "at count 4, one count-preserving repair is allowed only when an unbounded quantitative GAP was falsely closed by approved-answer matching and the linked clarification must return to pending",
             "before_validation": "repair format-only blocking_errors once without spending a content correction; quality_findings are carried to matrix authoring and review",
@@ -923,6 +934,20 @@ def leading_requirement_codes(value: str) -> list[str]:
     return result
 
 
+def declared_requirement_codes(value: str) -> list[str]:
+    """Return leading codes and embedded declarations whose text starts with a capitalized clause."""
+
+    result = set(leading_requirement_codes(value))
+    for anchor in sorted(item for item in extract_anchors(value) if item.startswith("CODE:")):
+        label = anchor.removeprefix("CODE:")
+        for match in re.finditer(rf"\b{re.escape(label)}\b", value, re.IGNORECASE):
+            suffix = value[match.end() :].lstrip()
+            if suffix and re.match(r"[A-ZА-ЯЁ]", suffix):
+                result.add(anchor)
+                break
+    return sorted(result)
+
+
 def xhtml_section_elements(path: Path, section_id: str) -> list[ET.Element]:
     """Return direct body elements that belong to one numbered section."""
 
@@ -986,7 +1011,7 @@ def requirement_fragment_catalog(elements: list[ET.Element]) -> dict[str, dict[s
             if tag in {"h1", "h2", "h3", "table"}:
                 current_code = None
             continue
-        codes = leading_requirement_codes(text)
+        codes = declared_requirement_codes(text)
         if codes:
             current_code = codes[0] if len(codes) == 1 else None
             for code in codes:
@@ -1015,7 +1040,7 @@ def selected_requirement_catalog(path: Path, section_id: str) -> dict[str, dict[
             ]
         for candidate in candidates:
             text = xhtml_cell_text(candidate) if local_tag(candidate) in {"td", "th"} else element_text(candidate)
-            for code in leading_requirement_codes(text):
+            for code in declared_requirement_codes(text):
                 result.setdefault(code, {"text": text, "list_fragments": []})
     return result
 

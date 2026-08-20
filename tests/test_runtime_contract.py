@@ -298,7 +298,7 @@ def write_requirement_catalog_xhtml(package: Path) -> None:
         "<tr><td>Добавить</td><td>AS.25 Открыть окно на Рисунок 5.</td></tr></table>"
         "<h2>9.3.3 Карточка реквизитов</h2>"
         "<p>AS.39 Можно добавить неограниченное количество реквизитов.</p>"
-        "<p>AS.40 Перевод использует реквизит.</p>"
+        "<p>AS.40 Перевод использует реквизит согласно AS.5. AS.41 Если проверка успешна, запись сохраняется AS.42 Иначе запись не сохраняется.</p>"
         "<p>Рисунок 5 — карточка.</p>"
         "<h2>9.4 Следующий раздел</h2>"
         "</body></html>",
@@ -1332,7 +1332,7 @@ class RuntimeContractTests(unittest.TestCase):
             contract = public_contract("9.3.3", package)
 
             self.assertEqual(
-                {"CODE:AS.39", "CODE:AS.40"},
+                {"CODE:AS.39", "CODE:AS.40", "CODE:AS.41", "CODE:AS.42"},
                 set(contract["selected_requirement_catalog"]),
             )
             self.assertEqual(
@@ -1533,6 +1533,18 @@ class RuntimeContractTests(unittest.TestCase):
         )
         self.assertFalse(too_many["final_closure_allowed"])
         self.assertFalse(too_many["correction_allowed"])
+
+        catalog_omissions = scope_stage_decision(
+            [
+                "scope-brief requirement-code boundary is partial; omitted active codes: CODE:REQ.2",
+                "incoming actions that open the selected UI scope are not assigned: REQ.3, REQ.4",
+                "parent requirement REQ.1 list fragment 1 has no explicit ownership row with an exact quoted fragment",
+                "parent requirement REQ.1 list fragment 2 has no explicit ownership row with an exact quoted fragment",
+            ],
+            2,
+        )
+        self.assertTrue(catalog_omissions["final_closure_allowed"])
+        self.assertTrue(catalog_omissions["correction_allowed"])
 
         workflow_failed = scope_stage_decision(
             ["workflow-state must reference work/scope-clarification-requests.md"],

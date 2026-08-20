@@ -11,7 +11,7 @@
 - `prompt.scope-to-writer.md`;
 - `workflow-state.yaml` со ссылкой `clarification_register: "work/scope-clarification-requests.md"`.
 
-Initial count — `0`. Следуй correction-флагам validator-а. `validator_repair_allowed` при count `4` сохраняет count и восстанавливает только ошибочно закрытый количественный GAP с pending-clarification. Переход — лишь при `writer_allowed=true`.
+Count — `0`. Следуй флагам validator-а. При count `2` финальная коррекция допускает ≤2 blockers либо catalog omissions. `validator_repair_allowed` при count `4` сохраняет count, восстанавливая ошибочно закрытый количественный GAP с pending-clarification. Переход при `writer_allowed=true`.
 
 ## Границы источника
 
