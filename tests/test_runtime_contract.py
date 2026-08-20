@@ -40,7 +40,11 @@ from scripts.validate_runtime_matrix import (
     validate_layout as validate_matrix_layout,
     validate_projection as validate_matrix_projection,
 )
-from scripts.validate_runtime_review import tc_repair_stage, validate as validate_review
+from scripts.validate_runtime_review import (
+    matrix_review_quality_blocking,
+    tc_repair_stage,
+    validate as validate_review,
+)
 from scripts.validate_runtime_scope import (
     classify_scope_error,
     generic_unavailability_without_observation,
@@ -3817,6 +3821,11 @@ class RuntimeContractTests(unittest.TestCase):
             review_path.with_suffix(".md").write_text("# Повторное review matrix\n", encoding="utf-8")
             enrich_review_record(root, artifact, review_path, "matrix", "reviews")
             self.assertEqual([], validate_review(artifact, review_path, "matrix", require_accepted=True))
+            manifest_backed_record = json.loads(review_path.read_text(encoding="utf-8"))
+            manifest_backed_record["review_quality_status"] = "failed-prior-review-incomplete"
+            self.assertTrue(matrix_review_quality_blocking(manifest_backed_record))
+            manifest_backed_record.pop("revision_manifest_path")
+            self.assertFalse(matrix_review_quality_blocking(manifest_backed_record))
 
             missing_quality_status = json.loads(review_path.read_text(encoding="utf-8"))
             missing_quality_status.pop("review_quality_status")

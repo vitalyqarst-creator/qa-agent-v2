@@ -176,6 +176,22 @@ def validate_matrix_finding_discovery(
     return errors
 
 
+def matrix_review_quality_blocking(record: dict[str, Any] | None) -> bool:
+    """Return whether reviewer incompleteness blocks the route.
+
+    The quality failure is meaningful only for a manifest-backed re-review after
+    a writer revision. A fresh full review that replaces a record invalidated by
+    a newer runtime contract may report all current findings, but it must not
+    turn those findings into an unrecoverable route failure.
+    """
+    return bool(
+        isinstance(record, dict)
+        and record.get("review_quality_status") == "failed-prior-review-incomplete"
+        and isinstance(record.get("revision_manifest_path"), str)
+        and record.get("revision_manifest_path", "").strip()
+    )
+
+
 def validate(artifact: Path, record_path: Path, kind: str, require_accepted: bool = False) -> list[str]:
     errors: list[str] = []
     record, load_errors = load_record(record_path)
@@ -403,13 +419,21 @@ def main() -> int:
     errors = validate(args.artifact, args.review_record, args.kind, args.require_accepted)
     record, _load_errors = load_record(args.review_record)
     repair_stage = None
+    review_quality_blocking = False
     if not errors and args.kind == "tc" and record is not None and record.get("verdict") == "tc-changes-required":
         findings = record.get("findings")
         if isinstance(findings, list):
             repair_stage = tc_repair_stage(findings)
+    if not errors and args.kind == "matrix":
+        review_quality_blocking = matrix_review_quality_blocking(record)
     print(
         json.dumps(
-            {"valid": not errors, "errors": errors, "repair_stage": repair_stage},
+            {
+                "valid": not errors,
+                "errors": errors,
+                "repair_stage": repair_stage,
+                "review_quality_blocking": review_quality_blocking,
+            },
             ensure_ascii=False,
         )
     )

@@ -67,7 +67,7 @@ Review выполняется только в отдельной верхнеу�
 
 Вердикт: только `matrix-accepted` или `matrix-changes-required` с конечным списком findings.
 
-При re-review классифицируй каждый текущий finding через `discovery_status` из `review-record.md`. Новый дефект неизменённого элемента, который должен был быть найден предыдущим полным review, помечай `prior-review-omission`, а весь record — `review_quality_status: failed-prior-review-incomplete`; не выдавай его за дефект, созданный revision. Controller останавливает текущий route на качестве review вместо расходования очередного цикла исправлений. Дефект, реально возникший в изменённом элементе, допускает `introduced-by-revision`; дефект из изменившегося semantic input — `semantic-input-change`; прежний незакрытый finding — `carried-forward` со ссылкой на прежний ID.
+Только при manifest-backed re-review после writer revision классифицируй каждый текущий finding через `discovery_status` из `review-record.md`. Новый дефект неизменённого элемента, который должен был быть найден предыдущим валидным полным review, помечай `prior-review-omission`, а весь record — `review_quality_status: failed-prior-review-incomplete`; не выдавай его за дефект, созданный revision. Fresh full review, заменяющий record, который стал невалиден после изменения runtime-контракта, не сравнивай с невалидным predecessor: верни обычный полный verdict со всеми текущими findings. Дефект, реально возникший в изменённом элементе, допускает `introduced-by-revision`; дефект из изменившегося semantic input — `semantic-input-change`; прежний незакрытый finding — `carried-forward` со ссылкой на прежний ID. Controller маршрутизирует качество только по `review_quality_blocking` validator-а.
 
 ## TC review
 

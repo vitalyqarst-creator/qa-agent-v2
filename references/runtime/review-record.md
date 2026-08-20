@@ -118,14 +118,14 @@ python scripts/runtime_review_dispatch.py verify --package-root <FT-package> --a
 
 `affected_items` обязателен для каждого schema v2 finding обоих видов review. Для matrix перечисляй `M-*`, `GAP-*` и затронутые элементы модели `EP-*`/`BVA-*`/`DT-R*`/`ST-T*`/`CT-C*`; для TC — `TC-*`. Используй `GLOBAL` только для действительно глобального дефекта: он принудительно включает полный re-review.
 
-При matrix re-review каждый finding дополнительно содержит `discovery_status` и непустое `discovery_evidence`:
+При manifest-backed matrix re-review после writer revision каждый finding дополнительно содержит `discovery_status` и непустое `discovery_evidence`. Fresh full review, заменяющий record, который стал невалиден после изменения runtime-контракта, не сравнивает свою полноту с таким невалидным predecessor и возвращает обычный полный набор текущих findings:
 
 - `carried-forward` — прежний finding не закрыт; обязателен `previous_finding_id`;
 - `introduced-by-revision` — дефект действительно возник в одном из `changed_items` manifest;
 - `semantic-input-change` — дефект стал применим из-за изменённого semantic input;
 - `prior-review-omission` — дефект неизменённого материала должен был войти в предыдущее полное review, но был пропущен.
 
-Record с хотя бы одним `prior-review-omission` получает `review_quality_status: failed-prior-review-incomplete`; иначе — `complete`. Это не скрывает найденный дефект, но запрещает controller-у выдавать finding drift за нормальную следующую matrix revision.
+Manifest-backed re-review record с хотя бы одним `prior-review-omission` получает `review_quality_status: failed-prior-review-incomplete`; иначе — `complete`. Это не скрывает найденный дефект, но запрещает controller-у выдавать finding drift за нормальную следующую matrix revision. Для маршрутизации controller использует только машинное поле `review_quality_blocking` из `validate_runtime_review.py`; raw `review_quality_status` без `revision_manifest_path` route не блокирует.
 
 - `matrix` — дефект присутствует в принятой matrix, но проверенный TC уже корректен относительно источника и после исправления matrix не требует изменения. Сначала исправляется matrix.
 - `tc` — matrix достаточна, а дефект возник только при её проекции в canonical TC. Исправляются TC.
