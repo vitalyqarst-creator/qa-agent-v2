@@ -1565,6 +1565,28 @@ class RuntimeContractTests(unittest.TestCase):
         self.assertFalse(exhausted["answer_reconciliation_allowed"])
         self.assertFalse(exhausted["correction_allowed"])
 
+    def test_scope_decision_allows_narrow_validator_repair_at_count_four(self) -> None:
+        eligible = scope_stage_decision(
+            [
+                "AS.39: an unbounded quantitative requirement needs an explicit GAP-*; a finite sample cannot prove absence of a limit",
+                "CLR-002: answered or cancelled clarification still links open coverage gaps: GAP-002",
+            ],
+            4,
+        )
+        self.assertTrue(eligible["validator_repair_allowed"])
+        self.assertTrue(eligible["correction_allowed"])
+        self.assertEqual(4, eligible["scope_revision_count"])
+
+        unrelated = scope_stage_decision(
+            [
+                "AS.39: an unbounded quantitative requirement needs an explicit GAP-*; a finite sample cannot prove absence of a limit",
+                "SR-001: active source row must contain one atomic requirement code",
+            ],
+            4,
+        )
+        self.assertFalse(unrelated["validator_repair_allowed"])
+        self.assertFalse(unrelated["correction_allowed"])
+
     def test_approved_answer_matching_distinguishes_quantity_from_duplicate_identity(self) -> None:
         quantity_question = (
             "Какой проверяемый критерий подтверждает неограниченное количество реквизитов у одного партнера?"

@@ -426,12 +426,24 @@ def scope_stage_decision(errors: list[str], revision_count: int | None) -> dict[
         and 0 < len(errors) <= 3
         and all(any(pattern in error for pattern in reconciliation_patterns) for error in errors)
     )
+    validator_repair_allowed = (
+        revision_count == 4
+        and len(blocking_errors) == 1
+        and "an unbounded quantitative requirement needs an explicit GAP-*" in blocking_errors[0]
+        and 0 < len(quality_findings) <= 2
+        and all(
+            "answered or cancelled clarification still links open coverage gaps" in finding
+            for finding in quality_findings
+        )
+        and len(errors) == len(blocking_errors) + len(quality_findings)
+    )
     correction_allowed = (
         bool(blocking_errors)
         and (
             revision_count in {0, 1}
             or final_closure_allowed
             or answer_reconciliation_allowed
+            or validator_repair_allowed
         )
         and not preflight_repair_allowed
     )
@@ -443,6 +455,7 @@ def scope_stage_decision(errors: list[str], revision_count: int | None) -> dict[
         "preflight_repair_allowed": preflight_repair_allowed,
         "final_closure_allowed": final_closure_allowed,
         "answer_reconciliation_allowed": answer_reconciliation_allowed,
+        "validator_repair_allowed": validator_repair_allowed,
         "correction_allowed": correction_allowed,
         "workflow_status": (
             "completed"
@@ -690,8 +703,9 @@ def public_contract(scope: str | None = None, package_root: Path | None = None) 
             "content_correction": "up to two blocking content corrections increment scope_revision_count from 0 to 1 and then to 2",
             "final_closure": "at count 2, one final correction is allowed only for at most two atomicity, completeness, traceability or source-contract blockers and changes count to 3",
             "answer_reconciliation": "at count 3, one last correction is allowed only to reconcile an already approved answer, its source and a duplicate readiness GAP; it changes count to 4",
+            "validator_repair": "at count 4, one count-preserving repair is allowed only when an unbounded quantitative GAP was falsely closed by approved-answer matching and the linked clarification must return to pending",
             "before_validation": "repair format-only blocking_errors once without spending a content correction; quality_findings are carried to matrix authoring and review",
-            "when_blocking_at_count_4": "stop; correction_allowed=false; workflow status is failed",
+            "when_blocking_at_count_4": "stop unless validator_repair_allowed=true; otherwise correction_allowed=false and workflow status is failed",
         },
         "atomicity_checks": [
             "один объект или UI-уровень в одной обязанности",

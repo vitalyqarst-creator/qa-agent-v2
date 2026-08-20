@@ -11,7 +11,7 @@
 - `prompt.scope-to-writer.md`;
 - `workflow-state.yaml` со ссылкой `clarification_register: "work/scope-clarification-requests.md"`.
 
-Initial: `scope_revision_count: 0`, `status: draft`. Preflight исправляет только format-errors и не меняет count при content-errors; коррекция `blocking_errors` меняет count на `1`. Остаток останавливает этап; `quality_findings` идут в matrix review. Переход разрешён при `writer_allowed=true`.
+Initial count — `0`. Следуй correction-флагам validator-а. `validator_repair_allowed` при count `4` сохраняет count и восстанавливает только ошибочно закрытый количественный GAP с pending-clarification. Переход — лишь при `writer_allowed=true`.
 
 ## Границы источника
 
