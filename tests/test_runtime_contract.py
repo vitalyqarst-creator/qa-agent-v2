@@ -1429,6 +1429,16 @@ class RuntimeContractTests(unittest.TestCase):
         self.assertIn("mandatory-field behavior", errors[0])
         self.assertEqual("semantic", classify_scope_error(errors[0]))
 
+    def test_invalid_logical_data_origin_blocks_scope_handoff(self) -> None:
+        error = (
+            "test-data-plan Партнёр: 'стендовая подготовка' is an execution method, "
+            "not a tester-facing value source"
+        )
+        self.assertEqual("source-contract", classify_scope_error(error))
+        blocking, quality = partition_scope_findings([error])
+        self.assertEqual([error], blocking)
+        self.assertEqual([], quality)
+
     def test_session_topology_uses_cost_aware_role_defaults(self) -> None:
         root = Path(__file__).resolve().parents[1]
         topology = (root / "references" / "runtime" / "session-topology.md").read_text(encoding="utf-8")
@@ -1763,10 +1773,14 @@ class RuntimeContractTests(unittest.TestCase):
 
 | Бизнес-ключ и область | Создание дубликата | Самосовпадение при редактировании | Конфликт при редактировании | Тот же ключ, другое неключевое поле | Основание или исключение |
 | --- | --- | --- | --- | --- | --- |
-| Наименование партнёра в пределах реестра | M-001 | Не применимо: инвентарь содержит только создание. | Не применимо: инвентарь содержит только создание. | Не применимо: инвентарь содержит только создание. | SR-001; проверка создания |
+| Наименование партнёра в пределах реестра | M-001 | Не применимо: AS.1 содержит только создание. | Не применимо: AS.1 содержит только создание. | Не применимо: AS.1 содержит только создание. | SR-001; проверка создания |
 """
         self.assertEqual([], validate_matrix(profiled))
         self.assertEqual([], validate_matrix_projection(profiled, inventory, VALID_GAPS))
+        unanchored = profiled.replace("Не применимо: AS.1 содержит только создание.", "Не применимо: доступно только создание.")
+        self.assertTrue(
+            any("must contain its own precise source anchor" in error for error in validate_matrix(unanchored))
+        )
 
     def test_matrix_requires_explicit_coverage_item(self) -> None:
         invalid = VALID_MATRIX.replace("Сохранение валидной карточки", "")
@@ -1878,7 +1892,7 @@ class RuntimeContractTests(unittest.TestCase):
                 encoding="utf-8",
             )
             final_plan = VALID_DATA_PLAN + (
-                "| Второй счёт | TD-ACCOUNT-B | стендовая подготовка | "
+                "| Второй счёт | TD-ACCOUNT-B | синтетический генератор; стендовая подготовка | "
                 "REL-DIFFERENT-ACCOUNT: счёт отличается от первого. | Не применимо. | "
                 "Подготовить второй счёт. | требуется |\n"
             )
@@ -2773,7 +2787,7 @@ class RuntimeContractTests(unittest.TestCase):
 
 | Группа проверок | Роли данных | Допустимый источник | Ограничения и отношения | Границы и классы | Воспроизводимая подготовка | Готовность материализации |
 | --- | --- | --- | --- | --- | --- | --- |
-| Размер файла не более 40 МБ | TD-FILE-LIMIT; TD-FILE-OVER | стендовая подготовка | Два открываемых файла допустимого формата. | Допустимо 40 МБ; недопустимо 41 МБ. | Создать файлы до проверки. | требуется |
+| Размер файла не более 40 МБ | TD-FILE-LIMIT; TD-FILE-OVER | синтетический генератор; стендовая подготовка | Два открываемых файла допустимого формата. | Допустимо 40 МБ; недопустимо 41 МБ. | Создать файлы до проверки. | требуется |
 """
         errors = validate_test_data_plan(plan)
         self.assertTrue(any("Шаг представления" in error for error in errors))
@@ -2783,6 +2797,36 @@ class RuntimeContractTests(unittest.TestCase):
             "Шаг представления: 1 КБ; валидная граница: 40 МБ; ближайшее недопустимое: 40 МБ + 1 КБ; Основание границы: AS.35.",
         )
         self.assertEqual([], validate_test_data_plan(valid))
+
+    def test_test_data_plan_separates_literal_origin_from_stand_preparation(self) -> None:
+        stand_only = VALID_DATA_PLAN.replace(
+            "первичный источник; стендовая подготовка",
+            "стендовая подготовка",
+        )
+        self.assertTrue(
+            any("not a tester-facing value source" in error for error in validate_test_data_plan(stand_only))
+        )
+
+        unqualified_acquisition = VALID_DATA_PLAN.replace(
+            "Создать запись с указанным наименованием.",
+            "Контракт получения: запросить запись внешнего реестра.",
+        )
+        self.assertTrue(
+            any("requires an explicit provider" in error for error in validate_test_data_plan(unqualified_acquisition))
+        )
+
+        confirmed_environment = VALID_DATA_PLAN.replace(
+            "первичный источник; стендовая подготовка",
+            "подтверждённая стендовая привязка",
+        )
+        self.assertTrue(
+            any("Контракт подтверждения:" in error for error in validate_test_data_plan(confirmed_environment))
+        )
+        confirmed_environment = confirmed_environment.replace(
+            "Создать запись с указанным наименованием.",
+            "Контракт подтверждения: сохранить evidence, путь и SHA-256.",
+        )
+        self.assertEqual([], validate_test_data_plan(confirmed_environment))
 
     def test_test_data_plan_reports_root_column_mismatch(self) -> None:
         malformed = """# План тестовых данных
@@ -2935,7 +2979,7 @@ class RuntimeContractTests(unittest.TestCase):
                 "# План данных\n\n"
                 "| Группа проверок | Роли данных | Допустимый источник | Ограничения и отношения | Границы и классы | Воспроизводимая подготовка | Готовность материализации |\n"
                 "| --- | --- | --- | --- | --- | --- | --- |\n"
-                "| Партнёр | TD-PARTNER-A | стендовая подготовка | Конкретная запись. | Не применимо: границ нет. | Найти подтверждённую запись. | требуется |\n",
+                "| Партнёр | TD-PARTNER-A | подтверждённая стендовая привязка | Конкретная запись. | Не применимо: границ нет. | Контракт подтверждения: сохранить evidence конкретной записи, путь и SHA-256. | требуется |\n",
                 encoding="utf-8",
             )
             materialization = package / "work" / "test-data" / "9.3.3" / "data-materialization.json"
@@ -2951,7 +2995,7 @@ class RuntimeContractTests(unittest.TestCase):
                         "role_id": "TD-PARTNER-A",
                         "used_by": ["M-001"],
                         "source_type": "environment",
-                        "source_name": "стендовая подготовка",
+                        "source_name": "подтверждённая стендовая привязка",
                         "values": {"Наименование партнёра": "ООО Тестовый партнёр"},
                     }
                 ],

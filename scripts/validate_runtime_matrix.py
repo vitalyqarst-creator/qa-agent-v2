@@ -11,14 +11,18 @@ try:
     from scripts.runtime_traceability import anchor_label, extract_anchors, find_markdown_table
     from scripts.runtime_workflow_state import validate_state as validate_workflow_state
     from scripts.runtime_session_registry import canonical_scope, find_package_root, validate_topology
-    from scripts.validate_runtime_scope import TEST_DATA_PLAN_HEADERS, validate_test_data_plan
+    from scripts.validate_runtime_scope import (
+        TEST_DATA_PLAN_HEADERS,
+        precise_source_anchors,
+        validate_test_data_plan,
+    )
 except ModuleNotFoundError:  # Direct invocation: python scripts/validate_runtime_matrix.py
     from runtime_cleanliness import validate_no_repository_temp
     from runtime_io import configure_utf8_stdio
     from runtime_traceability import anchor_label, extract_anchors, find_markdown_table
     from runtime_workflow_state import validate_state as validate_workflow_state
     from runtime_session_registry import canonical_scope, find_package_root, validate_topology
-    from validate_runtime_scope import TEST_DATA_PLAN_HEADERS, validate_test_data_plan
+    from validate_runtime_scope import TEST_DATA_PLAN_HEADERS, precise_source_anchors, validate_test_data_plan
 
 
 REQUIRED_HEADERS = (
@@ -324,6 +328,11 @@ def validate_uniqueness_control(
         for column in scenario_columns:
             value = row[table.index(column)].strip()
             if NOT_APPLICABLE_RE.match(value):
+                if not precise_source_anchors(value):
+                    errors.append(
+                        f"uniqueness control row {row_number}: {column} not-applicable reason "
+                        "must contain its own precise source anchor"
+                    )
                 continue
             if not MATRIX_ID_FULL_RE.fullmatch(value):
                 errors.append(

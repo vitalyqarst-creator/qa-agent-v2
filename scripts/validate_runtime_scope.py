@@ -192,6 +192,8 @@ ALLOWED_DATA_SOURCE_PREFIXES = (
     "проектный справочник",
     "официальный публичный источник",
     "синтетический генератор",
+    "подтверждённая стендовая привязка",
+    "подтвержденная стендовая привязка",
     "стендовая подготовка",
     "не требуются",
 )
@@ -298,6 +300,15 @@ def source_row_tokens(value: str) -> set[str]:
 
 def classify_scope_error(error: str) -> str:
     value = error.casefold()
+    if value.startswith("test-data-plan") and any(
+        token in value
+        for token in (
+            "not a tester-facing value source",
+            "requires an explicit provider",
+            "confirmed environment binding requires",
+        )
+    ):
+        return "source-contract"
     if any(token in value for token in ("aggregates independent", "atomic", "split mixed", "one object")):
         return "atomicity"
     if "full property coverage misses" in value:
@@ -331,7 +342,7 @@ def classify_scope_error(error: str) -> str:
     return "semantic"
 
 
-BLOCKING_SCOPE_ERROR_CLASSES = {"process", "format", "traceability", "completeness"}
+BLOCKING_SCOPE_ERROR_CLASSES = {"process", "format", "traceability", "completeness", "source-contract"}
 
 
 def partition_scope_findings(errors: list[str]) -> tuple[list[str], list[str]]:
@@ -1057,6 +1068,15 @@ def validate_test_data_plan(content: str, source_evidence: str = "") -> list[str
             for part in source_parts
         ):
             errors.append(f"test-data-plan {group}: unsupported or missing value source {source!r}")
+        stand_preparation = any(part.startswith("стендовая подготовка") for part in source_parts)
+        literal_origins = [
+            part for part in source_parts if not part.startswith("стендовая подготовка")
+        ]
+        if stand_preparation and not literal_origins:
+            errors.append(
+                f"test-data-plan {group}: 'стендовая подготовка' is an execution method, "
+                "not a tester-facing value source"
+            )
         if readiness not in ALLOWED_DATA_READINESS:
             errors.append(f"test-data-plan {group}: unsupported readiness {row[readiness_index]!r}")
         if not constraints:
@@ -1093,6 +1113,36 @@ def validate_test_data_plan(content: str, source_evidence: str = "") -> list[str
                 f"test-data-plan {group}: external value without a saved response requires readiness 'требуется'"
             )
         acquisition_contract = " | ".join((constraints, preparation))
+        if re.search(r"контракт\s+получения\s*:", acquisition_contract, re.IGNORECASE) and not any(
+            part.startswith(
+                (
+                    "внешний сервис:",
+                    "проектный справочник",
+                    "официальный публичный источник",
+                    "сохранённый ответ",
+                    "сохраненный ответ",
+                    "утверждённый ответ ба",
+                    "утвержденный ответ ба",
+                )
+            )
+            for part in source_parts
+        ):
+            errors.append(
+                f"test-data-plan {group}: 'Контракт получения:' requires an explicit provider, "
+                "dictionary, public, saved, or approved source; 'первичный источник' and stand "
+                "preparation do not identify the acquired literal"
+            )
+        confirmed_environment = any(
+            part.startswith(("подтверждённая стендовая привязка", "подтвержденная стендовая привязка"))
+            for part in source_parts
+        )
+        if confirmed_environment and not re.search(
+            r"контракт\s+подтверждения\s*:", acquisition_contract, re.IGNORECASE
+        ):
+            errors.append(
+                f"test-data-plan {group}: confirmed environment binding requires "
+                "'Контракт подтверждения:' with the future evidence requirements"
+            )
         if external and not saved and not re.search(
             r"контракт\s+получения\s*:", acquisition_contract, re.IGNORECASE
         ):
