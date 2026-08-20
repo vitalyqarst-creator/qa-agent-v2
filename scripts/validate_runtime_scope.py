@@ -397,9 +397,23 @@ def scope_stage_decision(errors: list[str], revision_count: int | None) -> dict[
         and 0 < len(blocking_errors) <= 2
         and blocking_classes <= {"atomicity", "completeness", "traceability", "source-contract"}
     )
+    reconciliation_patterns = (
+        "approved answer source mentions its requirement",
+        "duplicates a fully answered approved clarification",
+        "missing environment data is execution readiness, not a coverage gap",
+    )
+    answer_reconciliation_allowed = (
+        revision_count == 3
+        and 0 < len(errors) <= 3
+        and all(any(pattern in error for pattern in reconciliation_patterns) for error in errors)
+    )
     correction_allowed = (
         bool(blocking_errors)
-        and (revision_count in {0, 1} or final_closure_allowed)
+        and (
+            revision_count in {0, 1}
+            or final_closure_allowed
+            or answer_reconciliation_allowed
+        )
         and not preflight_repair_allowed
     )
     writer_allowed = not blocking_errors
@@ -409,6 +423,7 @@ def scope_stage_decision(errors: list[str], revision_count: int | None) -> dict[
         "scope_revision_count": revision_count,
         "preflight_repair_allowed": preflight_repair_allowed,
         "final_closure_allowed": final_closure_allowed,
+        "answer_reconciliation_allowed": answer_reconciliation_allowed,
         "correction_allowed": correction_allowed,
         "workflow_status": (
             "completed"
@@ -651,12 +666,13 @@ def public_contract(scope: str | None = None, package_root: Path | None = None) 
         "markdown_templates": templates,
         "correction_policy": {
             "initial_scope_revision_count": 0,
-            "maximum_scope_revision_count": 3,
+            "maximum_scope_revision_count": 4,
             "preflight_repair": "one preflight pass repairs only format errors, even when content errors coexist, and keeps scope_revision_count at 0",
             "content_correction": "up to two blocking content corrections increment scope_revision_count from 0 to 1 and then to 2",
             "final_closure": "at count 2, one final correction is allowed only for at most two atomicity, completeness, traceability or source-contract blockers and changes count to 3",
+            "answer_reconciliation": "at count 3, one last correction is allowed only to reconcile an already approved answer, its source and a duplicate readiness GAP; it changes count to 4",
             "before_validation": "repair format-only blocking_errors once without spending a content correction; quality_findings are carried to matrix authoring and review",
-            "when_blocking_at_count_3": "stop; correction_allowed=false; workflow status is failed",
+            "when_blocking_at_count_4": "stop; correction_allowed=false; workflow status is failed",
         },
         "atomicity_checks": [
             "один объект или UI-уровень в одной обязанности",
@@ -1643,9 +1659,9 @@ def validate(package_root: Path, scope_dir: Path) -> list[str]:
     scope_brief_content = (scope_dir / "scope-brief.md").read_text(encoding="utf-8")
     workflow_content = (scope_dir / "workflow-state.yaml").read_text(encoding="utf-8")
     revision_count = scalar_values(workflow_content).get("scope_revision_count")
-    if revision_count not in {"0", "1", "2", "3"}:
+    if revision_count not in {"0", "1", "2", "3", "4"}:
         errors.append(
-            "workflow-state scope_revision_count must be 0 initially, 1 or 2 after content corrections, or 3 after a permitted final closure"
+            "workflow-state scope_revision_count must be 0 initially, 1 or 2 after content corrections, 3 after final closure, or 4 after approved-answer reconciliation"
         )
     if not re.search(
         r"(?m)^clarification_register:\s*[\"']?work/scope-clarification-requests\.md[\"']?\s*$",
@@ -2540,7 +2556,7 @@ def main() -> int:
     errors = validate(args.package_root.resolve(), args.scope_dir.resolve())
     workflow = args.scope_dir.resolve() / "workflow-state.yaml"
     revision_raw = scalar_values(workflow.read_text(encoding="utf-8")).get("scope_revision_count") if workflow.is_file() else None
-    revision_count = int(revision_raw) if revision_raw in {"0", "1", "2", "3"} else None
+    revision_count = int(revision_raw) if revision_raw in {"0", "1", "2", "3", "4"} else None
     decision = scope_stage_decision(errors, revision_count)
     workflow_status = str(decision["workflow_status"])
     if workflow.is_file():

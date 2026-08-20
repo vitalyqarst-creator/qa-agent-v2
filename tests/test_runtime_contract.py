@@ -1303,7 +1303,7 @@ class RuntimeContractTests(unittest.TestCase):
         )
         self.assertIn("| ID | Связанная обязанность |", contract["markdown_templates"]["coverage_gaps"])
         self.assertIn("**Ответ БА:** _Введите ответ здесь._", contract["markdown_templates"]["clarification_card"])
-        self.assertEqual(3, contract["correction_policy"]["maximum_scope_revision_count"])
+        self.assertEqual(4, contract["correction_policy"]["maximum_scope_revision_count"])
         self.assertIn("blocking_errors", contract["correction_policy"]["before_validation"])
         self.assertTrue(
             any("один основной наблюдаемый результат" in item for item in contract["atomicity_checks"])
@@ -1536,6 +1536,32 @@ class RuntimeContractTests(unittest.TestCase):
         )
         self.assertFalse(workflow_failed["final_closure_allowed"])
         self.assertFalse(workflow_failed["correction_allowed"])
+
+    def test_scope_decision_allows_one_approved_answer_reconciliation(self) -> None:
+        eligible = scope_stage_decision(
+            [
+                "GAP-002: missing environment data is execution readiness, not a coverage gap",
+                "CLR-002: duplicates a fully answered approved clarification for CODE:AS.39",
+                "CLR-002: approved answer source mentions its requirement; add 'Источник ответа'",
+            ],
+            3,
+        )
+        self.assertTrue(eligible["answer_reconciliation_allowed"])
+        self.assertTrue(eligible["correction_allowed"])
+
+        unrelated = scope_stage_decision(
+            ["SR-001: active source row must contain one atomic requirement code"],
+            3,
+        )
+        self.assertFalse(unrelated["answer_reconciliation_allowed"])
+        self.assertFalse(unrelated["correction_allowed"])
+
+        exhausted = scope_stage_decision(
+            ["CLR-002: approved answer source mentions its requirement"],
+            4,
+        )
+        self.assertFalse(exhausted["answer_reconciliation_allowed"])
+        self.assertFalse(exhausted["correction_allowed"])
 
     def test_scope_findings_partition_blocks_atomicity_property_and_format_defects(self) -> None:
         blocking, quality = partition_scope_findings(
