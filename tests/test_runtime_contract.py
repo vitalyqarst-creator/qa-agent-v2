@@ -3760,6 +3760,17 @@ class RuntimeContractTests(unittest.TestCase):
             missing_checklist["matrix_review_checklist"] = checklist
             review_path.write_text(json.dumps(missing_checklist, ensure_ascii=False), encoding="utf-8")
 
+            invalid_identity = json.loads(review_path.read_text(encoding="utf-8"))
+            invalid_identity["matrix_review_checklist"]["identity-provenance"] = {
+                "status": "checked",
+                "evidence": ["TD-PARTNER-A -> стендовая подготовка"],
+            }
+            review_path.write_text(json.dumps(invalid_identity, ensure_ascii=False), encoding="utf-8")
+            self.assertTrue(
+                any("stand preparation" in error for error in validate_review(artifact, review_path, "matrix"))
+            )
+            review_path.write_text(json.dumps(missing_checklist, ensure_ascii=False), encoding="utf-8")
+
             artifact.write_text(
                 VALID_MATRIX.replace("Карточка сохранена", "Карточка сохранена и доступна для повторного открытия"),
                 encoding="utf-8",

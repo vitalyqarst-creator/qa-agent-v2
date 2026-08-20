@@ -40,6 +40,16 @@ MATRIX_REVIEW_CHECKS = {
     "duplication-parameterization",
 }
 MATRIX_REVIEW_CHECK_STATUSES = {"checked", "not-applicable"}
+IDENTITY_ORIGIN_MARKERS = (
+    "внешний сервис",
+    "provider",
+    "справочник",
+    "синтетическ",
+    "первичн",
+    "утвержд",
+    "официальн",
+    "подтвержд",
+)
 MATRIX_DISCOVERY_STATUSES = {
     "carried-forward",
     "introduced-by-revision",
@@ -100,6 +110,18 @@ def validate_matrix_review_checklist(record: dict[str, Any]) -> list[str]:
                 f"matrix_review_checklist {category} not-applicable status requires "
                 "'Не применимо: <reason>' evidence"
             )
+        if category == "identity-provenance" and isinstance(evidence, list):
+            for item in evidence:
+                if not isinstance(item, str):
+                    continue
+                for clause in re.split(r"[;\n]", item.casefold()):
+                    if "стендов" in clause and "подготов" in clause and not any(
+                        marker in clause for marker in IDENTITY_ORIGIN_MARKERS
+                    ):
+                        errors.append(
+                            "matrix_review_checklist identity-provenance cannot use stand preparation "
+                            "as literal origin without a confirmed binding or another source"
+                        )
     return errors
 
 
