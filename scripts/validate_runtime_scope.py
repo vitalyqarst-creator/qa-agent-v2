@@ -217,6 +217,9 @@ ALLOWED_DATA_SOURCE_PREFIXES = (
 )
 ALLOWED_DATA_READINESS = {"не требуется", "требуется", "готово"}
 DATA_ROLE_RE = re.compile(r"(?<![A-Za-z0-9_-])TD-[A-Z0-9]+(?:-[A-Z0-9]+)*(?![A-Za-z0-9_-])")
+ACTOR_ENVIRONMENT_ROLE_RE = re.compile(
+    r"^TD-(?:[A-Z0-9]+-)*(?:USER|ACTOR|ACCOUNT|LOGIN|CREDENTIALS?)$"
+)
 QUANTITATIVE_DATA_RE = re.compile(
     r"\b(?:размер|длин|количеств|диапазон|предел|максим|миним)\w*\b|"
     r"\bне\s+(?:более|менее)\b|"
@@ -1463,6 +1466,13 @@ def validate_test_data_plan(content: str, source_evidence: str = "") -> list[str
             part.startswith(("подтверждённая стендовая привязка", "подтвержденная стендовая привязка"))
             for part in source_parts
         )
+        actor_environment_roles = sorted(role for role in roles if ACTOR_ENVIRONMENT_ROLE_RE.fullmatch(role))
+        if confirmed_environment and actor_environment_roles:
+            errors.append(
+                f"test-data-plan {group}: actor account/access roles "
+                f"{', '.join(actor_environment_roles)} are execution prerequisites, not tester-facing "
+                "data roles; keep role/access in TC preconditions and do not materialize login, URL or credentials"
+            )
         if confirmed_environment and not re.search(
             r"контракт\s+подтверждения\s*:", acquisition_contract, re.IGNORECASE
         ):

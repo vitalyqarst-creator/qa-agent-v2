@@ -3139,6 +3139,12 @@ residual_missing: none
         )
         self.assertEqual([], validate_test_data_plan(confirmed_environment))
 
+        actor_environment = confirmed_environment.replace("TD-PARTNER-A", "TD-MODULE-USER")
+        errors = validate_test_data_plan(actor_environment)
+        self.assertTrue(
+            any("execution prerequisites, not tester-facing data roles" in error for error in errors)
+        )
+
     def test_test_data_plan_reports_root_column_mismatch(self) -> None:
         malformed = """# План тестовых данных
 
