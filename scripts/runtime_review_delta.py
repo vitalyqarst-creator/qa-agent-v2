@@ -363,8 +363,15 @@ def build_revision_manifest_from_record(
     changed_inputs = sorted(
         key for key in set(previous_semantic) | set(current_semantic) if previous_semantic.get(key) != current_semantic.get(key)
     )
+    # matrix-data-plan.md is a writer-owned companion of the matrix, not an
+    # external semantic input. A bounded matrix correction commonly updates
+    # both the affected matrix rows and their data-plan projections. Keep the
+    # companion in changed_semantic_inputs so the reviewer must inspect it,
+    # but do not promote an otherwise local revision to a full scope review.
+    matrix_companion = f"work/practical/{scope}/matrix-data-plan.md" if kind == "matrix" else None
+    external_changed_inputs = [value for value in changed_inputs if value != matrix_companion]
     fallback_reasons = list(affected_errors)
-    if changed_inputs:
+    if external_changed_inputs:
         fallback_reasons.append("semantic-inputs-changed")
     if previous_index.get("structure_sha256") != current_index.get("structure_sha256"):
         fallback_reasons.append("artifact-structure-or-order-changed")

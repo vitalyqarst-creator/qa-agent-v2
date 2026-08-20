@@ -4105,6 +4105,9 @@ residual_missing: none
             (source / "requirements.xhtml").write_text("<p>Требование</p>", encoding="utf-8")
             artifact = root / "test-design-matrix.md"
             artifact.write_text(VALID_MATRIX, encoding="utf-8")
+            companion_plan = root / "work" / "practical" / "reviews" / "matrix-data-plan.md"
+            companion_plan.parent.mkdir(parents=True)
+            companion_plan.write_text("# План данных\n\nИсходная проекция.\n", encoding="utf-8")
             create_session_topology(root, "reviews")
             reviewer_thread = "22345678-1234-1234-1234-123456789abc"
             prompt = root / "matrix-review-prompt.md"
@@ -4196,6 +4199,7 @@ residual_missing: none
                 VALID_MATRIX.replace("Карточка сохранена", "Карточка сохранена и доступна для повторного открытия"),
                 encoding="utf-8",
             )
+            companion_plan.write_text("# План данных\n\nИсправленная проекция M-001.\n", encoding="utf-8")
             second_dispatch = create_dispatch(
                 root,
                 artifact,
@@ -4209,6 +4213,14 @@ residual_missing: none
             )
             dispatch_payload = json.loads(second_dispatch.read_text(encoding="utf-8"))
             self.assertEqual("delta", dispatch_payload["review_mode"])
+            manifest = json.loads(
+                (root / dispatch_payload["revision_manifest_path"]).read_text(encoding="utf-8")
+            )
+            self.assertEqual(
+                ["work/practical/reviews/matrix-data-plan.md"],
+                manifest["changed_semantic_inputs"],
+            )
+            self.assertEqual([], manifest["fallback_reasons"])
 
             second_record = {
                 "schema_version": 1,
