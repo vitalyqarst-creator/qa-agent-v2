@@ -1303,7 +1303,7 @@ class RuntimeContractTests(unittest.TestCase):
         )
         self.assertIn("| ID | Связанная обязанность |", contract["markdown_templates"]["coverage_gaps"])
         self.assertIn("**Ответ БА:** _Введите ответ здесь._", contract["markdown_templates"]["clarification_card"])
-        self.assertEqual(2, contract["correction_policy"]["maximum_scope_revision_count"])
+        self.assertEqual(3, contract["correction_policy"]["maximum_scope_revision_count"])
         self.assertIn("blocking_errors", contract["correction_policy"]["before_validation"])
         self.assertTrue(
             any("один основной наблюдаемый результат" in item for item in contract["atomicity_checks"])
@@ -1501,10 +1501,41 @@ class RuntimeContractTests(unittest.TestCase):
                 check=False,
             )
             final_payload = json.loads(final.stdout)
+            self.assertFalse(final_payload["final_closure_allowed"])
             self.assertFalse(final_payload["correction_allowed"])
             self.assertFalse(final_payload["writer_allowed"])
             self.assertEqual("failed", final_payload["workflow_status"])
             self.assertIn("status: failed", workflow.read_text(encoding="utf-8"))
+
+    def test_scope_decision_allows_only_narrow_final_closure(self) -> None:
+        eligible = scope_stage_decision(
+            [
+                "SR-001: active source row must contain one atomic requirement code",
+                "AS.39: an unbounded quantitative requirement needs an explicit GAP-*",
+            ],
+            2,
+        )
+        self.assertTrue(eligible["final_closure_allowed"])
+        self.assertTrue(eligible["correction_allowed"])
+        self.assertEqual("draft", eligible["workflow_status"])
+
+        too_many = scope_stage_decision(
+            [
+                "SR-001: active source row must contain one atomic requirement code",
+                "AS.39: an unbounded quantitative requirement needs an explicit GAP-*",
+                "source-row-inventory has no required source rows table",
+            ],
+            2,
+        )
+        self.assertFalse(too_many["final_closure_allowed"])
+        self.assertFalse(too_many["correction_allowed"])
+
+        workflow_failed = scope_stage_decision(
+            ["workflow-state must reference work/scope-clarification-requests.md"],
+            2,
+        )
+        self.assertFalse(workflow_failed["final_closure_allowed"])
+        self.assertFalse(workflow_failed["correction_allowed"])
 
     def test_scope_findings_partition_blocks_atomicity_property_and_format_defects(self) -> None:
         blocking, quality = partition_scope_findings(
