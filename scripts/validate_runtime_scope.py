@@ -70,7 +70,7 @@ BOUNDARY_FRAGMENTS = (
     "Вводный текст родительского раздела",
     "Завершающий текст родительского раздела",
 )
-RESIDUAL_EXPLANATION = "**Почему существующий ответ не закрывает вопрос:**"
+PARTIAL_ANSWER_RESIDUAL_HEADING = "**Осталось уточнить:**"
 WORKING_ASSUMPTION_STATUS_RE = re.compile(
     r"^response_status:\s*(?:answered|resolved|approved)\s*$", re.IGNORECASE | re.MULTILINE
 )
@@ -194,7 +194,6 @@ ALLOWED_DATA_SOURCE_PREFIXES = (
     "синтетический генератор",
     "подтверждённая стендовая привязка",
     "подтвержденная стендовая привязка",
-    "стендовая подготовка",
     "не требуются",
 )
 ALLOWED_DATA_READINESS = {"не требуется", "требуется", "готово"}
@@ -203,6 +202,10 @@ QUANTITATIVE_DATA_RE = re.compile(
     r"\b(?:размер|длин|количеств|диапазон|предел|максим|миним)\w*\b|"
     r"\bне\s+(?:более|менее)\b|"
     r"\b\d+(?:[.,]\d+)?\s*(?:байт|кб|мб|гб|символ\w*|знак\w*|цифр\w*|дн\w*|лет\w*|сек\w*|мин\w*|%)\b",
+    re.IGNORECASE,
+)
+UNBOUNDED_REQUIREMENT_RE = re.compile(
+    r"\b(?:неограниченн\w*|без\s+(?:установленн\w*\s+)?(?:лимит\w*|ограничен\w*))\b",
     re.IGNORECASE,
 )
 BOUNDARY_PLAN_RE = re.compile(
@@ -304,15 +307,18 @@ def classify_scope_error(error: str) -> str:
         token in value
         for token in (
             "not a tester-facing value source",
+            "not a value source",
             "requires an explicit provider",
             "confirmed environment binding requires",
         )
     ):
         return "source-contract"
+    if "partial answer" in value or "approved answer source" in value:
+        return "source-contract"
+    if "full property coverage misses" in value:
+        return "completeness"
     if any(token in value for token in ("aggregates independent", "atomic", "split mixed", "one object")):
         return "atomicity"
-    if "full property coverage misses" in value:
-        return "semantic"
     if re.search(r"row\s+\d+\s+has\s+\d+\s+cells", value) or any(
         token in value
         for token in (
@@ -329,7 +335,20 @@ def classify_scope_error(error: str) -> str:
         )
     ):
         return "format"
-    if any(token in value for token in ("misses", "omitted", "complete table-row", "first and final", "full property")):
+    if any(
+        token in value
+        for token in (
+            "misses",
+            "omitted",
+            "complete table-row",
+            "first and final",
+            "full property",
+            "selected scope requirements",
+            "incoming actions",
+            "parent requirement",
+            "unbounded quantitative requirement",
+        )
+    ):
         return "completeness"
     if value.startswith("test-data-plan") or "boundary needs" in value:
         return "test-data"
@@ -342,7 +361,14 @@ def classify_scope_error(error: str) -> str:
     return "semantic"
 
 
-BLOCKING_SCOPE_ERROR_CLASSES = {"process", "format", "traceability", "completeness", "source-contract"}
+BLOCKING_SCOPE_ERROR_CLASSES = {
+    "process",
+    "format",
+    "traceability",
+    "completeness",
+    "source-contract",
+    "atomicity",
+}
 
 
 def partition_scope_findings(errors: list[str]) -> tuple[list[str], list[str]]:
@@ -364,14 +390,21 @@ def scope_error_summary(errors: list[str]) -> dict[str, int]:
 
 def scope_stage_decision(errors: list[str], revision_count: int | None) -> dict[str, object]:
     blocking_errors, quality_findings = partition_scope_findings(errors)
-    correction_allowed = bool(blocking_errors) and revision_count == 0
+    blocking_classes = {classify_scope_error(error) for error in blocking_errors}
+    preflight_repair_allowed = "format" in blocking_classes and revision_count == 0
+    correction_allowed = bool(blocking_errors) and revision_count == 0 and not preflight_repair_allowed
     writer_allowed = not blocking_errors
     return {
         "valid": writer_allowed,
         "writer_allowed": writer_allowed,
         "scope_revision_count": revision_count,
+        "preflight_repair_allowed": preflight_repair_allowed,
         "correction_allowed": correction_allowed,
-        "workflow_status": "completed" if writer_allowed else ("draft" if correction_allowed else "failed"),
+        "workflow_status": (
+            "completed"
+            if writer_allowed
+            else ("draft" if correction_allowed or preflight_repair_allowed else "failed")
+        ),
         "error_counts_by_class": scope_error_summary(errors),
         "blocking_errors": blocking_errors,
         "quality_findings": quality_findings,
@@ -499,10 +532,10 @@ def public_contract(scope: str | None = None, package_root: Path | None = None) 
             (
                 "Одна группа проверок",
                 "TD-OBJECT-A",
-                "стендовая подготовка",
+                "подтверждённая стендовая привязка: TD-OBJECT-A",
                 "Отношения равенства и различия",
                 "Классы или Не применимо: причина",
-                "Воспроизводимая подготовка",
+                "Контракт подтверждения: сохранить идентификатор объекта, наблюдаемые атрибуты, путь к evidence и SHA-256",
                 "требуется",
             ),
         ),
@@ -524,6 +557,22 @@ def public_contract(scope: str | None = None, package_root: Path | None = None) 
             'clarification_register: "work/scope-clarification-requests.md"'
         ),
     }
+    xhtml_path = machine_readable_primary(package_root.resolve()) if package_root is not None else None
+    selected_requirements = (
+        selected_requirement_catalog(xhtml_path, section_id)
+        if xhtml_path is not None and xhtml_path.is_file()
+        else {}
+    )
+    parent_requirements = (
+        parent_intro_requirement_catalog(xhtml_path, section_id)
+        if xhtml_path is not None and xhtml_path.is_file()
+        else {}
+    )
+    incoming_actions = (
+        incoming_action_catalog(xhtml_path, section_id)
+        if xhtml_path is not None and xhtml_path.is_file()
+        else []
+    )
     return {
         "contract_version": 2,
         "scope": scope_value,
@@ -543,7 +592,8 @@ def public_contract(scope: str | None = None, package_root: Path | None = None) 
             },
         },
         "clarification_fields": {
-            "partial_support_answer_residual_heading": RESIDUAL_EXPLANATION,
+            "partial_answer_residual_heading": PARTIAL_ANSWER_RESIDUAL_HEADING,
+            "support_answer_source_heading": "**Источник ответа:**",
         },
         "source_anchor_examples": {
             "table_row": "Таблица 8, строка «Точное значение первого столбца».",
@@ -552,6 +602,9 @@ def public_contract(scope: str | None = None, package_root: Path | None = None) 
             "uncoded_heading_or_list": "элемент списка «Короткая точная цитата элемента».",
         },
         "source_table_catalog": source_table_catalog(package_root),
+        "selected_requirement_catalog": selected_requirements,
+        "parent_intro_requirement_catalog": parent_requirements,
+        "incoming_action_catalog": incoming_actions,
         "required_tables": {
             "source_inventory": ["ID", "Источник", "Утверждение для покрытия"],
             "verifiability": [
@@ -581,6 +634,7 @@ def public_contract(scope: str | None = None, package_root: Path | None = None) 
         },
         "accepted_values": {
             "test_data_source_prefixes": list(ALLOWED_DATA_SOURCE_PREFIXES),
+            "execution_method_not_value_source": "стендовая подготовка",
             "test_data_materialization_readiness": sorted(ALLOWED_DATA_READINESS),
             "boundary_decisions": ["Включён", "Распределён", "Ранее покрыт: <область>", "Не применимо: <причина>"],
         },
@@ -588,8 +642,9 @@ def public_contract(scope: str | None = None, package_root: Path | None = None) 
         "correction_policy": {
             "initial_scope_revision_count": 0,
             "maximum_scope_revision_count": 1,
-            "structural_correction": 1,
-            "before_validation": "fix blocking_errors once; quality_findings are carried to matrix authoring and review",
+            "preflight_repair": "one preflight pass repairs only format errors, even when content errors coexist, and keeps scope_revision_count at 0",
+            "content_correction": "one blocking content correction changes scope_revision_count to 1",
+            "before_validation": "repair format-only blocking_errors once without spending the content correction; quality_findings are carried to matrix authoring and review",
             "when_blocking_at_count_1": "stop; correction_allowed=false; workflow status is failed",
         },
         "atomicity_checks": [
@@ -607,6 +662,10 @@ def public_contract(scope: str | None = None, package_root: Path | None = None) 
             "dependent_results": "когда атомарные результаты причинно связаны и хотя бы один из них имеет GAP; одинаковый source anchor включает automatic gate",
             "figma": "только если релевантного локального визуального материала недостаточно",
             "second_pass": "только при сигнале сложности из ft-scope-analyzer",
+            "confirmed_environment_binding": "источник 'подтверждённая стендовая привязка' требует в подготовке 'Контракт подтверждения:' с будущим evidence",
+            "external_value": "внешний источник без сохранённого ответа требует 'Контракт получения:' и готовность 'требуется'",
+            "quantitative_boundary": "количественная граница требует шаг представления, валидную и ближайшую недопустимую границы и точный источник",
+            "partial_answer": "статус 'частичный-ответ' требует поле 'Осталось уточнить'",
         },
         "human_language": "русский",
         "russian_process_terms": FORBIDDEN_PROCESS_WORDS,
@@ -775,6 +834,191 @@ def xhtml_table_cells(path: Path) -> dict[int, dict[str, tuple[str, ...]]]:
         }
         current_table_number = None
     return result
+
+
+def local_tag(element: ET.Element) -> str:
+    return element.tag.rsplit("}", 1)[-1].casefold()
+
+
+def element_text(element: ET.Element) -> str:
+    return " ".join("".join(element.itertext()).replace("\u00a0", " ").split())
+
+
+def section_number(value: str) -> str | None:
+    match = re.match(r"^\s*(\d+(?:\.\d+)*)\b", value)
+    return match.group(1) if match else None
+
+
+def leading_requirement_codes(value: str) -> list[str]:
+    """Return project requirement codes that begin a source paragraph or table cell."""
+
+    result: list[str] = []
+    for anchor in sorted(item for item in extract_anchors(value) if item.startswith("CODE:")):
+        label = anchor.removeprefix("CODE:")
+        if re.match(rf"^\s*(?:[\u2022\-\u2013\u2014]\s*)?{re.escape(label)}\b", value, re.IGNORECASE):
+            result.append(anchor)
+    return result
+
+
+def xhtml_section_elements(path: Path, section_id: str) -> list[ET.Element]:
+    """Return direct body elements that belong to one numbered section."""
+
+    tree = ET.parse(path)
+    body = next((element for element in tree.iter() if local_tag(element) == "body"), None)
+    if body is None:
+        return []
+    result: list[ET.Element] = []
+    active = False
+    for element in list(body):
+        tag = local_tag(element)
+        text = element_text(element)
+        number = section_number(text) if tag in {"h1", "h2", "h3"} else None
+        if not active:
+            if number == section_id:
+                active = True
+                result.append(element)
+            continue
+        if number and number != section_id and not number.startswith(section_id + "."):
+            break
+        result.append(element)
+    return result
+
+
+def xhtml_parent_intro_elements(path: Path, section_id: str) -> list[ET.Element]:
+    """Return only the normative intro of the immediate parent section."""
+
+    if "." not in section_id:
+        return []
+    parent_id = section_id.rsplit(".", 1)[0]
+    tree = ET.parse(path)
+    body = next((element for element in tree.iter() if local_tag(element) == "body"), None)
+    if body is None:
+        return []
+    result: list[ET.Element] = []
+    active = False
+    for element in list(body):
+        tag = local_tag(element)
+        text = element_text(element)
+        number = section_number(text) if tag in {"h1", "h2", "h3"} else None
+        if not active:
+            if number == parent_id:
+                active = True
+                result.append(element)
+            continue
+        if number and number != parent_id:
+            break
+        result.append(element)
+    return result
+
+
+def requirement_fragment_catalog(elements: list[ET.Element]) -> dict[str, dict[str, object]]:
+    """Build coded requirement blocks and their directly nested list fragments."""
+
+    result: dict[str, dict[str, object]] = {}
+    current_code: str | None = None
+    for element in elements:
+        tag = local_tag(element)
+        text = element_text(element)
+        if tag != "p":
+            if tag in {"h1", "h2", "h3", "table"}:
+                current_code = None
+            continue
+        codes = leading_requirement_codes(text)
+        if codes:
+            current_code = codes[0] if len(codes) == 1 else None
+            for code in codes:
+                result.setdefault(code, {"text": text, "list_fragments": []})
+            continue
+        if current_code and element.attrib.get("data-list-id") and text:
+            fragments = result[current_code]["list_fragments"]
+            if isinstance(fragments, list):
+                fragments.append(text)
+            continue
+        if text or not element.attrib.get("data-list-id"):
+            current_code = None
+    return result
+
+
+def selected_requirement_catalog(path: Path, section_id: str) -> dict[str, dict[str, object]]:
+    elements = xhtml_section_elements(path, section_id)
+    result = requirement_fragment_catalog(elements)
+    for element in elements:
+        candidates = [element]
+        if local_tag(element) == "table":
+            candidates = [
+                child
+                for child in element.iter()
+                if local_tag(child) in {"td", "th"}
+            ]
+        for candidate in candidates:
+            text = xhtml_cell_text(candidate) if local_tag(candidate) in {"td", "th"} else element_text(candidate)
+            for code in leading_requirement_codes(text):
+                result.setdefault(code, {"text": text, "list_fragments": []})
+    return result
+
+
+def parent_intro_requirement_catalog(path: Path, section_id: str) -> dict[str, dict[str, object]]:
+    return requirement_fragment_catalog(xhtml_parent_intro_elements(path, section_id))
+
+
+def incoming_action_catalog(path: Path, section_id: str) -> list[dict[str, object]]:
+    """Find earlier action rows that open the selected section's visual surface."""
+
+    section_text = " ".join(element_text(element) for element in xhtml_section_elements(path, section_id))
+    figure_refs = set(re.findall(r"\bРисунок\s+(\d+)\b", section_text, re.IGNORECASE))
+    if not figure_refs:
+        return []
+    result: list[dict[str, object]] = []
+    for table_number, rows in xhtml_table_cells(path).items():
+        for row in rows.values():
+            combined = " | ".join(row)
+            if not any(re.search(rf"\bРисунок\s+{re.escape(number)}\b", combined, re.IGNORECASE) for number in figure_refs):
+                continue
+            codes = sorted(
+                {
+                    anchor
+                    for cell in row
+                    for anchor in extract_anchors(cell)
+                    if anchor.startswith("CODE:")
+                }
+            )
+            if not codes:
+                continue
+            for code in codes:
+                result.append(
+                    {
+                        "code": code.removeprefix("CODE:"),
+                        "source": f"Таблица {table_number}, строка первого столбца «{row[0]}»",
+                        "action": row[0],
+                        "shared_visuals": [f"Рисунок {number}" for number in sorted(figure_refs)],
+                    }
+                )
+    return result
+
+
+def unbounded_requirement_coverage_errors(
+    selected_catalog: dict[str, dict[str, object]],
+    inventory_sources: dict[str, str],
+    open_gap_by_source: dict[str, set[str]],
+) -> list[str]:
+    errors: list[str] = []
+    unbounded_codes = {
+        code
+        for code, item in selected_catalog.items()
+        if UNBOUNDED_REQUIREMENT_RE.search(str(item.get("text", "")))
+    }
+    for code in sorted(unbounded_codes):
+        linked_sources = {
+            source_id
+            for source_id, source_anchor in inventory_sources.items()
+            if code in extract_anchors(source_anchor)
+        }
+        if linked_sources and not (linked_sources & set(open_gap_by_source)):
+            errors.append(
+                f"{code.removeprefix('CODE:')}: an unbounded quantitative requirement needs an explicit GAP-*; "
+                "a finite sample cannot prove absence of a limit"
+            )
+    return errors
 
 
 def table_property_coverage_errors(
@@ -1069,13 +1313,10 @@ def validate_test_data_plan(content: str, source_evidence: str = "") -> list[str
         ):
             errors.append(f"test-data-plan {group}: unsupported or missing value source {source!r}")
         stand_preparation = any(part.startswith("стендовая подготовка") for part in source_parts)
-        literal_origins = [
-            part for part in source_parts if not part.startswith("стендовая подготовка")
-        ]
-        if stand_preparation and not literal_origins:
+        if stand_preparation:
             errors.append(
                 f"test-data-plan {group}: 'стендовая подготовка' is an execution method, "
-                "not a tester-facing value source"
+                "not a value source; describe it only in 'Воспроизводимая подготовка'"
             )
         if readiness not in ALLOWED_DATA_READINESS:
             errors.append(f"test-data-plan {group}: unsupported readiness {row[readiness_index]!r}")
@@ -1244,8 +1485,17 @@ def validate(package_root: Path, scope_dir: Path) -> list[str]:
                 )
     xhtml_path = machine_readable_primary(package_root)
     machine_source_text = ""
+    selected_catalog: dict[str, dict[str, object]] = {}
+    parent_catalog: dict[str, dict[str, object]] = {}
+    incoming_catalog: list[dict[str, object]] = []
     if xhtml_path is not None and xhtml_path.is_file():
         machine_source_text = xhtml_path.read_text(encoding="utf-8")
+        scope_match = re.match(r"(\d+(?:\.\d+)*)", canonical_scope(scope_dir.name))
+        if scope_match:
+            section_id = scope_match.group(1)
+            selected_catalog = selected_requirement_catalog(xhtml_path, section_id)
+            parent_catalog = parent_intro_requirement_catalog(xhtml_path, section_id)
+            incoming_catalog = incoming_action_catalog(xhtml_path, section_id)
     if row_references:
         if xhtml_path is None or not xhtml_path.is_file():
             errors.append("source-row-inventory uses table rows but locator has no existing normalized machine-readable primary")
@@ -1267,6 +1517,31 @@ def validate(package_root: Path, scope_dir: Path) -> list[str]:
                         )
     if not re.search(r"^##\s+Примен[её]нные исключения\s*$", inventory_content, re.MULTILINE):
         errors.append("source-row-inventory must contain an explicit 'Применённые исключения' section")
+
+    inventory_code_anchors = {
+        anchor
+        for source in inventory_sources.values()
+        for anchor in extract_anchors(source)
+        if anchor.startswith("CODE:")
+    }
+    exclusion_match = re.search(
+        r"^##\s+Примен[её]нные исключения\s*$([\s\S]*)$",
+        inventory_content,
+        re.MULTILINE,
+    )
+    exclusion_code_anchors = {
+        anchor
+        for anchor in extract_anchors(exclusion_match.group(1) if exclusion_match else "")
+        if anchor.startswith("CODE:")
+    }
+    missing_selected_codes = sorted(
+        set(selected_catalog) - inventory_code_anchors - exclusion_code_anchors
+    )
+    if missing_selected_codes:
+        errors.append(
+            "selected scope requirements have no atomic SR-* or explicit applied exclusion: "
+            + ", ".join(code.removeprefix("CODE:") for code in missing_selected_codes)
+        )
 
     verifiability = find_markdown_table(
         inventory_content,
@@ -1475,6 +1750,8 @@ def validate(package_root: Path, scope_dir: Path) -> list[str]:
         ("Источник", "Родительская обязанность", "Целевая область", "Связанные обязанности или решение"),
     )
     ownership_refs: set[str] = set()
+    ownership_code_anchors: set[str] = set()
+    ownership_text_anchors: set[str] = set()
     if distributed_parent:
         if ownership is None or not ownership.rows:
             errors.append("scope-brief distributed parent text requires the parent requirement ownership table")
@@ -1486,6 +1763,15 @@ def validate(package_root: Path, scope_dir: Path) -> list[str]:
             current_scope = canonical_scope(scope_dir.name)
             for row_number, row in enumerate(ownership.rows, start=1):
                 source = row[source_index].strip()
+                source_anchors = extract_anchors(source)
+                ownership_code_anchors.update(
+                    anchor for anchor in source_anchors if anchor.startswith("CODE:")
+                )
+                ownership_text_anchors.update(
+                    anchor.removeprefix("TEXT:")
+                    for anchor in source_anchors
+                    if anchor.startswith("TEXT:")
+                )
                 duty = row[duty_index].strip()
                 target = row[target_index].strip().strip("` ")
                 resolution = row[resolution_index].strip()
@@ -1519,6 +1805,37 @@ def validate(package_root: Path, scope_dir: Path) -> list[str]:
             "scope-brief must state 'Нормативные родительские обязанности отсутствуют.' "
             "when parent fragments are not applicable"
         )
+
+    incoming_codes = {
+        f"CODE:{str(item.get('code', '')).strip()}"
+        for item in incoming_catalog
+        if str(item.get("code", "")).strip()
+    }
+    missing_incoming_codes = sorted(
+        incoming_codes - inventory_code_anchors - exclusion_code_anchors - ownership_code_anchors
+    )
+    if missing_incoming_codes:
+        errors.append(
+            "incoming actions that open the selected UI scope are not assigned: "
+            + ", ".join(code.removeprefix("CODE:") for code in missing_incoming_codes)
+        )
+
+    for code in sorted(boundary_code_anchors & set(parent_catalog)):
+        fragments = parent_catalog[code].get("list_fragments", [])
+        if not isinstance(fragments, list):
+            continue
+        for index, fragment in enumerate(fragments, start=1):
+            normalized_fragment = normalized_source_text(str(fragment))
+            matched = any(
+                len(anchor) >= 12
+                and (anchor in normalized_fragment or normalized_fragment in anchor)
+                for anchor in ownership_text_anchors
+            )
+            if not matched:
+                errors.append(
+                    f"parent requirement {code.removeprefix('CODE:')} list fragment {index} "
+                    "has no explicit ownership row with an exact quoted fragment"
+                )
 
     referenced_table_numbers = {table_number for _inventory_id, table_number, _row_name in row_references}
     table_coverage_refs: set[str] = set()
@@ -1906,6 +2223,13 @@ def validate(package_root: Path, scope_dir: Path) -> list[str]:
         for gap_id, source_id in gap_linked_sources.items()
         if gap_id not in resolved_gap_ids
     }
+    errors.extend(
+        unbounded_requirement_coverage_errors(
+            selected_catalog,
+            inventory_sources,
+            open_gap_by_source,
+        )
+    )
     source_groups: dict[str, set[str]] = {}
     for source_id, source_anchor in inventory_sources.items():
         source_groups.setdefault(canonical_source_reference(source_anchor), set()).add(source_id)
@@ -2138,12 +2462,18 @@ def validate(package_root: Path, scope_dir: Path) -> list[str]:
                     f"{question_id}: duplicates a fully answered approved clarification for "
                     + ", ".join(sorted(question_anchors))
                 )
-        if matching_support and status not in {"ответ-получен", "отменён"} and RESIDUAL_EXPLANATION not in block:
+        if matching_support and status not in {"ответ-получен", "отменён"}:
             names = sorted({path.name for path in matching_support})
-            errors.append(
-                f"{question_id}: approved answer source mentions its requirement; add exact field "
-                f"{RESIDUAL_EXPLANATION} {names}"
-            )
+            if not question_field(block, "Источник ответа"):
+                errors.append(
+                    f"{question_id}: approved answer source mentions its requirement; add 'Источник ответа' "
+                    f"with one of {names}"
+                )
+            if status == "частичный-ответ" and not question_field(block, "Осталось уточнить"):
+                errors.append(
+                    f"{question_id}: approved partial answer must use the canonical field "
+                    f"{PARTIAL_ANSWER_RESIDUAL_HEADING}"
+                )
 
     for name in REQUIRED_FILES:
         if not name.endswith(".md"):

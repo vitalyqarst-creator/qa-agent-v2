@@ -55,6 +55,7 @@ from scripts.validate_runtime_scope import (
     source_row_tokens,
     table_property_coverage_errors,
     table_row_references,
+    unbounded_requirement_coverage_errors,
     validate as validate_scope,
     validate_test_data_plan,
     xhtml_table_rows,
@@ -180,7 +181,7 @@ VALID_DATA_PLAN = """# План тестовых данных
 
 | Группа проверок | Роли данных | Допустимый источник | Ограничения и отношения | Границы и классы | Воспроизводимая подготовка | Готовность материализации |
 | --- | --- | --- | --- | --- | --- | --- |
-| Сохранение карточки | TD-PARTNER-A | первичный источник; стендовая подготовка | Уникальное наименование; отсутствие дубля. | Не применимо: количественное ограничение отсутствует. | Создать запись с указанным наименованием. | требуется |
+| Сохранение карточки | TD-PARTNER-A | первичный источник | Уникальное наименование; отсутствие дубля. | Не применимо: количественное ограничение отсутствует. | Подготовить запись на стенде с указанным в источнике наименованием. | требуется |
 """
 
 CONTROLLER_THREAD = "00000000-0000-4000-8000-000000000001"
@@ -278,6 +279,27 @@ def create_scope_locator(package: Path) -> None:
     initialize_registry(package, CONTROLLER_THREAD, "local")
     record_role(package, "source-locator", LOCATOR_THREAD, "local")
     record_role(package, "scope-analyzer", ANALYZER_THREAD, "local", "scope")
+
+
+def write_requirement_catalog_xhtml(package: Path) -> None:
+    (package / "source" / "requirements.xhtml").write_text(
+        "<html><body>"
+        "<h1>9.3 Партнёры</h1>"
+        "<p>AS.5 Правила уникальности:</p>"
+        '<p data-list-id="as5">a. Одинаковые значения разрешены в разных карточках.</p>'
+        "<h2>9.3.1 Список</h2>"
+        "<p>Таблица 5 Действия</p>"
+        "<table><tr><td>Название</td><td>Описание</td></tr>"
+        "<tr><td>Редактировать</td><td>AS.23 Открыть окно. AS.24 Макет на Рисунок 5.</td></tr>"
+        "<tr><td>Добавить</td><td>AS.25 Открыть окно на Рисунок 5.</td></tr></table>"
+        "<h2>9.3.3 Карточка реквизитов</h2>"
+        "<p>AS.39 Можно добавить неограниченное количество реквизитов.</p>"
+        "<p>AS.40 Перевод использует реквизит.</p>"
+        "<p>Рисунок 5 — карточка.</p>"
+        "<h2>9.4 Следующий раздел</h2>"
+        "</body></html>",
+        encoding="utf-8",
+    )
 
 
 def create_valid_source_stage(root: Path) -> tuple[Path, Path]:
@@ -1254,8 +1276,8 @@ class RuntimeContractTests(unittest.TestCase):
         self.assertIn("visual_crosscheck", contract["conditional_controls"])
         self.assertEqual(["готово", "не требуется", "требуется"], contract["accepted_values"]["test_data_materialization_readiness"])
         self.assertEqual(
-            "**Почему существующий ответ не закрывает вопрос:**",
-            contract["clarification_fields"]["partial_support_answer_residual_heading"],
+            "**Осталось уточнить:**",
+            contract["clarification_fields"]["partial_answer_residual_heading"],
         )
         self.assertIn("| ID | Связанная обязанность |", contract["markdown_templates"]["coverage_gaps"])
         self.assertIn("**Ответ БА:** _Введите ответ здесь._", contract["markdown_templates"]["clarification_card"])
@@ -1266,6 +1288,110 @@ class RuntimeContractTests(unittest.TestCase):
         )
         self.assertIn("scope_revision_count: 0", contract["markdown_templates"]["workflow_state"])
         self.assertIn("status: draft", contract["markdown_templates"]["workflow_state"])
+        self.assertNotIn("стендовая подготовка |", contract["markdown_templates"]["test_data"])
+        self.assertIn("Контракт подтверждения:", contract["markdown_templates"]["test_data"])
+
+        rendered_plan = "# План тестовых данных\n\n" + contract["markdown_templates"]["test_data"]
+        self.assertEqual([], validate_test_data_plan(rendered_plan))
+
+    def test_scope_public_contract_catalogs_selected_parent_and_incoming_requirements(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            (root / "AGENTS.md").write_text("# Runtime\n", encoding="utf-8")
+            (root / "scripts").mkdir()
+            package = root / "fts" / "Project" / "FT"
+            create_scope_locator(package)
+            write_requirement_catalog_xhtml(package)
+
+            contract = public_contract("9.3.3", package)
+
+            self.assertEqual(
+                {"CODE:AS.39", "CODE:AS.40"},
+                set(contract["selected_requirement_catalog"]),
+            )
+            self.assertEqual(
+                ["a. Одинаковые значения разрешены в разных карточках."],
+                contract["parent_intro_requirement_catalog"]["CODE:AS.5"]["list_fragments"],
+            )
+            self.assertEqual(
+                [("AS.23", "Редактировать"), ("AS.24", "Редактировать"), ("AS.25", "Добавить")],
+                [(item["code"], item["action"]) for item in contract["incoming_action_catalog"]],
+            )
+
+    def test_unbounded_requirement_needs_one_explicit_gap_per_requirement(self) -> None:
+        catalog = {
+            "CODE:AS.39": {
+                "text": "AS.39 Система разрешает неограниченное количество объектов.",
+                "list_fragments": [],
+            }
+        }
+        inventory = {"SR-001": "AS.39", "SR-002": "AS.39"}
+
+        errors = unbounded_requirement_coverage_errors(catalog, inventory, {})
+        self.assertEqual(1, len(errors))
+        self.assertIn("AS.39", errors[0])
+
+        self.assertEqual(
+            [],
+            unbounded_requirement_coverage_errors(catalog, inventory, {"SR-002": {"GAP-001"}}),
+        )
+
+    def test_scope_validator_blocks_omitted_selected_parent_and_incoming_requirements(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            (root / "AGENTS.md").write_text("# Runtime\n", encoding="utf-8")
+            (root / "scripts").mkdir()
+            package = root / "fts" / "Project" / "FT"
+            create_scope_locator(package)
+            write_requirement_catalog_xhtml(package)
+            record_role(package, "scope-analyzer", WRITER_THREAD, "local", "9.3.3")
+            scope = package / "work" / "stage-handoffs" / "9.3.3"
+            scope.mkdir()
+            (scope / "source-row-inventory.md").write_text(
+                "# Инвентарь\n\n"
+                "| ID | Источник | Утверждение для покрытия |\n"
+                "| --- | --- | --- |\n"
+                "| SR-001 | AS.39 | Реквизит можно добавить. |\n"
+                "| SR-002 | AS.39 | Предел количества не доказуется конечной выборкой. |\n\n"
+                "## Контракт проверяемости\n\n"
+                "| SR | Объект или UI-уровень | Актор и условие | Действие или событие | Наблюдаемый результат |\n"
+                "| --- | --- | --- | --- | --- |\n"
+                "| SR-001 | Карточка реквизита | Пользователь | Добавить реквизит | Реквизит добавлен |\n"
+                "| SR-002 | Карточка реквизита | Пользователь | Увеличивать количество | Результат не определён; GAP-001 |\n\n"
+                "## Применённые исключения\n\nИсключения отсутствуют.\n",
+                encoding="utf-8",
+            )
+            (scope / "coverage-gaps.md").write_text(VALID_GAPS, encoding="utf-8")
+            (scope / "scope-brief.md").write_text(
+                "# Область\n\n"
+                "## Контроль границ источника\n\n"
+                "| Фрагмент | Структурный якорь | Решение | Связанные обязанности или область |\n"
+                "| --- | --- | --- | --- |\n"
+                "| Выбранный раздел | Раздел 9.3.3; AS.39; AS.40 | Включён | SR-001; SR-002; GAP-001 |\n"
+                "| Вводный текст родительского раздела | AS.5 | Распределён | См. таблицу владения. |\n"
+                "| Завершающий текст родительского раздела | Раздел 9.3 | Не применимо: текст отсутствует. | — |\n\n"
+                "## Распределение родительских обязанностей\n\n"
+                "| Источник | Родительская обязанность | Целевая область | Связанные обязанности или решение |\n"
+                "| --- | --- | --- | --- |\n"
+                "| AS.5 | Общее правило. | 9.3.3 | SR-002 |\n",
+                encoding="utf-8",
+            )
+            (scope / "test-data-plan.md").write_text(VALID_DATA_PLAN, encoding="utf-8")
+            (scope / "prompt.scope-to-writer.md").write_text(
+                "Перенеси GAP-001 в матрицу как пробел покрытия.\n",
+                encoding="utf-8",
+            )
+            (scope / "workflow-state.yaml").write_text(
+                "stage: ft-scope-analyzer\nstatus: draft\nscope_revision_count: 0\n"
+                'clarification_register: "work/scope-clarification-requests.md"\n',
+                encoding="utf-8",
+            )
+
+            errors = validate_scope(package, scope)
+
+            self.assertTrue(any("selected scope requirements" in error and "AS.40" in error for error in errors))
+            self.assertTrue(any("incoming actions" in error and "AS.23" in error for error in errors))
+            self.assertTrue(any("parent requirement AS.5 list fragment" in error for error in errors))
 
     def test_scope_public_contract_exposes_exact_xhtml_table_catalog(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
@@ -1343,7 +1469,7 @@ class RuntimeContractTests(unittest.TestCase):
             self.assertEqual("failed", final_payload["workflow_status"])
             self.assertIn("status: failed", workflow.read_text(encoding="utf-8"))
 
-    def test_scope_findings_partition_does_not_block_writer_on_quality_only(self) -> None:
+    def test_scope_findings_partition_blocks_atomicity_property_and_format_defects(self) -> None:
         blocking, quality = partition_scope_findings(
             [
                 "SR-001: active source row aggregates independent properties: editability, format",
@@ -1351,12 +1477,18 @@ class RuntimeContractTests(unittest.TestCase):
                 "coverage-gaps table row 1 has 5 cells but expected 6",
             ]
         )
-        self.assertEqual(1, len(blocking))
-        self.assertEqual(2, len(quality))
-        decision = scope_stage_decision(quality, 0)
-        self.assertTrue(decision["writer_allowed"])
-        self.assertEqual("completed", decision["workflow_status"])
+        self.assertEqual(3, len(blocking))
+        self.assertEqual(0, len(quality))
+        decision = scope_stage_decision(blocking, 0)
+        self.assertFalse(decision["writer_allowed"])
+        self.assertEqual("draft", decision["workflow_status"])
+        self.assertTrue(decision["preflight_repair_allowed"])
         self.assertFalse(decision["correction_allowed"])
+        self.assertEqual(0, decision["scope_revision_count"])
+
+        format_only = scope_stage_decision(["coverage-gaps table row 1 has 5 cells but expected 6"], 0)
+        self.assertTrue(format_only["preflight_repair_allowed"])
+        self.assertFalse(format_only["correction_allowed"])
 
     def test_scope_identity_uses_section_for_label_and_slug(self) -> None:
         self.assertEqual("9.3.3", canonical_scope("9.3.3 Карточка реквизита"))
@@ -1427,7 +1559,7 @@ class RuntimeContractTests(unittest.TestCase):
 
         self.assertEqual(1, len(errors))
         self.assertIn("mandatory-field behavior", errors[0])
-        self.assertEqual("semantic", classify_scope_error(errors[0]))
+        self.assertEqual("completeness", classify_scope_error(errors[0]))
 
     def test_invalid_logical_data_origin_blocks_scope_handoff(self) -> None:
         error = (
@@ -1437,6 +1569,11 @@ class RuntimeContractTests(unittest.TestCase):
         self.assertEqual("source-contract", classify_scope_error(error))
         blocking, quality = partition_scope_findings([error])
         self.assertEqual([error], blocking)
+        self.assertEqual([], quality)
+
+        partial_answer = "CLR-001: partial answer requires 'Осталось уточнить'"
+        blocking, quality = partition_scope_findings([partial_answer])
+        self.assertEqual([partial_answer], blocking)
         self.assertEqual([], quality)
 
     def test_session_topology_uses_cost_aware_role_defaults(self) -> None:
@@ -1892,9 +2029,9 @@ class RuntimeContractTests(unittest.TestCase):
                 encoding="utf-8",
             )
             final_plan = VALID_DATA_PLAN + (
-                "| Второй счёт | TD-ACCOUNT-B | синтетический генератор; стендовая подготовка | "
+                "| Второй счёт | TD-ACCOUNT-B | синтетический генератор | "
                 "REL-DIFFERENT-ACCOUNT: счёт отличается от первого. | Не применимо. | "
-                "Подготовить второй счёт. | требуется |\n"
+                "Подготовить второй счёт на стенде. | требуется |\n"
             )
             data_plan = matrix.parent / "matrix-data-plan.md"
             data_plan.write_text(final_plan, encoding="utf-8")
@@ -1903,8 +2040,8 @@ class RuntimeContractTests(unittest.TestCase):
 
             data_plan.write_text(
                 final_plan.replace(
-                    "первичный источник; стендовая подготовка",
-                    "первичный источник; стендовая подготовка; синтетический генератор",
+                    "первичный источник",
+                    "первичный источник; синтетический генератор",
                     1,
                 ),
                 encoding="utf-8",
@@ -2744,15 +2881,15 @@ class RuntimeContractTests(unittest.TestCase):
 
     def test_test_data_plan_allows_compatible_role_reuse_and_rejects_source_conflicts(self) -> None:
         reused_role = VALID_DATA_PLAN + (
-            "| Отмена карточки | TD-PARTNER-A | первичный источник; стендовая подготовка | "
+            "| Отмена карточки | TD-PARTNER-A | первичный источник | "
             "Тот же партнёр используется для проверки отмены. | "
             "Не применимо: количественное ограничение отсутствует. | "
-            "Открыть новую карточку того же партнёра. | требуется |\n"
+            "Открыть новую карточку того же партнёра на стенде. | требуется |\n"
         )
         self.assertEqual([], validate_test_data_plan(reused_role))
 
         conflicting_source = reused_role.replace(
-            "| Отмена карточки | TD-PARTNER-A | первичный источник; стендовая подготовка |",
+            "| Отмена карточки | TD-PARTNER-A | первичный источник |",
             "| Отмена карточки | TD-PARTNER-A | синтетический генератор |",
         )
         errors = validate_test_data_plan(conflicting_source)
@@ -2768,10 +2905,10 @@ class RuntimeContractTests(unittest.TestCase):
             baseline.parent.mkdir(parents=True)
             baseline.write_text(
                 VALID_DATA_PLAN
-                + "| Отмена карточки | TD-PARTNER-A | первичный источник; стендовая подготовка | "
+                + "| Отмена карточки | TD-PARTNER-A | первичный источник | "
                 "Тот же партнёр используется для проверки отмены. | "
                 "Не применимо: количественное ограничение отсутствует. | "
-                "Открыть новую карточку того же партнёра. | требуется |\n",
+                "Открыть новую карточку того же партнёра на стенде. | требуется |\n",
                 encoding="utf-8",
             )
             matrix = package / "work" / "practical" / scope / "test-design-matrix.md"
@@ -2787,7 +2924,7 @@ class RuntimeContractTests(unittest.TestCase):
 
 | Группа проверок | Роли данных | Допустимый источник | Ограничения и отношения | Границы и классы | Воспроизводимая подготовка | Готовность материализации |
 | --- | --- | --- | --- | --- | --- | --- |
-| Размер файла не более 40 МБ | TD-FILE-LIMIT; TD-FILE-OVER | синтетический генератор; стендовая подготовка | Два открываемых файла допустимого формата. | Допустимо 40 МБ; недопустимо 41 МБ. | Создать файлы до проверки. | требуется |
+| Размер файла не более 40 МБ | TD-FILE-LIMIT; TD-FILE-OVER | синтетический генератор | Два открываемых файла допустимого формата. | Допустимо 40 МБ; недопустимо 41 МБ. | Создать файлы до проверки на стенде. | требуется |
 """
         errors = validate_test_data_plan(plan)
         self.assertTrue(any("Шаг представления" in error for error in errors))
@@ -2798,17 +2935,20 @@ class RuntimeContractTests(unittest.TestCase):
         )
         self.assertEqual([], validate_test_data_plan(valid))
 
-    def test_test_data_plan_separates_literal_origin_from_stand_preparation(self) -> None:
-        stand_only = VALID_DATA_PLAN.replace(
-            "первичный источник; стендовая подготовка",
-            "стендовая подготовка",
-        )
+    def test_test_data_plan_separates_value_source_from_stand_preparation(self) -> None:
+        stand_only = VALID_DATA_PLAN.replace("первичный источник", "стендовая подготовка")
         self.assertTrue(
-            any("not a tester-facing value source" in error for error in validate_test_data_plan(stand_only))
+            any("not a value source" in error for error in validate_test_data_plan(stand_only))
         )
 
+        combined = VALID_DATA_PLAN.replace(
+            "первичный источник",
+            "первичный источник; стендовая подготовка",
+        )
+        self.assertTrue(any("not a value source" in error for error in validate_test_data_plan(combined)))
+
         unqualified_acquisition = VALID_DATA_PLAN.replace(
-            "Создать запись с указанным наименованием.",
+            "Подготовить запись на стенде с указанным в источнике наименованием.",
             "Контракт получения: запросить запись внешнего реестра.",
         )
         self.assertTrue(
@@ -2816,14 +2956,14 @@ class RuntimeContractTests(unittest.TestCase):
         )
 
         confirmed_environment = VALID_DATA_PLAN.replace(
-            "первичный источник; стендовая подготовка",
+            "первичный источник",
             "подтверждённая стендовая привязка",
         )
         self.assertTrue(
             any("Контракт подтверждения:" in error for error in validate_test_data_plan(confirmed_environment))
         )
         confirmed_environment = confirmed_environment.replace(
-            "Создать запись с указанным наименованием.",
+            "Подготовить запись на стенде с указанным в источнике наименованием.",
             "Контракт подтверждения: сохранить evidence, путь и SHA-256.",
         )
         self.assertEqual([], validate_test_data_plan(confirmed_environment))

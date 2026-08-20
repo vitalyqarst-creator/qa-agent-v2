@@ -7,13 +7,13 @@ description: Подтверждает scope, извлекает обязанно
 
 ## Вход и запуск
 
-1. Выполни registry self-check для роли `scope-analyzer`. `AGENTS.md` уже загружен средой: не перечитывай его. `session-topology.md` относится к controller и анализатору не нужен.
+1. Выполни registry self-check для `scope-analyzer`. `AGENTS.md` уже загружен средой: не перечитывай. `session-topology.md` не нужен.
 2. Прочитай этот skill и `references/runtime/scope-analysis.md`. `references/runtime/test-data-fixtures.md` открывай только если активные обязанности требуют конкретных значений, справочника, интеграции, границ или подготовки состояния.
 3. До записи артефактов получи точный публичный контракт:
 
    `python -X utf8 scripts/validate_runtime_scope.py <package-root> --print-contract --scope <scope>`
 
-   Копируй показанные Markdown-шаблоны целиком, включая строку-разделитель; не собирай таблицы по памяти. Заголовки и названия строк первого столбца копируй только из `source_table_catalog` этого контракта; остальные свойства строки читай в XHTML. Используй показанные форматы ID, обязательные файлы и `atomicity_checks`. Реализацию validator-а заранее не читай.
+   Копируй Markdown-шаблоны целиком; не собирай их по памяти. Заголовки и названия строк бери из `source_table_catalog`; свойства — из XHTML. Сверь `selected_requirement_catalog`, `parent_intro_requirement_catalog` и `incoming_action_catalog`: каждый элемент получает SR/GAP, исключение или ownership-решение. Используй conditional contracts. Реализацию validator-а не читай.
 
 ## Анализ
 
@@ -43,7 +43,7 @@ description: Подтверждает scope, извлекает обязанно
 
 Если `SR-*` причинно зависимы даже при разных source anchors, заполни `Контроль зависимых результатов`. GAP причины даёт зависимому результату свой GAP либо точное source-backed основание независимости.
 
-Один содержательный проход — default. Повторная сверка — только по сигналу сложности и риску.
+Один содержательный проход — default. Повторная сверка — по сигналу сложности и риску.
 
 ## Завершение
 
@@ -53,4 +53,4 @@ description: Подтверждает scope, извлекает обязанно
 
 `python -X utf8 scripts/validate_runtime_scope.py <package-root> <scope-handoff-dir>`
 
-В initial `workflow-state.yaml` установи `scope_revision_count: 0` и `status: draft`; итоговый status устанавливает validator. При `correction_allowed=true` исправь только возвращённые `blocking_errors`, установи count `1` и повтори validator. Второй scope-correction нет. `quality_findings` не запускают цикл переписывания: они передаются в matrix и её independent review. После удаления или перенумерации `SR-*` или `GAP-*` сначала найди и обнови все ссылки на старый ID в текущем handoff; не используй диапазон, пересекающий отсутствующий ID. Передача writer-у разрешена при `writer_allowed=true` и `workflow_status=completed`; иначе остановись.
+В initial `workflow-state.yaml` установи `scope_revision_count: 0` и `status: draft`; итоговый status устанавливает validator. При `preflight_repair_allowed=true` один раз исправь только format-errors без изменения count. При `correction_allowed=true` исправь только blocking content-errors, установи count `1` и повтори validator. Второй content-correction нет. `quality_findings` не запускают цикл переписывания: они передаются в матрицу и independent review. После удаления или перенумерации `SR-*` или `GAP-*` сначала обнови все ссылки на старый ID; не используй диапазон, пересекающий отсутствующий ID. Передача этапу написания разрешена только при `writer_allowed=true` и `workflow_status=completed`; иначе остановись.
