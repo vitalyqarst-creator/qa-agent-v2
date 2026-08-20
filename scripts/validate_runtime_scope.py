@@ -83,16 +83,35 @@ USER_RESPONSE_RE = re.compile(
     re.IGNORECASE | re.MULTILINE,
 )
 TOKEN_STOPWORDS = {
+    "карточк",
     "данны",
     "должн",
     "использ",
     "какие",
     "какой",
     "котор",
+    "объект",
+    "один",
+    "партнер",
     "провер",
     "реквиз",
     "систем",
     "требов",
+}
+QUESTION_INTENT_PATTERNS = {
+    "unbounded-quantity": re.compile(
+        r"\b(?:неогранич\w*|без\s+огранич\w*|лимит\w*|предельн\w*|максимальн\w*\s+количеств\w*|"
+        r"сколько\s+\w*|количественн\w*\s+критери\w*)\b",
+        re.IGNORECASE,
+    ),
+    "duplicate-identity": re.compile(
+        r"\b(?:дубл\w*|одинаков\w*|совпада\w*|ключ\w*\s+уникальност\w*|уникальн\w*)\b",
+        re.IGNORECASE,
+    ),
+    "exact-unit": re.compile(
+        r"\b(?:байт\w*|киб\w*|мебибайт\w*|килобайт\w*|мегабайт\w*|миб\w*|мб\b|кб\b)\b",
+        re.IGNORECASE,
+    ),
 }
 OMIT_GAP_RE = re.compile(
     r"не\s+(?:создава(?:й|ть)|включа(?:й|ть))[^\n]{0,100}(?:matrix|матриц)[^\n]{0,80}(?:строк|обязан|gap|пробел)",
@@ -1210,6 +1229,39 @@ def question_field(block: str, label: str) -> str:
     return match.group(1).strip() if match else ""
 
 
+def support_blocks(content: str) -> list[str]:
+    blocks = re.split(r"(?=^#{2,4}\s+\S)", content, flags=re.MULTILINE)
+    return [block for block in blocks if re.match(r"^#{2,4}\s+\S", block)]
+
+
+def support_block_question(block: str) -> str:
+    historical_match = re.search(r"^question:\s*(.+?)\s*$", block, re.IGNORECASE | re.MULTILINE)
+    if historical_match is None:
+        historical_match = re.search(r"\*\*Вопрос:\*\*\s*(.+?)(?=\n\n|\Z)", block, re.DOTALL)
+    return historical_match.group(1).strip() if historical_match else block
+
+
+def question_intents(value: str) -> set[str]:
+    return {name for name, pattern in QUESTION_INTENT_PATTERNS.items() if pattern.search(value)}
+
+
+def semantically_matching_question(left: str, right: str) -> bool:
+    left_intents = question_intents(left)
+    right_intents = question_intents(right)
+    if left_intents and right_intents and left_intents.isdisjoint(right_intents):
+        return False
+    return len(meaningful_tokens(left) & meaningful_tokens(right)) >= 2
+
+
+def relevant_approved_support_blocks(support: str, anchors: set[str], current_question: str) -> list[str]:
+    return [
+        block
+        for block in support_blocks(support)
+        if anchors.intersection(precise_source_anchors(block))
+        and semantically_matching_question(current_question, support_block_question(block))
+    ]
+
+
 def precise_source_anchors(value: str) -> set[str]:
     anchors = extract_anchors(value)
     codes = {anchor for anchor in anchors if anchor.startswith("CODE:")}
@@ -1238,19 +1290,12 @@ def independent_property_conflicts(statement: str) -> list[str]:
 
 
 def duplicates_fully_answered_question(current_question: str, support: str, anchors: set[str]) -> bool:
-    current_tokens = meaningful_tokens(current_question)
-    for card in re.split(r"(?=^###\s+CLR-)", support, flags=re.MULTILINE):
-        if not anchors.intersection(precise_source_anchors(card)):
-            continue
+    for card in relevant_approved_support_blocks(support, anchors, current_question):
         if not re.search(r"response_status:\s*(?:answered|resolved|approved)\b", card, re.IGNORECASE):
             continue
         if not re.search(r"residual_missing:\s*none\b", card, re.IGNORECASE):
             continue
-        historical_match = re.search(r"^question:\s*(.+?)\s*$", card, re.IGNORECASE | re.MULTILINE)
-        if historical_match is None:
-            historical_match = re.search(r"\*\*Вопрос:\*\*\s*(.+?)(?=\n\n|\Z)", card, re.DOTALL)
-        if historical_match and len(current_tokens & meaningful_tokens(historical_match.group(1))) >= 2:
-            return True
+        return True
     return False
 
 
@@ -2488,7 +2533,7 @@ def validate(package_root: Path, scope_dir: Path) -> list[str]:
             )
         matching_support: list[Path] = []
         for path, support in support_contents:
-            if question_anchors.intersection(precise_source_anchors(support)):
+            if relevant_approved_support_blocks(support, question_anchors, current_question):
                 matching_support.append(path)
             if status not in {"ответ-получен", "отменён"} and duplicates_fully_answered_question(
                 current_question, support, question_anchors

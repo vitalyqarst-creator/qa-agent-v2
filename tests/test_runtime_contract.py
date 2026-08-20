@@ -47,11 +47,13 @@ from scripts.validate_runtime_review import (
 )
 from scripts.validate_runtime_scope import (
     classify_scope_error,
+    duplicates_fully_answered_question,
     generic_unavailability_without_observation,
     independent_property_conflicts,
     partition_scope_findings,
     public_contract,
     scope_stage_decision,
+    semantically_matching_question,
     source_row_tokens,
     table_property_coverage_errors,
     table_row_references,
@@ -1562,6 +1564,29 @@ class RuntimeContractTests(unittest.TestCase):
         )
         self.assertFalse(exhausted["answer_reconciliation_allowed"])
         self.assertFalse(exhausted["correction_allowed"])
+
+    def test_approved_answer_matching_distinguishes_quantity_from_duplicate_identity(self) -> None:
+        quantity_question = (
+            "Какой проверяемый критерий подтверждает неограниченное количество реквизитов у одного партнера?"
+        )
+        duplicate_question = "Какие поля карточки реквизитов образуют дубль внутри одного партнера?"
+        self.assertFalse(semantically_matching_question(quantity_question, duplicate_question))
+
+        support = """### CLR-002 — status `answered`
+
+```yaml
+related_ft_reference: AS.5 cross-reference; AS.39-AS.42
+question: Какие поля карточки реквизитов образуют дубль внутри одного партнера?
+response_status: answered
+residual_missing: none
+```
+"""
+        self.assertFalse(
+            duplicates_fully_answered_question(quantity_question, support, {"CODE:AS.39"})
+        )
+        self.assertTrue(
+            duplicates_fully_answered_question(duplicate_question, support, {"CODE:AS.39"})
+        )
 
     def test_scope_findings_partition_blocks_atomicity_property_and_format_defects(self) -> None:
         blocking, quality = partition_scope_findings(
