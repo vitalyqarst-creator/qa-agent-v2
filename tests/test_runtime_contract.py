@@ -2879,6 +2879,60 @@ class RuntimeContractTests(unittest.TestCase):
             errors = validate_test_data(materialization, matrix, data_plan)
             self.assertTrue(any("RUN-ID/timestamp is forbidden" in error for error in errors))
 
+    def test_environment_materialization_requires_confirmed_binding(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            package = Path(temporary_directory) / "FT"
+            (package / "AGENT-NOTES.md").parent.mkdir(parents=True)
+            (package / "AGENT-NOTES.md").write_text("# Notes\n", encoding="utf-8")
+            matrix = package / "work" / "practical" / "9.3.3" / "test-design-matrix.md"
+            matrix.parent.mkdir(parents=True)
+            matrix_content = VALID_MATRIX.replace(
+                "`Наименование` = `ПАО СБЕРБАНК`",
+                "TD-PARTNER-A",
+            )
+            matrix.write_text(matrix_content, encoding="utf-8")
+            data_plan = package / "work" / "stage-handoffs" / "9.3.3" / "test-data-plan.md"
+            data_plan.parent.mkdir(parents=True)
+            data_plan.write_text(
+                "# План данных\n\n"
+                "| Группа проверок | Роли данных | Допустимый источник | Ограничения и отношения | Границы и классы | Воспроизводимая подготовка | Готовность материализации |\n"
+                "| --- | --- | --- | --- | --- | --- | --- |\n"
+                "| Партнёр | TD-PARTNER-A | стендовая подготовка | Конкретная запись. | Не применимо: границ нет. | Найти подтверждённую запись. | требуется |\n",
+                encoding="utf-8",
+            )
+            materialization = package / "work" / "test-data" / "9.3.3" / "data-materialization.json"
+            materialization.parent.mkdir(parents=True)
+            payload = {
+                "schema_version": 1,
+                "scope": "9.3.3",
+                "status": "completed",
+                "matrix_path": "work/practical/9.3.3/test-design-matrix.md",
+                "matrix_sha256": hashlib.sha256(matrix.read_bytes()).hexdigest(),
+                "bindings": [
+                    {
+                        "role_id": "TD-PARTNER-A",
+                        "used_by": ["M-001"],
+                        "source_type": "environment",
+                        "source_name": "стендовая подготовка",
+                        "values": {"Наименование партнёра": "ООО Тестовый партнёр"},
+                    }
+                ],
+                "relations": [],
+            }
+            materialization.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+            errors = validate_test_data(materialization, matrix, data_plan)
+            self.assertTrue(any("confirmed environment_binding" in error for error in errors))
+
+            evidence = package / "work" / "test-data" / "9.3.3" / "environment-evidence.md"
+            evidence.write_text("Подтверждённая запись: ООО Тестовый партнёр\n", encoding="utf-8")
+            payload["bindings"][0]["environment_binding"] = {
+                "status": "confirmed",
+                "evidence_path": "work/test-data/9.3.3/environment-evidence.md",
+                "evidence_sha256": hashlib.sha256(evidence.read_bytes()).hexdigest(),
+            }
+            materialization.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+            self.assertEqual([], validate_test_data(materialization, matrix, data_plan))
+
     def test_tc_accepts_concrete_file_preparation_in_preconditions(self) -> None:
         test_case = VALID_TC.replace(
             "1. Открыть карточку добавления партнёра.",
@@ -3649,6 +3703,10 @@ class RuntimeContractTests(unittest.TestCase):
                         "evidence": ["Не применимо: источник не задаёт уникальность."],
                     },
                     "save-data-closure": {"status": "checked", "evidence": ["M-001"]},
+                    "identity-provenance": {
+                        "status": "checked",
+                        "evidence": ["TD-PARTNER-A; TD-PARTNER-B -> Provider"],
+                    },
                     "reachability-oracles": {"status": "checked", "evidence": ["M-001; GAP-001"]},
                     "duplication-parameterization": {"status": "checked", "evidence": ["M-001"]},
                 },

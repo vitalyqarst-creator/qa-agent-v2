@@ -35,6 +35,7 @@ MATRIX_REVIEW_CHECKS = {
     "formal-techniques",
     "uniqueness-lifecycle",
     "save-data-closure",
+    "identity-provenance",
     "reachability-oracles",
     "duplication-parameterization",
 }

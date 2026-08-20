@@ -190,6 +190,35 @@ def validate(materialization_path: Path, matrix_path: Path, data_plan_path: Path
             errors.append(f"{role}: source_type {source_type!r} is incompatible with test-data-plan {sources}")
         if not isinstance(binding.get("source_name"), str) or not binding["source_name"].strip():
             errors.append(f"{role}: source_name is required")
+        environment_evidence: str | None = None
+        if source_type == "environment":
+            environment_binding = binding.get("environment_binding")
+            if not isinstance(environment_binding, dict):
+                errors.append(
+                    f"{role}: environment source requires a confirmed environment_binding; "
+                    "planned stand preparation is not literal provenance"
+                )
+            else:
+                if environment_binding.get("status") != "confirmed":
+                    errors.append(f"{role}: environment_binding status must be 'confirmed'")
+                evidence_path_value = environment_binding.get("evidence_path")
+                evidence_digest = environment_binding.get("evidence_sha256")
+                if not isinstance(evidence_path_value, str):
+                    errors.append(f"{role}: environment_binding evidence_path is required")
+                else:
+                    evidence_path = resolve_package_path(package_root, evidence_path_value)
+                    if evidence_path is None or not evidence_path.is_file():
+                        errors.append(f"{role}: environment_binding evidence_path is invalid or missing")
+                    else:
+                        actual_evidence_digest = hashlib.sha256(evidence_path.read_bytes()).hexdigest()
+                        if not isinstance(evidence_digest, str) or not DIGEST_RE.fullmatch(evidence_digest):
+                            errors.append(f"{role}: environment_binding evidence_sha256 is required")
+                        elif evidence_digest.casefold() != actual_evidence_digest:
+                            errors.append(f"{role}: environment_binding evidence_sha256 does not match")
+                        try:
+                            environment_evidence = evidence_path.read_text(encoding="utf-8")
+                        except UnicodeDecodeError:
+                            errors.append(f"{role}: environment_binding evidence must be UTF-8 text")
         values = binding.get("values")
         if not isinstance(values, dict) or not values:
             errors.append(f"{role}: values must be a non-empty object")
@@ -203,6 +232,8 @@ def validate(materialization_path: Path, matrix_path: Path, data_plan_path: Path
                 errors.append(f"{role}.{field}: unresolved placeholder is forbidden")
             if source_type in {"provider", "dictionary"} and RUN_ID_RE.search(text):
                 errors.append(f"{role}.{field}: RUN-ID/timestamp is forbidden for {source_type}-bound data")
+            if environment_evidence is not None and text not in environment_evidence:
+                errors.append(f"{role}.{field}: value is absent from confirmed environment evidence")
 
     for role in sorted(set(role_usage) - set(bindings)):
         errors.append(f"matrix data role {role} has no materialized binding")
