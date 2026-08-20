@@ -115,11 +115,11 @@ def validate_matrix_review_checklist(record: dict[str, Any]) -> list[str]:
                 if not isinstance(item, str):
                     continue
                 for clause in re.split(r"[;\n]", item.casefold()):
-                    if "стендов" in clause and "подготов" in clause and not any(
+                    if "стендов" in clause and not any(
                         marker in clause for marker in IDENTITY_ORIGIN_MARKERS
                     ):
                         errors.append(
-                            "matrix_review_checklist identity-provenance cannot use stand preparation "
+                            "matrix_review_checklist identity-provenance cannot use a stand reference "
                             "as literal origin without a confirmed binding or another source"
                         )
     return errors

@@ -3767,7 +3767,15 @@ class RuntimeContractTests(unittest.TestCase):
             }
             review_path.write_text(json.dumps(invalid_identity, ensure_ascii=False), encoding="utf-8")
             self.assertTrue(
-                any("stand preparation" in error for error in validate_review(artifact, review_path, "matrix"))
+                any("stand reference" in error for error in validate_review(artifact, review_path, "matrix"))
+            )
+            invalid_identity["matrix_review_checklist"]["identity-provenance"] = {
+                "status": "checked",
+                "evidence": ["TD-PARTNER-A -> стендовая привязка"],
+            }
+            review_path.write_text(json.dumps(invalid_identity, ensure_ascii=False), encoding="utf-8")
+            self.assertTrue(
+                any("stand reference" in error for error in validate_review(artifact, review_path, "matrix"))
             )
             review_path.write_text(json.dumps(missing_checklist, ensure_ascii=False), encoding="utf-8")
 
