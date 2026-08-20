@@ -36,6 +36,7 @@ from scripts.validate_fixture_catalog import validate as validate_catalog
 from scripts.validate_runtime_matrix import (
     DATA_RELATION_RE as MATRIX_DATA_RELATION_RE,
     DATA_ROLE_RE as MATRIX_DATA_ROLE_RE,
+    MISSING_ENVIRONMENT_GAP_RE as MATRIX_MISSING_ENVIRONMENT_GAP_RE,
     validate as validate_matrix,
     validate_layout as validate_matrix_layout,
     validate_projection as validate_matrix_projection,
@@ -46,6 +47,7 @@ from scripts.validate_runtime_review import (
     validate as validate_review,
 )
 from scripts.validate_runtime_scope import (
+    MISSING_ENVIRONMENT_GAP_RE as SCOPE_MISSING_ENVIRONMENT_GAP_RE,
     classify_scope_error,
     duplicates_fully_answered_question,
     generic_unavailability_without_observation,
@@ -1586,6 +1588,15 @@ class RuntimeContractTests(unittest.TestCase):
         )
         self.assertFalse(unrelated["validator_repair_allowed"])
         self.assertFalse(unrelated["correction_allowed"])
+
+    def test_missing_environment_gap_does_not_match_absence_of_business_limit(self) -> None:
+        quantitative_gap = (
+            "Конечная проверка не подтверждает отсутствие предела. Второй реквизит подтверждает только нижний порог."
+        )
+        missing_fixture = "Отсутствует подготовленный реквизит со статусом Подтвержден."
+        for pattern in (SCOPE_MISSING_ENVIRONMENT_GAP_RE, MATRIX_MISSING_ENVIRONMENT_GAP_RE):
+            self.assertIsNone(pattern.search(quantitative_gap))
+            self.assertIsNotNone(pattern.search(missing_fixture))
 
     def test_approved_answer_matching_distinguishes_quantity_from_duplicate_identity(self) -> None:
         quantity_question = (
