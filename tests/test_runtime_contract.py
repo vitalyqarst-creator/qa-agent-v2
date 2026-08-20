@@ -1314,6 +1314,8 @@ class RuntimeContractTests(unittest.TestCase):
         )
         self.assertIn("scope_revision_count: 0", contract["markdown_templates"]["workflow_state"])
         self.assertIn("status: draft", contract["markdown_templates"]["workflow_state"])
+        self.assertIn("| Источник | Входящее действие |", contract["markdown_templates"]["incoming_actions"])
+        self.assertIn("Передано: <область>", contract["accepted_values"]["incoming_action_decisions"])
         self.assertNotIn("стендовая подготовка |", contract["markdown_templates"]["test_data"])
         self.assertIn("Контракт подтверждения:", contract["markdown_templates"]["test_data"])
 
@@ -1418,6 +1420,20 @@ class RuntimeContractTests(unittest.TestCase):
             self.assertTrue(any("selected scope requirements" in error and "AS.40" in error for error in errors))
             self.assertTrue(any("incoming actions" in error and "AS.23" in error for error in errors))
             self.assertTrue(any("parent requirement AS.5 list fragment" in error for error in errors))
+
+            brief_path = scope / "scope-brief.md"
+            brief_path.write_text(
+                brief_path.read_text(encoding="utf-8")
+                + "\n## Входящие действия\n\n"
+                + "| Источник | Входящее действие | Решение | Связанные обязанности или область |\n"
+                + "| --- | --- | --- | --- |\n"
+                + "| AS.23 | Редактировать | Передано: 9.3.1 | Область 9.3.1 |\n"
+                + "| AS.24 | Редактировать | Передано: 9.3.1 | Область 9.3.1 |\n"
+                + "| AS.25 | Добавить | Передано: 9.3.1 | Область 9.3.1 |\n",
+                encoding="utf-8",
+            )
+            assigned_errors = validate_scope(package, scope)
+            self.assertFalse(any("incoming actions" in error for error in assigned_errors))
 
     def test_scope_public_contract_exposes_exact_xhtml_table_catalog(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
@@ -1545,6 +1561,16 @@ class RuntimeContractTests(unittest.TestCase):
         )
         self.assertTrue(catalog_omissions["final_closure_allowed"])
         self.assertTrue(catalog_omissions["correction_allowed"])
+
+        catalog_repair = scope_stage_decision(
+            [
+                "incoming actions that open the selected UI scope are not assigned: row 1 references no completed earlier scope",
+                "incoming actions that open the selected UI scope are not assigned: AS.23",
+            ],
+            3,
+        )
+        self.assertTrue(catalog_repair["catalog_repair_allowed"])
+        self.assertTrue(catalog_repair["correction_allowed"])
 
         workflow_failed = scope_stage_decision(
             ["workflow-state must reference work/scope-clarification-requests.md"],
@@ -3476,6 +3502,16 @@ residual_missing: none
 
             brief_path = scope / "scope-brief.md"
             complete_brief = brief_path.read_text(encoding="utf-8")
+            brief_path.write_text(
+                complete_brief.replace(
+                    "`fts/Project/FT/mockups/form.png`",
+                    f"`fts/Project/FT/mockups/form.png`; `{figma_url}`",
+                ),
+                encoding="utf-8",
+            )
+            self.assertFalse(any("Figma URL is not registered" in error for error in validate_scope(package, scope)))
+            brief_path.write_text(complete_brief, encoding="utf-8")
+
             brief_path.write_text(
                 complete_brief.replace(
                     "| Форма | `fts/Project/FT/mockups/form.png` | Подтверждена форма. |",

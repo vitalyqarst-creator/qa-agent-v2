@@ -430,6 +430,11 @@ def scope_stage_decision(errors: list[str], revision_count: int | None) -> dict[
         and all(any(pattern in error for pattern in catalog_closure_patterns) for error in blocking_errors)
     )
     final_closure_allowed = narrow_final_closure_allowed or catalog_final_closure_allowed
+    catalog_repair_allowed = (
+        revision_count == 3
+        and bool(blocking_errors)
+        and all(any(pattern in error for pattern in catalog_closure_patterns) for error in blocking_errors)
+    )
     reconciliation_patterns = (
         "approved answer source mentions its requirement",
         "duplicates a fully answered approved clarification",
@@ -456,6 +461,7 @@ def scope_stage_decision(errors: list[str], revision_count: int | None) -> dict[
         and (
             revision_count in {0, 1}
             or final_closure_allowed
+            or catalog_repair_allowed
             or answer_reconciliation_allowed
             or validator_repair_allowed
         )
@@ -468,6 +474,7 @@ def scope_stage_decision(errors: list[str], revision_count: int | None) -> dict[
         "scope_revision_count": revision_count,
         "preflight_repair_allowed": preflight_repair_allowed,
         "final_closure_allowed": final_closure_allowed,
+        "catalog_repair_allowed": catalog_repair_allowed,
         "answer_reconciliation_allowed": answer_reconciliation_allowed,
         "validator_repair_allowed": validator_repair_allowed,
         "correction_allowed": correction_allowed,
@@ -568,6 +575,15 @@ def public_contract(scope: str | None = None, package_root: Path | None = None) 
         "parent_ownership": markdown_table_template(
             ("Источник", "Родительская обязанность", "Целевая область", "Связанные обязанности или решение"),
             (f"Раздел {section_id}; абзац «Точная цитата»", "Одна обязанность", scope_value, f"SR-{scope_digits}001"),
+        ),
+        "incoming_actions": markdown_table_template(
+            ("Источник", "Входящее действие", "Решение", "Связанные обязанности или область"),
+            (
+                f"Таблица 1, строка первого столбца «Добавить»; AS.1",
+                "Нажатие «Добавить»",
+                "Включено",
+                f"SR-{scope_digits}001",
+            ),
         ),
         "table_rows": markdown_table_template(
             ("Таблица", "Строка", "Решение", "Связанные обязанности/пробелы"),
@@ -691,6 +707,12 @@ def public_contract(scope: str | None = None, package_root: Path | None = None) 
                 "Решение",
                 "Связанные обязанности или область",
             ],
+            "incoming_actions": [
+                "Источник",
+                "Входящее действие",
+                "Решение",
+                "Связанные обязанности или область",
+            ],
             "consistency": ["Аспект", "Вывод анализа", "Связанные обязанности/пробелы"],
             "coverage_gaps": [
                 "ID",
@@ -708,6 +730,7 @@ def public_contract(scope: str | None = None, package_root: Path | None = None) 
             "execution_method_not_value_source": "стендовая подготовка",
             "test_data_materialization_readiness": sorted(ALLOWED_DATA_READINESS),
             "boundary_decisions": ["Включён", "Распределён", "Ранее покрыт: <область>", "Не применимо: <причина>"],
+            "incoming_action_decisions": ["Включено", "Передано: <область>", "Ранее покрыто: <область>", "Не применимо: <причина>"],
         },
         "markdown_templates": templates,
         "correction_policy": {
@@ -716,6 +739,7 @@ def public_contract(scope: str | None = None, package_root: Path | None = None) 
             "preflight_repair": "one preflight pass repairs only format errors, even when content errors coexist, and keeps scope_revision_count at 0",
             "content_correction": "up to two blocking content corrections increment scope_revision_count from 0 to 1 and then to 2",
             "final_closure": "at count 2, one final correction changes count to 3 and is allowed for at most two atomicity/completeness/traceability/source-contract blockers, or for any number of deterministic catalog-closure omissions only",
+            "catalog_repair": "at count 3, one final catalog-only assignment repair changes count to 4",
             "answer_reconciliation": "at count 3, one last correction is allowed only to reconcile an already approved answer, its source and a duplicate readiness GAP; it changes count to 4",
             "validator_repair": "at count 4, one count-preserving repair is allowed only when an unbounded quantitative GAP was falsely closed by approved-answer matching and the linked clarification must return to pending",
             "before_validation": "repair format-only blocking_errors once without spending a content correction; quality_findings are carried to matrix authoring and review",
@@ -734,6 +758,7 @@ def public_contract(scope: str | None = None, package_root: Path | None = None) 
             "opaque_headers": "только для используемых коротких заголовков без явной семантики",
             "visual_crosscheck": "только для включённых UI-уровней",
             "dependent_results": "когда атомарные результаты причинно связаны и хотя бы один из них имеет GAP; одинаковый source anchor включает automatic gate",
+            "incoming_actions": "только при непустом incoming_action_catalog; каждый код назначается текущей или точной целевой области",
             "figma": "только если релевантного локального визуального материала недостаточно",
             "second_pass": "только при сигнале сложности из ft-scope-analyzer",
             "confirmed_environment_binding": "источник 'подтверждённая стендовая привязка' требует в подготовке 'Контракт подтверждения:' с будущим evidence",
@@ -1789,9 +1814,10 @@ def validate(package_root: Path, scope_dir: Path) -> list[str]:
         for row in boundary_control.rows:
             fragment = row[fragment_index].strip() or "<без фрагмента>"
             anchor = row[anchor_index].strip()
-            boundary_code_anchors.update(
+            row_code_anchors = {
                 item for item in extract_anchors(anchor) if item.startswith("CODE:")
-            )
+            }
+            boundary_code_anchors.update(row_code_anchors)
             decision = row[decision_index].strip()
             related = row[related_index].strip()
             if fragment.casefold() == "выбранный раздел" and decision.casefold() != "включён":
@@ -1801,7 +1827,10 @@ def validate(package_root: Path, scope_dir: Path) -> list[str]:
             if not anchor or anchor in {"-", "—"}:
                 errors.append(f"scope-brief source boundary fragment {fragment!r} has no structural anchor")
             if decision.casefold() == "включён":
-                if fragment.casefold() != "выбранный раздел":
+                if (
+                    fragment.casefold() != "выбранный раздел"
+                    and not row_code_anchors.intersection(selected_catalog)
+                ):
                     errors.append(
                         f"scope-brief parent fragment {fragment!r} must distribute obligations by target scope "
                         "instead of including the whole fragment"
@@ -1882,6 +1911,7 @@ def validate(package_root: Path, scope_dir: Path) -> list[str]:
     ownership_refs: set[str] = set()
     ownership_code_anchors: set[str] = set()
     ownership_text_anchors: set[str] = set()
+    current_scope = canonical_scope(scope_dir.name)
     if distributed_parent:
         if ownership is None or not ownership.rows:
             errors.append("scope-brief distributed parent text requires the parent requirement ownership table")
@@ -1890,7 +1920,6 @@ def validate(package_root: Path, scope_dir: Path) -> list[str]:
             duty_index = ownership.index("Родительская обязанность")
             target_index = ownership.index("Целевая область")
             resolution_index = ownership.index("Связанные обязанности или решение")
-            current_scope = canonical_scope(scope_dir.name)
             for row_number, row in enumerate(ownership.rows, start=1):
                 source = row[source_index].strip()
                 source_anchors = extract_anchors(source)
@@ -1941,8 +1970,83 @@ def validate(package_root: Path, scope_dir: Path) -> list[str]:
         for item in incoming_catalog
         if str(item.get("code", "")).strip()
     }
+    incoming_assignment_codes: set[str] = set()
+    incoming_assignments = find_markdown_table(
+        scope_brief_content,
+        ("Источник", "Входящее действие", "Решение", "Связанные обязанности или область"),
+    )
+    if incoming_codes and incoming_assignments is not None and incoming_assignments.rows:
+        source_index = incoming_assignments.index("Источник")
+        action_index = incoming_assignments.index("Входящее действие")
+        decision_index = incoming_assignments.index("Решение")
+        related_index = incoming_assignments.index("Связанные обязанности или область")
+        seen_incoming_codes: list[str] = []
+        for row_number, row in enumerate(incoming_assignments.rows, start=1):
+            source_codes = sorted(
+                code for code in extract_anchors(row[source_index]) if code in incoming_codes
+            )
+            prefix = "incoming actions that open the selected UI scope are not assigned"
+            if len(source_codes) != 1:
+                errors.append(f"{prefix}: row {row_number} must cite exactly one catalog code")
+                continue
+            code = source_codes[0]
+            seen_incoming_codes.append(code)
+            action = row[action_index].strip()
+            decision = row[decision_index].strip()
+            related = row[related_index].strip()
+            linked = source_row_tokens(related) | set(
+                re.findall(r"(?<![A-Za-z0-9_.-])GAP-\d{2,}(?![A-Za-z0-9_.-])", related)
+            )
+            valid_assignment = False
+            if not action or action in {"-", "—"}:
+                errors.append(f"{prefix}: row {row_number} has no action")
+            decision_folded = decision.casefold()
+            if decision_folded in {"включено", "включён", "включена"}:
+                if linked:
+                    valid_assignment = True
+                else:
+                    errors.append(f"{prefix}: row {row_number} included action must link SR-* or GAP-*")
+            elif decision_folded.startswith("передано:"):
+                target = decision.split(":", 1)[1].strip().strip("` ")
+                if target and canonical_scope(target) != current_scope and not linked:
+                    valid_assignment = True
+                else:
+                    errors.append(f"{prefix}: row {row_number} needs another explicit target scope and no current IDs")
+            elif re.match(r"^ранее\s+покрыт(?:о|а)?\s*:", decision_folded):
+                previous_scope = decision.split(":", 1)[1].strip().strip("` ")
+                previous_matches = [
+                    candidate
+                    for candidate in (package_root / "work" / "stage-handoffs").glob("*")
+                    if candidate.is_dir()
+                    and candidate.resolve() != scope_dir.resolve()
+                    and canonical_scope(candidate.name) == canonical_scope(previous_scope)
+                    and (candidate / "source-row-inventory.md").is_file()
+                ]
+                if previous_scope and previous_matches and not linked:
+                    valid_assignment = True
+                else:
+                    errors.append(f"{prefix}: row {row_number} references no completed earlier scope")
+            elif decision_folded.startswith("не применимо:"):
+                reason = decision.split(":", 1)[1].strip()
+                if len(reason) >= 5 and not linked:
+                    valid_assignment = True
+                else:
+                    errors.append(f"{prefix}: row {row_number} needs a concrete reason and no current IDs")
+            else:
+                errors.append(f"{prefix}: row {row_number} has unsupported decision {decision!r}")
+            if valid_assignment:
+                incoming_assignment_codes.add(code)
+        duplicates = sorted({code for code in seen_incoming_codes if seen_incoming_codes.count(code) > 1})
+        if duplicates:
+            errors.append(f"incoming actions that open the selected UI scope are not assigned: duplicate rows for {', '.join(duplicates)}")
+    elif not incoming_codes and incoming_assignments is not None and incoming_assignments.rows:
+        errors.append("scope-brief has incoming-action rows but incoming_action_catalog is empty")
     missing_incoming_codes = sorted(
-        incoming_codes - inventory_code_anchors - exclusion_code_anchors - ownership_code_anchors
+        incoming_codes
+        - inventory_code_anchors
+        - exclusion_code_anchors
+        - ownership_code_anchors
+        - incoming_assignment_codes
     )
     if missing_incoming_codes:
         errors.append(
@@ -2186,7 +2290,7 @@ def validate(package_root: Path, scope_dir: Path) -> list[str]:
             if VISUAL_INCOMPLETE_RE.search(visual_result):
                 incomplete_local_visual = True
             declared_paths = LOCAL_VISUAL_RE.findall(visual_source)
-            declared_urls = re.findall(r"https?://[^\s|]+", visual_source)
+            declared_urls = re.findall(r"https?://[^\s|`\])]+", visual_source)
             visible_without_urls = re.sub(r"https?://\S+", "", visual_source)
             if not declared_paths and (
                 LOCAL_VISUAL_LABEL_RE.search(visible_without_urls)
