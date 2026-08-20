@@ -1303,7 +1303,7 @@ class RuntimeContractTests(unittest.TestCase):
         )
         self.assertIn("| ID | Связанная обязанность |", contract["markdown_templates"]["coverage_gaps"])
         self.assertIn("**Ответ БА:** _Введите ответ здесь._", contract["markdown_templates"]["clarification_card"])
-        self.assertEqual(1, contract["correction_policy"]["maximum_scope_revision_count"])
+        self.assertEqual(2, contract["correction_policy"]["maximum_scope_revision_count"])
         self.assertIn("blocking_errors", contract["correction_policy"]["before_validation"])
         self.assertTrue(
             any("один основной наблюдаемый результат" in item for item in contract["atomicity_checks"])
@@ -1477,6 +1477,21 @@ class RuntimeContractTests(unittest.TestCase):
             self.assertIn("status: draft", workflow.read_text(encoding="utf-8"))
 
             workflow.write_text("status: completed\nscope_revision_count: 1\n", encoding="utf-8")
+            second = subprocess.run(
+                [sys.executable, "scripts/validate_runtime_scope.py", str(package), str(scope)],
+                cwd=root,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                check=False,
+            )
+            second_payload = json.loads(second.stdout)
+            self.assertTrue(second_payload["correction_allowed"])
+            self.assertFalse(second_payload["writer_allowed"])
+            self.assertEqual("draft", second_payload["workflow_status"])
+            self.assertIn("status: draft", workflow.read_text(encoding="utf-8"))
+
+            workflow.write_text("status: completed\nscope_revision_count: 2\n", encoding="utf-8")
             final = subprocess.run(
                 [sys.executable, "scripts/validate_runtime_scope.py", str(package), str(scope)],
                 cwd=root,

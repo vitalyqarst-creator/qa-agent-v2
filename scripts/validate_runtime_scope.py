@@ -392,7 +392,11 @@ def scope_stage_decision(errors: list[str], revision_count: int | None) -> dict[
     blocking_errors, quality_findings = partition_scope_findings(errors)
     blocking_classes = {classify_scope_error(error) for error in blocking_errors}
     preflight_repair_allowed = "format" in blocking_classes and revision_count == 0
-    correction_allowed = bool(blocking_errors) and revision_count == 0 and not preflight_repair_allowed
+    correction_allowed = (
+        bool(blocking_errors)
+        and revision_count in {0, 1}
+        and not preflight_repair_allowed
+    )
     writer_allowed = not blocking_errors
     return {
         "valid": writer_allowed,
@@ -641,11 +645,11 @@ def public_contract(scope: str | None = None, package_root: Path | None = None) 
         "markdown_templates": templates,
         "correction_policy": {
             "initial_scope_revision_count": 0,
-            "maximum_scope_revision_count": 1,
+            "maximum_scope_revision_count": 2,
             "preflight_repair": "one preflight pass repairs only format errors, even when content errors coexist, and keeps scope_revision_count at 0",
-            "content_correction": "one blocking content correction changes scope_revision_count to 1",
-            "before_validation": "repair format-only blocking_errors once without spending the content correction; quality_findings are carried to matrix authoring and review",
-            "when_blocking_at_count_1": "stop; correction_allowed=false; workflow status is failed",
+            "content_correction": "up to two blocking content corrections increment scope_revision_count from 0 to 1 and then to 2",
+            "before_validation": "repair format-only blocking_errors once without spending a content correction; quality_findings are carried to matrix authoring and review",
+            "when_blocking_at_count_2": "stop; correction_allowed=false; workflow status is failed",
         },
         "atomicity_checks": [
             "один объект или UI-уровень в одной обязанности",
@@ -1632,9 +1636,9 @@ def validate(package_root: Path, scope_dir: Path) -> list[str]:
     scope_brief_content = (scope_dir / "scope-brief.md").read_text(encoding="utf-8")
     workflow_content = (scope_dir / "workflow-state.yaml").read_text(encoding="utf-8")
     revision_count = scalar_values(workflow_content).get("scope_revision_count")
-    if revision_count not in {"0", "1"}:
+    if revision_count not in {"0", "1", "2"}:
         errors.append(
-            "workflow-state scope_revision_count must be 0 initially or 1 after the only structural correction"
+            "workflow-state scope_revision_count must be 0 initially, 1 after the first content correction or 2 after the second"
         )
     if not re.search(
         r"(?m)^clarification_register:\s*[\"']?work/scope-clarification-requests\.md[\"']?\s*$",
@@ -2529,7 +2533,7 @@ def main() -> int:
     errors = validate(args.package_root.resolve(), args.scope_dir.resolve())
     workflow = args.scope_dir.resolve() / "workflow-state.yaml"
     revision_raw = scalar_values(workflow.read_text(encoding="utf-8")).get("scope_revision_count") if workflow.is_file() else None
-    revision_count = int(revision_raw) if revision_raw in {"0", "1"} else None
+    revision_count = int(revision_raw) if revision_raw in {"0", "1", "2"} else None
     decision = scope_stage_decision(errors, revision_count)
     workflow_status = str(decision["workflow_status"])
     if workflow.is_file():
