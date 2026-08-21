@@ -201,7 +201,13 @@ def matrix_review_quality_blocking(record: dict[str, Any] | None) -> bool:
     )
 
 
-def validate(artifact: Path, record_path: Path, kind: str, require_accepted: bool = False) -> list[str]:
+def validate(
+    artifact: Path,
+    record_path: Path,
+    kind: str,
+    require_accepted: bool = False,
+    require_current_assignment: bool = False,
+) -> list[str]:
     errors: list[str] = []
     record, load_errors = load_record(record_path)
     if load_errors:
@@ -362,7 +368,7 @@ def validate(artifact: Path, record_path: Path, kind: str, require_accepted: boo
                                 dispatch_path,
                                 kind,
                                 session_id if isinstance(session_id, str) else None,
-                                require_current_assignment=False,
+                                require_current_assignment=require_current_assignment,
                             )
                         )
                         dispatched_at = dispatch.get("dispatched_at")

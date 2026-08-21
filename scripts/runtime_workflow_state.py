@@ -41,7 +41,12 @@ def validate_matrix_review(matrix: Path, review_path: Path) -> list[str]:
         from scripts.validate_runtime_review import validate
     except ModuleNotFoundError:  # Direct invocation
         from validate_runtime_review import validate
-    return validate(matrix.resolve(), review_path.resolve(), "matrix")
+    return validate(
+        matrix.resolve(),
+        review_path.resolve(),
+        "matrix",
+        require_current_assignment=True,
+    )
 
 
 def digest(path: Path) -> str:

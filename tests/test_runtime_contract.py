@@ -4603,6 +4603,36 @@ residual_missing: none
             self.assertTrue(second_dispatch.is_file())
             self.assertEqual([], validate_review(artifact, review_path, "matrix", require_accepted=True))
 
+    def test_workflow_rejects_historical_review_as_current_transition_evidence(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            package = Path(temporary_directory) / "FT"
+            (package / "AGENT-NOTES.md").parent.mkdir(parents=True)
+            (package / "AGENT-NOTES.md").write_text("# Notes\n", encoding="utf-8")
+            matrix = package / "work" / "practical" / "9.3.1" / "test-design-matrix.md"
+            matrix.parent.mkdir(parents=True)
+            matrix.write_text(VALID_MATRIX, encoding="utf-8")
+            (matrix.parent / "matrix-data-plan.md").write_text(
+                "# План данных\n\nДанные не требуются.\n", encoding="utf-8"
+            )
+            set_pending(matrix)
+            with patch("scripts.runtime_session_registry.runtime_code_commit", return_value="a" * 40):
+                review_path = create_accepted_matrix_review(package, matrix, "9.3.1")
+            prompt = package / "matrix-review-prompt.md"
+            with patch("scripts.runtime_session_registry.runtime_code_commit", return_value="b" * 40):
+                create_dispatch(
+                    package,
+                    matrix,
+                    prompt,
+                    package / "work" / "reviews" / "9.3.1",
+                    "matrix",
+                    "32345678-1234-1234-1234-123456789abc",
+                    "local",
+                    "2026-08-17T00:02:00Z",
+                )
+
+                with self.assertRaisesRegex(ValueError, "runtime code commit changed"):
+                    apply_review(matrix, review_path)
+
     def test_subagent_cannot_be_recorded_as_independent_reviewer(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
             root = Path(temporary_directory)
