@@ -141,4 +141,6 @@ Review input manifest содержит только artifact, source package, an
 
 Writer revision может изменять текущую matrix и writer-owned `matrix-data-plan.md`. Она не изменяет analyzer-owned handoff. Поэтому новые `TD-*`/`REL-*`, выводимые из уже зафиксированного source-backed профиля, закрываются в том же matrix cycle; только новый source-level смысл требует возврата к analyzer.
 
+Поздний внешний input проходит теми же ролями по `external-dependency-coverage.md`; несвязанные scope не запускаются. Пока внешний GAP открыт, stage summary фиксирует частичное покрытие.
+
 Если зарегистрированная сессия недоступна, controller не подменяет её другой ролью и не продолжает в собственной сессии. Требуется явное решение пользователя о замене роли или новом practical route.

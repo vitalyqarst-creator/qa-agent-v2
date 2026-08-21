@@ -13,7 +13,7 @@ description: Подтверждает scope, извлекает обязанно
 
    `python -X utf8 scripts/validate_runtime_scope.py <package-root> --print-contract --scope <scope>`
 
-   Копируй Markdown-шаблоны целиком; не собирай их по памяти. Заголовки и названия строк бери из `source_table_catalog`; свойства — из XHTML. Сверь `selected_requirement_catalog`, `parent_intro_requirement_catalog` и `incoming_action_catalog`: каждый элемент получает SR/GAP, исключение или ownership-решение. Используй conditional contracts. Реализацию validator-а не читай.
+   Копируй contract-шаблоны целиком. Строки бери из `source_table_catalog`, свойства — из XHTML. Сверь selected/parent/incoming catalogs; каждый элемент получает SR/GAP, исключение или ownership. При непустом `external_reference_catalog` прочитай `references/runtime/external-dependency-coverage.md`. Реализацию validator-а не читай.
 
 ## Анализ
 

@@ -50,7 +50,15 @@ ALLOWED_QUESTION_STATUSES = {
     "частичный-ответ",
     "ответ-получен",
     "отменён",
+    "ожидает-источник",
+    "частично-урегулировано",
+    "источник-получен",
+    "учтено",
+    "не-применимо",
 }
+PENDING_QUESTION_STATUSES = {"ожидает-ответа", "ожидает-источник"}
+PARTIAL_QUESTION_STATUSES = {"частичный-ответ", "частично-урегулировано"}
+FINAL_QUESTION_STATUSES = {"ответ-получен", "отменён", "учтено", "не-применимо"}
 QUESTION_ANSWER_PLACEHOLDER_RE = re.compile(r"^_?Введите\s+ответ\s+здесь\.?_?$", re.IGNORECASE)
 UNCERTAIN_VERIFIABILITY_RE = re.compile(
     r"не\s+(?:указан\w*|задан\w*|определ[её]н\w*)|требуется\s+уточн|неизвест\w*",
@@ -186,6 +194,48 @@ ALLOWED_GAP_CLASSES = {
     "нет-бизнес-результата",
     "нет-точки-наблюдения",
 }
+EXTERNAL_REFERENCE_HEADERS = (
+    "ID",
+    "Источник",
+    "Целевой документ или интерфейс",
+    "Классификация",
+    "Влияние на текущий выпуск",
+    "Связанные обязанности/пробелы",
+    "Статус",
+)
+ALLOWED_EXTERNAL_REFERENCE_CLASSES = {
+    "контекст",
+    "отложенное-правило",
+    "внешняя-точка-наблюдения",
+    "подготовка-данных",
+}
+ALLOWED_EXTERNAL_REFERENCE_STATUSES = {
+    "ожидает-источник",
+    "частично-урегулировано",
+    "источник-получен",
+    "учтено",
+    "не-применимо",
+}
+EXTERNAL_DOCUMENT_CUE_RE = re.compile(
+    r"(?:\b(?:ФТ|ТЗ|BRD|SRS|RFC)\s*(?:№\s*)?"
+    r"(?:[0-9A-Za-zА-Яа-яЁё][0-9A-Za-zА-Яа-яЁё._/-]*|[«\"'][^»\"'\n]{2,80}[»\"'])"
+    r"|\bдокумент\w*\s+[«\"'][^»\"'\n]{2,120}[»\"']"
+    r"|\b(?:соответствующ\w*|отдельн\w*|друг\w+)\s+"
+    r"(?:ФТ|ТЗ|документ\w*|спецификац\w*))",
+    re.IGNORECASE,
+)
+EXTERNAL_SURFACE_CUE_RE = re.compile(
+    r"\b(?:в|на)\s+(?:модул\w*|этап\w*|интерфейс\w*|экран\w*|api\b|"
+    r"(?:[0-9A-Za-zА-Яа-яЁё._/-]+\s+){0,3}(?:конвейер\w*|портал\w*)|"
+    r"электронн\w+\s+архив\w*)"
+    r"(?:\s+[0-9A-Za-zА-Яа-яЁё._/-]+){0,8}",
+    re.IGNORECASE,
+)
+EXTERNAL_SURFACE_ACTION_RE = re.compile(
+    r"\b(?:использ\w*|подтяг\w*|переда\w*|перевод\w*|отображ\w*|доступ\w*|"
+    r"недоступ\w*|выбира\w*|осуществ\w*|получ\w*|отправ\w*|сохран\w*)",
+    re.IGNORECASE,
+)
 TEST_DATA_PLAN_HEADERS = (
     "Группа проверок",
     "Роли данных",
@@ -604,6 +654,18 @@ def public_contract(scope: str | None = None, package_root: Path | None = None) 
                 "Независима: точное source-backed основание",
             ),
         ),
+        "external_references": markdown_table_template(
+            EXTERNAL_REFERENCE_HEADERS,
+            (
+                f"EXT-{scope_digits}001",
+                f'Раздел {section_id}; абзац "Точная ссылка на внешний источник".',
+                "ФТ N или точный интерфейс",
+                "отложенное-правило",
+                "Не блокирует остальные проверки.",
+                "Нет текущей обязанности или GAP-*",
+                "ожидает-источник",
+            ),
+        ),
         "coverage_gaps": markdown_table_template(
             ("ID", "Связанная обязанность", "Источник", "Класс", "Недостаток источника", "Что требуется для закрытия"),
             (f"GAP-{scope_digits}001", f"SR-{scope_digits}001", source_example, "нет-бизнес-результата", "Точный недостаток", "Один ответ"),
@@ -629,6 +691,16 @@ def public_contract(scope: str | None = None, package_root: Path | None = None) 
             f"**Влияние на покрытие:** GAP-{scope_digits}001 и неизвестный результат.\n"
             "**Ответ БА:** _Введите ответ здесь._"
         ),
+        "external_source_card": (
+            f"## CLR-{section_id}-001 — Ожидаемый внешний источник\n\n"
+            f"**Область проверки:** `{scope_value}`\n"
+            "**Статус:** `ожидает-источник`\n"
+            "**Целевой источник:** ФТ N или точный интерфейс.\n"
+            "**Вопрос:** Предоставить утверждённый источник либо временное правило.\n"
+            "**Основание в ФТ:** Точный source anchor.\n"
+            "**Влияние на покрытие:** GAP-* либо `Нет текущей обязанности`.\n"
+            "**Ответ БА:** _Введите ответ здесь._"
+        ),
         "workflow_state": (
             f'scope: "{scope_value}"\n'
             f'canonical_scope: "{scope_value}"\n'
@@ -651,6 +723,11 @@ def public_contract(scope: str | None = None, package_root: Path | None = None) 
     )
     incoming_actions = (
         incoming_action_catalog(xhtml_path, section_id)
+        if xhtml_path is not None and xhtml_path.is_file()
+        else []
+    )
+    external_references = (
+        external_reference_catalog(xhtml_path, section_id)
         if xhtml_path is not None and xhtml_path.is_file()
         else []
     )
@@ -686,6 +763,7 @@ def public_contract(scope: str | None = None, package_root: Path | None = None) 
         "selected_requirement_catalog": selected_requirements,
         "parent_intro_requirement_catalog": parent_requirements,
         "incoming_action_catalog": incoming_actions,
+        "external_reference_catalog": external_references,
         "required_tables": {
             "source_inventory": ["ID", "Источник", "Утверждение для покрытия"],
             "verifiability": [
@@ -725,6 +803,8 @@ def public_contract(scope: str | None = None, package_root: Path | None = None) 
             "test_data_materialization_readiness": sorted(ALLOWED_DATA_READINESS),
             "boundary_decisions": ["Включён", "Распределён", "Ранее покрыт: <область>", "Не применимо: <причина>"],
             "incoming_action_decisions": ["Включено", "Передано: <область>", "Ранее покрыто: <область>", "Не применимо: <причина>"],
+            "external_reference_classes": sorted(ALLOWED_EXTERNAL_REFERENCE_CLASSES),
+            "external_reference_statuses": sorted(ALLOWED_EXTERNAL_REFERENCE_STATUSES),
         },
         "markdown_templates": templates,
         "correction_policy": {
@@ -753,6 +833,7 @@ def public_contract(scope: str | None = None, package_root: Path | None = None) 
             "visual_crosscheck": "только для включённых UI-уровней",
             "dependent_results": "только когда атомарные результаты действительно причинно связаны и хотя бы один из них имеет GAP; общий source anchor сам по себе причинность не доказывает",
             "incoming_actions": "только при непустом incoming_action_catalog; каждый код назначается текущей или точной целевой области",
+            "external_references": "только при непустом external_reference_catalog; каждая ссылка классифицируется без блокировки несвязанных проверок",
             "figma": "только если релевантного локального визуального материала недостаточно",
             "second_pass": "только при сигнале сложности из ft-scope-analyzer",
             "confirmed_environment_binding": "источник 'подтверждённая стендовая привязка' требует в подготовке 'Контракт подтверждения:' с будущим evidence",
@@ -960,6 +1041,15 @@ def declared_requirement_codes(value: str) -> list[str]:
     for anchor in sorted(item for item in extract_anchors(value) if item.startswith("CODE:")):
         label = anchor.removeprefix("CODE:")
         for match in re.finditer(rf"\b{re.escape(label)}\b", value, re.IGNORECASE):
+            if anchor not in result and any(
+                external.start() <= match.start() < external.end()
+                for external in EXTERNAL_DOCUMENT_CUE_RE.finditer(value)
+            ):
+                # An embedded document identifier such as "описано в ФТ 11"
+                # is a dependency, not a requirement declaration. A real
+                # project code at the beginning remains covered by
+                # leading_requirement_codes above.
+                continue
             suffix = value[match.end() :].lstrip()
             if suffix and re.match(r"[A-ZА-ЯЁ]", suffix):
                 result.add(anchor)
@@ -1062,6 +1152,86 @@ def selected_requirement_catalog(path: Path, section_id: str) -> dict[str, dict[
             for code in declared_requirement_codes(text):
                 result.setdefault(code, {"text": text, "list_fragments": []})
     return result
+
+
+def external_reference_fragments(path: Path, section_id: str) -> list[str]:
+    """Return high-confidence cross-document or cross-interface source fragments."""
+
+    candidates: list[str] = []
+    for element in xhtml_section_elements(path, section_id):
+        tag = local_tag(element)
+        if tag == "p":
+            raw_fragments = [element_text(element)]
+        elif tag == "table":
+            raw_fragments = [
+                xhtml_cell_text(child)
+                for child in element.iter()
+                if local_tag(child) in {"td", "th"}
+            ]
+        else:
+            continue
+        for raw in raw_fragments:
+            text = " ".join(raw.split())
+            if not text:
+                continue
+            fragments = re.split(r"(?<!\d\.)(?<=[.!?])\s+(?=[A-ZА-ЯЁ])", text)
+            for fragment in fragments:
+                fragment = fragment.strip()
+                document_reference = EXTERNAL_DOCUMENT_CUE_RE.search(fragment)
+                surface_reference = EXTERNAL_SURFACE_CUE_RE.search(fragment)
+                if document_reference is None and not (
+                    surface_reference is not None and EXTERNAL_SURFACE_ACTION_RE.search(fragment)
+                ):
+                    continue
+                normalized = normalized_source_text(fragment)
+                if normalized and all(normalized != normalized_source_text(item) for item in candidates):
+                    candidates.append(fragment)
+    return candidates
+
+
+def external_reference_catalog(path: Path, section_id: str) -> list[dict[str, str]]:
+    """Build stable authoring candidates for external dependencies in one selected section."""
+
+    scope_digits = "".join(re.findall(r"\d+", section_id)) or "00"
+    result: list[dict[str, str]] = []
+    for index, fragment in enumerate(external_reference_fragments(path, section_id), start=1):
+        document_match = EXTERNAL_DOCUMENT_CUE_RE.search(fragment)
+        surface_match = EXTERNAL_SURFACE_CUE_RE.search(fragment)
+        target_match = document_match or surface_match
+        source_quote = fragment.replace('"', "'")
+        result.append(
+            {
+                "id": f"EXT-{scope_digits}{index:03d}",
+                "source_anchor": f'Раздел {section_id}; абзац "{source_quote}".',
+                "source_text": fragment,
+                "kind_hint": "document" if document_match is not None else "interface",
+                "target_hint": target_match.group(0).strip().rstrip(".,;:") if target_match is not None else "",
+            }
+        )
+    return result
+
+
+def external_question_coverage_errors(
+    external_rows: list[dict[str, object]],
+    question_links: dict[str, set[str]],
+) -> list[str]:
+    """Require a persistent clarification card for every external GAP."""
+
+    errors: list[str] = []
+    for row in external_rows:
+        linked_gaps = {
+            value for value in set(row.get("related", set())) if str(value).startswith("GAP-")
+        }
+        if not linked_gaps:
+            continue
+        source = canonical_source_reference(str(row.get("source_anchor", "")))
+        missing = sorted(linked_gaps - question_links.get(source, set()))
+        if missing:
+            errors.append(
+                f"{row.get('id')}: external coverage gaps require a matching external-source question: "
+                + ", ".join(missing)
+            )
+    return errors
 
 
 def parent_intro_requirement_catalog(path: Path, section_id: str) -> dict[str, dict[str, object]]:
@@ -1637,6 +1807,7 @@ def validate(package_root: Path, scope_dir: Path) -> list[str]:
     selected_catalog: dict[str, dict[str, object]] = {}
     parent_catalog: dict[str, dict[str, object]] = {}
     incoming_catalog: list[dict[str, object]] = []
+    external_catalog: list[dict[str, str]] = []
     if xhtml_path is not None and xhtml_path.is_file():
         machine_source_text = xhtml_path.read_text(encoding="utf-8")
         scope_match = re.match(r"(\d+(?:\.\d+)*)", canonical_scope(scope_dir.name))
@@ -1645,6 +1816,7 @@ def validate(package_root: Path, scope_dir: Path) -> list[str]:
             selected_catalog = selected_requirement_catalog(xhtml_path, section_id)
             parent_catalog = parent_intro_requirement_catalog(xhtml_path, section_id)
             incoming_catalog = incoming_action_catalog(xhtml_path, section_id)
+            external_catalog = external_reference_catalog(xhtml_path, section_id)
     if row_references:
         if xhtml_path is None or not xhtml_path.is_file():
             errors.append("source-row-inventory uses table rows but locator has no existing normalized machine-readable primary")
@@ -1906,6 +2078,112 @@ def validate(package_root: Path, scope_dir: Path) -> list[str]:
     ownership_code_anchors: set[str] = set()
     ownership_text_anchors: set[str] = set()
     current_scope = canonical_scope(scope_dir.name)
+
+    external_reference_rows: list[dict[str, object]] = []
+    external_references = find_markdown_table(scope_brief_content, EXTERNAL_REFERENCE_HEADERS)
+    if external_catalog:
+        if external_references is None or not external_references.rows:
+            errors.append(
+                "scope-brief must contain external-reference control for every external_reference_catalog item"
+            )
+        else:
+            ext_id_index = external_references.index("ID")
+            ext_source_index = external_references.index("Источник")
+            ext_target_index = external_references.index("Целевой документ или интерфейс")
+            ext_class_index = external_references.index("Классификация")
+            ext_impact_index = external_references.index("Влияние на текущий выпуск")
+            ext_related_index = external_references.index("Связанные обязанности/пробелы")
+            ext_status_index = external_references.index("Статус")
+            expected_external = {item["id"]: item for item in external_catalog}
+            seen_external_ids: list[str] = []
+            for row_number, row in enumerate(external_references.rows, start=1):
+                external_id = row[ext_id_index].strip()
+                seen_external_ids.append(external_id)
+                candidate = expected_external.get(external_id)
+                if candidate is None:
+                    errors.append(
+                        f"external-reference row {row_number}: unknown catalog ID {external_id!r}"
+                    )
+                    continue
+                source = row[ext_source_index].strip()
+                target = row[ext_target_index].strip()
+                classification = row[ext_class_index].strip().casefold()
+                impact = row[ext_impact_index].strip()
+                related = row[ext_related_index].strip()
+                status = row[ext_status_index].strip().casefold()
+                if canonical_source_reference(source) != canonical_source_reference(candidate["source_anchor"]):
+                    errors.append(
+                        f"{external_id}: source must exactly reuse external_reference_catalog source_anchor"
+                    )
+                if len(target.strip("` -—")) < 2:
+                    errors.append(f"{external_id}: target document or interface is missing")
+                if classification not in ALLOWED_EXTERNAL_REFERENCE_CLASSES:
+                    errors.append(f"{external_id}: unsupported external-reference classification {classification!r}")
+                if status not in ALLOWED_EXTERNAL_REFERENCE_STATUSES:
+                    errors.append(f"{external_id}: unsupported external-reference status {status!r}")
+                linked = source_row_tokens(related) | set(
+                    re.findall(r"(?<![A-Za-z0-9_.-])GAP-\d{2,}(?![A-Za-z0-9_.-])", related)
+                )
+                no_current_obligation = re.search(
+                    r"\bнет\s+текущей\s+обязанност", related, re.IGNORECASE
+                ) is not None
+                if status in {"ожидает-источник", "частично-урегулировано"} and not re.search(
+                    r"не\s+блокиру\w*\s+(?:остальн\w*\s+)?провер", impact, re.IGNORECASE
+                ):
+                    errors.append(
+                        f"{external_id}: pending external source must state that unrelated checks are not blocked"
+                    )
+                if classification == "контекст":
+                    if linked or not no_current_obligation:
+                        errors.append(
+                            f"{external_id}: context must use 'Нет текущей обязанности' and no SR-*/GAP-* links"
+                        )
+                    if status not in {"учтено", "не-применимо"}:
+                        errors.append(f"{external_id}: context status must be 'учтено' or 'не-применимо'")
+                elif classification == "подготовка-данных":
+                    if any(value.startswith("GAP-") for value in linked):
+                        errors.append(f"{external_id}: test-data preparation must not create a coverage gap")
+                    if not any(value.startswith("SR-") for value in linked):
+                        errors.append(f"{external_id}: test-data preparation must link an active SR-*")
+                elif classification == "внешняя-точка-наблюдения":
+                    if no_current_obligation or not any(value.startswith("SR-") for value in linked):
+                        errors.append(f"{external_id}: external observation must link an active SR-*")
+                    if not any(value.startswith("GAP-") for value in linked):
+                        errors.append(f"{external_id}: external observation must link an open GAP-*")
+                elif classification == "отложенное-правило":
+                    if no_current_obligation:
+                        if linked:
+                            errors.append(
+                                f"{external_id}: deferred reference without a current obligation must not link SR-*/GAP-*"
+                            )
+                    elif not any(value.startswith("GAP-") for value in linked):
+                        errors.append(f"{external_id}: deferred rule with a current obligation must link an open GAP-*")
+                external_reference_rows.append(
+                    {
+                        "id": external_id,
+                        "source_anchor": source,
+                        "classification": classification,
+                        "status": status,
+                        "related": linked,
+                        "no_current_obligation": no_current_obligation,
+                    }
+                )
+            duplicates = sorted(
+                {value for value in seen_external_ids if seen_external_ids.count(value) > 1}
+            )
+            if duplicates:
+                errors.append("external-reference control duplicates catalog IDs: " + ", ".join(duplicates))
+            missing_external = sorted(set(expected_external) - set(seen_external_ids))
+            if missing_external:
+                errors.append(
+                    "scope-brief external-reference control misses catalog IDs: "
+                    + ", ".join(missing_external)
+                )
+    elif external_references is not None and external_references.rows:
+        errors.append(
+            "scope-brief has external-reference rows but external_reference_catalog is empty"
+        )
+
     if distributed_parent:
         if ownership is None or not ownership.rows:
             errors.append("scope-brief distributed parent text requires the parent requirement ownership table")
@@ -2499,6 +2777,35 @@ def validate(package_root: Path, scope_dir: Path) -> list[str]:
         unknown_contract_gaps = sorted(contract_gap_ids - known_gap_ids)
         if unknown_contract_gaps:
             errors.append("verifiability contract references unknown gaps: " + ", ".join(unknown_contract_gaps))
+    for external_row in external_reference_rows:
+        external_id = str(external_row["id"])
+        status = str(external_row["status"])
+        related = set(external_row["related"])
+        unknown_related = sorted(
+            value
+            for value in related
+            if value not in active_inventory_ids and value not in known_gap_ids
+        )
+        if unknown_related:
+            errors.append(
+                f"{external_id}: external-reference control links unknown IDs: "
+                + ", ".join(unknown_related)
+            )
+        linked_gaps = {value for value in related if value.startswith("GAP-")}
+        if status in {"ожидает-источник", "частично-урегулировано", "источник-получен"}:
+            closed_pending = sorted(linked_gaps & resolved_gap_ids)
+            if closed_pending:
+                errors.append(
+                    f"{external_id}: pending external source links resolved gaps: "
+                    + ", ".join(closed_pending)
+                )
+        if status in {"учтено", "не-применимо"}:
+            still_open = sorted(linked_gaps - resolved_gap_ids)
+            if still_open:
+                errors.append(
+                    f"{external_id}: accounted external source still links open gaps: "
+                    + ", ".join(still_open)
+                )
     unknown_consistency_refs = sorted(
         reference
         for reference in consistency_refs
@@ -2573,6 +2880,7 @@ def validate(package_root: Path, scope_dir: Path) -> list[str]:
     if duplicate_question_ids:
         errors.append("clarification register contains duplicate IDs: " + ", ".join(duplicate_question_ids))
     current_scope_question_blocks: list[str] = []
+    external_question_links: dict[str, set[str]] = {}
     for question_id, block in question_cards:
         question_scope = question_field(block, "Область проверки").strip("` ")
         if question_scope and canonical_scope(question_scope) != current_scope:
@@ -2583,6 +2891,13 @@ def validate(package_root: Path, scope_dir: Path) -> list[str]:
         requirement_basis = question_field(block, "Основание в ФТ")
         coverage_impact = question_field(block, "Влияние на покрытие")
         answer = question_field(block, "Ответ БА")
+        external_question = status in {
+            "ожидает-источник",
+            "частично-урегулировано",
+            "источник-получен",
+            "учтено",
+            "не-применимо",
+        }
         if not question_scope:
             errors.append(f"{question_id}: clarification card has no scope")
         if status not in ALLOWED_QUESTION_STATUSES:
@@ -2595,14 +2910,17 @@ def validate(package_root: Path, scope_dir: Path) -> list[str]:
             errors.append(f"{question_id}: clarification card has no coverage impact")
         linked_gaps = set(re.findall(r"\bGAP-\d{2,}\b", coverage_impact))
         if not linked_gaps:
-            if status != "отменён":
+            no_current_obligation = re.search(
+                r"\bнет\s+текущей\s+обязанност", coverage_impact, re.IGNORECASE
+            ) is not None
+            if status != "отменён" and not (external_question and no_current_obligation):
                 errors.append(
                     f"{question_id}: clarification card must track at least one independently resolvable GAP-*"
                 )
         elif len(linked_gaps) == 1:
             linked_gap = next(iter(linked_gaps))
             if linked_gap not in gap_sources:
-                if not gaps_parse_failed and status not in {"ответ-получен", "отменён"}:
+                if not gaps_parse_failed and status not in FINAL_QUESTION_STATUSES:
                     errors.append(f"{question_id}: clarification card references unknown coverage gap {linked_gap}")
             elif canonical_source_reference(requirement_basis) != canonical_source_reference(
                 gap_sources[linked_gap]
@@ -2614,7 +2932,7 @@ def validate(package_root: Path, scope_dir: Path) -> list[str]:
             question_basis_anchors = precise_source_anchors(requirement_basis)
             for linked_gap in sorted(linked_gaps):
                 if linked_gap not in gap_sources:
-                    if not gaps_parse_failed and status not in {"ответ-получен", "отменён"}:
+                    if not gaps_parse_failed and status not in FINAL_QUESTION_STATUSES:
                         errors.append(f"{question_id}: clarification card references unknown coverage gap {linked_gap}")
                     continue
                 gap_anchors = precise_source_anchors(gap_sources[linked_gap])
@@ -2622,7 +2940,7 @@ def validate(package_root: Path, scope_dir: Path) -> list[str]:
                     errors.append(
                         f"{question_id}: multi-gap FT basis must include the exact source anchor of {linked_gap}"
                     )
-        if not gaps_parse_failed and status in {"ответ-получен", "отменён"}:
+        if not gaps_parse_failed and status in FINAL_QUESTION_STATUSES:
             still_open = sorted(linked_gaps - resolved_gap_ids)
             if still_open:
                 errors.append(
@@ -2632,12 +2950,26 @@ def validate(package_root: Path, scope_dir: Path) -> list[str]:
         if not answer:
             errors.append(f"{question_id}: clarification card has no editable 'Ответ БА' field")
         placeholder = bool(QUESTION_ANSWER_PLACEHOLDER_RE.fullmatch(answer.strip()))
-        if status == "ожидает-ответа" and not placeholder:
+        if status in PENDING_QUESTION_STATUSES and not placeholder:
             errors.append(f"{question_id}: pending clarification must keep the explicit editable answer placeholder")
-        if status in {"ответ-получен", "отменён", "частичный-ответ"} and (not answer or placeholder):
+        if status not in PENDING_QUESTION_STATUSES and (not answer or placeholder):
             errors.append(f"{question_id}: status {status!r} requires a recorded answer or reason")
-        if status == "частичный-ответ" and not question_field(block, "Осталось уточнить"):
+        if status in PARTIAL_QUESTION_STATUSES and not question_field(block, "Осталось уточнить"):
             errors.append(f"{question_id}: partial answer requires 'Осталось уточнить'")
+        if external_question and not question_field(block, "Целевой источник"):
+            errors.append(f"{question_id}: external-source clarification requires 'Целевой источник'")
+        if external_question:
+            external_anchors = {
+                canonical_source_reference(item["source_anchor"])
+                for item in external_catalog
+            }
+            external_anchor = canonical_source_reference(requirement_basis)
+            external_question_links.setdefault(external_anchor, set()).update(linked_gaps)
+            if external_anchor not in external_anchors:
+                errors.append(
+                    f"{question_id}: external-source clarification must exactly reuse an "
+                    "external_reference_catalog source anchor"
+                )
         current_question = explicit_question or question_text(block)
         if QUESTION_EXTRA_BEHAVIOR_RE.search(current_question):
             errors.append(
@@ -2655,7 +2987,7 @@ def validate(package_root: Path, scope_dir: Path) -> list[str]:
             )
             continue
         provisional_anchors = question_anchors & assumption_anchors
-        if provisional_anchors and status not in {"ответ-получен", "отменён"}:
+        if provisional_anchors and status not in FINAL_QUESTION_STATUSES:
             errors.append(
                 f"{question_id}: non-blocking working assumption already provides current behavior for "
                 + ", ".join(sorted(provisional_anchors))
@@ -2665,25 +2997,27 @@ def validate(package_root: Path, scope_dir: Path) -> list[str]:
         for path, support in support_contents:
             if relevant_approved_support_blocks(support, question_anchors, current_question):
                 matching_support.append(path)
-            if status not in {"ответ-получен", "отменён"} and duplicates_fully_answered_question(
+            if status not in FINAL_QUESTION_STATUSES and duplicates_fully_answered_question(
                 current_question, support, question_anchors
             ):
                 errors.append(
                     f"{question_id}: duplicates a fully answered approved clarification for "
                     + ", ".join(sorted(question_anchors))
                 )
-        if matching_support and status not in {"ответ-получен", "отменён"}:
+        if matching_support and status not in FINAL_QUESTION_STATUSES:
             names = sorted({path.name for path in matching_support})
             if not question_field(block, "Источник ответа"):
                 errors.append(
                     f"{question_id}: approved answer source mentions its requirement; add 'Источник ответа' "
                     f"with one of {names}"
                 )
-            if status == "частичный-ответ" and not question_field(block, "Осталось уточнить"):
+            if status in PARTIAL_QUESTION_STATUSES and not question_field(block, "Осталось уточнить"):
                 errors.append(
                     f"{question_id}: approved partial answer must use the canonical field "
                     f"{PARTIAL_ANSWER_RESIDUAL_HEADING}"
                 )
+
+    errors.extend(external_question_coverage_errors(external_reference_rows, external_question_links))
 
     for name in REQUIRED_FILES:
         if not name.endswith(".md"):

@@ -65,8 +65,12 @@ from scripts.validate_runtime_review import (
 )
 from scripts.validate_runtime_scope import (
     MISSING_ENVIRONMENT_GAP_RE as SCOPE_MISSING_ENVIRONMENT_GAP_RE,
+    canonical_source_reference,
     classify_scope_error,
+    declared_requirement_codes,
     duplicates_fully_answered_question,
+    external_question_coverage_errors,
+    external_reference_catalog,
     generic_unavailability_without_observation,
     independent_property_conflicts,
     partition_scope_findings,
@@ -314,8 +318,11 @@ def write_requirement_catalog_xhtml(package: Path) -> None:
         "<tr><td>Редактировать</td><td>AS.23 Открыть окно. AS.24 Макет на Рисунок 5.</td></tr>"
         "<tr><td>Добавить</td><td>AS.25 Открыть окно на Рисунок 5.</td></tr></table>"
         "<h2>9.3.3 Карточка реквизитов</h2>"
+        "<p>Требования к ролям будут описаны в ФТ 11 Ролевая модель.</p>"
+        "<p>Сущность переводится в архив.</p>"
         "<p>AS.39 Можно добавить неограниченное количество реквизитов.</p>"
         "<p>AS.40 Перевод использует реквизит согласно AS.5. AS.41 Если проверка успешна, запись сохраняется AS.42 Иначе запись не сохраняется.</p>"
+        "<p>Заполненные реквизиты используются в модуле кредитный конвейер.</p>"
         "<p>Рисунок 5 — карточка.</p>"
         "<h2>9.4 Следующий раздел</h2>"
         "</body></html>",
@@ -1324,10 +1331,16 @@ class RuntimeContractTests(unittest.TestCase):
         agents = (root / "AGENTS.md").read_text(encoding="utf-8")
         skill = (root / "skills" / "ft-scope-analyzer" / "SKILL.md").read_text(encoding="utf-8")
         reference = (root / "references" / "runtime" / "scope-analysis.md").read_text(encoding="utf-8")
+        external = (root / "references" / "runtime" / "external-dependency-coverage.md").read_text(encoding="utf-8")
+        writer = (root / "skills" / "ft-test-case-writer" / "SKILL.md").read_text(encoding="utf-8")
+        reviewer = (root / "skills" / "ft-test-case-reviewer" / "SKILL.md").read_text(encoding="utf-8")
 
         self.assertLessEqual(len(agents.split()), 800)
         self.assertLessEqual(len(skill.split()), 600)
         self.assertLessEqual(len(reference.split()), 800)
+        self.assertLessEqual(len(external.split()), 400)
+        for role_skill in (skill, writer, reviewer):
+            self.assertIn("references/runtime/external-dependency-coverage.md", role_skill)
         self.assertIn("AGENTS.md` уже загружен средой: не перечитывай", skill)
         self.assertIn("Один содержательный проход — default", skill)
         self.assertIn("только применимые аспекты", skill)
@@ -1399,6 +1412,10 @@ class RuntimeContractTests(unittest.TestCase):
         self.assertIn("scope_revision_count: 0", contract["markdown_templates"]["workflow_state"])
         self.assertIn("status: draft", contract["markdown_templates"]["workflow_state"])
         self.assertIn("| Источник | Входящее действие |", contract["markdown_templates"]["incoming_actions"])
+        self.assertIn("| ID | Источник | Целевой документ или интерфейс |", contract["markdown_templates"]["external_references"])
+        self.assertIn("**Целевой источник:**", contract["markdown_templates"]["external_source_card"])
+        self.assertIn("ожидает-источник", contract["accepted_values"]["external_reference_statuses"])
+        self.assertIn("внешняя-точка-наблюдения", contract["accepted_values"]["external_reference_classes"])
         self.assertIn("Передано: <область>", contract["accepted_values"]["incoming_action_decisions"])
         self.assertNotIn("стендовая подготовка |", contract["markdown_templates"]["test_data"])
         self.assertIn("Контракт подтверждения:", contract["markdown_templates"]["test_data"])
@@ -1429,6 +1446,73 @@ class RuntimeContractTests(unittest.TestCase):
                 [("AS.23", "Редактировать"), ("AS.24", "Редактировать"), ("AS.25", "Добавить")],
                 [(item["code"], item["action"]) for item in contract["incoming_action_catalog"]],
             )
+            self.assertEqual(
+                ["document", "interface"],
+                [item["kind_hint"] for item in contract["external_reference_catalog"]],
+            )
+            self.assertEqual(
+                ["EXT-933001", "EXT-933002"],
+                [item["id"] for item in contract["external_reference_catalog"]],
+            )
+            self.assertIn("ФТ 11", contract["external_reference_catalog"][0]["target_hint"])
+            self.assertIn("модуле кредитный конвейер", contract["external_reference_catalog"][1]["target_hint"])
+            self.assertEqual(
+                contract["external_reference_catalog"],
+                external_reference_catalog(package / "source" / "requirements.xhtml", "9.3.3"),
+            )
+
+    def test_external_reference_catalog_avoids_internal_archive_false_positive(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            xhtml = Path(temporary_directory) / "requirements.xhtml"
+            xhtml.write_text(
+                "<html><body><h2>1.1 Область</h2>"
+                "<p>Окно будет описано в ФТ «Общие требования».</p>"
+                "<p>Переход будет описан в ФТ 6. Сделка и выдача.</p>"
+                "<p>Ограничения приведены в другом документе.</p>"
+                "<p>Система переводит запись в архив.</p>"
+                "<p>Система сохраняет файл в электронном архиве Банка.</p>"
+                "<h2>1.2 Следующая область</h2></body></html>",
+                encoding="utf-8",
+            )
+
+            catalog = external_reference_catalog(xhtml, "1.1")
+
+            self.assertEqual(
+                ["document", "document", "document", "interface"],
+                [item["kind_hint"] for item in catalog],
+            )
+            self.assertTrue(any("ФТ «Общие требования»" in item["source_text"] for item in catalog))
+            self.assertTrue(any("ФТ 6. Сделка и выдача" in item["source_text"] for item in catalog))
+            self.assertTrue(any("электронном архиве Банка" in item["source_text"] for item in catalog))
+            self.assertFalse(any("переводит запись в архив" in item["source_text"] for item in catalog))
+            self.assertNotIn(
+                "CODE:ФТ 11",
+                declared_requirement_codes("Правило будет описано в ФТ 11 Ролевая модель."),
+            )
+            self.assertIn(
+                "CODE:FT 11",
+                declared_requirement_codes("FT 11 System validates the selected record."),
+            )
+
+    def test_external_gap_requires_persistent_clarification_card(self) -> None:
+        rows = [
+            {
+                "id": "EXT-11001",
+                "source_anchor": 'Раздел 1.1; абзац "Правило будет описано отдельно".',
+                "related": {"SR-11001", "GAP-11001"},
+            }
+        ]
+        anchor = 'Раздел 1.1; абзац "Правило будет описано отдельно".'
+
+        errors = external_question_coverage_errors(rows, {})
+        self.assertTrue(any("GAP-11001" in error for error in errors))
+        self.assertEqual(
+            [],
+            external_question_coverage_errors(
+                rows,
+                {canonical_source_reference(anchor): {"GAP-11001"}},
+            ),
+        )
 
     def test_unbounded_requirement_needs_one_explicit_gap_per_requirement(self) -> None:
         catalog = {
@@ -1504,8 +1588,10 @@ class RuntimeContractTests(unittest.TestCase):
             self.assertTrue(any("selected scope requirements" in error and "AS.40" in error for error in errors))
             self.assertTrue(any("incoming actions" in error and "AS.23" in error for error in errors))
             self.assertTrue(any("parent requirement AS.5 list fragment" in error for error in errors))
+            self.assertTrue(any("external-reference control" in error for error in errors))
 
             brief_path = scope / "scope-brief.md"
+            external_catalog = public_contract("9.3.3", package)["external_reference_catalog"]
             brief_path.write_text(
                 brief_path.read_text(encoding="utf-8")
                 + "\n## Входящие действия\n\n"
@@ -1516,8 +1602,17 @@ class RuntimeContractTests(unittest.TestCase):
                 + "| AS.25 | Добавить | Передано: 9.3.1 | Область 9.3.1 |\n",
                 encoding="utf-8",
             )
+            with brief_path.open("a", encoding="utf-8", newline="\n") as stream:
+                stream.write(
+                    "\n## Внешние ссылки и отложенное покрытие\n\n"
+                    "| ID | Источник | Целевой документ или интерфейс | Классификация | Влияние на текущий выпуск | Связанные обязанности/пробелы | Статус |\n"
+                    "| --- | --- | --- | --- | --- | --- | --- |\n"
+                    f"| {external_catalog[0]['id']} | {external_catalog[0]['source_anchor']} | ФТ 11 Ролевая модель | отложенное-правило | Не блокирует остальные проверки. | Нет текущей обязанности | ожидает-источник |\n"
+                    f"| {external_catalog[1]['id']} | {external_catalog[1]['source_anchor']} | модуль кредитный конвейер | контекст | Не блокирует остальные проверки. | Нет текущей обязанности | не-применимо |\n"
+                )
             assigned_errors = validate_scope(package, scope)
             self.assertFalse(any("incoming actions" in error for error in assigned_errors))
+            self.assertFalse(any("external-reference" in error for error in assigned_errors))
 
     def test_scope_public_contract_exposes_exact_xhtml_table_catalog(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:

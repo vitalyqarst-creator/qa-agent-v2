@@ -76,3 +76,5 @@ python scripts/validate_runtime_source.py <FT-package> <source-handoff-dir> --su
 ```
 
 Она по-прежнему проверяет полный набор локальных входов, роли, пути и SHA-256, но не считает уже существующие scope/matrix/TC и поздние временные файлы ошибкой первоначальной source-стадии.
+
+Внешний late support только регистрируется; downstream reconciliation выполняется по `external-dependency-coverage.md` без пересоздания source selection.
