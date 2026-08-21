@@ -30,6 +30,7 @@ VERDICTS = {
     "tc": {"tc-accepted", "tc-changes-required"},
 }
 TC_FINDING_ORIGINS = {"matrix", "tc", "both"}
+MATRIX_FINDING_ORIGINS = {"scope", "matrix", "both"}
 MATRIX_REVIEW_CHECKS_V1 = {
     "source-coverage",
     "formal-techniques",
@@ -73,6 +74,20 @@ def tc_repair_stage(findings: list[Any]) -> str | None:
     return None
 
 
+def matrix_repair_stage(findings: list[Any]) -> str | None:
+    """Return the first artifact that must be repaired for a valid matrix review."""
+    origins = {
+        finding.get("origin_stage")
+        for finding in findings
+        if isinstance(finding, dict)
+    }
+    if origins & {"scope", "both"}:
+        return "scope"
+    if origins == {"matrix"}:
+        return "matrix"
+    return None
+
+
 def load_record(path: Path) -> tuple[dict[str, Any] | None, list[str]]:
     try:
         payload = json.loads(path.read_text(encoding="utf-8"))
@@ -86,12 +101,12 @@ def load_record(path: Path) -> tuple[dict[str, Any] | None, list[str]]:
 def validate_matrix_review_checklist(record: dict[str, Any], *, delta_only: bool = False) -> list[str]:
     errors: list[str] = []
     version = record.get("matrix_review_checklist_version", 1)
-    if version not in {1, 2}:
-        return ["matrix_review_checklist_version must be 1 or 2"]
+    if version not in {1, 2, 3}:
+        return ["matrix_review_checklist_version must be 1, 2, or 3"]
     required_checks = (
         {"data-materializability"}
-        if delta_only and version == 2
-        else MATRIX_REVIEW_CHECKS_V2 if version == 2 else MATRIX_REVIEW_CHECKS_V1
+        if delta_only and version in {2, 3}
+        else MATRIX_REVIEW_CHECKS_V2 if version in {2, 3} else MATRIX_REVIEW_CHECKS_V1
     )
     checklist = record.get("matrix_review_checklist")
     if not isinstance(checklist, dict):
@@ -281,7 +296,7 @@ def validate(
             ):
                 errors.append(f"finding {index} must contain non-empty affected_items")
     if kind == "matrix" and schema_version == 2 and (
-        record.get("review_mode") == "full" or record.get("matrix_review_checklist_version") == 2
+        record.get("review_mode") == "full" or record.get("matrix_review_checklist_version") in {2, 3}
     ):
         errors.extend(
             validate_matrix_review_checklist(
@@ -289,6 +304,21 @@ def validate(
                 delta_only=record.get("review_mode") == "delta",
             )
         )
+    if (
+        kind == "matrix"
+        and verdict == "matrix-changes-required"
+        and record.get("matrix_review_checklist_version") == 3
+        and isinstance(findings, list)
+    ):
+        for index, finding in enumerate(findings, start=1):
+            if not isinstance(finding, dict):
+                errors.append(f"matrix finding {index} must be a JSON object")
+                continue
+            origin = finding.get("origin_stage")
+            if origin not in MATRIX_FINDING_ORIGINS:
+                errors.append(
+                    f"matrix finding {index} origin_stage must be one of: both, matrix, scope"
+                )
     if kind == "tc" and verdict == "tc-changes-required" and isinstance(findings, list):
         for index, finding in enumerate(findings, start=1):
             if not isinstance(finding, dict):
@@ -446,6 +476,10 @@ def main() -> int:
         findings = record.get("findings")
         if isinstance(findings, list):
             repair_stage = tc_repair_stage(findings)
+    if not errors and args.kind == "matrix" and record is not None and record.get("verdict") == "matrix-changes-required":
+        findings = record.get("findings")
+        if isinstance(findings, list) and record.get("matrix_review_checklist_version") == 3:
+            repair_stage = matrix_repair_stage(findings)
     if not errors and args.kind == "matrix":
         review_quality_blocking = matrix_review_quality_blocking(record)
     print(

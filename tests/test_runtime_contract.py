@@ -17,6 +17,7 @@ from scripts.cleanup_runtime_temp import cleanup
 from scripts.create_ft_package import PACKAGE_DIRS, create_package
 from scripts.normalize_ft_source import normalize_docx
 from scripts.render_runtime_pdf import parse_pages, render_pdf
+from scripts.runtime_fixture_candidates import fixture_candidates
 from scripts.runtime_review_dispatch import create_dispatch, sha256, validate_dispatch
 from scripts.runtime_review_delta import artifact_index, enrich_review_record, semantic_input_hashes, write_revision_manifest
 from scripts.runtime_session_registry import (
@@ -42,6 +43,7 @@ from scripts.validate_runtime_matrix import (
     validate_projection as validate_matrix_projection,
 )
 from scripts.validate_runtime_review import (
+    matrix_repair_stage,
     matrix_review_quality_blocking,
     tc_repair_stage,
     validate as validate_review,
@@ -4134,6 +4136,125 @@ residual_missing: none
             self.assertEqual([], validate_review(artifact, review_path, "tc"))
             self.assertEqual("matrix", tc_repair_stage(record["findings"]))
 
+    def test_matrix_changes_required_classifies_first_repair_stage(self) -> None:
+        matrix_only = [{"origin_stage": "matrix"}]
+        self.assertEqual("matrix", matrix_repair_stage(matrix_only))
+        self.assertEqual(
+            "scope",
+            matrix_repair_stage(matrix_only + [{"origin_stage": "scope"}]),
+        )
+        self.assertEqual("scope", matrix_repair_stage([{"origin_stage": "both"}]))
+
+    def test_matrix_review_v3_requires_finding_origin(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            artifact = root / "test-design-matrix.md"
+            artifact.write_text(VALID_MATRIX, encoding="utf-8")
+            create_session_topology(root, "reviews")
+            reviewer_thread = "22345678-1234-1234-1234-123456789abc"
+            prompt = root / "matrix-review-prompt.md"
+            prompt.write_text("Проведи независимое review matrix.\n", encoding="utf-8")
+            review_dir = root / "reviews"
+            dispatch_path = create_dispatch(
+                root,
+                artifact,
+                prompt,
+                review_dir,
+                "matrix",
+                reviewer_thread,
+                "local",
+                "2026-08-17T00:00:00Z",
+            )
+            record = {
+                "schema_version": 2,
+                "review_kind": "matrix",
+                "artifact_path": "test-design-matrix.md",
+                "artifact_sha256": hashlib.sha256(artifact.read_bytes()).hexdigest(),
+                "dispatch_path": dispatch_path.relative_to(root).as_posix(),
+                "dispatch_sha256": sha256(dispatch_path),
+                "reviewer_session_type": "codex-thread",
+                "reviewer_session_id": reviewer_thread,
+                "reviewed_at": "2026-08-17T00:01:00Z",
+                "verdict": "matrix-changes-required",
+                "findings": [
+                    {
+                        "id": "M-R-001",
+                        "severity": "material",
+                        "affected_items": ["M-001"],
+                        "description": "Матрица ослабляет исходный результат.",
+                        "required_correction": "Исправить строку matrix.",
+                    }
+                ],
+                "reviewed_items": ["M-001", "GAP-001"],
+                "review_scope_complete": True,
+                "matrix_review_checklist_version": 3,
+                "matrix_review_checklist": {
+                    "source-coverage": {"status": "checked", "evidence": ["SR-001; SR-002"]},
+                    "formal-techniques": {"status": "checked", "evidence": ["M-001; GAP-001"]},
+                    "uniqueness-lifecycle": {"status": "not-applicable", "evidence": ["Не применимо: источник не задаёт уникальность."]},
+                    "save-data-closure": {"status": "checked", "evidence": ["M-001"]},
+                    "identity-provenance": {"status": "checked", "evidence": ["TD-PARTNER-A -> Provider"]},
+                    "data-materializability": {"status": "checked", "evidence": ["TD-PARTNER-A достижим через Provider"]},
+                    "reachability-oracles": {"status": "checked", "evidence": ["M-001"]},
+                    "duplication-parameterization": {"status": "checked", "evidence": ["M-001"]},
+                },
+            }
+            review_path = review_dir / "matrix-review.json"
+            review_path.write_text(json.dumps(record, ensure_ascii=False), encoding="utf-8")
+            review_path.with_suffix(".md").write_text("# Ревью матрицы\n", encoding="utf-8")
+            enrich_review_record(root, artifact, review_path, "matrix", "reviews")
+
+            origin_errors = validate_review(artifact, review_path, "matrix")
+            self.assertTrue(
+                any("origin_stage" in error for error in origin_errors),
+                origin_errors,
+            )
+            enriched = json.loads(review_path.read_text(encoding="utf-8"))
+            enriched["findings"][0]["origin_stage"] = "matrix"
+            review_path.write_text(json.dumps(enriched, ensure_ascii=False), encoding="utf-8")
+            self.assertEqual([], validate_review(artifact, review_path, "matrix"))
+
+    def test_fixture_candidates_use_only_accepted_completed_sibling_scopes(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            package = Path(temporary_directory) / "FT"
+            for scope, matrix_status, data_status in (
+                ("accepted", "accepted", "completed"),
+                ("pending", "review-pending", "completed"),
+                ("current", "accepted", "completed"),
+            ):
+                state = package / "work" / "practical" / scope / "workflow-state.yaml"
+                state.parent.mkdir(parents=True, exist_ok=True)
+                state.write_text(
+                    f"matrix_status: {matrix_status}\ndata_status: {data_status}\n",
+                    encoding="utf-8",
+                )
+                materialization = package / "work" / "test-data" / scope / "data-materialization.json"
+                materialization.parent.mkdir(parents=True, exist_ok=True)
+                materialization.write_text(
+                    json.dumps(
+                        {
+                            "scope": scope,
+                            "data_roles": [
+                                {
+                                    "role_id": f"TD-{scope.upper()}",
+                                    "source_type": "provider",
+                                    "source_name": "Provider",
+                                    "fixture_id": f"FX-{scope.upper()}",
+                                    "values": {"Наименование": scope},
+                                }
+                            ],
+                        },
+                        ensure_ascii=False,
+                    ),
+                    encoding="utf-8",
+                )
+
+            candidates = fixture_candidates(package, "current")
+
+            self.assertEqual(1, len(candidates))
+            self.assertEqual("accepted", candidates[0]["source_scope"])
+            self.assertEqual({"Наименование": "accepted"}, candidates[0]["values"])
+
     def test_schema_v2_delta_rereview_checks_only_declared_changed_tc(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
             root = Path(temporary_directory)
@@ -4284,6 +4405,7 @@ residual_missing: none
                         "id": "M-R-001",
                         "severity": "material",
                         "affected_items": ["M-001"],
+                        "origin_stage": "matrix",
                         "description": "Ожидаемый результат строки M-001 недостаточно точен.",
                         "required_correction": "Уточнить ожидаемый результат M-001.",
                     }

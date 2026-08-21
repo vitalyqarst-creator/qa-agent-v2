@@ -424,7 +424,7 @@ def enrich_review_record(package_root: Path, artifact: Path, record_path: Path, 
     record.update(snapshot)
     record["review_mode"] = dispatch.get("review_mode", "full")
     if kind == "matrix":
-        record["matrix_review_checklist_version"] = 2
+        record["matrix_review_checklist_version"] = 3
     if dispatch.get("revision_manifest_path"):
         record["revision_manifest_path"] = dispatch["revision_manifest_path"]
         record["revision_manifest_sha256"] = dispatch["revision_manifest_sha256"]
