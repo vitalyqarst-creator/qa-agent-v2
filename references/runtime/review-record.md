@@ -26,6 +26,8 @@ Bootstrap prompt:
 python scripts/runtime_review_dispatch.py prepare --package-root <FT-package> --artifact <matrix-or-TC> --review-dir <work/reviews/scope> --kind <matrix|tc> --reviewer-thread-id <threadId> --reviewer-host-id <hostId>
 ```
 
+`--review-dir` принимает только точный каталог `work/reviews/<scope>`. Вложенный уровень вида `work/reviews/<scope>/matrix` или `.../tc` отклоняется до записи transport artifacts и регистрации reviewer.
+
 После revision к команде добавляется:
 
 ```text

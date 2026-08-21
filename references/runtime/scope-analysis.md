@@ -11,7 +11,7 @@
 - `prompt.scope-to-writer.md`;
 - `workflow-state.yaml` со ссылкой `clarification_register: "work/scope-clarification-requests.md"`.
 
-Count — `0`. Следуй флагам validator-а. При count `2` финальная коррекция допускает ≤2 blockers либо catalog omissions. `validator_repair_allowed` при count `4` разрешает одну count-preserving коррекцию ошибочно закрытого количественного GAP; неблокирующие `quality_findings` не отменяют эту возможность. Переход при `writer_allowed=true`.
+Count — `0`; следуй validator-флагам. `source_anchor_repair_allowed` при count `2`–`4` сохраняет count: меняется только `Источник` (точный код/цитата), без изменения ID/смысла/контракта/GAP/данных. Остальные коррекции определяют возвращённые флаги; `quality_findings` их не блокируют. Переход — `writer_allowed=true`.
 
 ## Границы источника
 

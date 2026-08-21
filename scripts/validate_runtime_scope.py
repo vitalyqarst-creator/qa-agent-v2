@@ -463,6 +463,14 @@ def scope_error_summary(errors: list[str]) -> dict[str, int]:
 def scope_stage_decision(errors: list[str], revision_count: int | None) -> dict[str, object]:
     blocking_errors, quality_findings = partition_scope_findings(errors)
     blocking_classes = {classify_scope_error(error) for error in blocking_errors}
+    source_anchor_repair_pattern = (
+        "source needs an exact requirement code or an uncoded structural anchor"
+    )
+    source_anchor_repair_allowed = (
+        revision_count in {2, 3, 4}
+        and bool(blocking_errors)
+        and all(source_anchor_repair_pattern in error for error in blocking_errors)
+    )
     preflight_repair_allowed = "format" in blocking_classes and revision_count == 0
     narrow_final_closure_allowed = (
         revision_count == 2
@@ -508,6 +516,7 @@ def scope_stage_decision(errors: list[str], revision_count: int | None) -> dict[
             or catalog_repair_allowed
             or answer_reconciliation_allowed
             or validator_repair_allowed
+            or source_anchor_repair_allowed
         )
         and not preflight_repair_allowed
     )
@@ -517,6 +526,7 @@ def scope_stage_decision(errors: list[str], revision_count: int | None) -> dict[
         "writer_allowed": writer_allowed,
         "scope_revision_count": revision_count,
         "preflight_repair_allowed": preflight_repair_allowed,
+        "source_anchor_repair_allowed": source_anchor_repair_allowed,
         "final_closure_allowed": final_closure_allowed,
         "catalog_repair_allowed": catalog_repair_allowed,
         "answer_reconciliation_allowed": answer_reconciliation_allowed,
@@ -811,13 +821,14 @@ def public_contract(scope: str | None = None, package_root: Path | None = None) 
             "initial_scope_revision_count": 0,
             "maximum_scope_revision_count": 4,
             "preflight_repair": "one preflight pass repairs only format errors, even when content errors coexist, and keeps scope_revision_count at 0",
+            "source_anchor_repair": "at count 2, 3, or 4, a correction containing only exact-source-anchor blockers preserves scope_revision_count and may change only source-anchor cells, not obligation meaning or IDs",
             "content_correction": "up to two blocking content corrections increment scope_revision_count from 0 to 1 and then to 2",
             "final_closure": "at count 2, one final correction changes count to 3 and is allowed for at most two atomicity/completeness/traceability/source-contract blockers, or for any number of deterministic catalog-closure omissions only",
             "catalog_repair": "at count 3, one final catalog-only assignment repair changes count to 4",
             "answer_reconciliation": "at count 3, one last correction is allowed only to reconcile an already approved answer, its source and a duplicate readiness GAP; it changes count to 4",
             "validator_repair": "at count 4, one count-preserving repair is allowed only when an unbounded quantitative GAP was falsely closed by a finite acceptance sample; unrelated nonblocking quality findings do not disable that repair",
             "before_validation": "repair format-only blocking_errors once without spending a content correction; quality_findings are carried to matrix authoring and review",
-            "when_blocking_at_count_4": "stop unless validator_repair_allowed=true; otherwise correction_allowed=false and workflow status is failed",
+            "when_blocking_at_count_4": "stop unless validator_repair_allowed=true or source_anchor_repair_allowed=true; otherwise correction_allowed=false and workflow status is failed",
         },
         "atomicity_checks": [
             "один объект или UI-уровень в одной обязанности",

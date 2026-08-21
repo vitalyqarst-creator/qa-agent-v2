@@ -43,6 +43,20 @@ def relative_to_package(path: Path, package_root: Path) -> str:
         raise ValueError(f"path is outside FT package: {resolved_path}") from exc
 
 
+def canonical_review_scope(package_root: Path, review_dir: Path) -> str:
+    """Return scope only for the canonical work/reviews/<scope> directory."""
+
+    resolved_root = package_root.resolve()
+    resolved_review_dir = review_dir.resolve()
+    expected_parent = resolved_root / "work" / "reviews"
+    if resolved_review_dir.parent != expected_parent:
+        raise ValueError("review_dir must be the canonical package path work/reviews/<scope>")
+    scope = canonical_scope(resolved_review_dir.name)
+    if not scope.strip():
+        raise ValueError("review_dir scope must not be empty")
+    return scope
+
+
 def load_json(path: Path) -> tuple[dict[str, Any] | None, list[str]]:
     try:
         payload = json.loads(path.read_text(encoding="utf-8"))
@@ -325,10 +339,9 @@ def prepare_review_package(
     package_root = package_root.resolve()
     artifact = artifact.resolve()
     review_dir = review_dir.resolve()
-    relative_to_package(review_dir, package_root)
+    scope = canonical_review_scope(package_root, review_dir)
     review_dir.mkdir(parents=True, exist_ok=True)
     artifact_digest = sha256(artifact)
-    scope = canonical_scope(review_dir.name)
     snapshot = review_snapshot(package_root, artifact, kind, scope)
 
     inputs_path = review_dir / f"{kind}-review-inputs-{artifact_digest[:12]}.json"

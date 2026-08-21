@@ -1758,6 +1758,26 @@ class RuntimeContractTests(unittest.TestCase):
         self.assertFalse(workflow_failed["final_closure_allowed"])
         self.assertFalse(workflow_failed["correction_allowed"])
 
+    def test_scope_decision_allows_count_preserving_exact_source_anchor_repair(self) -> None:
+        anchor_errors = [
+            f"SR-00{index}: source needs an exact requirement code or an uncoded structural anchor "
+            "(exact table row, or section plus quoted paragraph/list text)"
+            for index in range(1, 5)
+        ]
+        for revision_count in (2, 3, 4):
+            decision = scope_stage_decision(anchor_errors, revision_count)
+            self.assertTrue(decision["source_anchor_repair_allowed"])
+            self.assertTrue(decision["correction_allowed"])
+            self.assertEqual(revision_count, decision["scope_revision_count"])
+            self.assertEqual("draft", decision["workflow_status"])
+
+        mixed = scope_stage_decision(
+            [*anchor_errors, "SR-099: active source row aggregates independent properties"],
+            3,
+        )
+        self.assertFalse(mixed["source_anchor_repair_allowed"])
+        self.assertFalse(mixed["correction_allowed"])
+
     def test_scope_decision_allows_one_approved_answer_reconciliation(self) -> None:
         eligible = scope_stage_decision(
             [
@@ -5283,6 +5303,36 @@ residual_missing: none
                     "2026-08-17T00:00:00Z",
                 ),
             )
+
+    def test_prepare_review_package_rejects_nested_kind_directory_before_writes(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            artifact = root / "work" / "practical" / "9.3.2" / "test-design-matrix.md"
+            artifact.parent.mkdir(parents=True)
+            artifact.write_text(VALID_MATRIX, encoding="utf-8")
+            create_session_topology(root, "9.3.2")
+            invalid_review_dir = root / "work" / "reviews" / "9.3.2" / "matrix"
+
+            with self.assertRaisesRegex(ValueError, r"work/reviews/<scope>"):
+                prepare_review_package(
+                    root,
+                    artifact,
+                    invalid_review_dir,
+                    "matrix",
+                    MATRIX_REVIEWER_THREAD,
+                    "local",
+                    "2026-08-17T00:00:00Z",
+                )
+
+            self.assertFalse(invalid_review_dir.exists())
+
+    def test_controller_wait_contract_treats_poll_timeout_as_non_terminal(self) -> None:
+        root = Path(__file__).resolve().parents[1]
+        topology = (root / "references" / "runtime" / "session-topology.md").read_text(encoding="utf-8")
+
+        self.assertIn("Timeout одного вызова `wait_threads`", topology)
+        self.assertIn("одно лишь прошедшее время не означает недоступность", topology)
+        self.assertIn("повторно передаёт тот же operational prompt", topology)
 
     def test_review_record_rejects_thread_id_not_owned_by_dispatch(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
