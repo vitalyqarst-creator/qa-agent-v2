@@ -61,6 +61,11 @@ AMBIGUOUS_STATE_SETUP_RE = re.compile(
     r"^\d+\.\s+(?:Установить|Перевести|Задать|Изменить|Привести)\b.*\bстатус",
     re.IGNORECASE,
 )
+PASSIVE_UI_PRECONDITION_RE = re.compile(
+    r"^\d+\.\s+(?:(?:Открыт|Выбран|Нажат|Заполнен|Загружен|Выполнен)(?:а|о|ы)?\b|"
+    r"(?:Пользователь|Тестировщик)\s+(?:открыл|переш[её]л|выбрал|нажал|вв[её]л|заполнил|загрузил|вош[её]л)\w*\b)",
+    re.IGNORECASE,
+)
 LOGIN_PRECONDITION_RE = re.compile(r"^\d+\.\s+Войти\s+пользовател", re.IGNORECASE | re.MULTILINE)
 PREPARED_USER_RE = re.compile(r"^\d+\.\s+Подготовить\s+пользовател", re.IGNORECASE | re.MULTILINE)
 INLINE_POSTCONDITION_ACTOR_RE = re.compile(
@@ -394,6 +399,11 @@ def validate(content: str) -> list[str]:
         if any(AMBIGUOUS_STATE_SETUP_RE.match(line) for line in preconditions.splitlines() if line.strip()):
             errors.append(
                 f"{tc_id}: ambiguous one-line state setup; declare the concrete initial state or list the full source-backed transition"
+            )
+        if any(PASSIVE_UI_PRECONDITION_RE.match(line) for line in preconditions.splitlines() if line.strip()):
+            errors.append(
+                f"{tc_id}: UI setup in preconditions must be an imperative action such as "
+                "'Открыть', 'Выбрать' or 'Нажать'; declarative wording is reserved for data, role and state conditions"
             )
         if PREPARED_USER_RE.search(preconditions):
             errors.append(

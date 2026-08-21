@@ -2107,6 +2107,47 @@ residual_missing: none
         invalid = VALID_MATRIX.replace("базовый, жизненный-цикл-создания", "")
         self.assertTrue(any("no test-design profile" in error for error in validate_matrix(invalid)))
 
+    def test_matrix_rejects_internal_fixture_ids_in_user_facing_data(self) -> None:
+        invalid = VALID_MATRIX.replace(
+            "`Наименование` = `ПАО СБЕРБАНК`",
+            "TD-PARTNER; work/test-data/9.3.2/data-materialization.json; FX-DADATA-003",
+        )
+        self.assertTrue(any("internal fixture IDs" in error for error in validate_matrix(invalid)))
+
+    def test_matrix_requires_clean_second_creation_form_after_successful_ui_creation(self) -> None:
+        without_clean_form = VALID_MATRIX.replace(
+            "Сохранить карточку",
+            "Создать карточку",
+        ).replace(
+            "Карточка сохранена",
+            "Карточка создана",
+        )
+        self.assertTrue(any("second same-type object" in error for error in validate_matrix(without_clean_form)))
+        without_lifecycle_profile = without_clean_form.replace(
+            "базовый, жизненный-цикл-создания",
+            "базовый",
+        )
+        self.assertTrue(
+            any("second same-type object" in error for error in validate_matrix(without_lifecycle_profile))
+        )
+
+        clean_row = (
+            "| M-002 | SR-001; AS.38; Таблица 7, строка «Сохранить» | После успешного создания "
+            "повторно открыть форму нового партнёра | жизненный-цикл-создания | Повторное открытие "
+            "формы нового объекта | Карточка первого партнёра создана | Не требуются. | Поля новой "
+            "формы не предзаполнены значениями предыдущего партнёра; отображаются только source-backed "
+            "defaults | TC | candidate-ui-calibration |"
+        )
+        with_clean_form = without_clean_form.replace("| GAP-001", f"{clean_row}\n| GAP-001")
+        self.assertEqual([], validate_matrix(with_clean_form))
+
+    def test_tc_rejects_passive_ui_actions_in_preconditions(self) -> None:
+        passive = VALID_TC.replace(
+            "1. Открыть карточку добавления партнёра.",
+            "1. Пользователь открыл карточку добавления партнёра.",
+        )
+        self.assertTrue(any("imperative action" in error for error in validate_tc(passive)))
+
     def test_matrix_requires_explicit_contract_for_system_generated_output(self) -> None:
         dynamic = VALID_MATRIX.replace(
             "`Наименование` = `ПАО СБЕРБАНК`",

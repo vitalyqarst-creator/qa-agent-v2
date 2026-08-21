@@ -73,6 +73,24 @@ MATRIX_ROW_TOKEN_RE = re.compile(r"(?<![A-Za-z0-9_.-])M-\d{2,}(?![A-Za-z0-9_.-])
 CONCRETE_DATA_RE = re.compile(r"`[^`\n]+`\s*=\s*`[^`\n]+`")
 DATA_ROLE_RE = re.compile(r"(?<![A-Za-z0-9_-])TD-[A-Z0-9]+(?:-[A-Z0-9]+)*(?![A-Za-z0-9_-])")
 DATA_RELATION_RE = re.compile(r"(?<![A-Za-z0-9_-])REL-[A-Z0-9]+(?:-[A-Z0-9]+)*(?![A-Za-z0-9_-])")
+INTERNAL_FIXTURE_ID_RE = re.compile(
+    r"(?<![A-Za-z0-9_-])(?:FX|FIX)-[A-Z0-9]+(?:-[A-Z0-9]+)*(?![A-Za-z0-9_-])",
+    re.IGNORECASE,
+)
+SUCCESSFUL_UI_CREATION_RE = re.compile(
+    r"(?:\b(?:создать|добавить|создание|добавление)\b.{0,100}\b(?:форм|карточк|объект|запис|сущност|партн[её]р|реквизит)\w*\b|"
+    r"\b(?:форм|карточк|объект|запис|сущност|партн[её]р|реквизит)\w*\b.{0,100}\b(?:создан(?:а|о|ы)?|добавлен(?:а|о|ы)?)\b)",
+    re.IGNORECASE,
+)
+CLEAN_NEW_FORM_RE = re.compile(
+    r"(?:повторн\w*\s+откры\w*\s+форм\w*|инициир\w*\s+создан\w*\s+(?:втор|ещ[её])\w*|"
+    r"откры\w*\s+форм\w*\s+(?:создан\w*|добавлен\w*)\s+нов\w*\s+(?:объект|запис|сущност|партн[её]р|реквизит)\w*)",
+    re.IGNORECASE,
+)
+NO_INHERITANCE_ORACLE_RE = re.compile(
+    r"(?:не\s+(?:предзаполн|наслед)\w*|пуст\w*|только\s+[^|\n.]{0,80}(?:исходн|source-backed)\w*\s+(?:значен|default)\w*)",
+    re.IGNORECASE,
+)
 DYNAMIC_OUTPUT_RE = re.compile(
     r"\b(?:системн\w*\s+(?:id|идентификатор\w*|номер\w*|timestamp|sequence)|"
     r"(?:id|идентификатор\w*|номер\w*|timestamp|sequence)\s+текущ\w*\s+прогон\w*|"
@@ -370,6 +388,8 @@ def validate(content: str) -> list[str]:
     index_by_name = {name: header.index(name) for name in REQUIRED_HEADERS if name in header}
     seen_ids: set[str] = set()
     used_formal_items: dict[str, str] = {}
+    has_successful_ui_creation = False
+    has_clean_new_form_coverage = False
     for row_number, row in enumerate(rows, start=1):
         row_id = row[index_by_name["ID"]]
         if not row_id or EMPTY_RE.fullmatch(row_id):
@@ -440,6 +460,11 @@ def validate(content: str) -> list[str]:
                 else:
                     used_formal_items[item] = row_id
         data = row[index_by_name["Тестовые данные и отношения"]]
+        if INTERNAL_FIXTURE_ID_RE.search(data):
+            errors.append(
+                f"{row_id}: internal fixture IDs are forbidden in user-facing matrix data; "
+                "keep TD-*/REL-*, saved-source path and required tester-facing literals"
+            )
         if decision == "TC" and (not data or EMPTY_RE.fullmatch(data)):
             errors.append(f"{row_id}: TC decision requires data roles, exact coverage literals or 'Не требуются.'")
         if (
@@ -455,6 +480,15 @@ def validate(content: str) -> list[str]:
                 f"{row_id}: missing environment binding requires needs-test-data, not absent test data"
             )
         row_text = " | ".join(row)
+        if decision == "TC" and SUCCESSFUL_UI_CREATION_RE.search(row_text):
+            has_successful_ui_creation = True
+        if "жизненный-цикл-создания" in profiles and CLEAN_NEW_FORM_RE.search(row_text):
+            has_clean_new_form_coverage = True
+            if decision == "TC" and not NO_INHERITANCE_ORACLE_RE.search(row[index_by_name["Ожидаемый результат"]]):
+                errors.append(
+                    f"{row_id}: clean-new-form lifecycle check must require no inherited values "
+                    "except source-backed defaults"
+                )
         if decision == "TC" and DYNAMIC_OUTPUT_RE.search(row_text):
             has_property_contract = bool(DYNAMIC_PROPERTY_RE.search(row_text))
             has_binding_contract = bool(
@@ -467,6 +501,11 @@ def validate(content: str) -> list[str]:
                     f"{row_id}: system-generated output requires a property-check or runtime-binding "
                     "contract with separate capture and assertion points"
                 )
+    if has_successful_ui_creation and not has_clean_new_form_coverage:
+        errors.append(
+            "successful UI creation requires a lifecycle row that reopens creation for a second "
+            "same-type object and checks that prior values are not inherited; use a TC or an explicit coverage-gap"
+        )
     errors.extend(validate_coverage_model(content, used_formal_items))
     errors.extend(validate_boundary_families(content, used_formal_items))
     errors.extend(validate_uniqueness_control(content, header, rows))
