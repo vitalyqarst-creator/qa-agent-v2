@@ -57,4 +57,4 @@ description: Подтверждает scope, извлекает обязанно
 
 `python -X utf8 scripts/validate_runtime_scope.py <package-root> <scope-handoff-dir>`
 
-В initial `workflow-state.yaml` установи `scope_revision_count: 0`, `status: draft`; итоговый status ставит validator. Следуй только его correction-флагам. При `validator_repair_allowed=true` сохрани count `4` и исправь только количественный GAP и связанный вопрос. Полная политика — в `references/runtime/scope-analysis.md`. После изменения `SR-*`/`GAP-*` обнови все ссылки. Передача разрешена только при `writer_allowed=true` и `workflow_status=completed`.
+В initial `workflow-state.yaml` установи `scope_revision_count: 0`, `status: draft`; итоговый status ставит validator. При `correction_allowed=true` исправь весь возвращённый список `blocking_errors`, установи точный `next_scope_revision_count` и повтори validator. Не выполняй частичную правку и не придумывай дополнительный режим после `correction_exhausted=true`. После изменения `SR-*`/`GAP-*` обнови все ссылки. Передача разрешена только при `writer_allowed=true` и `workflow_status=completed`.

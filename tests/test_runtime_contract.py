@@ -1658,9 +1658,30 @@ class RuntimeContractTests(unittest.TestCase):
             scope = package / "work" / "stage-handoffs" / "9.3.3"
             scope.mkdir(parents=True)
             workflow = scope / "workflow-state.yaml"
-            workflow.write_text("status: completed\nscope_revision_count: 0\n", encoding="utf-8")
+            for revision_count in range(4):
+                workflow.write_text(
+                    f"status: completed\nscope_revision_count: {revision_count}\n",
+                    encoding="utf-8",
+                )
+                result = subprocess.run(
+                    [sys.executable, "scripts/validate_runtime_scope.py", str(package), str(scope)],
+                    cwd=root,
+                    capture_output=True,
+                    text=True,
+                    encoding="utf-8",
+                    check=False,
+                )
+                payload = json.loads(result.stdout)
+                self.assertTrue(payload["correction_allowed"])
+                self.assertEqual(revision_count + 1, payload["next_scope_revision_count"])
+                self.assertFalse(payload["correction_exhausted"])
+                self.assertFalse(payload["writer_allowed"])
+                self.assertTrue(payload["blocking_errors"])
+                self.assertEqual("draft", payload["workflow_status"])
+                self.assertIn("status: draft", workflow.read_text(encoding="utf-8"))
 
-            first = subprocess.run(
+            workflow.write_text("status: completed\nscope_revision_count: 4\n", encoding="utf-8")
+            exhausted = subprocess.run(
                 [sys.executable, "scripts/validate_runtime_scope.py", str(package), str(scope)],
                 cwd=root,
                 capture_output=True,
@@ -1668,165 +1689,42 @@ class RuntimeContractTests(unittest.TestCase):
                 encoding="utf-8",
                 check=False,
             )
-            first_payload = json.loads(first.stdout)
-            self.assertTrue(first_payload["correction_allowed"])
-            self.assertFalse(first_payload["writer_allowed"])
-            self.assertTrue(first_payload["blocking_errors"])
-            self.assertEqual("draft", first_payload["workflow_status"])
-            self.assertIn("status: draft", workflow.read_text(encoding="utf-8"))
-
-            workflow.write_text("status: completed\nscope_revision_count: 1\n", encoding="utf-8")
-            second = subprocess.run(
-                [sys.executable, "scripts/validate_runtime_scope.py", str(package), str(scope)],
-                cwd=root,
-                capture_output=True,
-                text=True,
-                encoding="utf-8",
-                check=False,
-            )
-            second_payload = json.loads(second.stdout)
-            self.assertTrue(second_payload["correction_allowed"])
-            self.assertFalse(second_payload["writer_allowed"])
-            self.assertEqual("draft", second_payload["workflow_status"])
-            self.assertIn("status: draft", workflow.read_text(encoding="utf-8"))
-
-            workflow.write_text("status: completed\nscope_revision_count: 2\n", encoding="utf-8")
-            final = subprocess.run(
-                [sys.executable, "scripts/validate_runtime_scope.py", str(package), str(scope)],
-                cwd=root,
-                capture_output=True,
-                text=True,
-                encoding="utf-8",
-                check=False,
-            )
-            final_payload = json.loads(final.stdout)
-            self.assertFalse(final_payload["final_closure_allowed"])
-            self.assertFalse(final_payload["correction_allowed"])
-            self.assertFalse(final_payload["writer_allowed"])
-            self.assertEqual("failed", final_payload["workflow_status"])
+            exhausted_payload = json.loads(exhausted.stdout)
+            self.assertFalse(exhausted_payload["correction_allowed"])
+            self.assertIsNone(exhausted_payload["next_scope_revision_count"])
+            self.assertTrue(exhausted_payload["correction_exhausted"])
+            self.assertFalse(exhausted_payload["writer_allowed"])
+            self.assertEqual("failed", exhausted_payload["workflow_status"])
             self.assertIn("status: failed", workflow.read_text(encoding="utf-8"))
 
-    def test_scope_decision_allows_only_narrow_final_closure(self) -> None:
-        eligible = scope_stage_decision(
-            [
-                "SR-001: active source row must contain one atomic requirement code",
-                "AS.39: an unbounded quantitative requirement needs an explicit GAP-*",
-            ],
-            2,
-        )
-        self.assertTrue(eligible["final_closure_allowed"])
-        self.assertTrue(eligible["correction_allowed"])
-        self.assertEqual("draft", eligible["workflow_status"])
-
-        too_many = scope_stage_decision(
-            [
-                "SR-001: active source row must contain one atomic requirement code",
-                "AS.39: an unbounded quantitative requirement needs an explicit GAP-*",
-                "source-row-inventory has no required source rows table",
-            ],
-            2,
-        )
-        self.assertFalse(too_many["final_closure_allowed"])
-        self.assertFalse(too_many["correction_allowed"])
-
-        catalog_omissions = scope_stage_decision(
-            [
-                "scope-brief requirement-code boundary is partial; omitted active codes: CODE:REQ.2",
-                "incoming actions that open the selected UI scope are not assigned: REQ.3, REQ.4",
-                "parent requirement REQ.1 list fragment 1 has no explicit ownership row with an exact quoted fragment",
-                "parent requirement REQ.1 list fragment 2 has no explicit ownership row with an exact quoted fragment",
-            ],
-            2,
-        )
-        self.assertTrue(catalog_omissions["final_closure_allowed"])
-        self.assertTrue(catalog_omissions["correction_allowed"])
-
-        catalog_repair = scope_stage_decision(
-            [
-                "incoming actions that open the selected UI scope are not assigned: row 1 references no completed earlier scope",
-                "incoming actions that open the selected UI scope are not assigned: AS.23",
-            ],
-            3,
-        )
-        self.assertTrue(catalog_repair["catalog_repair_allowed"])
-        self.assertTrue(catalog_repair["correction_allowed"])
-
-        workflow_failed = scope_stage_decision(
-            ["workflow-state must reference work/scope-clarification-requests.md"],
-            2,
-        )
-        self.assertFalse(workflow_failed["final_closure_allowed"])
-        self.assertFalse(workflow_failed["correction_allowed"])
-
-    def test_scope_decision_allows_count_preserving_exact_source_anchor_repair(self) -> None:
-        anchor_errors = [
-            f"SR-00{index}: source needs an exact requirement code or an uncoded structural anchor "
-            "(exact table row, or section plus quoted paragraph/list text)"
-            for index in range(1, 5)
+    def test_scope_decision_applies_one_uniform_policy_to_all_blocking_classes(self) -> None:
+        errors = [
+            "SR-001: active source row aggregates independent properties",
+            "scope-brief requirement-code boundary is partial; omitted active codes: CODE:REQ.2",
+            "coverage-gaps table row 1 has 5 cells but expected 6",
+            "GAP-002: source reference must exactly reuse the linked SR-001 source anchor",
         ]
-        for revision_count in (2, 3, 4):
-            decision = scope_stage_decision(anchor_errors, revision_count)
-            self.assertTrue(decision["source_anchor_repair_allowed"])
+        for revision_count in range(4):
+            decision = scope_stage_decision(errors, revision_count)
             self.assertTrue(decision["correction_allowed"])
-            self.assertEqual(revision_count, decision["scope_revision_count"])
+            self.assertEqual(revision_count + 1, decision["next_scope_revision_count"])
+            self.assertFalse(decision["correction_exhausted"])
             self.assertEqual("draft", decision["workflow_status"])
 
-        mixed = scope_stage_decision(
-            [*anchor_errors, "SR-099: active source row aggregates independent properties"],
-            3,
-        )
-        self.assertFalse(mixed["source_anchor_repair_allowed"])
-        self.assertFalse(mixed["correction_allowed"])
-
-    def test_scope_decision_allows_one_approved_answer_reconciliation(self) -> None:
-        eligible = scope_stage_decision(
-            [
-                "GAP-002: missing environment data is execution readiness, not a coverage gap",
-                "CLR-002: duplicates a fully answered approved clarification for CODE:AS.39",
-                "CLR-002: approved answer source mentions its requirement; add 'Источник ответа'",
-            ],
-            3,
-        )
-        self.assertTrue(eligible["answer_reconciliation_allowed"])
-        self.assertTrue(eligible["correction_allowed"])
-
-        unrelated = scope_stage_decision(
-            ["SR-001: active source row must contain one atomic requirement code"],
-            3,
-        )
-        self.assertFalse(unrelated["answer_reconciliation_allowed"])
-        self.assertFalse(unrelated["correction_allowed"])
-
-        exhausted = scope_stage_decision(
-            ["CLR-002: approved answer source mentions its requirement"],
-            4,
-        )
-        self.assertFalse(exhausted["answer_reconciliation_allowed"])
+        exhausted = scope_stage_decision(errors, 4)
         self.assertFalse(exhausted["correction_allowed"])
+        self.assertIsNone(exhausted["next_scope_revision_count"])
+        self.assertTrue(exhausted["correction_exhausted"])
+        self.assertEqual("failed", exhausted["workflow_status"])
 
-    def test_scope_decision_allows_narrow_validator_repair_at_count_four(self) -> None:
-        eligible = scope_stage_decision(
-            [
-                "AS.39: an unbounded quantitative requirement needs an explicit GAP-*; a finite sample cannot prove absence of a limit",
-                "CLR-002: answered or cancelled clarification still links open coverage gaps: GAP-002",
-                "CLR-002: FT basis must exactly reuse the linked coverage-gap source anchor",
-                "work/scope-clarification-requests.md: use Russian wording instead of 'gap' (пробел покрытия)",
-            ],
+        quality_only = scope_stage_decision(
+            ["SR-001: unknown verifiability element must link an explicit GAP-*"],
             4,
         )
-        self.assertTrue(eligible["validator_repair_allowed"])
-        self.assertTrue(eligible["correction_allowed"])
-        self.assertEqual(4, eligible["scope_revision_count"])
-
-        unrelated = scope_stage_decision(
-            [
-                "AS.39: an unbounded quantitative requirement needs an explicit GAP-*; a finite sample cannot prove absence of a limit",
-                "SR-001: active source row must contain one atomic requirement code",
-            ],
-            4,
-        )
-        self.assertFalse(unrelated["validator_repair_allowed"])
-        self.assertFalse(unrelated["correction_allowed"])
+        self.assertTrue(quality_only["writer_allowed"])
+        self.assertFalse(quality_only["correction_allowed"])
+        self.assertFalse(quality_only["correction_exhausted"])
+        self.assertEqual("completed", quality_only["workflow_status"])
 
     def test_missing_environment_gap_does_not_match_absence_of_business_limit(self) -> None:
         quantitative_gap = (
@@ -1879,13 +1777,13 @@ residual_missing: none
         decision = scope_stage_decision(blocking, 0)
         self.assertFalse(decision["writer_allowed"])
         self.assertEqual("draft", decision["workflow_status"])
-        self.assertTrue(decision["preflight_repair_allowed"])
-        self.assertFalse(decision["correction_allowed"])
+        self.assertTrue(decision["correction_allowed"])
+        self.assertEqual(1, decision["next_scope_revision_count"])
         self.assertEqual(0, decision["scope_revision_count"])
 
         format_only = scope_stage_decision(["coverage-gaps table row 1 has 5 cells but expected 6"], 0)
-        self.assertTrue(format_only["preflight_repair_allowed"])
-        self.assertFalse(format_only["correction_allowed"])
+        self.assertTrue(format_only["correction_allowed"])
+        self.assertEqual(1, format_only["next_scope_revision_count"])
 
     def test_scope_identity_uses_section_for_label_and_slug(self) -> None:
         self.assertEqual("9.3.3", canonical_scope("9.3.3 Карточка реквизита"))

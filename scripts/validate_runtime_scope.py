@@ -462,80 +462,21 @@ def scope_error_summary(errors: list[str]) -> dict[str, int]:
 
 def scope_stage_decision(errors: list[str], revision_count: int | None) -> dict[str, object]:
     blocking_errors, quality_findings = partition_scope_findings(errors)
-    blocking_classes = {classify_scope_error(error) for error in blocking_errors}
-    source_anchor_repair_pattern = (
-        "source needs an exact requirement code or an uncoded structural anchor"
-    )
-    source_anchor_repair_allowed = (
-        revision_count in {2, 3, 4}
-        and bool(blocking_errors)
-        and all(source_anchor_repair_pattern in error for error in blocking_errors)
-    )
-    preflight_repair_allowed = "format" in blocking_classes and revision_count == 0
-    narrow_final_closure_allowed = (
-        revision_count == 2
-        and 0 < len(blocking_errors) <= 2
-        and blocking_classes <= {"atomicity", "completeness", "traceability", "source-contract"}
-    )
-    catalog_closure_patterns = (
-        "requirement-code boundary is partial; omitted active codes",
-        "incoming actions that open the selected UI scope are not assigned",
-        "has no explicit ownership row with an exact quoted fragment",
-    )
-    catalog_final_closure_allowed = (
-        revision_count == 2
-        and bool(blocking_errors)
-        and all(any(pattern in error for pattern in catalog_closure_patterns) for error in blocking_errors)
-    )
-    final_closure_allowed = narrow_final_closure_allowed or catalog_final_closure_allowed
-    catalog_repair_allowed = (
-        revision_count == 3
-        and bool(blocking_errors)
-        and all(any(pattern in error for pattern in catalog_closure_patterns) for error in blocking_errors)
-    )
-    reconciliation_patterns = (
-        "approved answer source mentions its requirement",
-        "duplicates a fully answered approved clarification",
-        "missing environment data is execution readiness, not a coverage gap",
-    )
-    answer_reconciliation_allowed = (
-        revision_count == 3
-        and 0 < len(errors) <= 3
-        and all(any(pattern in error for pattern in reconciliation_patterns) for error in errors)
-    )
-    validator_repair_allowed = (
-        revision_count == 4
-        and len(blocking_errors) == 1
-        and "an unbounded quantitative requirement needs an explicit GAP-*" in blocking_errors[0]
-    )
-    correction_allowed = (
-        bool(blocking_errors)
-        and (
-            revision_count in {0, 1}
-            or final_closure_allowed
-            or catalog_repair_allowed
-            or answer_reconciliation_allowed
-            or validator_repair_allowed
-            or source_anchor_repair_allowed
-        )
-        and not preflight_repair_allowed
-    )
+    correction_allowed = bool(blocking_errors) and revision_count in {0, 1, 2, 3}
+    next_revision_count = revision_count + 1 if correction_allowed and revision_count is not None else None
+    correction_exhausted = bool(blocking_errors) and revision_count == 4
     writer_allowed = not blocking_errors
     return {
         "valid": writer_allowed,
         "writer_allowed": writer_allowed,
         "scope_revision_count": revision_count,
-        "preflight_repair_allowed": preflight_repair_allowed,
-        "source_anchor_repair_allowed": source_anchor_repair_allowed,
-        "final_closure_allowed": final_closure_allowed,
-        "catalog_repair_allowed": catalog_repair_allowed,
-        "answer_reconciliation_allowed": answer_reconciliation_allowed,
-        "validator_repair_allowed": validator_repair_allowed,
+        "next_scope_revision_count": next_revision_count,
         "correction_allowed": correction_allowed,
+        "correction_exhausted": correction_exhausted,
         "workflow_status": (
             "completed"
             if writer_allowed
-            else ("draft" if correction_allowed or preflight_repair_allowed else "failed")
+            else ("draft" if correction_allowed else "failed")
         ),
         "error_counts_by_class": scope_error_summary(errors),
         "blocking_errors": blocking_errors,
@@ -820,15 +761,10 @@ def public_contract(scope: str | None = None, package_root: Path | None = None) 
         "correction_policy": {
             "initial_scope_revision_count": 0,
             "maximum_scope_revision_count": 4,
-            "preflight_repair": "one preflight pass repairs only format errors, even when content errors coexist, and keeps scope_revision_count at 0",
-            "source_anchor_repair": "at count 2, 3, or 4, a correction containing only exact-source-anchor blockers preserves scope_revision_count and may change only source-anchor cells, not obligation meaning or IDs",
-            "content_correction": "up to two blocking content corrections increment scope_revision_count from 0 to 1 and then to 2",
-            "final_closure": "at count 2, one final correction changes count to 3 and is allowed for at most two atomicity/completeness/traceability/source-contract blockers, or for any number of deterministic catalog-closure omissions only",
-            "catalog_repair": "at count 3, one final catalog-only assignment repair changes count to 4",
-            "answer_reconciliation": "at count 3, one last correction is allowed only to reconcile an already approved answer, its source and a duplicate readiness GAP; it changes count to 4",
-            "validator_repair": "at count 4, one count-preserving repair is allowed only when an unbounded quantitative GAP was falsely closed by a finite acceptance sample; unrelated nonblocking quality findings do not disable that repair",
-            "before_validation": "repair format-only blocking_errors once without spending a content correction; quality_findings are carried to matrix authoring and review",
-            "when_blocking_at_count_4": "stop unless validator_repair_allowed=true or source_anchor_repair_allowed=true; otherwise correction_allowed=false and workflow status is failed",
+            "before_validation": "write the complete first draft with scope_revision_count 0; validator returns the full blocking_errors set",
+            "content_correction": "when correction_allowed=true, repair the complete current blocking_errors list and set scope_revision_count to next_scope_revision_count; at most four validator-guided corrections are allowed",
+            "quality_findings": "quality_findings do not block writer and do not consume a correction",
+            "when_blocking_at_count_4": "correction_exhausted=true, correction_allowed=false and workflow status is failed; do not invent a narrow exception",
         },
         "atomicity_checks": [
             "один объект или UI-уровень в одной обязанности",
@@ -1958,7 +1894,7 @@ def validate(package_root: Path, scope_dir: Path) -> list[str]:
     revision_count = scalar_values(workflow_content).get("scope_revision_count")
     if revision_count not in {"0", "1", "2", "3", "4"}:
         errors.append(
-            "workflow-state scope_revision_count must be 0 initially, 1 or 2 after content corrections, 3 after final closure, or 4 after approved-answer reconciliation"
+            "workflow-state scope_revision_count must be 0 initially or 1 through 4 after validator-guided corrections"
         )
     if not re.search(
         r"(?m)^clarification_register:\s*[\"']?work/scope-clarification-requests\.md[\"']?\s*$",
