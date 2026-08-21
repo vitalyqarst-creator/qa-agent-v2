@@ -757,7 +757,7 @@ def public_contract(scope: str | None = None, package_root: Path | None = None) 
             "table_rows": "только если область использует таблицу ФТ",
             "opaque_headers": "только для используемых коротких заголовков без явной семантики",
             "visual_crosscheck": "только для включённых UI-уровней",
-            "dependent_results": "когда атомарные результаты причинно связаны и хотя бы один из них имеет GAP; одинаковый source anchor включает automatic gate",
+            "dependent_results": "только когда атомарные результаты действительно причинно связаны и хотя бы один из них имеет GAP; общий source anchor сам по себе причинность не доказывает",
             "incoming_actions": "только при непустом incoming_action_catalog; каждый код назначается текущей или точной целевой области",
             "figma": "только если релевантного локального визуального материала недостаточно",
             "second_pass": "только при сигнале сложности из ft-scope-analyzer",
@@ -2464,25 +2464,8 @@ def validate(package_root: Path, scope_dir: Path) -> list[str]:
             open_gap_by_source,
         )
     )
-    source_groups: dict[str, set[str]] = {}
-    for source_id, source_anchor in inventory_sources.items():
-        source_groups.setdefault(canonical_source_reference(source_anchor), set()).add(source_id)
-    required_dependency_pairs = {
-        (cause, dependent)
-        for group in source_groups.values()
-        for cause in group
-        if cause in open_gap_by_source
-        for dependent in group
-        if dependent != cause
-    }
     dependency_table = find_markdown_table(scope_brief_content, DEPENDENT_RESULTS_HEADERS)
-    covered_dependency_pairs: set[tuple[str, str]] = set()
-    if required_dependency_pairs and (dependency_table is None or not dependency_table.rows):
-        errors.append(
-            "scope-brief requires 'Контроль зависимых результатов' because one shared source anchor "
-            "has an open GAP and sibling observable obligations"
-        )
-    elif dependency_table is not None:
+    if dependency_table is not None:
         cause_index = dependency_table.index("Причинная обязанность")
         dependent_index = dependency_table.index("Зависимая обязанность")
         relation_index = dependency_table.index("Связь")
@@ -2496,7 +2479,6 @@ def validate(package_root: Path, scope_dir: Path) -> list[str]:
                 )
                 continue
             cause, dependent = causes[0], dependents[0]
-            covered_dependency_pairs.add((cause, dependent))
             if cause not in active_inventory_ids or dependent not in active_inventory_ids:
                 errors.append(f"dependent-results row {row_number}: references an inactive SR-* obligation")
             if not row[relation_index].strip():
@@ -2513,10 +2495,6 @@ def validate(package_root: Path, scope_dir: Path) -> list[str]:
                     errors.append(
                         f"dependent-results row {row_number}: {handling_gaps[0]} must be an open GAP linked to {dependent}"
                     )
-        for cause, dependent in sorted(required_dependency_pairs - covered_dependency_pairs):
-            errors.append(
-                f"dependent-results control omits {cause} -> {dependent} for a shared source anchor with an open GAP"
-            )
     known_gap_ids = set(gap_ids)
     if not gaps_parse_failed:
         unknown_header_semantics_gaps = sorted(header_semantics_gap_ids - known_gap_ids)

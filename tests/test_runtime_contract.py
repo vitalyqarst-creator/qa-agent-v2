@@ -3661,7 +3661,7 @@ residual_missing: none
             )
             self.assertEqual([], validate_scope(package, scope))
 
-    def test_scope_gap_propagates_to_dependent_result_with_same_source_anchor(self) -> None:
+    def test_shared_source_anchor_does_not_invent_causal_dependencies(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
             root = Path(temporary_directory)
             (root / "AGENTS.md").write_text("# Runtime\n", encoding="utf-8")
@@ -3698,7 +3698,7 @@ residual_missing: none
             )
 
             errors = validate_scope(package, scope)
-            self.assertTrue(any("requires 'Контроль зависимых результатов'" in error for error in errors))
+            self.assertFalse(any("Контроль зависимых результатов" in error for error in errors))
 
             brief_path.write_text(
                 brief
@@ -3709,8 +3709,7 @@ residual_missing: none
                 encoding="utf-8",
             )
             errors = validate_scope(package, scope)
-            self.assertFalse(any("requires 'Контроль зависимых результатов'" in error for error in errors))
-            self.assertFalse(any("dependent-results control omits SR-002 -> SR-001" in error for error in errors))
+            self.assertFalse(any("dependent-results row" in error for error in errors))
 
             (scope / "source-row-inventory.md").write_text(
                 inventory.replace(
@@ -3720,6 +3719,20 @@ residual_missing: none
             )
             errors = validate_scope(package, scope)
             self.assertFalse(any("dependent-results row" in error for error in errors))
+
+    def test_scope_roles_search_primary_source_for_supporting_execution_anchors(self) -> None:
+        root = Path(__file__).resolve().parents[1]
+        scope_reference = (root / "references" / "runtime" / "scope-analysis.md").read_text(encoding="utf-8")
+        analyzer = (root / "skills" / "ft-scope-analyzer" / "SKILL.md").read_text(encoding="utf-8")
+        reviewer = (root / "skills" / "ft-test-case-reviewer" / "SKILL.md").read_text(encoding="utf-8")
+
+        for instructions in (scope_reference, analyzer, reviewer):
+            self.assertIn("supporting execution anchors", instructions)
+        self.assertIn("том же основном XHTML", scope_reference)
+        self.assertIn("основного XHTML", reviewer)
+        self.assertIn("references/runtime/scope-analysis.md", analyzer)
+        self.assertIn("общий source anchor её не доказывает", scope_reference)
+        self.assertIn("Недоступность Figma сама по себе не блокирует", reviewer)
 
     def test_scope_validator_rejects_gap_and_question_covered_by_nonblocking_working_assumption(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
