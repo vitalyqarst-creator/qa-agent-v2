@@ -1241,6 +1241,34 @@ class RuntimeContractTests(unittest.TestCase):
         self.assertIn("недостижим ему", reviewer)
         self.assertIn("логического покрытия другой строкой matrix", reviewer)
 
+    def test_writer_and_reviewer_load_only_stage_specific_references(self) -> None:
+        root = Path(__file__).resolve().parents[1]
+        writer = (root / "skills" / "ft-test-case-writer" / "SKILL.md").read_text(encoding="utf-8")
+        reviewer = (root / "skills" / "ft-test-case-reviewer" / "SKILL.md").read_text(encoding="utf-8")
+
+        self.assertIn("только комплект текущего этапа", writer)
+        self.assertIn("для материализации данных и первичных TC", writer)
+        self.assertIn("не загружай не относящиеся к этапу references", writer)
+        self.assertIn("только комплект вида review", reviewer)
+        self.assertIn("для delta review", reviewer)
+        self.assertIn("не относящиеся к текущему review references", reviewer)
+
+    def test_review_contract_requires_lifecycle_and_same_class_dedup_evidence(self) -> None:
+        root = Path(__file__).resolve().parents[1]
+        profiles = (root / "references" / "runtime" / "test-design-profiles.md").read_text(encoding="utf-8")
+        review_record = (root / "references" / "runtime" / "review-record.md").read_text(encoding="utf-8")
+        writer = (root / "skills" / "ft-test-case-writer" / "SKILL.md").read_text(encoding="utf-8")
+        reviewer = (root / "skills" / "ft-test-case-reviewer" / "SKILL.md").read_text(encoding="utf-8")
+
+        for instructions in (profiles, writer, reviewer):
+            self.assertIn("Ближайшая точка за границей", instructions)
+            self.assertIn("source anchors", instructions)
+            self.assertIn("control/trigger", instructions)
+        for instructions in (review_record, reviewer):
+            self.assertIn("группы-кандидаты", instructions)
+            self.assertIn("без наследования", instructions)
+        self.assertIn("повторное открытие формы нового объекта", profiles)
+
     def test_matrix_projection_preserves_exact_negative_role_visibility(self) -> None:
         inventory = VALID_INVENTORY.replace(
             "Карточка сохраняется",
