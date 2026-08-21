@@ -176,7 +176,7 @@ DATA_PROVISION_QUESTION_RE = re.compile(
 MISSING_ENVIRONMENT_GAP_RE = re.compile(
     r"(?:нет|отсутств(?:ует|уют|овал(?:а|и)?|овать)\w*)[^\n|]{0,80}(?:fixture|фикстур|готов\w*\s+)?"
     r"(?:партн[её]р\w*|реквизит\w*|сущност\w*|запис\w*|уч[её]тн\w*|логин\w*|url\b|credentials\b)|"
-    r"(?:созда|подготов|предостав)[^\n|]{0,100}"
+    r"\b(?:создать|подготовить|предоставить)\b[^\n|]{0,100}"
     r"(?:стендов\w*\s+)?(?:партн[её]р\w*|реквизит\w*|сущност\w*|запис\w*|уч[её]тн\w*)",
     re.IGNORECASE,
 )
@@ -449,12 +449,6 @@ def scope_stage_decision(errors: list[str], revision_count: int | None) -> dict[
         revision_count == 4
         and len(blocking_errors) == 1
         and "an unbounded quantitative requirement needs an explicit GAP-*" in blocking_errors[0]
-        and 0 < len(quality_findings) <= 2
-        and all(
-            "answered or cancelled clarification still links open coverage gaps" in finding
-            for finding in quality_findings
-        )
-        and len(errors) == len(blocking_errors) + len(quality_findings)
     )
     correction_allowed = (
         bool(blocking_errors)
@@ -741,7 +735,7 @@ def public_contract(scope: str | None = None, package_root: Path | None = None) 
             "final_closure": "at count 2, one final correction changes count to 3 and is allowed for at most two atomicity/completeness/traceability/source-contract blockers, or for any number of deterministic catalog-closure omissions only",
             "catalog_repair": "at count 3, one final catalog-only assignment repair changes count to 4",
             "answer_reconciliation": "at count 3, one last correction is allowed only to reconcile an already approved answer, its source and a duplicate readiness GAP; it changes count to 4",
-            "validator_repair": "at count 4, one count-preserving repair is allowed only when an unbounded quantitative GAP was falsely closed by approved-answer matching and the linked clarification must return to pending",
+            "validator_repair": "at count 4, one count-preserving repair is allowed only when an unbounded quantitative GAP was falsely closed by a finite acceptance sample; unrelated nonblocking quality findings do not disable that repair",
             "before_validation": "repair format-only blocking_errors once without spending a content correction; quality_findings are carried to matrix authoring and review",
             "when_blocking_at_count_4": "stop unless validator_repair_allowed=true; otherwise correction_allowed=false and workflow status is failed",
         },

@@ -37,6 +37,8 @@ description: Подтверждает scope, извлекает обязанно
 
 Перед новым вопросом ищи ответ по anchor в общем реестре и утверждённых support-файлах. Нерешённый вопрос получает статус `ожидает-ответа` и строку `**Ответ БА:** _Введите ответ здесь._`; отвеченную карточку обновляй, не удаляй.
 
+Для конечной выборки по неограниченному требованию следуй правилу частичного покрытия из `scope-analysis.md`.
+
 В плане данных не получай значения. Задай минимальный baseline `TD-*`, источников, отношений и изоляции; для каждой сущности наследуй provider/справочник её создания. При наличии принятых materialization других scope один раз запусти `runtime_fixture_candidates.py` и укажи совместимый scope как сохранённый источник, не копируя литералы. Стенд и его изменяемые статусы/роли — подготовка и `needs-test-data`, не источник идентичности. URL, логин, credentials и общий доступ не являются `TD-*`; если иных данных нет, напиши `Данные не требуются.`. Writer расширит план после matrix.
 
 Сверь используемые и родительские/контейнерные таблицы XHTML по `scope-analysis.md`. Короткие заголовки требуют легенды. Сравнивай видимые подписи буквально; для включённого UI-уровня сверь релевантный макет; нерелевантные визуальные входы не перечисляй, Figma открывай лишь при недостатке локального материала.
@@ -55,4 +57,4 @@ description: Подтверждает scope, извлекает обязанно
 
 `python -X utf8 scripts/validate_runtime_scope.py <package-root> <scope-handoff-dir>`
 
-В initial `workflow-state.yaml` установи `scope_revision_count: 0`, `status: draft`; итоговый status ставит validator. Следуй только его correction-флагам и исправляй перечисленные ошибки. Count `4` сохраняй при `validator_repair_allowed=true`; этот режим восстанавливает ошибочно закрытый количественный GAP и pending-clarification. Полная политика — в `references/runtime/scope-analysis.md`. После изменения `SR-*`/`GAP-*` обнови все ссылки. Передача разрешена только при `writer_allowed=true` и `workflow_status=completed`.
+В initial `workflow-state.yaml` установи `scope_revision_count: 0`, `status: draft`; итоговый status ставит validator. Следуй только его correction-флагам. При `validator_repair_allowed=true` сохрани count `4` и исправь только количественный GAP и связанный вопрос. Полная политика — в `references/runtime/scope-analysis.md`. После изменения `SR-*`/`GAP-*` обнови все ссылки. Передача разрешена только при `writer_allowed=true` и `workflow_status=completed`.

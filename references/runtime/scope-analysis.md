@@ -11,7 +11,7 @@
 - `prompt.scope-to-writer.md`;
 - `workflow-state.yaml` со ссылкой `clarification_register: "work/scope-clarification-requests.md"`.
 
-Count — `0`. Следуй флагам validator-а. При count `2` финальная коррекция допускает ≤2 blockers либо catalog omissions. `validator_repair_allowed` при count `4` сохраняет count, восстанавливая ошибочно закрытый количественный GAP с pending-clarification. Переход при `writer_allowed=true`.
+Count — `0`. Следуй флагам validator-а. При count `2` финальная коррекция допускает ≤2 blockers либо catalog omissions. `validator_repair_allowed` при count `4` разрешает одну count-preserving коррекцию ошибочно закрытого количественного GAP; неблокирующие `quality_findings` не отменяют эту возможность. Переход при `writer_allowed=true`.
 
 ## Границы источника
 
@@ -101,4 +101,4 @@ GAP связан с одной SR и только её неизвестным о
 
 Статусы: `ожидает-ответа`, `частичный-ответ`, `ответ-получен`, `отменён`. Для частичного ответа укажи `Осталось уточнить`, для support — `Источник ответа`. Вопросы не удаляй/дублируй. Один вопрос закрывает несколько GAP только при общем правиле; перечисли их anchors.
 
-`working-assumption` с текущим поведением и `blocking: no` временно закрывает GAP; в brief сохрани источник, поведение и условие актуализации. Иной ответ оставляет только точный остаточный пробел.
+`working-assumption` с текущим поведением временно закрывает GAP. Конечная выборка не закрывает требование «неограниченно»: сохраняй `частичный-ответ`, `SR-*` и GAP до замены границы.

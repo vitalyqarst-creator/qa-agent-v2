@@ -1694,6 +1694,8 @@ class RuntimeContractTests(unittest.TestCase):
             [
                 "AS.39: an unbounded quantitative requirement needs an explicit GAP-*; a finite sample cannot prove absence of a limit",
                 "CLR-002: answered or cancelled clarification still links open coverage gaps: GAP-002",
+                "CLR-002: FT basis must exactly reuse the linked coverage-gap source anchor",
+                "work/scope-clarification-requests.md: use Russian wording instead of 'gap' (пробел покрытия)",
             ],
             4,
         )
@@ -1715,10 +1717,16 @@ class RuntimeContractTests(unittest.TestCase):
         quantitative_gap = (
             "Конечная проверка не подтверждает отсутствие предела. Второй реквизит подтверждает только нижний порог."
         )
+        bounded_acceptance = (
+            "Утверждённый ответ устанавливает успешное создание 10 реквизитов приёмочной выборкой."
+        )
         missing_fixture = "Отсутствует подготовленный реквизит со статусом Подтвержден."
+        environment_preparation = "Подготовить реквизит со статусом Подтвержден."
         for pattern in (SCOPE_MISSING_ENVIRONMENT_GAP_RE, MATRIX_MISSING_ENVIRONMENT_GAP_RE):
             self.assertIsNone(pattern.search(quantitative_gap))
+            self.assertIsNone(pattern.search(bounded_acceptance))
             self.assertIsNotNone(pattern.search(missing_fixture))
+            self.assertIsNotNone(pattern.search(environment_preparation))
 
     def test_approved_answer_matching_distinguishes_quantity_from_duplicate_identity(self) -> None:
         quantity_question = (
@@ -2583,6 +2591,15 @@ residual_missing: none
 
     def test_matrix_projection_preserves_inventory_and_coverage_gaps(self) -> None:
         self.assertEqual([], validate_matrix_projection(VALID_MATRIX, VALID_INVENTORY, VALID_GAPS))
+        bounded_sample_and_residual_gap = VALID_MATRIX.replace(
+            "| GAP-001 | SR-002; AS.39 | Проверить неизвестную реакцию | допустимые-классы | GAP-001 | Открыта форма | Не определены | Требуется уточнение результата | coverage-gap | blocked-observability |",
+            "| M-002 | SR-002; AS.39 | Создать 10 объектов | базовый | Приёмочная выборка 10 объектов | Открыта форма | Десять разных записей | Созданы 10 объектов | TC | needs-test-data |\n"
+            "| GAP-001 | SR-002; AS.39 | Проверить отсутствие верхнего предела | допустимые-классы | GAP-001 | Созданы 10 объектов | Не определены | Отсутствие верхнего предела не доказуемо конечной выборкой | coverage-gap | blocked-observability |",
+        )
+        self.assertEqual(
+            [],
+            validate_matrix_projection(bounded_sample_and_residual_gap, VALID_INVENTORY, VALID_GAPS),
+        )
         missing_gap = VALID_MATRIX.replace("GAP-001", "M-002", 1)
         self.assertTrue(any("GAP-001" in error for error in validate_matrix_projection(missing_gap, VALID_INVENTORY, VALID_GAPS)))
         missing_source = VALID_MATRIX.replace("AS.38; Таблица 7", "Таблица 7", 1)
