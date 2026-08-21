@@ -3395,6 +3395,26 @@ residual_missing: none
             )
             self.assertTrue(any("linked data roles have no concrete" in error for error in errors))
 
+            payload["bindings"].append(
+                {
+                    "role_id": "TD-UNRELATED-PARTNER",
+                    "used_by": ["M-999"],
+                    "source_type": "provider",
+                    "source_name": "Provider",
+                    "fixture_id": "FX-PARTNER-A",
+                    "values": {"Наименование партнёра": "ООО ПОСТОРОННЕЕ"},
+                }
+            )
+            materialization.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+            contaminated_tc = projected_tc.replace(
+                "1. Открыть карточку добавления партнёра.",
+                "1. Открыть карточку добавления партнёра для `ООО ПОСТОРОННЕЕ`.",
+            )
+            errors = validate_materialized_projection(
+                contaminated_tc, matrix_content, materialization
+            )
+            self.assertTrue(any("unrelated materialized roles" in error for error in errors))
+
             payload["bindings"][0]["values"]["Наименование партнёра"] = "ПАО СБЕРБАНК RUN-ID"
             materialization.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
             errors = validate_test_data(materialization, matrix, data_plan)

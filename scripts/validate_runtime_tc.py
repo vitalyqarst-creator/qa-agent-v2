@@ -585,6 +585,15 @@ def validate_materialized_projection(
         for binding in payload.get("bindings", [])
         if isinstance(binding, dict) and isinstance(binding.get("role_id"), str)
     }
+    all_materialized_values = {
+        part.strip()
+        for binding in bindings.values()
+        for values in [binding.get("values")]
+        if isinstance(values, dict)
+        for value in values.values()
+        for part in str(value).split(";")
+        if part.strip()
+    }
     matrix = find_markdown_table(matrix_content, ("ID", "Тестовые данные и отношения", "Решение"))
     if matrix is None:
         return ["cannot project materialized data without matrix data roles"]
@@ -600,7 +609,9 @@ def validate_materialized_projection(
         block = content[match.end() : matches[index + 1].start() if index + 1 < len(matches) else len(content)]
         fields = {name: value.strip() for name, value in FIELD_RE.findall(block)}
         traceability = fields.get("Трассировка", "")
-        tc_data = sections(block).get("Тестовые данные", "")
+        tc_sections = sections(block)
+        tc_data = tc_sections.get("Тестовые данные", "")
+        runtime_text = "\n".join(tc_sections.values())
         linked_matrix = {
             matrix_id
             for matrix_id in roles_by_matrix
@@ -622,6 +633,16 @@ def validate_materialized_projection(
         if materialized_values and not any(value in tc_data for value in materialized_values):
             errors.append(
                 f"{tc_id}: linked data roles have no concrete materialized value in test data"
+            )
+        unrelated_values = sorted(
+            value
+            for value in all_materialized_values.difference(materialized_values)
+            if len(value) >= 4 and value in runtime_text
+        )
+        if unrelated_values:
+            errors.append(
+                f"{tc_id}: runtime sections contain values from unrelated materialized roles: "
+                + ", ".join(unrelated_values)
             )
     return errors
 
