@@ -7,6 +7,7 @@ from pathlib import Path
 
 try:
     from scripts.runtime_cleanliness import validate_no_repository_temp
+    from scripts.runtime_fixture_candidates import fixture_candidates
     from scripts.runtime_io import configure_utf8_stdio
     from scripts.runtime_traceability import anchor_label, extract_anchors, find_markdown_table
     from scripts.runtime_workflow_state import validate_state as validate_workflow_state
@@ -18,6 +19,7 @@ try:
     )
 except ModuleNotFoundError:  # Direct invocation: python scripts/validate_runtime_matrix.py
     from runtime_cleanliness import validate_no_repository_temp
+    from runtime_fixture_candidates import fixture_candidates
     from runtime_io import configure_utf8_stdio
     from runtime_traceability import anchor_label, extract_anchors, find_markdown_table
     from runtime_workflow_state import validate_state as validate_workflow_state
@@ -658,6 +660,80 @@ def data_plan_contract(content: str) -> tuple[dict[str, set[str]], set[str], lis
     return role_sources, set(DATA_RELATION_RE.findall(content)), errors
 
 
+ENVIRONMENT_SOURCE_PREFIXES = (
+    "подтверждённая стендовая привязка",
+    "подтвержденная стендовая привязка",
+)
+MUTABLE_STATE_RE = re.compile(r"(?:статус|состояни|роль|право|доступ)", re.IGNORECASE)
+ROLE_TOKEN_STOPWORDS = {
+    "TD", "A", "B", "C", "D", "CONFIRMED", "HIDDEN", "EXISTING", "WITH",
+    "CURRENT", "TARGET", "BEFORE", "AFTER", "NONFINAL", "FINAL",
+}
+
+
+def role_entity_tokens(role: str) -> set[str]:
+    return {
+        token
+        for token in role.upper().split("-")
+        if token and token not in ROLE_TOKEN_STOPWORDS and not token.isdigit()
+    }
+
+
+def environment_identity_candidate_errors(content: str, package_root: Path, scope: str) -> list[str]:
+    table = find_markdown_table(content, TEST_DATA_PLAN_HEADERS)
+    if table is None or not table.rows:
+        return []
+    roles_index = table.index("Роли данных")
+    sources_index = table.index("Допустимый источник")
+    constraints_index = table.index("Ограничения и отношения")
+    preparation_index = table.index("Воспроизводимая подготовка")
+    candidates = fixture_candidates(package_root, scope)
+    errors: list[str] = []
+    for row in table.rows:
+        source_parts = [
+            part.strip().strip("`").casefold()
+            for part in row[sources_index].split(";")
+            if part.strip()
+        ]
+        if not source_parts or not all(
+            part.startswith(ENVIRONMENT_SOURCE_PREFIXES) for part in source_parts
+        ):
+            continue
+        if not MUTABLE_STATE_RE.search(" | ".join((row[constraints_index], row[preparation_index]))):
+            continue
+        for role in DATA_ROLE_RE.findall(row[roles_index]):
+            tokens = role_entity_tokens(role)
+            matches = [
+                candidate
+                for candidate in candidates
+                if tokens & role_entity_tokens(str(candidate.get("role_id", "")))
+            ]
+            if matches:
+                origins = sorted(
+                    {f"{candidate['source_scope']}:{candidate['role_id']}" for candidate in matches}
+                )
+                origin_summary = ", ".join(origins[:5])
+                if len(origins) > 5:
+                    origin_summary += f", ещё {len(origins) - 5}"
+                errors.append(
+                    f"matrix data plan {role}: accepted sibling identity candidate exists "
+                    f"({origin_summary}); use its saved source for tester-facing identity "
+                    "and keep mutable environment state in preparation/needs-test-data"
+                )
+    return errors
+
+
+def allowed_source_extension(baseline: set[str], added: set[str]) -> bool:
+    if not added:
+        return True
+    environment_only = bool(baseline) and all(
+        source.startswith(ENVIRONMENT_SOURCE_PREFIXES) for source in baseline
+    )
+    return environment_only and all(
+        not source.startswith(ENVIRONMENT_SOURCE_PREFIXES) for source in added
+    )
+
+
 def validate_layout(matrix_path: Path, package_root: Path) -> list[str]:
     errors: list[str] = validate_no_repository_temp(package_root)
     scope = matrix_path.parent.name
@@ -679,14 +755,16 @@ def validate_layout(matrix_path: Path, package_root: Path) -> list[str]:
     baseline_roles, baseline_relations, baseline_errors = data_plan_contract(
         baseline_plan.read_text(encoding="utf-8")
     )
-    final_roles, final_relations, final_errors = data_plan_contract(matrix_plan.read_text(encoding="utf-8"))
+    matrix_plan_content = matrix_plan.read_text(encoding="utf-8")
+    final_roles, final_relations, final_errors = data_plan_contract(matrix_plan_content)
     errors.extend(f"analyzer baseline: {error}" for error in baseline_errors)
     errors.extend(f"matrix data plan: {error}" for error in final_errors)
+    errors.extend(environment_identity_candidate_errors(matrix_plan_content, package_root, scope))
     for role in sorted(set(baseline_roles) - set(final_roles)):
         errors.append(f"matrix data plan omits analyzer baseline role {role}")
     for role in sorted(set(baseline_roles) & set(final_roles)):
         added_sources = final_roles[role] - baseline_roles[role]
-        if added_sources:
+        if added_sources and not allowed_source_extension(baseline_roles[role], added_sources):
             errors.append(f"matrix data plan weakens {role} with unapproved sources: {sorted(added_sources)}")
     for relation in sorted(baseline_relations - final_relations):
         errors.append(f"matrix data plan omits analyzer baseline relation {relation}")

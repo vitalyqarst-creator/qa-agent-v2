@@ -38,6 +38,8 @@ from scripts.validate_runtime_matrix import (
     DATA_RELATION_RE as MATRIX_DATA_RELATION_RE,
     DATA_ROLE_RE as MATRIX_DATA_ROLE_RE,
     MISSING_ENVIRONMENT_GAP_RE as MATRIX_MISSING_ENVIRONMENT_GAP_RE,
+    allowed_source_extension,
+    environment_identity_candidate_errors,
     validate as validate_matrix,
     validate_layout as validate_matrix_layout,
     validate_projection as validate_matrix_projection,
@@ -4254,6 +4256,53 @@ residual_missing: none
             self.assertEqual(1, len(candidates))
             self.assertEqual("accepted", candidates[0]["source_scope"])
             self.assertEqual({"Наименование": "accepted"}, candidates[0]["values"])
+
+    def test_matrix_plan_separates_reusable_identity_from_mutable_environment_state(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            package = Path(temporary_directory) / "FT"
+            sibling = "9.3.3"
+            state = package / "work" / "practical" / sibling / "workflow-state.yaml"
+            state.parent.mkdir(parents=True, exist_ok=True)
+            state.write_text("matrix_status: accepted\ndata_status: completed\n", encoding="utf-8")
+            materialization = package / "work" / "test-data" / sibling / "data-materialization.json"
+            materialization.parent.mkdir(parents=True, exist_ok=True)
+            materialization.write_text(
+                json.dumps(
+                    {
+                        "scope": sibling,
+                        "bindings": [
+                            {
+                                "role_id": "TD-PARTNER-A",
+                                "source_type": "provider",
+                                "source_name": "Provider",
+                                "values": {"Наименование": "ООО Альфа"},
+                            }
+                        ],
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+            plan = """# План
+
+| Группа проверок | Роли данных | Допустимый источник | Ограничения и отношения | Границы и классы | Воспроизводимая подготовка | Готовность материализации |
+| --- | --- | --- | --- | --- | --- | --- |
+| Переход | TD-PARTNER-CONFIRMED | подтверждённая стендовая привязка | Партнёр существует в статусе Подтвержден. | Не применимо: границ нет. | Контракт подтверждения: сохранить идентификатор и статус. | требуется |
+"""
+            errors = environment_identity_candidate_errors(plan, package, "9.2")
+            self.assertTrue(any("accepted sibling identity candidate" in error for error in errors))
+
+            saved_plan = plan.replace(
+                "подтверждённая стендовая привязка",
+                "сохранённый ответ: work/test-data/9.3.3/data-materialization.json",
+            )
+            self.assertEqual([], environment_identity_candidate_errors(saved_plan, package, "9.2"))
+            self.assertTrue(
+                allowed_source_extension(
+                    {"подтверждённая стендовая привязка"},
+                    {"сохранённый ответ: work/test-data/9.3.3/data-materialization.json"},
+                )
+            )
 
     def test_schema_v2_delta_rereview_checks_only_declared_changed_tc(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
