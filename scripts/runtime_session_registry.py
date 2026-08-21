@@ -197,6 +197,20 @@ def initialize_registry(package_root: Path, controller_thread_id: str, controlle
     return write_registry(package_root, payload)
 
 
+def runtime_is_frozen(payload: dict[str, Any]) -> bool:
+    """Return whether semantic work has started for this practical run."""
+
+    if isinstance(payload.get("source_locator"), dict):
+        return True
+    scopes = payload.get("scopes")
+    if not isinstance(scopes, dict):
+        return False
+    return any(
+        isinstance(roles, dict) and any(isinstance(record, dict) for record in roles.values())
+        for roles in scopes.values()
+    )
+
+
 def acknowledge_runtime(package_root: Path, controller_thread_id: str) -> Path:
     payload, errors = load_registry(package_root)
     if errors:
@@ -205,8 +219,23 @@ def acknowledge_runtime(package_root: Path, controller_thread_id: str) -> Path:
     controller = payload.get("controller")
     if not isinstance(controller, dict) or controller.get("session_id") != controller_thread_id:
         raise ValueError("only the registered controller session may acknowledge a runtime update")
+    runtime = payload.get("runtime")
+    current_commit = runtime_code_commit(package_root)
+    recorded_commit = runtime.get("code_commit") if isinstance(runtime, dict) else None
+    if recorded_commit == current_commit and payload.get("schema_version") == REGISTRY_SCHEMA_VERSION:
+        return registry_path(package_root)
+    if runtime_is_frozen(payload):
+        raise ValueError(
+            "runtime is frozen after semantic work starts; create a new clean practical run "
+            "for the updated agent-layer commit"
+        )
     payload["schema_version"] = REGISTRY_SCHEMA_VERSION
     payload["runtime"] = runtime_acknowledgement(package_root)
+    # Before the first semantic role starts, the same controller may reread an
+    # updated contract. Keep its recorded runtime identity consistent with the
+    # acknowledgement; downstream role records do not exist yet.
+    controller["runtime_commit"] = current_commit
+    controller["recorded_at"] = utc_now()
     return write_registry(package_root, payload)
 
 
@@ -391,10 +420,12 @@ def inherit_scope_analyzer(package_root: Path, source_package_root: Path, scope:
 def validate_runtime_acknowledgement(package_root: Path, payload: dict[str, Any]) -> list[str]:
     errors: list[str] = []
     if payload.get("schema_version") != REGISTRY_SCHEMA_VERSION:
-        errors.append(
-            "session registry runtime contract is stale; controller must reread AGENTS.md and "
-            "references/runtime/session-topology.md, then run acknowledge-runtime"
+        action = (
+            "start a new clean practical run"
+            if runtime_is_frozen(payload)
+            else "reread the runtime contract and run acknowledge-runtime before semantic work"
         )
+        errors.append(f"session registry runtime contract is stale; controller must {action}")
         return errors
     runtime = payload.get("runtime")
     if not isinstance(runtime, dict):
@@ -402,9 +433,14 @@ def validate_runtime_acknowledgement(package_root: Path, payload: dict[str, Any]
     recorded_commit = runtime.get("code_commit")
     current_commit = runtime_code_commit(package_root)
     if recorded_commit != current_commit:
+        action = (
+            "start a new clean practical run; an active run cannot change agent-layer commit"
+            if runtime_is_frozen(payload)
+            else "reread the runtime contract and run acknowledge-runtime before semantic work"
+        )
         errors.append(
             f"runtime code commit changed from {recorded_commit!r} to {current_commit!r}; "
-            "controller must reread the runtime contract and run acknowledge-runtime"
+            f"controller must {action}"
         )
     package_inputs = payload.get("package_inputs")
     if isinstance(package_inputs, dict) and package_inputs.get("agent_notes_sha256"):
@@ -462,6 +498,9 @@ def record_role(
     if errors:
         raise ValueError(errors[0])
     assert payload is not None
+    runtime_errors = validate_runtime_acknowledgement(package_root, payload)
+    if runtime_errors:
+        raise ValueError(runtime_errors[0])
     current_commit = runtime_code_commit(package_root)
     record = session_record(thread_id, host_id, current_commit, model, thinking)
     migrated_scope_key = False

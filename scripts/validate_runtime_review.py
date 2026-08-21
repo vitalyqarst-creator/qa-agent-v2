@@ -12,13 +12,15 @@ try:
     from scripts.runtime_io import configure_utf8_stdio
     from scripts.runtime_review_dispatch import load_json as load_dispatch_json
     from scripts.runtime_review_dispatch import validate_dispatch
-    from scripts.runtime_review_delta import review_snapshot
+    from scripts.runtime_review_delta import introduced_correction_errors, review_snapshot
+    from scripts.runtime_session_registry import find_package_root
 except ModuleNotFoundError:  # Direct invocation: python scripts/validate_runtime_review.py
     from runtime_cleanliness import validate_no_repository_temp
     from runtime_io import configure_utf8_stdio
     from runtime_review_dispatch import load_json as load_dispatch_json
     from runtime_review_dispatch import validate_dispatch
-    from runtime_review_delta import review_snapshot
+    from runtime_review_delta import introduced_correction_errors, review_snapshot
+    from runtime_session_registry import find_package_root
 
 
 THREAD_ID_RE = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", re.IGNORECASE)
@@ -149,7 +151,7 @@ def validate_matrix_review_checklist(record: dict[str, Any], *, delta_only: bool
     return errors
 
 
-def validate_matrix_finding_discovery(
+def validate_revision_finding_discovery(
     record: dict[str, Any],
     findings: list[Any],
     manifest: dict[str, Any],
@@ -172,24 +174,24 @@ def validate_matrix_finding_discovery(
         evidence = finding.get("discovery_evidence")
         if status not in MATRIX_DISCOVERY_STATUSES:
             errors.append(
-                f"matrix re-review finding {index} discovery_status must be one of "
+                f"re-review finding {index} discovery_status must be one of "
                 f"{sorted(MATRIX_DISCOVERY_STATUSES)}"
             )
             continue
         if not isinstance(evidence, str) or not evidence.strip():
-            errors.append(f"matrix re-review finding {index} requires discovery_evidence")
+            errors.append(f"re-review finding {index} requires discovery_evidence")
         affected = set(finding.get("affected_items", [])) if isinstance(finding.get("affected_items"), list) else set()
         if status == "carried-forward":
             previous_id = finding.get("previous_finding_id")
             if previous_id not in previous_ids:
-                errors.append(f"matrix re-review finding {index} carried-forward status requires previous_finding_id")
+                errors.append(f"re-review finding {index} carried-forward status requires previous_finding_id")
         elif status == "introduced-by-revision" and not (affected & changed_items):
             errors.append(
-                f"matrix re-review finding {index} introduced-by-revision must affect a changed item"
+                f"re-review finding {index} introduced-by-revision must affect a changed item"
             )
         elif status == "semantic-input-change" and not semantic_inputs_changed:
             errors.append(
-                f"matrix re-review finding {index} semantic-input-change requires changed semantic inputs"
+                f"re-review finding {index} semantic-input-change requires changed semantic inputs"
             )
         elif status == "prior-review-omission":
             omission_found = True
@@ -414,6 +416,13 @@ def validate(
                                 errors.append("a full dispatch cannot be downgraded to delta review")
                             elif dispatched_mode == "delta" and review_mode not in {"delta", "full"}:
                                 errors.append("review_mode differs from controller dispatch")
+                        dispatched_round = dispatch.get("revision_cycle_round")
+                        dispatched_purpose = dispatch.get("revision_purpose")
+                        if dispatched_round is not None or dispatch.get("schema_version") == 3:
+                            if record.get("revision_cycle_round") != dispatched_round:
+                                errors.append("review revision_cycle_round differs from controller dispatch")
+                            if record.get("revision_purpose") != dispatched_purpose:
+                                errors.append("review revision_purpose differs from controller dispatch")
                         scope = dispatch_path.parent.name
                         try:
                             current_snapshot = review_snapshot(package_root, artifact, kind, scope)
@@ -448,8 +457,8 @@ def validate(
                                 manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
                             except (OSError, json.JSONDecodeError):
                                 manifest = None
-                            if kind == "matrix" and isinstance(manifest, dict) and isinstance(findings, list):
-                                errors.extend(validate_matrix_finding_discovery(record, findings, manifest))
+                            if isinstance(manifest, dict) and isinstance(findings, list):
+                                errors.extend(validate_revision_finding_discovery(record, findings, manifest))
                             if review_mode == "delta" and isinstance(manifest, dict) and isinstance(reviewed_items, list):
                                 if set(reviewed_items) != set(manifest.get("changed_items", [])):
                                     errors.append("delta reviewed_items must equal revision manifest changed_items")
@@ -472,6 +481,7 @@ def main() -> int:
     record, _load_errors = load_record(args.review_record)
     repair_stage = None
     review_quality_blocking = False
+    integrity_correction_allowed = False
     if not errors and args.kind == "tc" and record is not None and record.get("verdict") == "tc-changes-required":
         findings = record.get("findings")
         if isinstance(findings, list):
@@ -482,6 +492,15 @@ def main() -> int:
             repair_stage = matrix_repair_stage(findings)
     if not errors and args.kind == "matrix":
         review_quality_blocking = matrix_review_quality_blocking(record)
+    if (
+        not errors
+        and record is not None
+        and record.get("verdict") == f"{args.kind}-changes-required"
+        and record.get("revision_cycle_round") == 1
+    ):
+        package_root = find_package_root(args.artifact)
+        if package_root is not None:
+            integrity_correction_allowed = not introduced_correction_errors(package_root, record, args.kind)
     print(
         json.dumps(
             {
@@ -489,6 +508,7 @@ def main() -> int:
                 "errors": errors,
                 "repair_stage": repair_stage,
                 "review_quality_blocking": review_quality_blocking,
+                "integrity_correction_allowed": integrity_correction_allowed,
             },
             ensure_ascii=False,
         )

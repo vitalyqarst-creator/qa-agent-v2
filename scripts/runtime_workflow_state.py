@@ -18,6 +18,10 @@ except ModuleNotFoundError:  # Direct invocation
 
 
 MATRIX_STATUSES = {"review-pending", "changes-required", "accepted", "revision-exhausted"}
+DATA_STATUSES = {"not-started", "in-progress", "completed", "not-required", "blocked-data-preparation"}
+DATA_ROLE_OR_RELATION_RE = re.compile(
+    r"(?<![A-Za-z0-9_-])(?:TD|REL)-[A-Z0-9]+(?:-[A-Z0-9]+)*(?![A-Za-z0-9_-])"
+)
 STATE_ORDER = (
     "role",
     "scope",
@@ -202,6 +206,78 @@ def set_exhausted(matrix: Path, previous_review_path: Path, closure_path: Path) 
     return values
 
 
+def matrix_uses_materialized_data(matrix: Path) -> bool:
+    return DATA_ROLE_OR_RELATION_RE.search(matrix.read_text(encoding="utf-8")) is not None
+
+
+def start_data_stage(matrix: Path) -> dict[str, str]:
+    state_errors = validate_state(matrix)
+    if state_errors:
+        raise ValueError("invalid pre-data workflow state: " + "; ".join(state_errors))
+    package_root, state_path, values = state_context(matrix)
+    if values.get("matrix_status") != "accepted":
+        raise ValueError("test-data materialization requires the current matrix-accepted verdict")
+    values.pop("data_materialization", None)
+    values.pop("test_cases", None)
+    values["data_status"] = "in-progress"
+    values["test_case_status"] = "not-started"
+    write_state(state_path, values)
+    return values
+
+
+def complete_data_stage(matrix: Path, materialization: Path | None = None) -> dict[str, str]:
+    state_errors = validate_state(matrix)
+    if state_errors:
+        raise ValueError("invalid data-stage workflow state: " + "; ".join(state_errors))
+    package_root, state_path, values = state_context(matrix)
+    if values.get("matrix_status") != "accepted":
+        raise ValueError("test-data materialization requires the current matrix-accepted verdict")
+    if values.get("data_status") != "in-progress":
+        raise ValueError("data-complete requires data_status: in-progress")
+
+    expected = package_root / "work" / "test-data" / matrix.parent.name / "data-materialization.json"
+    if matrix_uses_materialized_data(matrix):
+        if materialization is None:
+            raise ValueError("matrix uses TD-*/REL-* and requires data-materialization.json")
+        if materialization.resolve() != expected.resolve():
+            raise ValueError(f"data materialization must be stored at {expected}")
+        data_plan = matrix.parent / "matrix-data-plan.md"
+        try:
+            from scripts.validate_runtime_test_data import validate as validate_test_data
+        except ModuleNotFoundError:  # Direct invocation
+            from validate_runtime_test_data import validate as validate_test_data
+        errors = validate_test_data(materialization.resolve(), matrix.resolve(), data_plan.resolve())
+        if errors:
+            raise ValueError("invalid data materialization: " + "; ".join(errors))
+        values["data_status"] = "completed"
+        values["data_materialization"] = package_relative(materialization, package_root)
+    else:
+        if materialization is not None:
+            raise ValueError("matrix has no TD-*/REL-*; materialization must not be supplied")
+        if expected.exists():
+            raise ValueError("matrix has no TD-*/REL-*; remove the unnecessary data-materialization.json")
+        values["data_status"] = "not-required"
+        values.pop("data_materialization", None)
+    write_state(state_path, values)
+    return values
+
+
+def block_data_stage(matrix: Path) -> dict[str, str]:
+    state_errors = validate_state(matrix)
+    if state_errors:
+        raise ValueError("invalid data-stage workflow state: " + "; ".join(state_errors))
+    _package_root, state_path, values = state_context(matrix)
+    if values.get("matrix_status") != "accepted":
+        raise ValueError("test-data materialization requires the current matrix-accepted verdict")
+    if values.get("data_status") != "in-progress":
+        raise ValueError("data-blocked requires data_status: in-progress")
+    values["data_status"] = "blocked-data-preparation"
+    values.pop("data_materialization", None)
+    values["test_case_status"] = "not-started"
+    write_state(state_path, values)
+    return values
+
+
 def validate_state(matrix: Path) -> list[str]:
     errors: list[str] = []
     try:
@@ -226,6 +302,36 @@ def validate_state(matrix: Path) -> list[str]:
         errors.append("matrix_data_plan does not reference the writer-owned plan")
     if not expected_plan.is_file():
         errors.append("writer-owned matrix data plan is missing")
+    data_status = values.get("data_status")
+    if data_status not in DATA_STATUSES:
+        errors.append(f"unsupported data_status {data_status!r}")
+    data_value = values.get("data_materialization")
+    uses_data = matrix_uses_materialized_data(matrix)
+    expected_materialization = package_root / "work" / "test-data" / matrix.parent.name / "data-materialization.json"
+    if status != "accepted" and data_status != "not-started":
+        errors.append("data stage may start only after matrix-accepted")
+    if data_status == "completed":
+        if not uses_data:
+            errors.append("data_status completed is invalid for a matrix without TD-*/REL-*")
+        if data_value != package_relative(expected_materialization, package_root):
+            errors.append("data_materialization does not reference the scope materialization")
+        elif not expected_materialization.is_file():
+            errors.append("data materialization path is missing")
+        else:
+            try:
+                from scripts.validate_runtime_test_data import validate as validate_test_data
+            except ModuleNotFoundError:  # Direct invocation
+                from validate_runtime_test_data import validate as validate_test_data
+            errors.extend(validate_test_data(expected_materialization, matrix, expected_plan))
+    elif data_status == "not-required":
+        if uses_data:
+            errors.append("matrix uses TD-*/REL-* and cannot have data_status not-required")
+        if data_value:
+            errors.append("data_status not-required must not reference data_materialization")
+        if expected_materialization.exists():
+            errors.append("unnecessary data-materialization.json exists for a matrix without TD-*/REL-*")
+    elif data_value:
+        errors.append(f"data_status {data_status} must not reference data_materialization")
     if status in {"accepted", "changes-required"}:
         review_value = values.get("matrix_review", "")
         review_path = package_root / review_value
@@ -278,6 +384,13 @@ def main() -> int:
     exhausted.add_argument("--matrix", type=Path, required=True)
     exhausted.add_argument("--previous-review", type=Path, required=True)
     exhausted.add_argument("--closure", type=Path, required=True)
+    data_start = subparsers.add_parser("data-start")
+    data_start.add_argument("--matrix", type=Path, required=True)
+    data_complete = subparsers.add_parser("data-complete")
+    data_complete.add_argument("--matrix", type=Path, required=True)
+    data_complete.add_argument("--materialization", type=Path)
+    data_blocked = subparsers.add_parser("data-blocked")
+    data_blocked.add_argument("--matrix", type=Path, required=True)
     validate_parser = subparsers.add_parser("validate")
     validate_parser.add_argument("--matrix", type=Path, required=True)
     args = parser.parse_args()
@@ -290,6 +403,15 @@ def main() -> int:
             payload = set_exhausted(
                 args.matrix.resolve(), args.previous_review.resolve(), args.closure.resolve()
             )
+        elif args.command == "data-start":
+            payload = start_data_stage(args.matrix.resolve())
+        elif args.command == "data-complete":
+            payload = complete_data_stage(
+                args.matrix.resolve(),
+                args.materialization.resolve() if args.materialization is not None else None,
+            )
+        elif args.command == "data-blocked":
+            payload = block_data_stage(args.matrix.resolve())
         else:
             errors = validate_state(args.matrix.resolve())
             print(json.dumps({"valid": not errors, "errors": errors}, ensure_ascii=False))

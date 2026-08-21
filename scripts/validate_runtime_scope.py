@@ -579,7 +579,7 @@ def public_contract(scope: str | None = None, package_root: Path | None = None) 
         "incoming_actions": markdown_table_template(
             ("Источник", "Входящее действие", "Решение", "Связанные обязанности или область"),
             (
-                f"Таблица 1, строка первого столбца «Добавить»; AS.1",
+                "Таблица 1, строка первого столбца «Добавить»; AS.1",
                 "Нажатие «Добавить»",
                 "Включено",
                 f"SR-{scope_digits}001",

@@ -18,8 +18,14 @@ from scripts.create_ft_package import PACKAGE_DIRS, create_package
 from scripts.normalize_ft_source import normalize_docx
 from scripts.render_runtime_pdf import parse_pages, render_pdf
 from scripts.runtime_fixture_candidates import fixture_candidates
-from scripts.runtime_review_dispatch import create_dispatch, sha256, validate_dispatch
-from scripts.runtime_review_delta import artifact_index, enrich_review_record, semantic_input_hashes, write_revision_manifest
+from scripts.runtime_review_dispatch import create_dispatch, prepare_review_package, sha256, validate_dispatch
+from scripts.runtime_review_delta import (
+    artifact_index,
+    enrich_review_record,
+    introduced_correction_errors,
+    semantic_input_hashes,
+    write_revision_manifest,
+)
 from scripts.runtime_session_registry import (
     acknowledge_runtime,
     canonical_scope,
@@ -32,7 +38,14 @@ from scripts.runtime_session_registry import (
     validate_topology,
 )
 from scripts.runtime_traceability import diagnose_markdown_table, extract_anchors, find_markdown_table
-from scripts.runtime_workflow_state import apply_review, set_pending, validate_state
+from scripts.runtime_workflow_state import (
+    apply_review,
+    block_data_stage,
+    complete_data_stage,
+    set_pending,
+    start_data_stage,
+    validate_state,
+)
 from scripts.validate_fixture_catalog import validate as validate_catalog
 from scripts.validate_runtime_matrix import (
     DATA_RELATION_RE as MATRIX_DATA_RELATION_RE,
@@ -117,7 +130,7 @@ VALID_MATRIX = """# Матрица
 
 | ID | Источник требования | Проверка | Профили тест-дизайна | Элемент покрытия | Предусловие/исходное состояние | Тестовые данные и отношения | Ожидаемый результат | Решение | Готовность |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| M-001 | SR-001; AS.38; Таблица 7, строка «Сохранить» | Сохранить карточку | базовый, жизненный-цикл-создания | Сохранение валидной карточки | Открыта форма добавления | `Наименование` = `ПАО СБЕРБАНК` | Карточка сохранена | TC | ready |
+| M-001 | SR-001; AS.38; Таблица 7, строка «Сохранить» | Сохранить карточку | базовый | Сохранение валидной карточки | Открыта форма добавления | `Наименование` = `ПАО СБЕРБАНК` | Карточка сохранена | TC | ready |
 | GAP-001 | SR-002; AS.39 | Проверить неизвестную реакцию | допустимые-классы | GAP-001 | Открыта форма | Не определены | Требуется уточнение результата | coverage-gap | blocked-observability |
 """
 
@@ -945,6 +958,20 @@ class RuntimeContractTests(unittest.TestCase):
                 acknowledge_runtime(root, CONTROLLER_THREAD)
                 self.assertEqual([], validate_controller(root, CONTROLLER_THREAD))
 
+    def test_controller_may_acknowledge_runtime_only_before_semantic_work(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            with patch("scripts.runtime_session_registry.runtime_code_commit", return_value="a" * 40):
+                initialize_registry(root, CONTROLLER_THREAD, "local")
+            with patch("scripts.runtime_session_registry.runtime_code_commit", return_value="b" * 40):
+                acknowledge_runtime(root, CONTROLLER_THREAD)
+                payload = json.loads(
+                    (root / "work" / "runtime-session-registry.json").read_text(encoding="utf-8")
+                )
+                self.assertEqual("b" * 40, payload["runtime"]["code_commit"])
+                self.assertEqual("b" * 40, payload["controller"]["runtime_commit"])
+                self.assertEqual([], validate_controller(root, CONTROLLER_THREAD))
+
     def test_writer_session_cannot_be_shared_between_scopes(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
             root = Path(temporary_directory)
@@ -967,35 +994,16 @@ class RuntimeContractTests(unittest.TestCase):
             second = record_role(root, "writer", WRITER_THREAD, "local", "9.3.1-partners")
             self.assertEqual(first, second)
 
-    def test_stale_semantic_role_requires_a_fresh_session_after_runtime_update(self) -> None:
-        fresh_writer = "00000000-0000-4000-8000-000000000005"
+    def test_active_run_rejects_runtime_update(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
             root = Path(temporary_directory)
             with patch("scripts.runtime_session_registry.runtime_code_commit", return_value="a" * 40):
                 create_session_topology(root, "9.3.1-partners")
             with patch("scripts.runtime_session_registry.runtime_code_commit", return_value="b" * 40):
-                acknowledge_runtime(root, CONTROLLER_THREAD)
-                errors = validate_topology(
-                    root,
-                    "writer",
-                    "9.3.1-partners",
-                    "writer",
-                    WRITER_THREAD,
-                )
-                self.assertTrue(any("fresh top-level session" in error for error in errors))
-                with self.assertRaisesRegex(ValueError, "fresh top-level session"):
-                    record_role(root, "writer", WRITER_THREAD, "local", "9.3.1-partners")
-                record_role(root, "writer", fresh_writer, "local", "9.3.1-partners")
-                self.assertEqual(
-                    [],
-                    validate_topology(
-                        root,
-                        "writer",
-                        "9.3.1-partners",
-                        "writer",
-                        fresh_writer,
-                    ),
-                )
+                with self.assertRaisesRegex(ValueError, "runtime is frozen"):
+                    acknowledge_runtime(root, CONTROLLER_THREAD)
+                errors = validate_controller(root, CONTROLLER_THREAD)
+                self.assertTrue(any("new clean practical run" in error for error in errors))
 
     def test_matrix_and_tc_reviewers_cannot_share_a_session(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
@@ -1869,7 +1877,7 @@ residual_missing: none
 
     def test_role_based_matrix_projection_requires_explicit_login(self) -> None:
         role_matrix = VALID_MATRIX.replace(
-            "базовый, жизненный-цикл-создания",
+            "базовый",
             "базовый, ролевой-доступ",
         )
         errors = validate_tc_projection(VALID_TC, role_matrix)
@@ -1951,8 +1959,8 @@ residual_missing: none
 
     def test_hover_revealed_control_requires_hover_before_every_click(self) -> None:
         hover_matrix = VALID_MATRIX.replace(
-            "Сохранить карточку | базовый, жизненный-цикл-создания",
-            "Навести курсор на карточку | базовый, жизненный-цикл-создания",
+            "Сохранить карточку | базовый",
+            "Навести курсор на карточку | базовый",
         ).replace(
             "Карточка сохранена | TC",
             "Доступна кнопка «Редактировать» | TC",
@@ -2104,7 +2112,7 @@ residual_missing: none
 
     def test_runtime_matrix_requires_profiles_and_valid_decisions(self) -> None:
         self.assertEqual([], validate_matrix(VALID_MATRIX))
-        invalid = VALID_MATRIX.replace("базовый, жизненный-цикл-создания", "")
+        invalid = VALID_MATRIX.replace("| базовый |", "|  |", 1)
         self.assertTrue(any("no test-design profile" in error for error in validate_matrix(invalid)))
 
     def test_matrix_rejects_internal_fixture_ids_in_user_facing_data(self) -> None:
@@ -2114,23 +2122,9 @@ residual_missing: none
         )
         self.assertTrue(any("internal fixture IDs" in error for error in validate_matrix(invalid)))
 
-    def test_matrix_requires_clean_second_creation_form_after_successful_ui_creation(self) -> None:
-        without_clean_form = VALID_MATRIX.replace(
-            "Сохранить карточку",
-            "Создать карточку",
-        ).replace(
-            "Карточка сохранена",
-            "Карточка создана",
-        )
-        self.assertTrue(any("second same-type object" in error for error in validate_matrix(without_clean_form)))
-        without_lifecycle_profile = without_clean_form.replace(
-            "базовый, жизненный-цикл-создания",
-            "базовый",
-        )
-        self.assertTrue(
-            any("second same-type object" in error for error in validate_matrix(without_lifecycle_profile))
-        )
-
+    def test_matrix_requires_explicit_creation_lifecycle_contract(self) -> None:
+        lifecycle_matrix = VALID_MATRIX.replace("| базовый |", "| базовый, жизненный-цикл-создания |", 1)
+        self.assertTrue(any("creation lifecycle control table" in error for error in validate_matrix(lifecycle_matrix)))
         clean_row = (
             "| M-002 | SR-001; AS.38; Таблица 7, строка «Сохранить» | После успешного создания "
             "повторно открыть форму нового партнёра | жизненный-цикл-создания | Повторное открытие "
@@ -2138,8 +2132,24 @@ residual_missing: none
             "формы не предзаполнены значениями предыдущего партнёра; отображаются только source-backed "
             "defaults | TC | candidate-ui-calibration |"
         )
-        with_clean_form = without_clean_form.replace("| GAP-001", f"{clean_row}\n| GAP-001")
-        self.assertEqual([], validate_matrix(with_clean_form))
+        control = """
+
+## Контроль жизненного цикла создания
+
+| Аспект | Решение | Связанные строки | Основание |
+| --- | --- | --- | --- |
+| Уникальность успешного создания | покрыто | M-001 | SR-001; успешное создание использует изолированные данные. |
+| Отмена или закрытие без сохранения | не применимо | — | Не применимо: источник не задаёт действие отмены. |
+| Повторное открытие чистой формы | покрыто | M-002 | SR-001; отдельная проверка остаточного состояния формы. |
+"""
+        complete = lifecycle_matrix.replace("| GAP-001", f"{clean_row}\n| GAP-001") + control
+        self.assertEqual([], validate_matrix(complete))
+
+        missing_aspect = complete.replace(
+            "| Отмена или закрытие без сохранения | не применимо | — | Не применимо: источник не задаёт действие отмены. |\n",
+            "",
+        )
+        self.assertTrue(any("missing aspects" in error for error in validate_matrix(missing_aspect)))
 
     def test_tc_rejects_passive_ui_actions_in_preconditions(self) -> None:
         passive = VALID_TC.replace(
@@ -2205,7 +2215,7 @@ residual_missing: none
         self.assertTrue(any("уникальность-и-дубли" in error for error in errors))
 
         profiled = VALID_MATRIX.replace(
-            "базовый, жизненный-цикл-создания",
+            "базовый",
             "базовый, уникальность-и-дубли",
         )
         self.assertTrue(
@@ -2232,7 +2242,7 @@ residual_missing: none
 
     def test_formal_profiles_require_coverage_model_and_exact_projection(self) -> None:
         formal = VALID_MATRIX.replace(
-            "базовый, жизненный-цикл-создания | Сохранение валидной карточки",
+            "базовый | Сохранение валидной карточки",
             "допустимые-классы, границы | EP-01; BVA-LOW; BVA-BOUND; BVA-ABOVE",
         )
         self.assertTrue(any("coverage model" in error for error in validate_matrix(formal)))
@@ -2296,7 +2306,7 @@ residual_missing: none
         for profile, item in replacements.items():
             with self.subTest(profile=profile):
                 invalid = VALID_MATRIX.replace(
-                    "базовый, жизненный-цикл-создания | Сохранение валидной карточки",
+                    "базовый | Сохранение валидной карточки",
                     f"{profile} | Сохранение валидной карточки",
                 )
                 errors = validate_matrix(invalid)
@@ -2304,7 +2314,7 @@ residual_missing: none
 
     def test_dependent_mandatory_outputs_form_one_save_oracle(self) -> None:
         grouped = VALID_MATRIX.replace(
-            "| M-001 | SR-001; AS.38; Таблица 7, строка «Сохранить» | Сохранить карточку | базовый, жизненный-цикл-создания | Сохранение валидной карточки | Открыта форма добавления | `Наименование` = `ПАО СБЕРБАНК` | Карточка сохранена | TC | ready |",
+            "| M-001 | SR-001; AS.38; Таблица 7, строка «Сохранить» | Сохранить карточку | базовый | Сохранение валидной карточки | Открыта форма добавления | `Наименование` = `ПАО СБЕРБАНК` | Карточка сохранена | TC | ready |",
             "| M-001 | SR-001; SR-003; AS.38; Таблица 7, строка «Сохранить» | Нажать «Сохранить» при незаполненной зависимой группе | зависимая-обязательность | Общий отказ сохранения | Открыта форма добавления | TD-CHOICE-A; REL-FILLS-OUTPUTS | Карточка не сохраняется | TC | needs-test-data |",
         )
         self.assertEqual([], validate_matrix(grouped))
@@ -2395,6 +2405,59 @@ residual_missing: none
             self.assertNotIn("data_materialization", state)
             self.assertNotIn("test_cases", state)
 
+    def test_explicit_data_stage_marks_no_role_matrix_as_not_required(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            package = Path(temporary_directory) / "FT"
+            package.mkdir()
+            (package / "AGENT-NOTES.md").write_text("# Notes\n", encoding="utf-8")
+            matrix = package / "work" / "practical" / "9.3.1" / "test-design-matrix.md"
+            matrix.parent.mkdir(parents=True)
+            matrix.write_text(VALID_MATRIX, encoding="utf-8")
+            (matrix.parent / "matrix-data-plan.md").write_text(
+                "# План данных\n\nМатериализация не требуется.\n",
+                encoding="utf-8",
+            )
+            set_pending(matrix)
+            review = create_accepted_matrix_review(package, matrix, "9.3.1")
+            apply_review(matrix, review)
+
+            self.assertEqual("in-progress", start_data_stage(matrix)["data_status"])
+            state = complete_data_stage(matrix)
+            self.assertEqual("not-required", state["data_status"])
+            self.assertNotIn("data_materialization", state)
+            self.assertEqual([], validate_state(matrix))
+
+    def test_explicit_data_stage_blocks_tc_when_required_values_are_unavailable(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            package = Path(temporary_directory) / "FT"
+            package.mkdir()
+            (package / "AGENT-NOTES.md").write_text("# Notes\n", encoding="utf-8")
+            matrix = package / "work" / "practical" / "9.3.2" / "test-design-matrix.md"
+            matrix.parent.mkdir(parents=True)
+            matrix.write_text(
+                VALID_MATRIX.replace(
+                    "`Наименование` = `ПАО СБЕРБАНК`",
+                    "TD-PARTNER-A: `Наименование` = `ПАО СБЕРБАНК`",
+                    1,
+                ),
+                encoding="utf-8",
+            )
+            (matrix.parent / "matrix-data-plan.md").write_text(
+                "# План данных\n\nTD-PARTNER-A должен быть получен из разрешённого источника.\n",
+                encoding="utf-8",
+            )
+            set_pending(matrix)
+            review = create_accepted_matrix_review(package, matrix, "9.3.2")
+            apply_review(matrix, review)
+            start_data_stage(matrix)
+
+            with self.assertRaisesRegex(ValueError, "requires data-materialization.json"):
+                complete_data_stage(matrix)
+            state = block_data_stage(matrix)
+            self.assertEqual("blocked-data-preparation", state["data_status"])
+            self.assertEqual("not-started", state["test_case_status"])
+            self.assertEqual([], validate_state(matrix))
+
     def test_matrix_separates_coverage_from_execution_readiness(self) -> None:
         needs_data = VALID_MATRIX.replace("| TC | ready |", "| TC | needs-test-data |", 1)
         self.assertEqual([], validate_matrix(needs_data))
@@ -2468,6 +2531,7 @@ residual_missing: none
                 'test_design_matrix: "work/practical/9.3.1/test-design-matrix.md"\n'
                 f'matrix_sha256: "{hashlib.sha256(matrix.read_bytes()).hexdigest()}"\n'
                 'matrix_data_plan: "work/practical/9.3.1/matrix-data-plan.md"\n'
+                "data_status: not-started\n"
                 "test_case_status: not-started\n",
                 encoding="utf-8",
             )
@@ -2599,8 +2663,8 @@ residual_missing: none
 
     def test_prefill_projection_requires_explicit_field_value_oracle(self) -> None:
         matrix = VALID_MATRIX.replace(
-            "Сохранить карточку | базовый, жизненный-цикл-создания | Сохранение валидной карточки",
-            "Открыть предзаполненную форму | базовый, жизненный-цикл-создания | Предзаполнение формы",
+            "Сохранить карточку | базовый | Сохранение валидной карточки",
+            "Открыть предзаполненную форму | базовый | Предзаполнение формы",
         ).replace(
             "Карточка сохранена | TC | ready |",
             "Поля «Наименование» и «ИНН» предзаполнены | TC | ready |",
@@ -4453,6 +4517,169 @@ residual_missing: none
                 any("must equal revision manifest changed_items" in error for error in validate_review(artifact, review_path, "tc"))
             )
 
+    def test_revision_cycle_allows_only_one_narrow_introduced_defect_correction(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            source = root / "source"
+            source.mkdir()
+            (source / "requirements.xhtml").write_text("<p>Требование</p>", encoding="utf-8")
+            artifact = root / "test-cases.md"
+            original = "# Набор\n\n## TC-001\n\nПервый результат.\n\n## TC-002\n\nВторой результат.\n"
+            artifact.write_text(original, encoding="utf-8")
+            create_session_topology(root, "reviews")
+            record_role(root, "matrix-reviewer", MATRIX_REVIEWER_THREAD, "local", "reviews")
+            reviewer_thread = "22345678-1234-1234-1234-123456789abc"
+            prompt = root / "tc-review-prompt.md"
+            prompt.write_text("Проведи независимое review тест-кейсов.\n", encoding="utf-8")
+            review_dir = root / "reviews"
+
+            first_dispatch = create_dispatch(
+                root,
+                artifact,
+                prompt,
+                review_dir,
+                "tc",
+                reviewer_thread,
+                "local",
+                "2026-08-17T00:00:00Z",
+            )
+            first_record = {
+                "schema_version": 1,
+                "review_kind": "tc",
+                "artifact_path": "test-cases.md",
+                "artifact_sha256": sha256(artifact),
+                "dispatch_path": first_dispatch.relative_to(root).as_posix(),
+                "dispatch_sha256": sha256(first_dispatch),
+                "reviewer_session_type": "codex-thread",
+                "reviewer_session_id": reviewer_thread,
+                "reviewed_at": "2026-08-17T00:01:00Z",
+                "verdict": "tc-changes-required",
+                "findings": [
+                    {
+                        "id": "TC-R-001",
+                        "severity": "material",
+                        "affected_items": ["TC-001"],
+                        "origin_stage": "tc",
+                        "description": "Ожидаемый результат неточен.",
+                        "required_correction": "Уточнить ожидаемый результат.",
+                    }
+                ],
+                "total_tc_count": 2,
+                "reviewed_tc_count": 2,
+                "reviewed_items": ["TC-001", "TC-002"],
+                "review_scope_complete": True,
+            }
+            review_path = review_dir / "tc-review.json"
+            review_path.write_text(json.dumps(first_record, ensure_ascii=False), encoding="utf-8")
+            review_path.with_suffix(".md").write_text("# Review\n\nПроверено TC: 2/2\n", encoding="utf-8")
+            enrich_review_record(root, artifact, review_path, "tc", "reviews")
+            self.assertEqual([], validate_review(artifact, review_path, "tc"))
+
+            artifact.write_text(
+                original.replace("Первый результат.", "Первый уточнённый результат."),
+                encoding="utf-8",
+            )
+            second_dispatch = create_dispatch(
+                root,
+                artifact,
+                prompt,
+                review_dir,
+                "tc",
+                reviewer_thread,
+                "local",
+                "2026-08-17T00:02:00Z",
+                previous_review=review_path,
+            )
+            second_record = {
+                "schema_version": 1,
+                "review_kind": "tc",
+                "artifact_path": "test-cases.md",
+                "artifact_sha256": sha256(artifact),
+                "dispatch_path": second_dispatch.relative_to(root).as_posix(),
+                "dispatch_sha256": sha256(second_dispatch),
+                "reviewer_session_type": "codex-thread",
+                "reviewer_session_id": reviewer_thread,
+                "reviewed_at": "2026-08-17T00:03:00Z",
+                "verdict": "tc-changes-required",
+                "findings": [
+                    {
+                        "id": "TC-R-002",
+                        "severity": "material",
+                        "affected_items": ["TC-001"],
+                        "origin_stage": "tc",
+                        "description": "В исправлении появился новый дефект.",
+                        "required_correction": "Исправить только новый дефект TC-001.",
+                        "discovery_status": "introduced-by-revision",
+                        "discovery_evidence": "Дефект отсутствовал до первой revision и находится в changed item TC-001.",
+                    }
+                ],
+                "total_tc_count": 2,
+                "reviewed_tc_count": 1,
+                "reviewed_items": ["TC-001"],
+                "review_scope_complete": True,
+                "review_quality_status": "complete",
+            }
+            review_path.write_text(json.dumps(second_record, ensure_ascii=False), encoding="utf-8")
+            review_path.with_suffix(".md").write_text(
+                "# Review\n\nПроверено изменённых TC: 1/2\n",
+                encoding="utf-8",
+            )
+            enrich_review_record(root, artifact, review_path, "tc", "reviews")
+            self.assertEqual([], validate_review(artifact, review_path, "tc"))
+            enriched_second = json.loads(review_path.read_text(encoding="utf-8"))
+            self.assertEqual([], introduced_correction_errors(root, enriched_second, "tc"))
+            invalid_discovery = json.loads(json.dumps(enriched_second))
+            invalid_discovery["findings"][0]["discovery_status"] = "prior-review-omission"
+            self.assertTrue(introduced_correction_errors(root, invalid_discovery, "tc"))
+
+            artifact.write_text(
+                artifact.read_text(encoding="utf-8").replace(
+                    "Первый уточнённый результат.",
+                    "Первый окончательный результат.",
+                ),
+                encoding="utf-8",
+            )
+            third_dispatch = create_dispatch(
+                root,
+                artifact,
+                prompt,
+                review_dir,
+                "tc",
+                reviewer_thread,
+                "local",
+                "2026-08-17T00:04:00Z",
+                previous_review=review_path,
+            )
+            third_dispatch_payload = json.loads(third_dispatch.read_text(encoding="utf-8"))
+            self.assertEqual(2, third_dispatch_payload["revision_cycle_round"])
+            self.assertEqual("introduced-defect-correction", third_dispatch_payload["revision_purpose"])
+
+            third_record = {
+                **second_record,
+                "artifact_sha256": sha256(artifact),
+                "dispatch_path": third_dispatch.relative_to(root).as_posix(),
+                "dispatch_sha256": sha256(third_dispatch),
+                "reviewed_at": "2026-08-17T00:05:00Z",
+            }
+            review_path.write_text(json.dumps(third_record, ensure_ascii=False), encoding="utf-8")
+            enrich_review_record(root, artifact, review_path, "tc", "reviews")
+            artifact.write_text(
+                artifact.read_text(encoding="utf-8").replace("окончательный", "ещё один"),
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(ValueError, "invalid or exhausted revision_cycle_round"):
+                create_dispatch(
+                    root,
+                    artifact,
+                    prompt,
+                    review_dir,
+                    "tc",
+                    reviewer_thread,
+                    "local",
+                    "2026-08-17T00:06:00Z",
+                    previous_review=review_path,
+                )
+
     def test_schema_v2_matrix_revision_completes_delta_rereview(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
             root = Path(temporary_directory)
@@ -4828,22 +5055,20 @@ residual_missing: none
             )
             set_pending(matrix)
             with patch("scripts.runtime_session_registry.runtime_code_commit", return_value="a" * 40):
-                review_path = create_accepted_matrix_review(package, matrix, "9.3.1")
+                create_accepted_matrix_review(package, matrix, "9.3.1")
             prompt = package / "matrix-review-prompt.md"
             with patch("scripts.runtime_session_registry.runtime_code_commit", return_value="b" * 40):
-                create_dispatch(
-                    package,
-                    matrix,
-                    prompt,
-                    package / "work" / "reviews" / "9.3.1",
-                    "matrix",
-                    "32345678-1234-1234-1234-123456789abc",
-                    "local",
-                    "2026-08-17T00:02:00Z",
-                )
-
-                with self.assertRaisesRegex(ValueError, "runtime code commit changed"):
-                    apply_review(matrix, review_path)
+                with self.assertRaisesRegex(ValueError, "new clean practical run"):
+                    create_dispatch(
+                        package,
+                        matrix,
+                        prompt,
+                        package / "work" / "reviews" / "9.3.1",
+                        "matrix",
+                        "32345678-1234-1234-1234-123456789abc",
+                        "local",
+                        "2026-08-17T00:02:00Z",
+                    )
 
     def test_subagent_cannot_be_recorded_as_independent_reviewer(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
@@ -4879,6 +5104,73 @@ residual_missing: none
             self.assertEqual([], validate_dispatch(root, artifact, prompt, dispatch_path, "matrix", "12345678-1234-1234-1234-123456789abc"))
             prompt.write_text("Изменённый prompt.\n", encoding="utf-8")
             self.assertTrue(any("prompt SHA-256 mismatch" in error for error in validate_dispatch(root, artifact, prompt, dispatch_path, "matrix")))
+
+    def test_prepare_review_package_is_scope_bounded_and_self_consistent(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            source = root / "source"
+            source.mkdir()
+            (source / "requirements.xhtml").write_text("<p>Требование scope 9.3.2</p>", encoding="utf-8")
+            support = root / "support"
+            support.mkdir()
+            relevant = support / "relevant.md"
+            unrelated = support / "unrelated.md"
+            relevant.write_text("# Ответ БА для 9.3.2\n", encoding="utf-8")
+            unrelated.write_text("# Другой scope\n", encoding="utf-8")
+            (root / "AGENT-NOTES.md").write_text(
+                "# Notes\n\nДля scope используется `support/relevant.md`.\n",
+                encoding="utf-8",
+            )
+            artifact = root / "work" / "practical" / "9.3.2" / "test-design-matrix.md"
+            artifact.parent.mkdir(parents=True)
+            artifact.write_text(VALID_MATRIX, encoding="utf-8")
+            create_session_topology(root, "9.3.2")
+            review_dir = root / "work" / "reviews" / "9.3.2"
+
+            outputs = prepare_review_package(
+                root,
+                artifact,
+                review_dir,
+                "matrix",
+                MATRIX_REVIEWER_THREAD,
+                "local",
+                "2026-08-17T00:00:00Z",
+            )
+            inputs_path = Path(outputs["review_inputs"])
+            dispatch_path = Path(outputs["dispatch"])
+            prompt_path = Path(outputs["review_prompt"])
+            scaffold_path = Path(outputs["review_scaffold"])
+            inputs = json.loads(inputs_path.read_text(encoding="utf-8"))
+            dispatch = json.loads(dispatch_path.read_text(encoding="utf-8"))
+            scaffold = json.loads(scaffold_path.read_text(encoding="utf-8"))
+
+            self.assertEqual(3, dispatch["schema_version"])
+            self.assertIn("support/relevant.md", inputs["semantic_input_hashes"])
+            self.assertNotIn("support/unrelated.md", inputs["semantic_input_hashes"])
+            self.assertEqual("initial-review", scaffold["revision_purpose"])
+            self.assertEqual(
+                [],
+                validate_dispatch(
+                    root,
+                    artifact,
+                    prompt_path,
+                    dispatch_path,
+                    "matrix",
+                    MATRIX_REVIEWER_THREAD,
+                ),
+            )
+            self.assertEqual(
+                outputs,
+                prepare_review_package(
+                    root,
+                    artifact,
+                    review_dir,
+                    "matrix",
+                    MATRIX_REVIEWER_THREAD,
+                    "local",
+                    "2026-08-17T00:00:00Z",
+                ),
+            )
 
     def test_review_record_rejects_thread_id_not_owned_by_dispatch(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:

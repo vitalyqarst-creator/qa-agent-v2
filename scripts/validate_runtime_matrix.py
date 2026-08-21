@@ -77,20 +77,6 @@ INTERNAL_FIXTURE_ID_RE = re.compile(
     r"(?<![A-Za-z0-9_-])(?:FX|FIX)-[A-Z0-9]+(?:-[A-Z0-9]+)*(?![A-Za-z0-9_-])",
     re.IGNORECASE,
 )
-SUCCESSFUL_UI_CREATION_RE = re.compile(
-    r"(?:\b(?:создать|добавить|создание|добавление)\b.{0,100}\b(?:форм|карточк|объект|запис|сущност|партн[её]р|реквизит)\w*\b|"
-    r"\b(?:форм|карточк|объект|запис|сущност|партн[её]р|реквизит)\w*\b.{0,100}\b(?:создан(?:а|о|ы)?|добавлен(?:а|о|ы)?)\b)",
-    re.IGNORECASE,
-)
-CLEAN_NEW_FORM_RE = re.compile(
-    r"(?:повторн\w*\s+откры\w*\s+форм\w*|инициир\w*\s+создан\w*\s+(?:втор|ещ[её])\w*|"
-    r"откры\w*\s+форм\w*\s+(?:создан\w*|добавлен\w*)\s+нов\w*\s+(?:объект|запис|сущност|партн[её]р|реквизит)\w*)",
-    re.IGNORECASE,
-)
-NO_INHERITANCE_ORACLE_RE = re.compile(
-    r"(?:не\s+(?:предзаполн|наслед)\w*|пуст\w*|только\s+[^|\n.]{0,80}(?:исходн|source-backed)\w*\s+(?:значен|default)\w*)",
-    re.IGNORECASE,
-)
 DYNAMIC_OUTPUT_RE = re.compile(
     r"\b(?:системн\w*\s+(?:id|идентификатор\w*|номер\w*|timestamp|sequence)|"
     r"(?:id|идентификатор\w*|номер\w*|timestamp|sequence)\s+текущ\w*\s+прогон\w*|"
@@ -188,6 +174,19 @@ UNIQUENESS_CONTROL_HEADERS = (
     "Тот же ключ, другое неключевое поле",
     "Основание или исключение",
 )
+CREATION_LIFECYCLE_CONTROL_HEADERS = (
+    "Аспект",
+    "Решение",
+    "Связанные строки",
+    "Основание",
+)
+CREATION_LIFECYCLE_ASPECTS = {
+    "Уникальность успешного создания",
+    "Отмена или закрытие без сохранения",
+    "Повторное открытие чистой формы",
+}
+CREATION_LIFECYCLE_DECISIONS = {"покрыто", "coverage-gap", "не применимо"}
+MATRIX_OR_GAP_ID_RE = re.compile(r"(?<![A-Za-z0-9_.-])(?:M|GAP)-[A-Za-z0-9.-]+(?![A-Za-z0-9_.-])")
 MATRIX_ID_FULL_RE = re.compile(r"M-[A-Za-z0-9.-]+")
 NOT_APPLICABLE_RE = re.compile(r"^Не применимо:\s+\S", re.IGNORECASE)
 SAVE_ACTION_RE = re.compile(r"\bсохран", re.IGNORECASE)
@@ -372,6 +371,85 @@ def validate_uniqueness_control(
     return errors
 
 
+def validate_creation_lifecycle_control(
+    content: str,
+    header: list[str],
+    rows: list[list[str]],
+) -> list[str]:
+    """Validate the explicit lifecycle contract without inferring semantics from prose."""
+
+    profile_index = header.index("Профили тест-дизайна")
+    id_index = header.index("ID")
+    decision_index = header.index("Решение")
+    lifecycle_rows = {
+        row[id_index]: row[decision_index]
+        for row in rows
+        if "жизненный-цикл-создания" in {
+            item.strip() for item in re.split(r"[,;]", row[profile_index]) if item.strip()
+        }
+    }
+    table = find_markdown_table(content, CREATION_LIFECYCLE_CONTROL_HEADERS)
+    if not lifecycle_rows:
+        return ["creation lifecycle control table is present without lifecycle-profile matrix rows"] if table else []
+    if table is None or not table.rows:
+        return ["lifecycle profile requires a non-empty creation lifecycle control table"]
+
+    errors: list[str] = []
+    seen_aspects: set[str] = set()
+    referenced: set[str] = set()
+    for row_number, row in enumerate(table.rows, start=1):
+        aspect = row[table.index("Аспект")].strip()
+        decision = row[table.index("Решение")].strip().casefold()
+        links_text = row[table.index("Связанные строки")].strip()
+        basis = row[table.index("Основание")].strip()
+        if aspect not in CREATION_LIFECYCLE_ASPECTS:
+            errors.append(f"creation lifecycle row {row_number}: unsupported aspect {aspect!r}")
+            continue
+        if aspect in seen_aspects:
+            errors.append(f"creation lifecycle row {row_number}: duplicate aspect {aspect!r}")
+        seen_aspects.add(aspect)
+        if decision not in CREATION_LIFECYCLE_DECISIONS:
+            errors.append(
+                f"creation lifecycle row {row_number}: decision must be покрыто, coverage-gap or не применимо"
+            )
+            continue
+        if not basis or EMPTY_RE.fullmatch(basis):
+            errors.append(f"creation lifecycle row {row_number}: basis is empty")
+        links = MATRIX_OR_GAP_ID_RE.findall(links_text)
+        if decision == "покрыто":
+            if not links or any(not value.startswith("M-") for value in links):
+                errors.append(f"creation lifecycle row {row_number}: covered aspect requires M-* links")
+            for value in links:
+                if lifecycle_rows.get(value) != "TC":
+                    errors.append(
+                        f"creation lifecycle row {row_number}: {value} must be a lifecycle-profile TC row"
+                    )
+        elif decision == "coverage-gap":
+            if not links or any(not value.startswith("GAP-") for value in links):
+                errors.append(f"creation lifecycle row {row_number}: coverage-gap aspect requires GAP-* links")
+            for value in links:
+                if lifecycle_rows.get(value) != "coverage-gap":
+                    errors.append(
+                        f"creation lifecycle row {row_number}: {value} must be a lifecycle-profile coverage-gap row"
+                    )
+        else:
+            if links:
+                errors.append(f"creation lifecycle row {row_number}: not-applicable aspect must not link matrix rows")
+            if not basis.casefold().startswith("не применимо:"):
+                errors.append(
+                    f"creation lifecycle row {row_number}: not-applicable basis must start with 'Не применимо:'"
+                )
+        referenced.update(links)
+
+    missing_aspects = CREATION_LIFECYCLE_ASPECTS - seen_aspects
+    if missing_aspects:
+        errors.append(f"creation lifecycle control is missing aspects: {sorted(missing_aspects)}")
+    unreferenced = set(lifecycle_rows) - referenced
+    if unreferenced:
+        errors.append(f"lifecycle-profile matrix rows are absent from lifecycle control: {sorted(unreferenced)}")
+    return errors
+
+
 def validate(content: str) -> list[str]:
     errors: list[str] = []
     matrix = find_matrix(content.splitlines())
@@ -388,8 +466,6 @@ def validate(content: str) -> list[str]:
     index_by_name = {name: header.index(name) for name in REQUIRED_HEADERS if name in header}
     seen_ids: set[str] = set()
     used_formal_items: dict[str, str] = {}
-    has_successful_ui_creation = False
-    has_clean_new_form_coverage = False
     for row_number, row in enumerate(rows, start=1):
         row_id = row[index_by_name["ID"]]
         if not row_id or EMPTY_RE.fullmatch(row_id):
@@ -480,15 +556,6 @@ def validate(content: str) -> list[str]:
                 f"{row_id}: missing environment binding requires needs-test-data, not absent test data"
             )
         row_text = " | ".join(row)
-        if decision == "TC" and SUCCESSFUL_UI_CREATION_RE.search(row_text):
-            has_successful_ui_creation = True
-        if "жизненный-цикл-создания" in profiles and CLEAN_NEW_FORM_RE.search(row_text):
-            has_clean_new_form_coverage = True
-            if decision == "TC" and not NO_INHERITANCE_ORACLE_RE.search(row[index_by_name["Ожидаемый результат"]]):
-                errors.append(
-                    f"{row_id}: clean-new-form lifecycle check must require no inherited values "
-                    "except source-backed defaults"
-                )
         if decision == "TC" and DYNAMIC_OUTPUT_RE.search(row_text):
             has_property_contract = bool(DYNAMIC_PROPERTY_RE.search(row_text))
             has_binding_contract = bool(
@@ -501,14 +568,10 @@ def validate(content: str) -> list[str]:
                     f"{row_id}: system-generated output requires a property-check or runtime-binding "
                     "contract with separate capture and assertion points"
                 )
-    if has_successful_ui_creation and not has_clean_new_form_coverage:
-        errors.append(
-            "successful UI creation requires a lifecycle row that reopens creation for a second "
-            "same-type object and checks that prior values are not inherited; use a TC or an explicit coverage-gap"
-        )
     errors.extend(validate_coverage_model(content, used_formal_items))
     errors.extend(validate_boundary_families(content, used_formal_items))
     errors.extend(validate_uniqueness_control(content, header, rows))
+    errors.extend(validate_creation_lifecycle_control(content, header, rows))
     return errors
 
 

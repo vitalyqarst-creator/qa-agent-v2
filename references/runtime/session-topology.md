@@ -11,11 +11,11 @@ Source handoff всегда находится в `work/stage-handoffs/00-<packa
 - Для каждого scope — свой `writer` в отдельной верхнеуровневой сессии. Этот же writer создаёт matrix, выполняет разрешённую правку matrix, после `matrix-accepted` материализует данные, пишет TC и выполняет разрешённую правку TC.
 - Для каждого scope — отдельные `matrix-reviewer` и `tc-reviewer`. Они отличаются от controller, locator, analyzer, writer и друг от друга.
 
-Новые сессии для fixture materialization, запуска validator-а и каждой revision не создаются, пока commit agent-layer не изменился. Повторная работа по тому же scope возвращается в ранее зарегистрированную analyzer/writer/reviewer-сессию соответствующей роли только при совпадении `runtime_commit`. После обновления agent-layer controller создаёт новую верхнеуровневую сессию для каждой реально вызываемой semantic role и заменяет её stale-запись в registry; существующие артефакты переиспользуются, полный этап не повторяется без содержательной причины.
+Новые сессии для fixture materialization, запуска validator-а и revision не создаются. Commit agent-layer фиксируется при `init` и становится неизменяемым после регистрации первой semantic role. Повторная работа по тому же scope возвращается в ранее зарегистрированную analyzer/writer/reviewer-сессию соответствующей роли только внутри этого frozen runtime.
 
 Исторический `accepted` review неизменного artifact не становится stale только из-за смены commit agent-layer: он остаётся привязан к собственным receipt, reviewer thread и SHA-256. Новую reviewer-сессию создавай после обновления runtime лишь тогда, когда действительно требуется новый review или re-review.
 
-Новый practical route по существующему пакету начинается не с source locator, а с определения первого отсутствующего, stale или невалидного артефакта. Controller последовательно проверяет существующие source (`validate_runtime_source.py --resume-existing`), handoff, matrix/review и canonical TC/review и переиспользует все валидные предшествующие результаты. Semantic role вызывается только для первого этапа, который действительно требует изменения; смена runtime commit сама по себе не является причиной пересоздавать артефакты.
+После изменения agent-layer активный run не обновляется: controller создаёт новую чистую practical run-папку. Новый route по существующему пакету начинается с определения первого отсутствующего, stale или невалидного артефакта и может унаследовать валидные immutable source/scope handoff штатными командами ниже. Историческая session identity подтверждает происхождение унаследованного artifact, но такая сессия не возобновляется в новом runtime.
 
 Если валидный source handoff скопирован в новую чистую папку того же FT-пакета, controller не выдумывает locator session и не запускает locator повторно. После `init` он переносит точную историческую запись из исходного пакета штатной командой, затем запускает source validator с `--resume-existing`:
 
@@ -79,13 +79,13 @@ Scope analyzer-ы одного FT-пакета не работают однов�
 python scripts/runtime_session_registry.py controller-check --package-root <FT-package> --expected-thread-id <controller-threadId>
 ```
 
-Если проверка сообщает об изменившемся runtime commit, controller сначала перечитывает текущие `AGENTS.md` и этот файл, затем явно подтверждает новую версию и повторяет `controller-check`:
+`acknowledge-runtime` допустим только до регистрации первой semantic role, например если commit изменился между `init` и фактическим стартом. После начала semantic work изменившийся commit означает обязательный новый clean run:
 
 ```text
 python scripts/runtime_session_registry.py acknowledge-runtime --package-root <FT-package> --controller-thread-id <controller-threadId>
 ```
 
-До успешного `controller-check` создавать или продолжать semantic role запрещено. Обычный role self-check также проверяет runtime commit текущей semantic role. Старую semantic role нельзя подтвердить после изменения кода: для следующего вызова этой роли нужна новая верхнеуровневая сессия, чтобы инструкции гарантированно загрузились заново.
+До успешного `controller-check` создавать или продолжать semantic role запрещено. Запрещено частично переносить новый runtime в активный route либо заменять отдельные role-сессии после изменения кода.
 
 ```text
 python scripts/runtime_session_registry.py init --package-root <FT-package> --controller-thread-id <threadId> --controller-host-id <hostId>
@@ -94,9 +94,9 @@ python scripts/runtime_session_registry.py record --package-root <FT-package> --
 python scripts/runtime_session_registry.py record --package-root <FT-package> --role writer --scope <scope> --thread-id <threadId> --host-id <hostId>
 ```
 
-К соответствующей команде `record` добавь фактически использованные `--model <model> --thinking <level>`. Для reviewer те же значения передаются в `runtime_review_dispatch.py create` через `--reviewer-model` и `--reviewer-thinking`.
+К соответствующей команде `record` добавь фактически использованные `--model <model> --thinking <level>`. Для reviewer те же значения передаются в `runtime_review_dispatch.py prepare` через `--reviewer-model` и `--reviewer-thinking`.
 
-Для reviewer запись выполняется автоматически командой `runtime_review_dispatch.py create` по имени review-каталога `<scope>`.
+Для reviewer controller одной командой `runtime_review_dispatch.py prepare` создаёт ограниченный input manifest, operational prompt, dispatch receipt и record/summary scaffolds, а также автоматически регистрирует reviewer по имени review-каталога `<scope>`. Ручная сборка этих transport artifacts не является default.
 
 Каждый operational prompt содержит роль, scope, собственный `threadId` и команду self-check:
 
@@ -121,9 +121,11 @@ Operational prompt — только транспортный конверт эт
 
 ## Переходы
 
-Controller не редактирует `matrix_status` вручную. После каждого валидного matrix review он вызывает `runtime_workflow_state.py apply-review`; этот gate требует текущую reviewer-сессию, поэтому исторический review после смены runtime/назначения не является разрешением перехода, даже если отдельно проходит structural validator. Перед materialization/TC controller вызывает `runtime_workflow_state.py validate`; переход разрешён только при `matrix_status: accepted` и текущих SHA-256 matrix/review. Если единственная revision исчерпана и остались findings, controller вызывает `runtime_workflow_state.py exhausted`; это закрывает route для TC, а не разрешает обход review.
+Controller не редактирует `matrix_status` или `data_status` вручную. После каждого валидного matrix review он вызывает `runtime_workflow_state.py apply-review`. После `matrix-accepted` выполняется ровно один явный data-stage: `data-start`, материализация всех `TD-*`/`REL-*` текущей matrix тем же writer-ом и `data-complete`; для matrix без ролей helper фиксирует `not-required`. Canonical TC разрешены только после успешного data gate. Если bounded revision cycle исчерпан и остались findings, controller вызывает `runtime_workflow_state.py exhausted`; это закрывает route для TC, а не разрешает обход review.
 
-Controller запускает следующий этап только после успешного artifact validator-а и проверки registry. Отдельная сессия не означает новый цикл: замечания matrix reviewer возвращаются исходному writer, затем текущая matrix повторно проверяется тем же matrix reviewer; аналогично для TC. Первое review всегда полное. После revision controller передаёт прежний review-record в `runtime_review_dispatch.py create --previous-review`; controller не выбирает объём вручную. Штатный manifest разрешает delta re-review только для заявленных и локализованных изменений при неизменных внешних semantic inputs, структуре и порядке artifact. Изменённый вместе с заявленными строками writer-owned `matrix-data-plan.md` остаётся частью delta и целиком проверяется reviewer-ом; иные semantic-input изменения автоматически требуют full review.
+Controller запускает следующий этап только после успешного artifact validator-а и проверки registry. Замечания reviewer возвращаются исходному writer, затем artifact повторно проверяется тем же reviewer. Первое review всегда полное. На matrix и TC допускается один bounded revision cycle. После него разрешена только одна узкая integrity correction, если validator возвращает `integrity_correction_allowed: true`: все новые findings классифицированы `introduced-by-revision`, относятся только к изменённым элементам и текущему writer-owned stage, semantic inputs не менялись, а review остаётся delta. Любой carried-forward, omission, source/matrix drift или третья попытка завершает cycle как exhausted. Controller передаёт предыдущий record в `runtime_review_dispatch.py prepare --previous-review`; объём и допустимость вычисляет manifest, а не prompt.
+
+Review input manifest содержит только artifact, source package, analyzer-owned файлы текущего scope, общий реестр вопросов, companion matrix/data plan и явно связанные support/visual/data artifacts. Все sibling support, mockups и materializations заново не загружаются. Reviewer расширяет manifest только при доказанной внешней зависимости и фиксирует причину.
 
 После matrix review controller запускает `validate_runtime_review.py` и использует только его машинное поле `review_quality_blocking`. Значение `true` возможно только у manifest-backed re-review после writer revision с `review_quality_status: failed-prior-review-incomplete`; тогда controller останавливает текущий route как `review-quality-failed`: новые findings сохраняются, но не расходуют ещё один обычный revision cycle. Fresh full review, заменяющий record, который стал невалиден после изменения runtime-контракта, не имеет revision manifest; даже если его raw record ошибочно содержит quality-status, `review_quality_blocking=false`, а полный текущий verdict остаётся исправимым штатной writer revision. Controller не трактует raw `review_quality_status` самостоятельно.
 

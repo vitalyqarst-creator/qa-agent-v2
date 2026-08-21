@@ -59,6 +59,18 @@
 
 В каждой сценарной колонке укажи одну строку `M-*` с профилем `уникальность-и-дубли` либо `Не применимо: <source-backed причина и точный anchor>`. Anchor находится в той же ячейке, а не только в общей колонке основания; отсутствие требования или его механический поиск по выбранному подразделу не доказывает неприменимость. Таблица не создаёт проверки без основания: она вынуждает до review явно решить применимость create/edit-вариантов, области ключа и неключевых атрибутов. Все строки matrix с этим профилем должны присутствовать в контроле.
 
+### Контроль жизненного цикла создания
+
+Если хотя бы одна строка использует профиль `жизненный-цикл-создания`, добавь одну явную таблицу:
+
+| Аспект | Решение | Связанные строки | Основание |
+| --- | --- | --- | --- |
+| Уникальность успешного создания | покрыто / coverage-gap / не применимо | `M-*`, `GAP-*` или `—` | Краткое source-backed основание |
+| Отмена или закрытие без сохранения | покрыто / coverage-gap / не применимо | `M-*`, `GAP-*` или `—` | Краткое source-backed основание |
+| Повторное открытие чистой формы | покрыто / coverage-gap / не применимо | `M-*`, `GAP-*` или `—` | Краткое source-backed основание |
+
+`покрыто` ссылается только на исполнимые `M-*` с тем же профилем; `coverage-gap` — только на `GAP-*` с тем же профилем. Для `не применимо` ссылки отсутствуют, а основание начинается с `Не применимо:` и объясняет конкретную причину. Таблица — явный writer/reviewer-контракт: validator проверяет структуру и ссылки, reviewer — фактическую применимость и смысл. Нельзя восстанавливать lifecycle по ключевым словам в русских формулировках matrix.
+
 `coverage-gaps.md` использует таблицу:
 
 | ID | Связанная обязанность | Источник | Класс | Недостаток источника | Что требуется для закрытия |
@@ -98,21 +110,22 @@ data_status: not-started
 test_case_status: not-started
 ```
 
-`completed` не является допустимым значением `matrix_status`. Controller штатным helper-ом переводит состояние в `accepted`, `changes-required` или `revision-exhausted`; `accepted` всегда относится к текущему SHA-256 matrix. После выпуска TC writer меняет только `test_case_status` и добавляет `test_cases`. Analyzer-owned `work/stage-handoffs/<scope>/workflow-state.yaml` не изменяется.
+`completed` не является допустимым значением `matrix_status`. Controller helper-ом переводит matrix в `accepted`, `changes-required` или `revision-exhausted`; `accepted` относится к текущему SHA-256. Data-stage также меняется только helper-ом. После выпуска TC writer меняет `test_case_status` и добавляет `test_cases`. Analyzer-owned handoff не изменяется.
 
 Штатные переходы:
 
 ```text
 python scripts/runtime_workflow_state.py pending --matrix <matrix>
 python scripts/runtime_workflow_state.py apply-review --matrix <matrix> --review-record <review.json>
+python scripts/runtime_workflow_state.py data-start --matrix <matrix>
+python scripts/runtime_workflow_state.py data-complete --matrix <matrix> [--materialization <data-materialization.json>]
+python scripts/runtime_workflow_state.py data-blocked --matrix <matrix>
 python scripts/runtime_workflow_state.py exhausted --matrix <matrix> --previous-review <review.json> --closure <revision-closure.md>
 python scripts/runtime_workflow_state.py validate --matrix <matrix>
 ```
 
-Writer вызывает `pending` после создания и каждой revision matrix. Controller вызывает `apply-review` только для валидного review-record текущей matrix. `exhausted` допустим лишь после единственной revision при остаточных findings, явно закрытых в closure-отчёте. Перед материализацией и TC controller обязан запустить `validate`; только `accepted` разрешает продолжение.
-
-Если неизменная matrix получает новый полный review после обновления agent-layer, новый валидный record может атомарно заменить прежний по тому же каноническому пути: `apply-review` допускает только ожидаемое расхождение SHA прежнего record и сразу привязывает state к SHA нового. Любая иная ошибка pre-review state остаётся блокирующей.
+Writer вызывает `pending` после создания и каждой revision matrix. Controller вызывает `apply-review` только для валидного review-record. После `accepted` writer открывает ровно один data-stage через `data-start`; `data-complete` валидирует материализацию либо сам фиксирует `not-required`. Если обязательный tester-facing input нельзя получить разрешённым источником, writer вызывает `data-blocked`; этот статус запрещает выпуск canonical TC. До успешного `data-complete` canonical TC запрещены.
 
 ## Результат review
 
-Reviewer сверяет матрицу с первичными источниками и профилями тест-дизайна, затем выносит только `matrix-accepted` либо `matrix-changes-required`. Review-record связывается с SHA-256 matrix по `references/runtime/review-record.md`. После одной ограниченной правки повторяет review; второй дополнительный цикл не запускается без решения пользователя.
+Reviewer сверяет матрицу с источниками и профилями, затем выносит только `matrix-accepted` либо `matrix-changes-required`. После одной bounded revision допускается только одна machine-approved correction дефекта `introduced-by-revision`; иной дополнительный цикл не запускается.

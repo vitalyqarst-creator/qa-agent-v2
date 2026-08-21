@@ -9,10 +9,12 @@ from typing import Any
 
 try:
     from scripts.runtime_io import configure_utf8_stdio
+    from scripts.runtime_session_registry import canonical_scope
     from scripts.runtime_traceability import find_markdown_table
     from scripts.validate_runtime_matrix import COVERAGE_MODEL_HEADERS, REQUIRED_HEADERS
 except ModuleNotFoundError:  # Direct invocation
     from runtime_io import configure_utf8_stdio
+    from runtime_session_registry import canonical_scope
     from runtime_traceability import find_markdown_table
     from validate_runtime_matrix import COVERAGE_MODEL_HEADERS, REQUIRED_HEADERS
 
@@ -109,19 +111,44 @@ def artifact_index(artifact: Path, kind: str) -> dict[str, Any]:
     raise ValueError("review kind must be matrix or tc")
 
 
+def referenced_package_files(package_root: Path, seeds: set[Path], candidates: set[Path]) -> set[Path]:
+    """Resolve package-relative file references without pulling whole sibling trees into review."""
+
+    selected: set[Path] = set()
+    searchable = set(seeds)
+    while True:
+        texts: list[str] = []
+        for path in searchable | selected:
+            try:
+                texts.append(path.read_text(encoding="utf-8"))
+            except (OSError, UnicodeError):
+                continue
+        haystack = "\n".join(texts).replace("\\", "/").casefold()
+        added = {
+            path
+            for path in candidates - selected
+            if path.resolve().relative_to(package_root.resolve()).as_posix().casefold() in haystack
+        }
+        if not added:
+            return selected
+        selected.update(added)
+
+
 def semantic_input_files(package_root: Path, artifact: Path, kind: str, scope: str) -> list[Path]:
     candidates: set[Path] = set()
+    reference_seeds: set[Path] = {artifact.resolve()}
     notes = package_root / "AGENT-NOTES.md"
     if notes.is_file():
         candidates.add(notes)
-    for directory_name in ("source", "support", "mockups"):
-        directory = package_root / directory_name
-        if directory.is_dir():
-            candidates.update(path for path in directory.rglob("*") if path.is_file())
+        reference_seeds.add(notes)
+    source = package_root / "source"
+    if source.is_dir():
+        candidates.update(path for path in source.rglob("*") if path.is_file())
 
     clarifications = package_root / "work" / "scope-clarification-requests.md"
     if clarifications.is_file():
         candidates.add(clarifications)
+        reference_seeds.add(clarifications)
     handoff = package_root / "work" / "stage-handoffs" / scope
     if handoff.is_dir():
         for path in handoff.rglob("*"):
@@ -133,22 +160,35 @@ def semantic_input_files(package_root: Path, artifact: Path, kind: str, scope: s
             ):
                 continue
             candidates.add(path)
+            reference_seeds.add(path)
 
     matrix_data_plan = package_root / "work" / "practical" / scope / "matrix-data-plan.md"
     if matrix_data_plan.is_file():
         candidates.add(matrix_data_plan)
+        reference_seeds.add(matrix_data_plan)
 
-    work = package_root / "work"
-    if work.is_dir() and kind == "tc":
-        candidates.update(path for path in work.rglob("fixture-catalog.json") if path.is_file())
-        candidates.update(path for path in work.rglob("data-materialization.json") if path.is_file())
-    for fixture_directory in (package_root / "fixtures", package_root / "work" / "fixtures"):
-        if fixture_directory.is_dir():
-            candidates.update(path for path in fixture_directory.rglob("*") if path.is_file())
+    optional_files: set[Path] = set()
+    for directory_name in ("support", "mockups", "fixtures"):
+        directory = package_root / directory_name
+        if directory.is_dir():
+            optional_files.update(path for path in directory.rglob("*") if path.is_file())
+    work_test_data = package_root / "work" / "test-data"
+    if work_test_data.is_dir():
+        optional_files.update(path for path in work_test_data.rglob("*") if path.is_file())
+
+    if kind == "tc" and work_test_data.is_dir():
+        scope_key = canonical_scope(scope)
+        for directory in work_test_data.iterdir():
+            if directory.is_dir() and canonical_scope(directory.name) == scope_key:
+                current_scope_files = {path for path in directory.rglob("*") if path.is_file()}
+                candidates.update(current_scope_files)
+                reference_seeds.update(current_scope_files)
     if kind == "tc":
         matrix = package_root / "work" / "practical" / scope / "test-design-matrix.md"
         if matrix.is_file():
             candidates.add(matrix)
+            reference_seeds.add(matrix)
+    candidates.update(referenced_package_files(package_root, reference_seeds, optional_files))
     candidates.discard(artifact.resolve())
     return sorted((path.resolve() for path in candidates), key=lambda value: value.as_posix().casefold())
 
@@ -279,14 +319,69 @@ def build_revision_manifest(
     previous = json.loads(previous_raw.decode("utf-8"))
     if not isinstance(previous, dict):
         raise ValueError("previous review must be a JSON object")
+    previous_round = previous.get("revision_cycle_round", 0)
+    if not isinstance(previous_round, int) or isinstance(previous_round, bool) or previous_round not in {0, 1}:
+        raise ValueError("previous review has an invalid or exhausted revision_cycle_round")
+    revision_round = previous_round + 1
+    if revision_round == 2:
+        correction_errors = introduced_correction_errors(package_root, previous, kind)
+        if correction_errors:
+            raise ValueError(correction_errors[0])
+    revision = build_revision_manifest_from_record(package_root, artifact, previous, kind, scope)
+    if revision_round == 2 and revision.get("review_mode") != "delta":
+        raise ValueError("introduced-by-revision correction must remain a bounded delta")
     return {
         "schema_version": 1,
         "review_kind": kind,
         "scope": scope,
+        "revision_cycle_round": revision_round,
+        "revision_purpose": "bounded-revision" if revision_round == 1 else "introduced-defect-correction",
         "previous_review_sha256": canonical_digest(previous),
         "previous_review_record": previous,
-        **build_revision_manifest_from_record(package_root, artifact, previous, kind, scope),
+        **revision,
     }
+
+
+def introduced_correction_errors(package_root: Path, previous: dict[str, Any], kind: str) -> list[str]:
+    """Allow one narrow correction only for defects created by the first revision."""
+
+    errors: list[str] = []
+    if previous.get("revision_cycle_round") != 1:
+        errors.append("introduced-by-revision correction requires the first re-review record")
+    if previous.get("review_mode") != "delta":
+        errors.append("introduced-by-revision correction requires a bounded delta re-review")
+    if previous.get("review_quality_status") != "complete":
+        errors.append("introduced-by-revision correction requires complete reviewer quality")
+    findings = previous.get("findings")
+    expected_origin = kind
+    if not isinstance(findings, list) or not findings:
+        errors.append("introduced-by-revision correction requires non-empty findings")
+        return errors
+    for index, finding in enumerate(findings, start=1):
+        if not isinstance(finding, dict):
+            errors.append(f"finding {index} is not an object")
+            continue
+        if finding.get("discovery_status") != "introduced-by-revision":
+            errors.append("only findings classified as introduced-by-revision permit a narrow correction")
+        if finding.get("origin_stage") != expected_origin:
+            errors.append(f"introduced correction finding {index} must have origin_stage {expected_origin}")
+
+    manifest_relative = previous.get("revision_manifest_path")
+    if not isinstance(manifest_relative, str) or Path(manifest_relative).is_absolute() or ".." in Path(manifest_relative).parts:
+        errors.append("first re-review lacks a valid revision manifest")
+        return errors
+    manifest_path = package_root / manifest_relative
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        errors.append("first re-review revision manifest is unreadable")
+        return errors
+    allowed = set(manifest.get("changed_items", [])) if isinstance(manifest, dict) else set()
+    current_affected, affected_errors = affected_items(findings)
+    errors.extend(affected_errors)
+    if current_affected - allowed:
+        errors.append("introduced correction affects items outside the first bounded revision")
+    return errors
 
 
 def validate_revision_manifest(
@@ -317,6 +412,8 @@ def validate_revision_manifest(
     except ValueError as exc:
         return errors + [str(exc)]
     for key in (
+        "revision_cycle_round",
+        "revision_purpose",
         "review_mode",
         "previous_artifact_sha256",
         "current_artifact_sha256",
@@ -328,8 +425,22 @@ def validate_revision_manifest(
         "changed_semantic_inputs",
         "fallback_reasons",
     ):
-        if manifest.get(key) != rebuilt.get(key):
+        expected = rebuilt.get(key)
+        if key in {"revision_cycle_round", "revision_purpose"}:
+            expected = manifest.get(key)
+        if manifest.get(key) != expected:
             errors.append(f"revision manifest field {key} is stale or inconsistent")
+    round_value = manifest.get("revision_cycle_round")
+    expected_purpose = {1: "bounded-revision", 2: "introduced-defect-correction"}.get(round_value)
+    if expected_purpose is None or manifest.get("revision_purpose") != expected_purpose:
+        errors.append("revision manifest has invalid revision cycle metadata")
+    previous_round = previous.get("revision_cycle_round", 0)
+    if round_value != previous_round + 1:
+        errors.append("revision manifest round does not follow the previous review")
+    if round_value == 2:
+        errors.extend(introduced_correction_errors(package_root, previous, kind))
+        if manifest.get("review_mode") != "delta":
+            errors.append("introduced-by-revision correction must use delta review")
     if manifest.get("review_mode") not in {"full", "delta"}:
         errors.append("revision manifest review_mode must be full or delta")
     return errors
@@ -423,11 +534,15 @@ def enrich_review_record(package_root: Path, artifact: Path, record_path: Path, 
     record["schema_version"] = 2
     record.update(snapshot)
     record["review_mode"] = dispatch.get("review_mode", "full")
+    record["revision_cycle_round"] = dispatch.get("revision_cycle_round", 0)
+    record["revision_purpose"] = dispatch.get("revision_purpose", "initial-review")
     if kind == "matrix":
         record["matrix_review_checklist_version"] = 3
     if dispatch.get("revision_manifest_path"):
         record["revision_manifest_path"] = dispatch["revision_manifest_path"]
         record["revision_manifest_sha256"] = dispatch["revision_manifest_sha256"]
+        if record.get("verdict") == f"{kind}-accepted" and not record.get("findings"):
+            record["review_quality_status"] = "complete"
     else:
         record.pop("revision_manifest_path", None)
         record.pop("revision_manifest_sha256", None)

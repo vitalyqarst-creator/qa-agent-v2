@@ -4,16 +4,15 @@ Matrix и canonical TC проверяются в разных верхнеуро
 
 ## Двухфазный dispatch
 
-1. Controller создаёт operational prompt в `work/reviews/<scope>/<matrix|tc>-review-prompt.md`.
-2. Через встроенный Codex Desktop API controller вызывает `list_projects`, затем `create_thread` в local environment текущего проекта. Начальный bootstrap prompt запрещает читать artifacts и выполнять review до operational follow-up.
-3. Полученный от `create_thread` `threadId` controller регистрирует командой `scripts/runtime_review_dispatch.py create`. Команда одновременно закрепляет reviewer за scope в `runtime-session-registry.json`. Для первого review `--previous-review` не передаётся и режим всегда `full`. После ограниченной revision controller передаёт прежний `changes-required` record через `--previous-review`; команда сама создаёт revision manifest и выбирает `delta` либо безопасный `full` fallback. Receipt имеет имя `<kind>-review-dispatch-<artifact-hash-prefix>-<reviewer-thread-prefix>.json`.
-4. Только после успешной регистрации controller отправляет в созданную сессию operational prompt через `send_message_to_thread`, включая путь receipt.
-5. Reviewer первым действием запускает `scripts/runtime_review_dispatch.py verify`. При успехе команда возвращает путь и SHA-256 `skills/ft-test-case-reviewer/SKILL.md`; reviewer полностью читает этот файл до review inputs. При ошибке или несовпадении skill contract он останавливается без verdict.
-6. Controller ожидает завершения через `wait_threads`, сверяет фактические thread/host ID, проверяет неизменность SHA-256 receipt относительно значения, возвращённого командой `create`, и валидирует итоговый review-record.
+1. Controller через встроенный Codex Desktop API создаёт отдельную reviewer-сессию. Начальный bootstrap prompt запрещает читать artifacts и выполнять review до operational follow-up.
+2. Полученный `threadId` controller передаёт одной команде `scripts/runtime_review_dispatch.py prepare`. Она одним вызовом закрепляет reviewer за scope и создаёт согласованный комплект: ограниченный input manifest, operational prompt, dispatch receipt и неизменяемые JSON/Markdown scaffolds. Для первого review `--previous-review` не передаётся и режим всегда `full`; после revision helper сам создаёт manifest и определяет допустимый объём.
+3. Только после успешной регистрации controller отправляет в созданную сессию operational prompt через `send_message_to_thread`, включая путь receipt.
+4. Reviewer первым действием запускает `scripts/runtime_review_dispatch.py verify-package` только с receipt и собственным thread ID. Команда возвращает путь/SHA-256 reviewer skill и точный input manifest. Reviewer читает skill и перечисленные inputs; все sibling support/mockups/materializations заново не загружаются без доказанной зависимости.
+5. Controller ожидает завершения через `wait_threads`, сверяет фактические thread/host ID, проверяет неизменность SHA-256 receipt относительно значения, возвращённого командой `prepare`, и валидирует итоговый review-record.
 
 Controller не меняет review inputs между созданием receipt и завершением reviewer. Reviewer изменяет только `<matrix|tc>-review.md` и `<matrix|tc>-review.json`. При вызове `create_thread` controller не переопределяет model/thinking, если пользователь явно этого не запросил.
 
-Controller не использует subagent, fork, analyzer, другой reviewer или текущую writer-сессию как независимый reviewer. После revision controller возвращает re-review в уже зарегистрированную reviewer-сессию того же вида только при неизменном commit agent-layer. Если runtime commit изменился, новый receipt создаётся для новой верхнеуровневой reviewer-сессии, чтобы она заново загрузила текущие инструкции. Если thread API недоступен или пользователь ещё не разрешил создание отдельных сессий, route останавливается до получения возможности/разрешения. Разрешение запрашивается один раз на текущий practical route.
+Controller не использует subagent, fork, analyzer, другой reviewer или текущую writer-сессию как независимый reviewer. После revision controller возвращает re-review в уже зарегистрированную reviewer-сессию того же вида только при неизменном commit agent-layer. Если runtime commit изменился после начала semantic work, текущий run заморожен: controller создаёт новый clean practical run, а не подменяет reviewer и не обновляет receipt внутри старого run. Если thread API недоступен или пользователь ещё не разрешил создание отдельных сессий, route останавливается до получения возможности/разрешения. Разрешение запрашивается один раз на текущий practical route.
 
 Bootstrap prompt:
 
@@ -24,7 +23,7 @@ Bootstrap prompt:
 После получения реального `threadId` controller выполняет:
 
 ```text
-python scripts/runtime_review_dispatch.py create --package-root <FT-package> --artifact <matrix-or-TC> --review-prompt <prompt.md> --review-dir <work/reviews/scope> --kind <matrix|tc> --reviewer-thread-id <threadId> --reviewer-host-id <hostId>
+python scripts/runtime_review_dispatch.py prepare --package-root <FT-package> --artifact <matrix-or-TC> --review-dir <work/reviews/scope> --kind <matrix|tc> --reviewer-thread-id <threadId> --reviewer-host-id <hostId>
 ```
 
 После revision к команде добавляется:
@@ -33,12 +32,14 @@ python scripts/runtime_review_dispatch.py create --package-root <FT-package> --a
 --previous-review <work/reviews/scope/matrix-or-tc-review.json>
 ```
 
-До перезаписи прежнего record dispatch встраивает его в controller-owned manifest. `delta` разрешён только когда source/support/mockup, scope handoff, ответы БА, materialization/fixtures и принятая matrix для TC не изменились; структура/порядок artifact прежние; изменены только элементы, перечисленные в `affected_items` findings. Writer-owned `matrix-data-plan.md` является companion-проекцией matrix: его изменение вместе с заявленными строками matrix сохраняет `delta`, но весь изменённый plan обязателен для чтения reviewer-ом и остаётся перечисленным в `changed_semantic_inputs`. Иные изменения semantic inputs автоматически требуют `full`. No-op revision отклоняется.
+До перезаписи прежнего record dispatch встраивает его в controller-owned manifest. `delta` разрешён только при неизменных ограниченных semantic inputs, прежней структуре/порядке artifact и изменении только элементов из `affected_items`. Writer-owned `matrix-data-plan.md` остаётся companion-проекцией matrix и целиком проверяется при его изменении. No-op revision отклоняется.
+
+Один обычный revision cycle имеет `revision_cycle_round: 1`. Если re-review находит только дефекты `introduced-by-revision` в тех же изменённых элементах и том же writer-owned stage, validator возвращает `integrity_correction_allowed: true`; разрешена одна correction с round `2`. Carried-forward finding, omission, semantic-input change, выход за affected items либо finding после round 2 означает exhaustion.
 
 Reviewer проверяет receipt:
 
 ```text
-python scripts/runtime_review_dispatch.py verify --package-root <FT-package> --artifact <matrix-or-TC> --review-prompt <prompt.md> --dispatch <dispatch.json> --kind <matrix|tc> --reviewer-thread-id <own-threadId>
+python scripts/runtime_review_dispatch.py verify-package --package-root <FT-package> --dispatch <dispatch.json> --reviewer-thread-id <own-threadId>
 ```
 
 ## Итог review
@@ -59,6 +60,8 @@ python scripts/runtime_review_dispatch.py verify --package-root <FT-package> --a
   "reviewer_session_id": "<top-level thread id>",
   "reviewed_at": "YYYY-MM-DDTHH:MM:SSZ",
   "review_mode": "full",
+  "revision_cycle_round": 0,
+  "revision_purpose": "initial-review",
   "artifact_index": {
     "items": {"M-001": "<64 hex>"},
     "order": ["M-001"],
@@ -87,6 +90,7 @@ python scripts/runtime_review_dispatch.py verify --package-root <FT-package> --a
 - Допустимые verdict: `matrix-accepted`, `matrix-changes-required`, `tc-accepted`, `tc-changes-required`.
 - Accepted verdict требует пустой `findings`; changes-required требует непустой конечный список findings.
 - Schema v2 обязательна для новых review. Schema v1 принимается только как историческое evidence и не может служить основанием для delta re-review.
+- Машинные поля, hashes, reviewed items и transport paths бери из controller-owned scaffold. Сам scaffold не изменяй: создай из него canonical review record, заполни checklist/evidence, verdict/findings, время, счётчики и quality status, затем запусти `enrich-review` и validator.
 - Перед validator reviewer запускает `runtime_review_delta.py enrich-review`: helper рассчитывает hashes элементов и semantic inputs из текущих файлов и переносит controller-owned режим/manifest из dispatch. Эти поля нельзя заполнять оценочно.
 - `full` означает полный независимый semantic review всех элементов ограниченного artifact. Source slice для первого review включает целиком выбранный раздел scope и точные зарегистрированные anchors; нерелевантные разделы FT-пакета повторно не читаются. Выход за границы фиксируется в Markdown review и допускается только по явной внешней ссылке либо для проверки противоречия. `delta` означает полный запуск дешёвых validator-ов и semantic re-review только `changed_items`, прежних findings и их source/dependency slices; для matrix delta reviewer дополнительно полностью читает изменённый `matrix-data-plan.md`, не перечитывая из-за этого весь source slice. Reviewer вправе повысить `delta` до `full` только при обнаруженной зависимости за пределами manifest, но не понизить controller-owned `full`.
 - Новые matrix review получают `matrix_review_checklist_version: 3` и содержат категории `source-coverage`, `formal-techniques`, `uniqueness-lifecycle`, `save-data-closure`, `identity-provenance`, `data-materializability`, `reachability-oracles`, `duplication-parameterization`. В `identity-provenance` перечисляются все целевые и prerequisite/родительские сущности и источник их tester-facing идентичности; сам стенд, будущая подготовка или стендовая привязка источником литерала не являются. В `data-materializability` reviewer перечисляет provider/dictionary-bound отношения, подходящие принятые materialization sibling scope и проверяемое основание их логической достижимости. Для двух целиком разных связных записей таким основанием служит воспроизводимый acquisition-контракт; concrete fixtures появляются после `matrix-accepted`. Для нетривиальных межкомпонентных ограничений `needs-test-data` не считается основанием. Каждая clause с упоминанием стенда должна в той же clause назвать подтверждённую привязку либо другой источник идентичности. Статус каждой категории — `checked` либо `not-applicable`; evidence непустое, а неприменимость содержит `Не применимо: <причина>`. Исторические records версий 1–2 проверяются по своему контракту и не становятся stale только из-за обновления agent-layer.

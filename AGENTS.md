@@ -10,11 +10,13 @@ Lean runtime для выпуска ручных и automation-ready тест-к�
 
 ## Default route
 
-Одна controller-сессия управляет пакетом и не выполняет содержательные этапы. Последовательность route хранится в `references/runtime/session-topology.md`: source locator → analyzer области → writer матрицы → независимый matrix review → canonical TC → независимый TC review. Каждая роль работает в отдельной верхнеуровневой Codex-сессии. После каждого review допускается одна ограниченная правка и повторная проверка изменённого набора; оставшийся material defect останавливает route до решения пользователя.
+Одна controller-сессия управляет пакетом и не выполняет содержательные этапы. Последовательность route хранится в `references/runtime/session-topology.md`: source locator → analyzer области → writer матрицы → независимый matrix review → явная materialization данных → canonical TC → независимый TC review. Каждая роль работает в отдельной верхнеуровневой Codex-сессии. После каждого review допускается один bounded revision cycle; одна дополнительная узкая correction разрешена только для дефекта, доказанно внесённого самой revision в её изменённые элементы.
 
 Controller перед dispatch читает `references/runtime/session-topology.md`, использует registry/self-check и передаёт ролевой сессии точный skill. Operational prompt остаётся нейтральным транспортным конвертом: controller не пересказывает требования и findings. При возобновлении новый route не означает повторный source locator или полный анализ с нуля; работа продолжается с первого отсутствующего, stale или невалидного артефакта.
 
 Subagent, fork и совмещение ролей не заменяют независимую top-level сессию. Модель и reasoning задаются параметрами создания сессии только по решению пользователя или явной runtime policy, а не содержательным prompt-ом.
+
+Commit agent-layer неизменяем на протяжении practical run после старта первой semantic role. Улучшение runtime применяется только в новом clean run; валидные immutable source/scope handoff можно унаследовать штатно, но старые semantic-сессии в новом runtime не возобновляются.
 
 ## Общие инварианты
 
