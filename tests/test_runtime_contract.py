@@ -3269,8 +3269,14 @@ residual_missing: none
             fixtures.mkdir(parents=True)
             snapshot_payload = {
                 "suggestions": [
-                    {"value": "ПАО СБЕРБАНК", "data": {"inn": "7707083893"}},
-                    {"value": "АО АЛЬФА-БАНК", "data": {"inn": "7728168971"}},
+                    {
+                        "value": "ПАО СБЕРБАНК",
+                        "data": {"inn": "7707083893", "address": "г Москва, ул Вавилова, д 19"},
+                    },
+                    {
+                        "value": "АО АЛЬФА-БАНК",
+                        "data": {"inn": "7728168971", "address": "г Москва, ул Каланчевская, д 27"},
+                    },
                 ]
             }
             snapshot = fixtures / "provider.json"
@@ -3283,7 +3289,11 @@ residual_missing: none
                         "source_type": "provider",
                         "provider": "Provider",
                         "request": {"query": "СБЕРБАНК"},
-                        "runtime_data": {"name": "ПАО СБЕРБАНК", "inn": "7707083893"},
+                        "runtime_data": {
+                            "name": "ПАО СБЕРБАНК",
+                            "inn": "7707083893",
+                            "address": "г Москва, ул Вавилова, д 19",
+                        },
                         "snapshot_path": "provider.json",
                         "snapshot_sha256": hashlib.sha256(snapshot.read_bytes()).hexdigest(),
                     },
@@ -3293,7 +3303,11 @@ residual_missing: none
                         "source_type": "provider",
                         "provider": "Provider",
                         "request": {"query": "АЛЬФА"},
-                        "runtime_data": {"name": "АО АЛЬФА-БАНК", "inn": "7728168971"},
+                        "runtime_data": {
+                            "name": "АО АЛЬФА-БАНК",
+                            "inn": "7728168971",
+                            "address": "г Москва, ул Каланчевская, д 27",
+                        },
                         "snapshot_path": "provider.json",
                         "snapshot_sha256": hashlib.sha256(snapshot.read_bytes()).hexdigest(),
                     },
@@ -3316,7 +3330,11 @@ residual_missing: none
                         "source_type": "provider",
                         "source_name": "Provider",
                         "fixture_id": "FX-PARTNER-A",
-                        "values": {"Наименование партнёра": "ПАО СБЕРБАНК", "ИНН": "7707083893"},
+                        "values": {
+                            "Наименование партнёра": "ПАО СБЕРБАНК",
+                            "ИНН": "7707083893",
+                            "Юридический адрес": "г Москва, ул Вавилова, д 19",
+                        },
                     },
                     {
                         "role_id": "TD-PARTNER-B",
@@ -3324,7 +3342,11 @@ residual_missing: none
                         "source_type": "provider",
                         "source_name": "Provider",
                         "fixture_id": "FX-PARTNER-B",
-                        "values": {"Наименование партнёра": "АО АЛЬФА-БАНК", "ИНН": "7728168971"},
+                        "values": {
+                            "Наименование партнёра": "АО АЛЬФА-БАНК",
+                            "ИНН": "7728168971",
+                            "Юридический адрес": "г Москва, ул Каланчевская, д 27",
+                        },
                     },
                 ],
                 "relations": [
@@ -3347,6 +3369,19 @@ residual_missing: none
                 "- `ИНН B` = `7728168971`.",
             )
             self.assertEqual([], validate_materialized_projection(projected_tc, matrix_content, materialization))
+
+            missing_relation_endpoint = projected_tc.replace("- `ИНН B` = `7728168971`.\n", "")
+            errors = validate_materialized_projection(
+                missing_relation_endpoint, matrix_content, materialization
+            )
+            self.assertTrue(any("relation endpoint TD-PARTNER-B.ИНН" in error for error in errors))
+
+            missing_role = (
+                projected_tc.replace("- `Наименование партнёра B` = `АО АЛЬФА-БАНК`.\n", "")
+                .replace("- `ИНН B` = `7728168971`.\n", "")
+            )
+            errors = validate_materialized_projection(missing_role, matrix_content, materialization)
+            self.assertTrue(any("data role TD-PARTNER-B has no concrete" in error for error in errors))
 
             payload["bindings"][0]["values"]["Наименование партнёра"] = "ПАО СБЕРБАНК RUN-ID"
             materialization.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
