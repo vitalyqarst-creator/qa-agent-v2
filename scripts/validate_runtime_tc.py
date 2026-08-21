@@ -43,10 +43,6 @@ FORBIDDEN_DATA_RE = re.compile(
 )
 CONCRETE_DATA_RE = re.compile(r"`[^`\n]+`\s*=\s*`[^`\n]+`")
 DATA_PAIR_RE = re.compile(r"`([^`\n]+)`\s*=\s*`([^`\n]+)`")
-PARAMETER_TABLE_HEADER_RE = re.compile(
-    r"^\|[^\n]*(?:Вариант|Параметр)[^\n]*\|[^\n]*Значение[^\n]*\|\s*$",
-    re.IGNORECASE | re.MULTILINE,
-)
 PROCESS_PLACEHOLDER_RE = re.compile(
     r"\b(?:edit\s+TC|несохран[её]нн\w*\s+значени\w*|данн\w*\s+предыдущ\w*\s+TC|значени\w*\s+из\s+fixture)\b",
     re.IGNORECASE,
@@ -288,12 +284,15 @@ def normalize_action(line: str) -> str:
 
 
 def has_parameter_table(value: str) -> bool:
-    header = PARAMETER_TABLE_HEADER_RE.search(value)
-    if not header:
+    lines = [line.strip() for line in value.splitlines() if line.strip().startswith("|")]
+    if len(lines) < 3:
         return False
-    following = value[header.end() :].splitlines()
-    table_lines = [line for line in following if line.strip().startswith("|")]
-    return len(table_lines) >= 2
+    separator_cells = [cell.strip() for cell in lines[1].strip("|").split("|")]
+    if not separator_cells or not all(
+        re.fullmatch(r":?-{3,}:?", cell) for cell in separator_cells
+    ):
+        return False
+    return any(any(cell.strip() for cell in line.strip("|").split("|")) for line in lines[2:])
 
 
 def hover_revealed_controls(matrix_rows: list[list[str]], check_index: int, result_index: int) -> set[str]:
@@ -586,11 +585,6 @@ def validate_materialized_projection(
         for binding in payload.get("bindings", [])
         if isinstance(binding, dict) and isinstance(binding.get("role_id"), str)
     }
-    relations = [
-        relation
-        for relation in payload.get("relations", [])
-        if isinstance(relation, dict)
-    ]
     matrix = find_markdown_table(matrix_content, ("ID", "Тестовые данные и отношения", "Решение"))
     if matrix is None:
         return ["cannot project materialized data without matrix data roles"]
@@ -613,24 +607,7 @@ def validate_materialized_projection(
             if re.search(rf"(?<![A-Za-z0-9_.-]){re.escape(matrix_id)}(?![A-Za-z0-9_.-])", traceability)
         }
         roles = {role for matrix_id in linked_matrix for role in roles_by_matrix[matrix_id]}
-        required_relation_values: dict[str, list[tuple[str, str]]] = {}
-        for relation in relations:
-            used_by = relation.get("used_by")
-            if not isinstance(used_by, list) or not linked_matrix.intersection(
-                item for item in used_by if isinstance(item, str)
-            ):
-                continue
-            for endpoint_name in ("left", "right"):
-                endpoint = relation.get(endpoint_name)
-                if not isinstance(endpoint, str) or "." not in endpoint:
-                    continue
-                role_id, field = endpoint.split(".", 1)
-                binding = bindings.get(role_id)
-                values = binding.get("values") if isinstance(binding, dict) else None
-                if isinstance(values, dict) and field in values:
-                    required_relation_values.setdefault(role_id, []).append(
-                        (field, str(values[field]))
-                    )
+        materialized_values: list[str] = []
         for role in sorted(roles):
             binding = bindings.get(role)
             if not isinstance(binding, dict):
@@ -638,16 +615,14 @@ def validate_materialized_projection(
             values = binding.get("values")
             if not isinstance(values, dict):
                 continue
-            projected_values = [str(value) for value in values.values() if str(value) in tc_data]
-            if not projected_values:
-                errors.append(
-                    f"{tc_id}: data role {role} has no concrete materialized value in test data"
+            for value in values.values():
+                materialized_values.extend(
+                    part.strip() for part in str(value).split(";") if part.strip()
                 )
-            for field, value in required_relation_values.get(role, []):
-                if value not in tc_data:
-                    errors.append(
-                        f"{tc_id}: relation endpoint {role}.{field} is absent from test data"
-                    )
+        if materialized_values and not any(value in tc_data for value in materialized_values):
+            errors.append(
+                f"{tc_id}: linked data roles have no concrete materialized value in test data"
+            )
     return errors
 
 

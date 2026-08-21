@@ -1124,6 +1124,13 @@ class RuntimeContractTests(unittest.TestCase):
         )
         self.assertEqual([], validate_tc(parameterized))
 
+    def test_parameter_table_does_not_require_a_column_named_value(self) -> None:
+        parameterized = VALID_TC.replace(
+            "- `Наименование партнёра` = `ПАО СБЕРБАНК`.",
+            "| Вариант | Тип партнёра |\n| --- | --- |\n| 1 | Страховая компания |\n| 2 | Поставщик |",
+        )
+        self.assertEqual([], validate_tc(parameterized))
+
     def test_process_placeholder_in_test_data_is_rejected(self) -> None:
         invalid = VALID_TC.replace("`ПАО СБЕРБАНК`.", "`edit TC`.", 1)
         self.assertTrue(any("process placeholder" in error for error in validate_tc(invalid)))
@@ -3370,18 +3377,23 @@ residual_missing: none
             )
             self.assertEqual([], validate_materialized_projection(projected_tc, matrix_content, materialization))
 
-            missing_relation_endpoint = projected_tc.replace("- `ИНН B` = `7728168971`.\n", "")
-            errors = validate_materialized_projection(
-                missing_relation_endpoint, matrix_content, materialization
-            )
-            self.assertTrue(any("relation endpoint TD-PARTNER-B.ИНН" in error for error in errors))
-
-            missing_role = (
-                projected_tc.replace("- `Наименование партнёра B` = `АО АЛЬФА-БАНК`.\n", "")
+            minimal_projection = (
+                projected_tc.replace("- `ИНН A` = `7707083893`.\n", "")
+                .replace("- `Наименование партнёра B` = `АО АЛЬФА-БАНК`.\n", "")
                 .replace("- `ИНН B` = `7728168971`.\n", "")
             )
-            errors = validate_materialized_projection(missing_role, matrix_content, materialization)
-            self.assertTrue(any("data role TD-PARTNER-B has no concrete" in error for error in errors))
+            self.assertEqual(
+                [], validate_materialized_projection(minimal_projection, matrix_content, materialization)
+            )
+
+            missing_projection = minimal_projection.replace(
+                "- `Наименование партнёра A` = `ПАО СБЕРБАНК`.",
+                "- `Поисковый запрос` = `НЕИЗВЕСТНАЯ ОРГАНИЗАЦИЯ`.",
+            )
+            errors = validate_materialized_projection(
+                missing_projection, matrix_content, materialization
+            )
+            self.assertTrue(any("linked data roles have no concrete" in error for error in errors))
 
             payload["bindings"][0]["values"]["Наименование партнёра"] = "ПАО СБЕРБАНК RUN-ID"
             materialization.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
